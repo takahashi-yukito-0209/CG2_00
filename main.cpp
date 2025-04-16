@@ -1,5 +1,45 @@
 #include <Windows.h>
 #include <cstdint>
+#include <format>
+#include <string>
+
+// ログを出す関数
+void Log(const std::string& message)
+{
+    OutputDebugStringA(message.c_str());
+}
+
+// string->wstring
+std::wstring ConvertString(const std::string& str)
+{
+    if (str.empty()) {
+        return std::wstring();
+    }
+
+    auto sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(&str[0]), static_cast<int>(str.size()), NULL, 0);
+    if (sizeNeeded == 0) {
+        return std::wstring();
+    }
+    std::wstring result(sizeNeeded, 0);
+    MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(&str[0]), static_cast<int>(str.size()), &result[0], sizeNeeded);
+    return result;
+}
+
+// wstring->string
+std::string ConvertString(const std::wstring& str)
+{
+    if (str.empty()) {
+        return std::string();
+    }
+
+    auto sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), NULL, 0, NULL, NULL);
+    if (sizeNeeded == 0) {
+        return std::string();
+    }
+    std::string result(sizeNeeded, 0);
+    WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded, NULL, NULL);
+    return result;
+}
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -50,7 +90,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // ウィンドウの生成
     HWND hwnd = CreateWindow(
         wc.lpszClassName, // 利用するクラス名
-        L"CG2", // タイトルバーの文字（なんでもいい）
+        L"CG2_LE2C_17_タカハシ_ユキト", // タイトルバーの文字（なんでもいい）
         WS_OVERLAPPEDWINDOW, // よく見るウィンドウタイトル
         CW_USEDEFAULT, // 表示X座標（Windowsに任せる）
         CW_USEDEFAULT, // 表示Y座標（WindowsOSに任せる）
@@ -65,7 +105,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     ShowWindow(hwnd, SW_SHOW);
 
     // 出力ウィンドウへの文字出力
-    OutputDebugStringA("Hello,DirectX!\n");
+    Log("Hello,DirectX!\n");
+    Log(ConvertString(std::format(L"ClientSize:{},{}\n", kClientWidth, kClientHeight)));
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
