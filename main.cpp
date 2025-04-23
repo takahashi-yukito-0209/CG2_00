@@ -220,6 +220,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     assert(device != nullptr);
     Log(logStream, "Complete create D3D12Device!!!\n"); // 初期化完了のログを出す
 
+    //コマンドキューを生成する
+    ID3D12CommandQueue* commandQueue = nullptr;
+    D3D12_COMMAND_QUEUE_DESC commandQueueDesc {};
+    hr = device->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueue));
+
+    //コマンドキューの生成がうまくいかなかったので起動できない
+    assert(SUCCEEDED(hr));
+
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
     while (msg.message != WM_QUIT) {
