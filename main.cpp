@@ -250,6 +250,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // モニタに移したら、中身を破棄
     // コマンドキュー、ウィンドウハンドル、設定を渡して生成する
     hr = dxgiFactory->CreateSwapChainForHwnd(commandQueue, hwnd, &swapChainDesc, nullptr, nullptr, reinterpret_cast<IDXGISwapChain1**>(&swapChain));
+    assert(SUCCEEDED(hr));
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
