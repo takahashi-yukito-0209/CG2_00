@@ -166,6 +166,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // ウィンドウを表示する
     ShowWindow(hwnd, SW_SHOW);
 
+#ifdef _DEBUG
+
+    ID3D12Debug1* debugController = nullptr;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+        // デバックレイヤーを有効化する
+        debugController->EnableDebugLayer();
+        // さらにGPU側でもチェックを行うようにする
+        debugController->SetEnableGPUBasedValidation(TRUE);
+    }
+
+#endif
+
     // DXGIファクトリーの生成
     IDXGIFactory7* dxgiFactory = nullptr;
     // HRESULTはWindows系のエラーコードであり、
@@ -217,6 +229,42 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // デバイスの生成がうまくいかなかったので起動できない
     assert(device != nullptr);
     Log(logStream, "Complete create D3D12Device!!!\n"); // 初期化完了のログを出す
+
+#ifdef _DEBUG
+
+    ID3D12InfoQueue* infoQueue = nullptr;
+    if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
+        // やばいエラー時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+
+        // エラー時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+
+        // 警告時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+
+        //抑制するメッセージのID
+        D3D12_MESSAGE_ID denyIds[] = {
+            // Windows11でのDXGIデバックレイヤーとDX12デバッグレイヤーの相互作用バグによるエラーメッセージ
+            // https://stackoverflow.com/questions/69805245/directx-12-application-is-crashing-in-windows-11
+            D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
+        };
+
+        //抑制するレベル
+        D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
+        D3D12_INFO_QUEUE_FILTER filter {};
+        filter.DenyList.NumIDs = _countof(denyIds);
+        filter.DenyList.pIDList = denyIds;
+        filter.DenyList.NumSeverities = _countof(severities);
+        filter.DenyList.pSeverityList = severities;
+        //指定したメッセージの表示を抑制する
+        infoQueue->PushStorageFilter(&filter);
+
+        // 解放
+        infoQueue->Release();
+    }
+
+#endif
 
     // コマンドキューを生成する
     ID3D12CommandQueue* commandQueue = nullptr;
@@ -285,7 +333,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 二つ目を作る
     device->CreateRenderTargetView(swapChainResources[1], &rtvDesc, rtvHandles[1]);
 
-
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
     while (msg.message != WM_QUIT) {
@@ -296,31 +343,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         } else {
             // ゲームの処理
 
-            //画面のクリア処理
+            // 画面のクリア処理
 
-            //これから書き込むバックバッファのインデックスを取得
+            // これから書き込むバックバッファのインデックスを取得
             UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-            //描画先のRTVを設定する
+            // 描画先のRTVを設定する
             commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, nullptr);
-            //指定した色で画面全体をクリアする
+            // 指定した色で画面全体をクリアする
             float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
             commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
-            //コマンドリストの内容を確定させる。すべてぼコマンドを積んでからCloseすること
+            // コマンドリストの内容を確定させる。すべてぼコマンドを積んでからCloseすること
             hr = commandList->Close();
             assert(SUCCEEDED(hr));
 
-            //GPUにコマンドリストの実行を行わせる
+            // GPUにコマンドリストの実行を行わせる
             ID3D12CommandList* commandLists[] = { commandList };
             commandQueue->ExecuteCommandLists(1, commandLists);
-            //GPUとOSに画面の交換を行うよう通知する
+            // GPUとOSに画面の交換を行うよう通知する
             swapChain->Present(1, 0);
-            //次のフレーム用のコマンドリストを準備
+            // 次のフレーム用のコマンドリストを準備
             hr = commandAllocator->Reset();
             assert(SUCCEEDED(hr));
             hr = commandList->Reset(commandAllocator, nullptr);
             assert(SUCCEEDED(hr));
-
         }
     }
 
