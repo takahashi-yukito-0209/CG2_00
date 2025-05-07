@@ -7,6 +7,7 @@
 #include <d3d12.h>
 #include <dbghelp.h>
 #include <dxgi1_6.h>
+#include <dxgidebug.h>
 #include <fstream>
 #include <string>
 #include <strsafe.h>
@@ -14,6 +15,7 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "Dbghelp.lib")
+#pragma comment(lib, "dxguid.lib")
 
 static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 {
@@ -243,21 +245,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         // 警告時に止まる
         infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
 
-        //抑制するメッセージのID
+        // 抑制するメッセージのID
         D3D12_MESSAGE_ID denyIds[] = {
             // Windows11でのDXGIデバックレイヤーとDX12デバッグレイヤーの相互作用バグによるエラーメッセージ
             // https://stackoverflow.com/questions/69805245/directx-12-application-is-crashing-in-windows-11
             D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
         };
 
-        //抑制するレベル
+        // 抑制するレベル
         D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
         D3D12_INFO_QUEUE_FILTER filter {};
         filter.DenyList.NumIDs = _countof(denyIds);
         filter.DenyList.pIDList = denyIds;
         filter.DenyList.NumSeverities = _countof(severities);
         filter.DenyList.pSeverityList = severities;
-        //指定したメッセージの表示を抑制する
+        // 指定したメッセージの表示を抑制する
         infoQueue->PushStorageFilter(&filter);
 
         // 解放
@@ -333,16 +335,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 二つ目を作る
     device->CreateRenderTargetView(swapChainResources[1], &rtvDesc, rtvHandles[1]);
 
-    //初期値0でFenceを作る
+    // 初期値0でFenceを作る
     ID3D12Fence* fence = nullptr;
     uint64_t fenceValue = 0;
     hr = device->CreateFence(fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
     assert(SUCCEEDED(hr));
 
-    //FenceのSignalを持つためのイベントを作成する
+    // FenceのSignalを持つためのイベントを作成する
     HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     assert(fenceEvent != nullptr);
-    
+
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
     while (msg.message != WM_QUIT) {
@@ -358,32 +360,31 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // これから書き込むバックバッファのインデックスを取得
             UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-            //TransitionBarrierの設定
+            // TransitionBarrierの設定
             D3D12_RESOURCE_BARRIER barrier {};
-            //今回のバリアはTransition
+            // 今回のバリアはTransition
             barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            //Noneにしておく
+            // Noneにしておく
             barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            //バリアを張る対象のリリース。現在のバックバッファに対して行う
+            // バリアを張る対象のリリース。現在のバックバッファに対して行う
             barrier.Transition.pResource = swapChainResources[backBufferIndex];
-            //遷移前（現在）のResourceState
+            // 遷移前（現在）のResourceState
             barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-            //遷移後のResourceState
+            // 遷移後のResourceState
             barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            //TransitionBarrierを張る
+            // TransitionBarrierを張る
             commandList->ResourceBarrier(1, &barrier);
-
 
             // 描画先のRTVを設定する
             commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, nullptr);
             // 指定した色で画面全体をクリアする
             float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
             commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
-            
-            //RenderTargetからPresentに遷移
+
+            // RenderTargetからPresentに遷移
             barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
             barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-            //TransitionBarrierを張る
+            // TransitionBarrierを張る
             commandList->ResourceBarrier(1, &barrier);
 
             // コマンドリストの内容を確定させる。すべてぼコマンドを積んでからCloseすること
@@ -395,18 +396,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             commandQueue->ExecuteCommandLists(1, commandLists);
             // GPUとOSに画面の交換を行うよう通知する
             swapChain->Present(1, 0);
-            
-            //Fenceの値を更新
+
+            // Fenceの値を更新
             fenceValue++;
-            //GPUがここまでたどり着いたときに、Fenceの値を指定した値に代入するようにsignalを送る
+            // GPUがここまでたどり着いたときに、Fenceの値を指定した値に代入するようにsignalを送る
             commandQueue->Signal(fence, fenceValue);
 
-            //Fenceの値が指定したsignal値にたどり着いているか確認する
-            //GetCompletedValueの初期値はFence作成時に渡した初期値
+            // Fenceの値が指定したsignal値にたどり着いているか確認する
+            // GetCompletedValueの初期値はFence作成時に渡した初期値
             if (fence->GetCompletedValue() < fenceValue) {
-                //指定したsignalにたどり着いていないので、たどり着くまで待つようにイベントを設定する
+                // 指定したsignalにたどり着いていないので、たどり着くまで待つようにイベントを設定する
                 fence->SetEventOnCompletion(fenceValue, fenceEvent);
-                //イベント待つ
+                // イベント待つ
                 WaitForSingleObject(fenceEvent, INFINITE);
             }
 
@@ -421,6 +422,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 出力ウィンドウへの文字出力
     Log(logStream, "Hello,DirectX!\n");
     Log(logStream, ConvertString(std::format(L"ClientSize:{},{}\n", kClientWidth, kClientHeight)));
+
+    // 解放処理
+    CloseHandle(fenceEvent);
+    fence->Release();
+    rtvDescriptorHeap->Release();
+    swapChainResources[0]->Release();
+    swapChainResources[1]->Release();
+    swapChain->Release();
+    commandList->Release();
+    commandAllocator->Release();
+    commandQueue->Release();
+    device->Release();
+    useAdapter->Release();
+    dxgiFactory->Release();
+#ifdef _DEBUG
+    debugController->Release();
+#endif
+    CloseWindow(hwnd);
+
+    // リソースリークチェック
+    IDXGIDebug1* debug;
+    if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debug)))) {
+        debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+        debug->ReportLiveObjects(DXGI_DEBUG_APP, DXGI_DEBUG_RLO_ALL);
+        debug->ReportLiveObjects(DXGI_DEBUG_D3D12, DXGI_DEBUG_RLO_ALL);
+        debug->Release();
+    }
 
     return 0;
 }
