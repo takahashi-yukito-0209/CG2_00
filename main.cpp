@@ -483,8 +483,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc {};
     graphicsPipelineStateDesc.pRootSignature = rootSignature; // RootSignature
     graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
-    graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // VertexShader
-    graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // PixelShader
+    graphicsPipelineStateDesc.VS = 
+    { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // VertexShader
+    graphicsPipelineStateDesc.PS = 
+    { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // PixelShader
     graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
     graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
     // 書き込むRTVの情報
@@ -569,6 +571,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         } else {
+
             // ゲームの処理
 
             // 画面のクリア処理
