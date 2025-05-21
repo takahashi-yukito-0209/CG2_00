@@ -651,7 +651,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();
 
-            // ゲームの処理
+            //--------------------
+            // ゲームの処理(UpDate)
+            //--------------------
 
             // Y軸回転
             transform.rotate.y += 0.03f;
@@ -670,7 +672,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
             ImGui::ShowDemoWindow();
 
-            // 画面のクリア処理
+            //--------------------
+            // 画面のクリア処理(Draw)
+            //--------------------
 
             // ImGuiの内部コマンドを生成する
             ImGui::Render();
