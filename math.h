@@ -29,6 +29,9 @@ public:
     // 4.逆行列
     Matrix4x4 Inverse(const Matrix4x4& m);
 
+    // 単位行列の作成
+    Matrix4x4 MakeIdentity4x4();
+
     // 1.X軸回転行列
     Matrix4x4 MakeRotateXMatrix(float radian);
 

@@ -106,6 +106,24 @@ Matrix4x4 Math::Inverse(const Matrix4x4& m)
     return result;
 }
 
+// 単位行列の作成
+Matrix4x4 Math::MakeIdentity4x4()
+{
+    Matrix4x4 result = {};
+
+    for (int row = 0; row < 4; row++) {
+        for (int column = 0; column < 4; column++) {
+            if (row != column) {
+                result.m[row][column] = 0.0f;
+            } else {
+                result.m[row][column] = 1.0f;
+            }
+        }
+    }
+
+    return result;
+}
+
 // 1.X軸回転行列
 Matrix4x4 Math::MakeRotateXMatrix(float radian) {
 	Matrix4x4 result = {};

@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <filesystem>
 // #include <format>
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+#include "externals/imgui/imgui_impl_win32.h"
 #include "math.h"
 #include <cassert>
 #include <d3d12.h>
@@ -13,6 +16,7 @@
 #include <fstream>
 #include <string>
 #include <strsafe.h>
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -93,6 +97,10 @@ std::string ConvertString(const std::wstring& str)
 // ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
+        return true;
+    }
+
     // メッセージに応じてゲーム固有の処理を行う
     switch (msg) {
         // ウィンドウが破棄された
@@ -182,41 +190,37 @@ ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInBytes)
     D3D12_HEAP_PROPERTIES uploadHeapProperties {};
     uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD; // UploadHeapを使う
     // 頂点リソースの設定
-    D3D12_RESOURCE_DESC vertexResourceDesc {};
+    D3D12_RESOURCE_DESC resourceDesc {};
     // バッファリソース。テクスチャの場合は別の設定をする
-    vertexResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    vertexResourceDesc.Width = sizeInBytes; // リソースのサイズ。今回はVector4を3頂点分
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resourceDesc.Width = sizeInBytes; // リソースのサイズ。今回はVector4を3頂点分
     // バッファの場合はこれらは1にする決まり
-    vertexResourceDesc.Height = 1;
-    vertexResourceDesc.DepthOrArraySize = 1;
-    vertexResourceDesc.MipLevels = 1;
-    vertexResourceDesc.SampleDesc.Count = 1;
+    resourceDesc.Height = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.SampleDesc.Count = 1;
     // バッファの場合はこれにする決まり
-    vertexResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     // 実際に頂点リソースを作る
-    ID3D12Resource* vertexResource = nullptr;
-    HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &vertexResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexResource));
+    ID3D12Resource* resource = nullptr;
+    HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&resource));
     assert(SUCCEEDED(hr));
 
-    return vertexResource;
+    return resource;
 };
 
-// 単位行列の作成
-Matrix4x4 MakeIdentity4x4()
+ID3D12DescriptorHeap* CreateDescriptorHeap(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shaderVisible)
 {
-    Matrix4x4 result = {};
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc {};
+    descriptorHeapDesc.Type = heapType; // レンダーターゲットビュー用
+    descriptorHeapDesc.NumDescriptors = numDescriptors; // ダブルバッファ用に二つ。多くても別に構わない
+    descriptorHeapDesc.Flags = shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    HRESULT hr = device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&descriptorHeap));
+    // ディスクリプタヒープが作れなかったので起動できない
+    assert(SUCCEEDED(hr));
 
-    for (int row = 0; row < 4; row++) {
-        for (int column = 0; column < 4; column++) {
-            if (row != column) {
-                result.m[row][column] = 0.0f;
-            } else {
-                result.m[row][column] = 1.0f;
-            }
-        }
-    }
-
-    return result;
+    return descriptorHeap;
 }
 
 // Windowsアプリでのエントリーポイント（main関数）
@@ -423,13 +427,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     assert(SUCCEEDED(hr));
 
     // ディスクリプタヒープの生成
-    ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
-    D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc {};
-    rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; // レンダーターゲットビュー用
-    rtvDescriptorHeapDesc.NumDescriptors = 2; // ダブルバッファ用に二つ。多くても別に構わない
-    hr = device->CreateDescriptorHeap(&rtvDescriptorHeapDesc, IID_PPV_ARGS(&rtvDescriptorHeap));
-    // ディスクリプタヒープが作れなかったので起動できない
-    assert(SUCCEEDED(hr));
+    // RTV用のヒープでディスクリプタの数は2。RTVはShader内で触るものではないので、ShaderVisibleはfalse
+    ID3D12DescriptorHeap* rtvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
+
+    // SRV用のヒープでディスクリプタの数は128。SRVはShaderで触るものなので、ShaderVisibleはtrue
+    ID3D12DescriptorHeap* srvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
 
     // SwapChainからResourceを引っ張ってくる
     ID3D12Resource* swapChainResources[2] = { nullptr };
@@ -557,6 +559,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     hr = device->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState));
     assert(SUCCEEDED(hr));
 
+    // 自作した数学関数の使用
+    Math math;
+
     // VertexResourceを生成
     ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(Vector4) * 3);
 
@@ -597,7 +602,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 書き込むためのアドレスを取得
     wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpData));
     // 単位行列を書き込んでおく
-    *wvpData = MakeIdentity4x4();
+    *wvpData = math.MakeIdentity4x4();
 
     // ビューポート
     D3D12_VIEWPORT viewport {};
@@ -618,9 +623,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     scissorRect.bottom = kClientHeight;
 
     // Transform変数を作る
-    Math math;
     Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
     Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f } };
+
+    // ImGuiの初期化
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplDX12_Init(device,
+        swapChainDesc.BufferCount,
+        rtvDesc.Format,
+        srvDescriptorHeap,
+        srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
@@ -631,22 +647,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             DispatchMessage(&msg);
         } else {
 
+            ImGui_ImplDX12_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+
             // ゲームの処理
 
             // Y軸回転
             transform.rotate.y += 0.03f;
+
             // WorldMatrix作成
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             Matrix4x4 cameraMatrix = math.MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
             Matrix4x4 viewMatrix = math.Inverse(cameraMatrix);
             Matrix4x4 projectionMatrix = math.MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
-            //WVPMatrixを作る
+
+            // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
             // CBufferの中身更新
             *wvpData = worldViewProjectionMatrix;
 
+            // 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
+            ImGui::ShowDemoWindow();
 
             // 画面のクリア処理
+
+            // ImGuiの内部コマンドを生成する
+            ImGui::Render();
 
             // これから書き込むバックバッファのインデックスを取得
             UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
@@ -672,6 +699,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
             commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
 
+            // 描画用のDescriptorHeapの設定
+            ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
+            commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
             // コマンドを積む
             commandList->RSSetViewports(1, &viewport); // Viewportを設定
             commandList->RSSetScissorRects(1, &scissorRect); // Scirssorを設定
@@ -687,6 +718,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
             // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
             commandList->DrawInstanced(3, 1, 0, 0);
+
+            // 実際のcommandListのImGuiの描画コマンドを積む
+            ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
             // RenderTargetからPresentに遷移
             barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -736,6 +770,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     CloseHandle(fenceEvent);
     fence->Release();
     rtvDescriptorHeap->Release();
+    srvDescriptorHeap->Release();
     swapChainResources[0]->Release();
     swapChainResources[1]->Release();
     swapChain->Release();
@@ -759,6 +794,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     rootSignature->Release();
     pixelShaderBlob->Release();
     vertexShaderBlob->Release();
+
+    // ImGuiの終了処理
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
 
     // リソースリークチェック
     IDXGIDebug1* debug;
