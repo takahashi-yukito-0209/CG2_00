@@ -301,7 +301,6 @@ void UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mip
 
 void ShowTransformSettingsWindow(Transform& transform)
 {
-#ifdef _DEBUG
     ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
     ImGui::Begin("SRT Settings");
 
@@ -310,7 +309,6 @@ void ShowTransformSettingsWindow(Transform& transform)
     ImGui::SliderFloat3("Translate", &transform.translate.x, -100.0f, 100.0f);
 
     ImGui::End();
-#endif
 }
 
 // Windowsアプリでのエントリーポイント（main関数）
