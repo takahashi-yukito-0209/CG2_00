@@ -299,6 +299,20 @@ void UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mip
     }
 }
 
+void ShowTransformSettingsWindow(Transform& transform)
+{
+#ifdef _DEBUG
+    ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+    ImGui::Begin("SRT Settings");
+
+    ImGui::SliderFloat3("Scale", &transform.scale.x, 0.1f, 10.0f);
+    ImGui::SliderFloat3("Rotate", &transform.rotate.x, -3.14159f, 3.14159f);
+    ImGui::SliderFloat3("Translate", &transform.translate.x, -100.0f, 100.0f);
+
+    ImGui::End();
+#endif
+}
+
 // Windowsアプリでのエントリーポイント（main関数）
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
@@ -811,6 +825,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             ImGui::Begin("MaterialColor");
             ImGui::ColorEdit4("color", &(*materialData).x);
             ImGui::End();
+
+            ShowTransformSettingsWindow(transform);
 
             //--------------------
             // 画面のクリア処理(Draw)
