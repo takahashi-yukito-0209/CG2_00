@@ -301,9 +301,10 @@ void UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mip
 
 void ShowTransformSettingsWindow(Transform& transform)
 {
+    //ウィンドウサイズ初期設定
     ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
     ImGui::Begin("SRT Settings");
-
+    //SRT項目パラメータをいじれるように
     ImGui::SliderFloat3("Scale", &transform.scale.x, 0.1f, 10.0f);
     ImGui::SliderFloat3("Rotate", &transform.rotate.x, -3.14159f, 3.14159f);
     ImGui::SliderFloat3("Translate", &transform.translate.x, -100.0f, 100.0f);
