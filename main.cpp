@@ -764,10 +764,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
             uint32_t startIndex = (latIndex * kSubdivision + lonIndex) * 6;
 
-            Vector2 uv0 = { lonIndex / static_cast<float>(kSubdivision),  -( latIndex / static_cast<float>(kSubdivision)) };
-            Vector2 uv1 = { lonIndex / static_cast<float>(kSubdivision),  -( (latIndex + 1) / static_cast<float>(kSubdivision)) };
-            Vector2 uv2 = { (lonIndex + 1) / static_cast<float>(kSubdivision),  -( (latIndex + 1) / static_cast<float>(kSubdivision)) };
-            Vector2 uv3 = { (lonIndex + 1) / static_cast<float>(kSubdivision),  -( latIndex / static_cast<float>(kSubdivision)) };
+            Vector2 uv0 = { lonIndex / static_cast<float>(kSubdivision), 1.0f - latIndex / static_cast<float>(kSubdivision) };
+            Vector2 uv1 = { lonIndex / static_cast<float>(kSubdivision), 1.0f - (latIndex + 1) / static_cast<float>(kSubdivision) };
+            Vector2 uv2 = { (lonIndex + 1) / static_cast<float>(kSubdivision), 1.0f - (latIndex + 1) / static_cast<float>(kSubdivision) };
+            Vector2 uv3 = { (lonIndex + 1) / static_cast<float>(kSubdivision), 1.0f - latIndex / static_cast<float>(kSubdivision) };
 
             // 1つ目の三角形
             vertexData[startIndex + 0].position = { a.x, a.y, a.z, 1.0f };
