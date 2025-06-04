@@ -701,7 +701,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）
     graphicsPipelineStateDesc.SampleDesc.Count = 1;
     graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-    
+
     // DepthStencilStateの設定
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc {};
     // Depthの機能を有効化する
@@ -714,7 +714,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // DepthStencilの設定
     graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
     graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    
+
     // 実際に生成
     ID3D12PipelineState* graphicsPipelineState = nullptr;
     hr = device->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState));
@@ -833,7 +833,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // DSVHeapの先頭にDSVを作る
     device->CreateDepthStencilView(depthStencilResource, &dsvDesc, dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-    
     // Transform変数を作る
     Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
     Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f } };
@@ -868,7 +867,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             //--------------------
 
             // Y軸回転
-            transform.rotate.y += 0.01f;
+            transform.rotate.y += 0.05f;
 
             // WorldMatrix作成
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
