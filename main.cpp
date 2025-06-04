@@ -19,6 +19,7 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
+#include <numbers>
 #include <vector>
 
 #pragma comment(lib, "d3d12.lib")
@@ -723,8 +724,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 自作した数学関数の使用
     Math math;
 
+    constexpr uint32_t kSubdivision = 16; // 分割数
+    constexpr uint32_t kVertexCount = kSubdivision * kSubdivision * 6; // 頂点数
+
     // VertexResourceを生成
-    ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 6);
+    ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * kVertexCount);
 
     // VertexBufferViewを作成
     // 頂点バッファビューを作成する
@@ -732,7 +736,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // リソースの先頭のアドレスから使う
     vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
     // 使用するリソースのサイズは頂点3つ分のサイズ
-    vertexBufferView.SizeInBytes = sizeof(VertexData) * 6;
+    vertexBufferView.SizeInBytes = sizeof(VertexData) * kVertexCount;
     // 1頂点当たりのサイズ
     vertexBufferView.StrideInBytes = sizeof(VertexData);
 
@@ -741,29 +745,47 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 書き込むためのアドレスを取得
     vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
 
-    // 左下
-    vertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
-    vertexData[0].texcoord = { 0.0f, 1.0f };
+    // 球体を生成
+    const float kLonEvery = 2.0f * std::numbers::pi_v<float> / kSubdivision;
+    const float kLatEvery = std::numbers::pi_v<float> / kSubdivision;
 
-    // 上
-    vertexData[1].position = { 0.0f, 0.5f, 0.0f, 1.0f };
-    vertexData[1].texcoord = { 0.5f, 0.0f };
+    for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
+        float lat = -std::numbers::pi_v<float> / 2.0f + kLatEvery * latIndex;
+        float nextLat = lat + kLatEvery;
 
-    // 右下
-    vertexData[2].position = { 0.5f, -0.5f, 0.0f, 1.0f };
-    vertexData[2].texcoord = { 1.0f, 1.0f };
+        for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+            float lon = lonIndex * kLonEvery;
+            float nextLon = lon + kLonEvery;
 
-    // 左下2
-    vertexData[3].position = { -0.5f, -0.5f, 0.5f, 1.0f };
-    vertexData[3].texcoord = { 0.0f, 1.0f };
+            Vector3 a = { cosf(lat) * cosf(lon), sinf(lat), cosf(lat) * sinf(lon) };
+            Vector3 b = { cosf(nextLat) * cosf(lon), sinf(nextLat), cosf(nextLat) * sinf(lon) };
+            Vector3 c = { cosf(nextLat) * cosf(nextLon), sinf(nextLat), cosf(nextLat) * sinf(nextLon) };
+            Vector3 d = { cosf(lat) * cosf(nextLon), sinf(lat), cosf(lat) * sinf(nextLon) };
 
-    // 上2
-    vertexData[4].position = { 0.0f, 0.0f, 0.0f, 1.0f };
-    vertexData[4].texcoord = { 0.5f, 0.0f };
+            uint32_t startIndex = (latIndex * kSubdivision + lonIndex) * 6;
 
-    // 右下2
-    vertexData[5].position = { 0.5f, -0.5f, -0.5f, 1.0f };
-    vertexData[5].texcoord = { 1.0f, 1.0f };
+            Vector2 uv0 = { lonIndex / static_cast<float>(kSubdivision),  -( latIndex / static_cast<float>(kSubdivision)) };
+            Vector2 uv1 = { lonIndex / static_cast<float>(kSubdivision),  -( (latIndex + 1) / static_cast<float>(kSubdivision)) };
+            Vector2 uv2 = { (lonIndex + 1) / static_cast<float>(kSubdivision),  -( (latIndex + 1) / static_cast<float>(kSubdivision)) };
+            Vector2 uv3 = { (lonIndex + 1) / static_cast<float>(kSubdivision),  -( latIndex / static_cast<float>(kSubdivision)) };
+
+            // 1つ目の三角形
+            vertexData[startIndex + 0].position = { a.x, a.y, a.z, 1.0f };
+            vertexData[startIndex + 0].texcoord = uv0;
+            vertexData[startIndex + 1].position = { b.x, b.y, b.z, 1.0f };
+            vertexData[startIndex + 1].texcoord = uv1;
+            vertexData[startIndex + 2].position = { c.x, c.y, c.z, 1.0f };
+            vertexData[startIndex + 2].texcoord = uv2;
+
+            // 2つ目の三角形
+            vertexData[startIndex + 3].position = { a.x, a.y, a.z, 1.0f };
+            vertexData[startIndex + 3].texcoord = uv0;
+            vertexData[startIndex + 4].position = { c.x, c.y, c.z, 1.0f };
+            vertexData[startIndex + 4].texcoord = uv2;
+            vertexData[startIndex + 5].position = { d.x, d.y, d.z, 1.0f };
+            vertexData[startIndex + 5].texcoord = uv3;
+        }
+    }
 
     // マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
     ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
@@ -873,7 +895,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // Transform変数を作る
     Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-    Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f } };
+    Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -10.0f } };
     Transform transformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 
     // ImGuiの初期化
@@ -989,7 +1011,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
             commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
             // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
-            commandList->DrawInstanced(6, 1, 0, 0);
+            commandList->DrawInstanced(kVertexCount, 1, 0, 0);
 
             // Spriteの描画。変更が必要なものだけ変更する。
             commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
