@@ -754,6 +754,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         float nextLat = lat + kLatEvery;
 
         for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+            
             float lon = lonIndex * kLonEvery;
             float nextLon = lon + kLonEvery;
 
