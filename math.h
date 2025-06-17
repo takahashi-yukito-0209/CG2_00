@@ -18,6 +18,9 @@ struct Matrix4x4 {
 
 class Math {
 public:
+    // 正規化
+    Vector3 Normalize(const Vector3& v);
+
     // 1.平行移動行列
     Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
 

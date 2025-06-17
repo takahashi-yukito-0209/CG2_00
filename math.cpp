@@ -3,6 +3,19 @@
 #include <cmath>
 #include <algorithm>
 
+Vector3 Math::Normalize(const Vector3& v)
+{
+    Vector3 result = {};
+
+    float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+
+    result.x = v.x / length;
+    result.y = v.y / length;
+    result.z = v.z / length;
+
+    return result;
+}
+
 // 1.平行移動行列
 Matrix4x4 Math::MakeTranslateMatrix(const Vector3& translate) {
 	Matrix4x4 result = {};
