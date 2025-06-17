@@ -370,12 +370,10 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descrip
     return handleGPU;
 }
 
-
 // Transform変数を作る
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -10.0f } };
 Transform transformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-
 
 // Windowsアプリでのエントリーポイント（main関数）
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
@@ -667,9 +665,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
     rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange; // Tableの中身の配列を指定
     rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange); // Tableで利用する数
-    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;//CBVを使う
-    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;//PixelShaderで使う
-    rootParameters[3].Descriptor.ShaderRegister = 1;//レジスタ番号1を使う
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+    rootParameters[3].Descriptor.ShaderRegister = 1; // レジスタ番号1を使う
 
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
@@ -868,7 +866,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
     // 今回は赤を書き込んでみる
     materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-    // SpriteはLightingしないのでtrueを設定する
     materialData->enableLighting = true;
 
     // Sprite用のマテリアルリソースを作る
@@ -884,9 +881,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // 平行光源用のResourceを作る
     ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
-    //データを書き込む
+    // データを書き込む
     DirectionalLight* directionalLightData = nullptr;
-    //書き込むためのアドレスを取得
+    // 書き込むためのアドレスを取得
     directionalLightResource->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData));
     directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
     directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
@@ -930,18 +927,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     vertexDataSprite[2].texcoord = { 1.0f, 1.0f };
     vertexDataSprite[2].normal = { 0.0f, 0.0f, -1.0f };
 
-    // 2枚目の三角形
-    vertexDataSprite[3].position = { 0.0f, 0.0f, 0.0f, 1.0f }; // 左上
-    vertexDataSprite[3].texcoord = { 0.0f, 0.0f };
+    vertexDataSprite[3].position = { 640.0f, 0.0f, 0.0f, 1.0f }; // 右上
+    vertexDataSprite[3].texcoord = { 1.0f, 0.0f };
     vertexDataSprite[3].normal = { 0.0f, 0.0f, -1.0f };
-
-    vertexDataSprite[4].position = { 640.0f, 0.0f, 0.0f, 1.0f }; // 右上
-    vertexDataSprite[4].texcoord = { 1.0f, 0.0f };
-    vertexDataSprite[4].normal = { 0.0f, 0.0f, -1.0f };
-
-    vertexDataSprite[5].position = { 640.0f, 360.0f, 0.0f, 1.0f }; // 右下
-    vertexDataSprite[5].texcoord = { 1.0f, 1.0f };
-    vertexDataSprite[5].normal = { 0.0f, 0.0f, -1.0f };
 
     // Sprite用のTransformationMatrix用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
     ID3D12Resource* transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(TransformationMatrix));
@@ -951,6 +939,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     transformationMatrixResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
     // 単位行列を書き込んでおく
     transformationMatrixDataSprite->WVP = math.MakeIdentity4x4();
+    transformationMatrixDataSprite->World = math.MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
+
+    // IndexResourceSpriteの生成
+    ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
+
+    // IndexBufferViewの生成
+    D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite {};
+    // リソースの先頭アドレスから使う
+    indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
+    // 使用するリソースのサイズはインデックス6つ分のサイズ
+    indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
+    // インデックスはuint32_tとする
+    indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
+
+    // インデックスリソースにデータを書き込む
+    uint32_t* indexDataSprite = nullptr;
+    indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+    indexDataSprite[0] = 0;
+    indexDataSprite[1] = 1;
+    indexDataSprite[2] = 2;
+    indexDataSprite[3] = 1;
+    indexDataSprite[4] = 3;
+    indexDataSprite[5] = 2;
 
     // ビューポート
     D3D12_VIEWPORT viewport {};
@@ -1079,10 +1090,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             ImGui::DragFloat3("CameraTranslate", &(cameraTransform.translate.x));
             ImGui::ColorEdit4("color", &(materialData->color.x));
             ImGui::ColorEdit4("colorMaterial", &(materialDataSprite->color.x));
-            ImGui::SliderFloat3("translateSprite", &(transformSprite.translate.x),0.0f,5.0f);
+            ImGui::SliderFloat3("translateSprite", &(transformSprite.translate.x), 0.0f, 5.0f);
             ImGui::Checkbox("useMonsterBall", &useMonsterBall);
             ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
-            ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x,-1.0f,1.0f);
+            ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x, -1.0f, 1.0f);
             ImGui::DragFloat("Intensity", &directionalLightData->intensity);
             ImGui::End();
 
@@ -1145,6 +1156,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
             commandList->DrawInstanced(kVertexCount, 1, 0, 0);
 
+            commandList->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
             // Spriteの描画。変更が必要なものだけ変更する。
             commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
             // マテリアルCBufferの場所を指定
@@ -1154,7 +1166,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
             commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
             // 描画!
-            commandList->DrawInstanced(6, 1, 0, 0);
+            commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
             // 実際のcommandListのImGuiの描画コマンドを積む
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
@@ -1229,6 +1241,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     wvpResource->Release();
     vertexResourceSprite->Release();
     transformationMatrixResourceSprite->Release();
+    indexResourceSprite->Release();
     textureResource->Release();
     intermediateResource->Release();
     textureResource2->Release();
