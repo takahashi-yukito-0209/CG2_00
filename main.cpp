@@ -41,6 +41,8 @@ struct VertexData {
 struct Material {
     Vector4 color;
     int32_t enableLighting;
+    float padding[3];
+    Matrix4x4 uvTransform;
 };
 
 struct TransformationMatrix {
@@ -374,6 +376,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descrip
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -10.0f } };
 Transform transformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
+Transform uvTransformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 
 // Windowsアプリでのエントリーポイント（main関数）
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
@@ -866,7 +869,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
     // 今回は赤を書き込んでみる
     materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    // SpriteはLightingするのでtrueを設定する
     materialData->enableLighting = true;
+    //UVTransformは単位行列で初期化
+    materialData->uvTransform = math.MakeIdentity4x4();
 
     // Sprite用のマテリアルリソースを作る
     ID3D12Resource* materialResourceSprite = CreateBufferResource(device, sizeof(Material));
@@ -878,6 +884,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     materialDataSprite->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
     // SpriteはLightingしないのでfalseを設定する
     materialDataSprite->enableLighting = false;
+    //UVTransformは単位行列で初期化
+    materialDataSprite->uvTransform = math.MakeIdentity4x4();
 
     // 平行光源用のResourceを作る
     ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
@@ -1082,6 +1090,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             Matrix4x4 worldViewProjectionMatrixSprite = math.Multiply(worldMatrixSprite, math.Multiply(viewMatrixSprite, projectionMatrixSprite));
             transformationMatrixDataSprite->WVP = worldViewProjectionMatrixSprite;
 
+            //UVTransform用の行列を作る
+            Matrix4x4 uvTransformMatrix = math.MakeScaleMatrix(uvTransformSprite.scale);
+            uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeRotateZMatrix(uvTransformSprite.rotate.z));
+            uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeTranslateMatrix(uvTransformSprite.translate));
+            materialDataSprite->uvTransform = uvTransformMatrix;
+
             // 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
             ImGui::ShowDemoWindow();
 
@@ -1095,6 +1109,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
             ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x, -1.0f, 1.0f);
             ImGui::DragFloat("Intensity", &directionalLightData->intensity);
+            ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
+            ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
+            ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
             ImGui::End();
 
             //--------------------
