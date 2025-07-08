@@ -852,6 +852,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         Log(logStream, reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
         assert(false);
     }
+
     // バイナリをもとに生成
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature = nullptr;
     hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
