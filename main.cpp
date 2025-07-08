@@ -67,30 +67,6 @@ struct ModelData {
     MaterialData material;
 };
 
-class ResourceObject {
-public:
-
-    ResourceObject(ID3D12Resource* resource)
-        : resource_(resource)
-    {
-    }
-    // デストラクタはオブジェクトの寿命が尽きたときに呼ばれる
-    ~ResourceObject()
-    {
-        // ここでReleaseを呼べば良い
-        if (resource_) {
-            resource_->Release();
-        }
-    }
-
-    ID3D12Resource* Get() { return resource_; }
-
-private:
-
-    ID3D12Resource* resource_;
-
-};
-
 struct D3DResourceLeakChacker {
     ~D3DResourceLeakChacker()
     {
@@ -190,22 +166,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-IDxcBlob* CompileShader(
+Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
     // CompileするShaderファイルへのパス
     const std::wstring& filePath,
     // Compilerに使用するProfile
     const wchar_t* profile,
     // 初期化で生成したものを3つ
-    IDxcUtils* dxcUtils,
-    IDxcCompiler3* dxcCompiler,
-    IDxcIncludeHandler* includeHandler,
+    const Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils,
+    const Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler,
+    const Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler,
     std::ostream& os)
 {
     // これからシェーダーをコンパイルする旨をログに出す
     Log(os, ConvertString(std::format(L"Begin CompileShader, path:{},profile:{}\n", filePath, profile)));
 
     // 1.hlslファイルを読む
-    IDxcBlobEncoding* shaderSource = nullptr;
+    Microsoft::WRL::ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
     HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
     // 読めなかったら止める
     assert(SUCCEEDED(hr));
@@ -226,19 +202,19 @@ IDxcBlob* CompileShader(
     };
 
     // 実際にShaderをコンパイルする
-    IDxcResult* shaderResult = nullptr;
+    Microsoft::WRL::ComPtr<IDxcResult> shaderResult = nullptr;
     hr = dxcCompiler->Compile(
         &shaderSourceBuffer, // 読み込んだファイル
         arguments, // コンパイルオプション
         _countof(arguments), // コンパイルオプションの数
-        includeHandler, // includeが含まれた諸々
+        includeHandler.Get(), // includeが含まれた諸々
         IID_PPV_ARGS(&shaderResult) // コンパイル結果
     );
     // コンパイルエラーではなくdxcが起動できないなど致命的な状況
     assert(SUCCEEDED(hr));
 
     // 3.警告・エラーが出ていないか確認する
-    IDxcBlobUtf8* shaderError = nullptr;
+    Microsoft::WRL::ComPtr<IDxcBlobUtf8> shaderError = nullptr;
     shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
     if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
         Log(os, shaderError->GetStringPointer());
@@ -248,14 +224,11 @@ IDxcBlob* CompileShader(
 
     // 4.Compile結果を受け取って渡す
     // コンパイル結果から実行用のバイナリ部分を取得
-    IDxcBlob* shaderBlob = nullptr;
+    Microsoft::WRL::ComPtr<IDxcBlob> shaderBlob = nullptr;
     hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
     assert(SUCCEEDED(hr));
     // 成功したログを出す
     Log(os, ConvertString(std::format(L"Compile Succeeded,path:{}, profile:{}\n", filePath, profile)));
-    // もう使わないリソースを解放
-    shaderSource->Release();
-    shaderResult->Release();
     // 実行用のバイナリを返却
     return shaderBlob;
 }
@@ -791,15 +764,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     assert(fenceEvent != nullptr);
 
     // dxCompilerを初期化
-    IDxcUtils* dxcUtils = nullptr;
-    IDxcCompiler3* dxcCompiler = nullptr;
+    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils = nullptr;
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler = nullptr;
     hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
     assert(SUCCEEDED(hr));
     hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
     assert(SUCCEEDED(hr));
 
     // 現時点でincludeはしないが、includeに対応するための設定を行っておく
-    IDxcIncludeHandler* includeHandler = nullptr;
+    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler = nullptr;
     hr = dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
     assert(SUCCEEDED(hr));
 
@@ -845,8 +818,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
     // シリアライズしてバイナリにする
-    ID3DBlob* signatureBlob = nullptr;
-    ID3DBlob* errorBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
     hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
         Log(logStream, reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
@@ -889,10 +862,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
     // Shaderをコンパイルする
-    IDxcBlob* vertexShaderBlob = CompileShader(L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
     assert(vertexShaderBlob != nullptr);
 
-    IDxcBlob* pixelShaderBlob = CompileShader(L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
     assert(pixelShaderBlob != nullptr);
 
     // PSOを生成する
@@ -1374,12 +1347,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // 解放処理
     CloseHandle(fenceEvent);
-    signatureBlob->Release();
-    if (errorBlob) {
-        errorBlob->Release();
-    }
-    pixelShaderBlob->Release();
-    vertexShaderBlob->Release();
 
     // ImGuiの終了処理
     ImGui_ImplDX12_Shutdown();
