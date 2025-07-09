@@ -673,7 +673,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         filter.DenyList.pSeverityList = severities;
         // 指定したメッセージの表示を抑制する
         infoQueue->PushStorageFilter(&filter);
-
     }
 
 #endif
@@ -929,9 +928,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
     std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData) * modelData.vertices.size());
 
-    const float kLonEvery = 2.0f * std::numbers::pi_v<float> / kSubdivision; // 1分割当たりの経度
-    const float kLatEvery = std::numbers::pi_v<float> / kSubdivision; // 1分割当たりの緯度
-
     // インデックスリソースの作成
     Microsoft::WRL::ComPtr<ID3D12Resource> indexResource = CreateBufferResource(device, sizeof(uint32_t) * kIndexCount);
 
@@ -949,18 +945,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 書き込むためのアドレスを取得
     indexResource->Map(0, nullptr, reinterpret_cast<void**>(&indexData));
 
-    uint32_t i = 0;
+    uint32_t i = 0; // インデックス配列の書き込み位置
+    // 緯度方向
     for (uint32_t lat = 0; lat < kSubdivision; ++lat) {
+        // 経度方向
         for (uint32_t lon = 0; lon < kSubdivision; ++lon) {
+            // 現在の頂点インデックス
             uint32_t current = lat * (kSubdivision + 1) + lon;
+            // 次の行の同じ列の頂点インデックス
             uint32_t next = (lat + 1) * (kSubdivision + 1) + lon;
 
-            // 三角形1個目
+            // --- 1枚目の三角形 ---
             indexData[i++] = current; // 左上
             indexData[i++] = next; // 左下
             indexData[i++] = next + 1; // 右下
 
-            // 三角形2個目
+            // --- 2枚目の三角形 ---
             indexData[i++] = current; // 左上
             indexData[i++] = next + 1; // 右下
             indexData[i++] = current + 1; // 右上
@@ -1143,9 +1143,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // DSVHeapの先頭にDSVを作る
     device->CreateDepthStencilView(depthStencilResource.Get(), &dsvDesc, dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-    // SRV切り替え用変数
-    bool useMonsterBall = true;
-
     // ImGuiの初期化
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -1200,28 +1197,40 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeTranslateMatrix(uvTransformSprite.translate));
             materialDataSprite->uvTransform = uvTransformMatrix;
 
-            // 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
-            ImGui::ShowDemoWindow();
-
             // imguiの項目内容
             ImGui::Begin("Settings");
-            ImGui::DragFloat3("CameraTranslate", &(cameraTransform.translate.x));
-            ImGui::SliderAngle("CameraRotateX", &cameraTransform.rotate.x);
-            ImGui::SliderAngle("CameraRotateY", &cameraTransform.rotate.y);
-            ImGui::SliderAngle("CameraRotateZ", &cameraTransform.rotate.z);
-            ImGui::SliderAngle("SphereRotateX", &transform.rotate.x);
-            ImGui::SliderAngle("SphereRotateY", &transform.rotate.y);
-            ImGui::SliderAngle("SphereRotateZ", &transform.rotate.z);
-            ImGui::ColorEdit4("color", &(materialData->color.x));
-            ImGui::ColorEdit4("colorMaterial", &(materialDataSprite->color.x));
-            ImGui::SliderFloat3("translateSprite", &(transformSprite.translate.x), 0.0f, 5.0f);
-            ImGui::Checkbox("useMonsterBall", &useMonsterBall);
-            ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
-            ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x, -1.0f, 1.0f);
-            ImGui::DragFloat("Intensity", &directionalLightData->intensity);
-            ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
-            ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
-            ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
+            if (ImGui::CollapsingHeader("Camera")) {
+                ImGui::DragFloat3("CameraTranslate", &(cameraTransform.translate.x));
+                ImGui::SliderAngle("CameraRotateX", &cameraTransform.rotate.x);
+                ImGui::SliderAngle("CameraRotateY", &cameraTransform.rotate.y);
+                ImGui::SliderAngle("CameraRotateZ", &cameraTransform.rotate.z);
+            }
+
+            if (ImGui::CollapsingHeader("Object##Main")) {
+                ImGui::DragFloat3("Scale##Object", &transform.scale.x, 0.001f);
+                ImGui::DragFloat3("Rotate##Object", &transform.rotate.x, 0.001f);
+                ImGui::DragFloat3("Translate##Object", &transform.translate.x, 0.001f);
+                ImGui::ColorEdit4("color##Object", &(materialData->color.x));
+            }
+
+            if (ImGui::CollapsingHeader("Object##Material")) {
+                ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.001f);
+                ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.001f);
+                ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.001f);
+                ImGui::ColorEdit4("color##Material", &(materialDataSprite->color.x));
+            }
+
+            if (ImGui::CollapsingHeader("Light")) {
+                ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
+                ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x, -1.0f, 1.0f);
+                ImGui::DragFloat("Intensity", &directionalLightData->intensity);
+            }
+
+            if (ImGui::CollapsingHeader("UVTransform")) {
+                ImGui::DragFloat2("Translate##UV", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
+                ImGui::DragFloat2("Scale##UV", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
+                ImGui::SliderAngle("Rotate##UV", &uvTransformSprite.rotate.z);
+            }
             ImGui::End();
 
             //--------------------
@@ -1279,7 +1288,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // 平面光源用のCBufferの場所を設定
             commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
             // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
-            commandList->SetGraphicsRootDescriptorTable(2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+            commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2);
             commandList->IASetIndexBuffer(&indexBufferView); // IBVを設定
             // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
             commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
