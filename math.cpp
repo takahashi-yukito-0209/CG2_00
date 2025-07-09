@@ -9,10 +9,15 @@ Vector3 Math::Normalize(const Vector3& v)
 
     float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 
-    result.x = v.x / length;
-    result.y = v.y / length;
-    result.z = v.z / length;
-
+    if (length > 0.000001) {  
+        result.x = v.x / length;
+        result.y = v.y / length;
+        result.z = v.z / length;
+    } else {
+        result.x = 0.0f;
+        result.y = -1.0f;
+        result.z = 0.0f;
+    }
     return result;
 }
 

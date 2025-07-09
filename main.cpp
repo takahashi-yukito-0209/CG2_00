@@ -1143,6 +1143,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // DSVHeapの先頭にDSVを作る
     device->CreateDepthStencilView(depthStencilResource.Get(), &dsvDesc, dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
+    // 描画対象をUIで切り替えるための変数と選択肢
+    enum DrawType {
+        DRAW_NONE,
+        DRAW_MODEL,
+        DRAW_SPRITE,
+        DRAW_ALL
+    };
+
+    DrawType selectedDrawType = DRAW_ALL; // 初期値
+
+    const char* drawOptions[] = {
+        "None", // 何も描画しない
+        "Model", // モデルのみ描画
+        "Sprite", // スプライトのみ描画
+        "All" // 両方描画
+    };
+
     // ImGuiの初期化
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -1199,38 +1216,57 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
             // imguiの項目内容
             ImGui::Begin("Settings");
+
+            // ImGuiのUIで描画対象を選択
+            ImGui::Combo("Model", (int*)&selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
+
+            // カメラ
             if (ImGui::CollapsingHeader("Camera")) {
-                ImGui::DragFloat3("CameraTranslate", &(cameraTransform.translate.x));
-                ImGui::SliderAngle("CameraRotateX", &cameraTransform.rotate.x);
-                ImGui::SliderAngle("CameraRotateY", &cameraTransform.rotate.y);
-                ImGui::SliderAngle("CameraRotateZ", &cameraTransform.rotate.z);
+                ImGui::DragFloat3("Translate##Camera", &(cameraTransform.translate.x));
+                ImGui::SliderAngle("Rotate.x##Camera", &cameraTransform.rotate.x);
+                ImGui::SliderAngle("Rotate.y##Camera", &cameraTransform.rotate.y);
+                ImGui::SliderAngle("Rotate.z##Camera", &cameraTransform.rotate.z);
             }
 
+            // メインオブジェクト
             if (ImGui::CollapsingHeader("Object##Main")) {
                 ImGui::DragFloat3("Scale##Object", &transform.scale.x, 0.001f);
                 ImGui::DragFloat3("Rotate##Object", &transform.rotate.x, 0.001f);
                 ImGui::DragFloat3("Translate##Object", &transform.translate.x, 0.001f);
-                ImGui::ColorEdit4("color##Object", &(materialData->color.x));
+                ImGui::ColorEdit4("Color##Object", &(materialData->color.x));
             }
 
+            // マテリアルオブジェクト
             if (ImGui::CollapsingHeader("Object##Material")) {
                 ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.001f);
                 ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.001f);
                 ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.001f);
-                ImGui::ColorEdit4("color##Material", &(materialDataSprite->color.x));
+                ImGui::ColorEdit4("Color##Material", &(materialDataSprite->color.x));
             }
 
+            // 平行光源
             if (ImGui::CollapsingHeader("Light")) {
-                ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
-                ImGui::SliderFloat3("LightDirection", &directionalLightData->direction.x, -1.0f, 1.0f);
-                ImGui::DragFloat("Intensity", &directionalLightData->intensity);
+                ImGui::ColorEdit4("Color", &directionalLightData->color.x);
+                // 方向ベクトルの調整。変な値を入れないよう正規化
+                if (ImGui::SliderFloat3("Direction", &directionalLightData->direction.x, -1.0f, 1.0f)) {
+                    //コピーしてからじゃないと値が吹き飛ぶので箱を作る
+                    auto dir = directionalLightData->direction;
+                    // コピーしたものを正規化
+                    dir = math.Normalize(dir);
+                    //正規化されたものを代入
+                    directionalLightData->direction = dir; 
+                }
+                // 明るさ（制限付き）
+                ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
             }
 
+            // UVTransform
             if (ImGui::CollapsingHeader("UVTransform")) {
                 ImGui::DragFloat2("Translate##UV", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
                 ImGui::DragFloat2("Scale##UV", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
                 ImGui::SliderAngle("Rotate##UV", &uvTransformSprite.rotate.z);
             }
+
             ImGui::End();
 
             //--------------------
@@ -1274,36 +1310,76 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
             // コマンドを積む
             commandList->RSSetViewports(1, &viewport); // Viewportを設定
-            commandList->RSSetScissorRects(1, &scissorRect); // Scirssorを設定
+            commandList->RSSetScissorRects(1, &scissorRect); // Scissorを設定
             // RootSignatureを設定。PSOに設定しているけど別途設定が必要
             commandList->SetGraphicsRootSignature(rootSignature.Get());
             commandList->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
-            commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
-            // 形状を設定。PSOに設定しているものとはまた別。同じものを設定すると考えておけばよい
-            commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            // マテリアルCBufferの場所を指定
-            commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
-            // wvp用のCBufferの場所を設定
-            commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
-            // 平面光源用のCBufferの場所を設定
-            commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
-            // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
-            commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2);
-            commandList->IASetIndexBuffer(&indexBufferView); // IBVを設定
-            // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
-            commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
 
-            commandList->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
-            // Spriteの描画。変更が必要なものだけ変更する。
-            commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
-            // マテリアルCBufferの場所を指定
-            commandList->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
-            // TransformationMatrixBufferの箇所を設定
-            commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-            // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
-            commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-            // 描画!
-            commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+            // 描画対象に応じた処理
+            switch (selectedDrawType) {
+
+            case DRAW_NONE:
+                // 何も描画しない（スキップ）
+                break;
+
+            case DRAW_MODEL:
+
+                // ===================== モデルの描画 ===================== //
+                commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
+                commandList->IASetIndexBuffer(&indexBufferView); // IBVを設定
+                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+                // マテリアルCBufferの場所を指定
+                commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+                // wvp用のCBufferの場所を設定
+                commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
+                // 平面光源用のCBufferの場所を設定
+                commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
+                // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
+                commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2);
+                // 描画！（DrawCall/ドローコール）。3頂点で1つのインスタンス。インスタンスについては今後
+                commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
+
+                break;
+
+            case DRAW_SPRITE:
+
+                // ===================== スプライトの描画 ===================== //
+                commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
+                commandList->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
+                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+                // マテリアルCBufferの場所を指定
+                commandList->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
+                // TransformationMatrixBufferの箇所を設定
+                commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+                // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
+                commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+                // 描画！
+                commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+
+                break;
+
+            case DRAW_ALL:
+
+                // ===================== モデルの描画 ===================== //
+                commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
+                commandList->IASetIndexBuffer(&indexBufferView); // IBVを設定
+                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+                commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress()); // マテリアル
+                commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress()); // WVP行列
+                commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
+                commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2); // SRV
+                commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0); // モデル描画
+
+                // ===================== スプライトの描画 ===================== //
+                commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
+                commandList->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
+                commandList->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress()); // マテリアル
+                commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress()); // 行列
+                commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU); // SRV
+                commandList->DrawIndexedInstanced(6, 1, 0, 0, 0); // スプライト描画
+
+                break;
+            }
 
             // 実際のcommandListのImGuiの描画コマンドを積む
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList.Get());
