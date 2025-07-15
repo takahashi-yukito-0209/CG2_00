@@ -1229,19 +1229,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             }
 
             // メインオブジェクト
-            if (ImGui::CollapsingHeader("Object##Main")) {
-                ImGui::DragFloat3("Scale##Object", &transform.scale.x, 0.001f);
-                ImGui::DragFloat3("Rotate##Object", &transform.rotate.x, 0.001f);
-                ImGui::DragFloat3("Translate##Object", &transform.translate.x, 0.001f);
-                ImGui::ColorEdit4("Color##Object", &(materialData->color.x));
+            if (selectedDrawType == DRAW_MODEL || selectedDrawType == DRAW_ALL) {
+                if (ImGui::CollapsingHeader("Object##Main")) {
+                    ImGui::DragFloat3("Scale##Object", &transform.scale.x, 0.001f);
+                    ImGui::DragFloat3("Rotate##Object", &transform.rotate.x, 0.001f);
+                    ImGui::DragFloat3("Translate##Object", &transform.translate.x, 0.001f);
+                    ImGui::ColorEdit4("Color##Object", &(materialData->color.x));
+                }
             }
 
             // マテリアルオブジェクト
-            if (ImGui::CollapsingHeader("Object##Material")) {
-                ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.001f);
-                ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.001f);
-                ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.001f);
-                ImGui::ColorEdit4("Color##Material", &(materialDataSprite->color.x));
+            if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
+                if (ImGui::CollapsingHeader("Object##Material")) {
+                    ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.001f);
+                    ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.001f);
+                    ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.001f);
+                    ImGui::ColorEdit4("Color##Material", &(materialDataSprite->color.x));
+                }
             }
 
             // 平行光源
