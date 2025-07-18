@@ -23,12 +23,14 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #include <sstream>
 #include <vector>
 #include <wrl.h>
+#include <xaudio2.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "Dbghelp.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "dxcompiler.lib")
+#pragma comment(lib, "xaudio2.lib")
 
 struct Transform {
     Vector3 scale, rotate, translate;
@@ -65,6 +67,34 @@ struct MaterialData {
 struct ModelData {
     std::vector<VertexData> vertices;
     MaterialData material;
+};
+
+// チャンクヘッダ
+struct ChunkHeader {
+    char id[4]; // チャンク毎のID
+    int32_t size; // チャンクサイズ
+};
+
+// RIFFヘッダチャンク
+struct RiffHeader {
+    ChunkHeader chunk; //"RIFF"
+    char type[4]; //"WAVE"
+};
+
+// FMTチャンク
+struct FormatChunk {
+    ChunkHeader chunk; //"fmt"
+    WAVEFORMATEX fmt; // 波型フォーマット
+};
+
+// 音声データ
+struct SoundData {
+    // 波型フォーマット
+    WAVEFORMATEX wfex;
+    // バッファの先頭アドレス
+    BYTE* pBuffer;
+    // バッファのサイズ
+    unsigned int bufferSize;
 };
 
 struct D3DResourceLeakChacker {
@@ -500,6 +530,112 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
     return modelData;
 }
 
+SoundData SoundLoadWave(const char* filename)
+{
+    // 1.ファイルオープン
+
+    // ファイル入力ストリームのインスタンス
+    std::ifstream file;
+    //.wavファイルをバイナリモードで開く
+    file.open(filename, std::ios_base::binary);
+    // ファイルオープン失敗を検知する
+    assert(file.is_open());
+
+    // 2..wavデータ読み込み
+
+    // RIFFヘッダーの読み込み
+    RiffHeader riff;
+    file.read((char*)&riff, sizeof(riff));
+    // ファイルがRIFFかチェック
+    if (strncmp(riff.chunk.id, "RIFF", 4) != 0) {
+        assert(0);
+    }
+    // タイプがWAVEかチェック
+    if (strncmp(riff.type, "WAVE", 4) != 0) {
+        assert(0);
+    }
+
+    // Formatチャンクの読み込み
+    FormatChunk format = {};
+    // チャンクヘッダーの確認
+    file.read((char*)&format, sizeof(ChunkHeader));
+    if (strncmp(format.chunk.id, "fmt ", 4) != 0) {
+        assert(0);
+    }
+
+    // チャンク本体の読み込み
+    assert(format.chunk.size <= sizeof(format.fmt));
+    file.read((char*)&format.fmt, format.chunk.size);
+
+    // Dataチャンクの読み込み
+    ChunkHeader data;
+    file.read((char*)&data, sizeof(data));
+    // JUNKチャンクを検出した場合
+    if (strncmp(data.id, "JUNK", 4) == 0) {
+        // 読み取り位置をJUNKチャンクの終わりまで進める
+        file.seekg(data.size, std::ios_base::cur);
+        // 再読み込み
+        file.read((char*)&data, sizeof(data));
+    }
+
+    if (strncmp(data.id, "data", 4) != 0) {
+        assert(0);
+    }
+
+    // Dataチャンクのデータ部(波型データ)の読み込み
+    char* pBuffer = new char[data.size];
+    file.read(pBuffer, data.size);
+
+    // 3.ファイルクローズ
+
+    // waveファイルを閉じる
+    file.close();
+
+    // 4.読み込んだ音声データをreturn
+
+    //returnするための音声データ
+    SoundData soundData = {};
+
+    soundData.wfex = format.fmt;
+    soundData.pBuffer = reinterpret_cast<BYTE*>(pBuffer);
+    soundData.bufferSize = data.size;
+
+    return soundData;
+
+}
+
+//音声データ解放
+void SoundUnload(SoundData* soundData) {
+    //バッファのメモリを解放
+    delete[] soundData->pBuffer;
+
+    soundData->pBuffer = 0;
+    soundData->bufferSize = 0;
+    soundData->wfex = {};
+}
+
+//音声再生
+void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData) {
+    HRESULT result;
+
+    //波型フォーマットを元にSourceVoiceの生成
+    IXAudio2SourceVoice* pSourceVoice = nullptr;
+    result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
+    assert(SUCCEEDED(result));
+
+    //再生する波型データの設定
+    XAUDIO2_BUFFER buf {};
+    buf.pAudioData = soundData.pBuffer;
+    buf.AudioBytes = soundData.bufferSize;
+    buf.Flags = XAUDIO2_END_OF_STREAM;
+
+    //波型データの再生
+    result = pSourceVoice->SubmitSourceBuffer(&buf);
+    result = pSourceVoice->Start();
+
+
+}
+
 // Transform変数を作る
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -10.0f } };
@@ -592,6 +728,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     D3DResourceLeakChacker leakCheck;
 
+    // XAudio2
+    Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
+    IXAudio2MasteringVoice* masterVoice;
+
     // DXGIファクトリーの生成
     Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
     // HRESULTはWindows系のエラーコードであり、
@@ -599,6 +739,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
     // 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
     assert(SUCCEEDED(hr));
+
+    // COMライブラリの初期化
+    HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    // XAudioエンジンのインスタンスを生成
+    result = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+    // マスターボイスを生成
+    result = xAudio2->CreateMasteringVoice(&masterVoice);
+
+    //音声読み込み
+    SoundData soundData1 = SoundLoadWave("resources/mokugyo.wav");
 
     // 使用するアダプタ用の変数。最初にnullptrを入れておく
     Microsoft::WRL::ComPtr<IDXGIAdapter4> useAdapter = nullptr;
@@ -1189,6 +1339,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // ゲームの処理(UpDate)
             //--------------------
 
+            //音声再生
+            SoundPlayWave(xAudio2.Get(), soundData1);
+
             // WorldMatrix作成
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             Matrix4x4 cameraMatrix = math.MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
@@ -1253,12 +1406,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 ImGui::ColorEdit4("Color", &directionalLightData->color.x);
                 // 方向ベクトルの調整。変な値を入れないよう正規化
                 if (ImGui::SliderFloat3("Direction", &directionalLightData->direction.x, -1.0f, 1.0f)) {
-                    //コピーしてからじゃないと値が吹き飛ぶので箱を作る
+                    // コピーしてからじゃないと値が吹き飛ぶので箱を作る
                     auto dir = directionalLightData->direction;
                     // コピーしたものを正規化
                     dir = math.Normalize(dir);
-                    //正規化されたものを代入
-                    directionalLightData->direction = dir; 
+                    // 正規化されたものを代入
+                    directionalLightData->direction = dir;
                 }
                 // 明るさ（制限付き）
                 ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
@@ -1434,6 +1587,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // 解放処理
     CloseHandle(fenceEvent);
+
+    //XAudio2解放
+    xAudio2.Reset();
+
+    //音声データ解放
+    SoundUnload(&soundData1);
 
     // ImGuiの終了処理
     ImGui_ImplDX12_Shutdown();
