@@ -1590,7 +1590,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     //XAudio2解放
     xAudio2.Reset();
-
     //音声データ解放
     SoundUnload(&soundData1);
 
