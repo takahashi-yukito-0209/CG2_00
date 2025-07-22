@@ -24,6 +24,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #include <vector>
 #include <wrl.h>
 #include <xaudio2.h>
+#define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
+#include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -31,6 +33,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "xaudio2.lib")
+#pragma comment(lib, "dinput8.lib")
+#pragma comment(lib, "dxguid.lib")
 
 struct Transform {
     Vector3 scale, rotate, translate;
@@ -593,7 +597,7 @@ SoundData SoundLoadWave(const char* filename)
 
     // 4.読み込んだ音声データをreturn
 
-    //returnするための音声データ
+    // returnするための音声データ
     SoundData soundData = {};
 
     soundData.wfex = format.fmt;
@@ -601,12 +605,12 @@ SoundData SoundLoadWave(const char* filename)
     soundData.bufferSize = data.size;
 
     return soundData;
-
 }
 
-//音声データ解放
-void SoundUnload(SoundData* soundData) {
-    //バッファのメモリを解放
+// 音声データ解放
+void SoundUnload(SoundData* soundData)
+{
+    // バッファのメモリを解放
     delete[] soundData->pBuffer;
 
     soundData->pBuffer = 0;
@@ -614,26 +618,64 @@ void SoundUnload(SoundData* soundData) {
     soundData->wfex = {};
 }
 
-//音声再生
-void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData) {
+// 音声再生
+void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData)
+{
     HRESULT result;
 
-    //波型フォーマットを元にSourceVoiceの生成
+    // 波型フォーマットを元にSourceVoiceの生成
     IXAudio2SourceVoice* pSourceVoice = nullptr;
     result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
     assert(SUCCEEDED(result));
 
-    //再生する波型データの設定
+    // 再生する波型データの設定
     XAUDIO2_BUFFER buf {};
     buf.pAudioData = soundData.pBuffer;
     buf.AudioBytes = soundData.bufferSize;
     buf.Flags = XAUDIO2_END_OF_STREAM;
 
-    //波型データの再生
+    // 波型データの再生
     result = pSourceVoice->SubmitSourceBuffer(&buf);
     result = pSourceVoice->Start();
+}
 
+//キー入力の箱
+constexpr int KEY_COUNT = 256;
+BYTE preKeys[KEY_COUNT] = {};
+BYTE keys[KEY_COUNT] = {};
 
+// 毎フレーム呼び出して状態更新
+void UpdateKeyboard(IDirectInputDevice8* keyboard)
+{
+    std::memcpy(preKeys, keys, KEY_COUNT);
+    if (FAILED(keyboard->GetDeviceState(KEY_COUNT, keys))) {
+        keyboard->Acquire();
+        std::memset(keys, 0, KEY_COUNT);
+    }
+}
+
+// 現在押されているか
+inline bool IsKeyPressed(uint8_t key)
+{
+    return keys[key] & 0x80;
+}
+
+// 現在離されているか
+inline bool IsKeyReleased(uint8_t key)
+{
+    return !(keys[key] & 0x80);
+}
+
+// 押した瞬間か
+inline bool IsKeyJustPressed(uint8_t key)
+{
+    return !(preKeys[key] & 0x80) && (keys[key] & 0x80);
+}
+
+// 離した瞬間か
+inline bool IsKeyJustReleased(uint8_t key)
+{
+    return (preKeys[key] & 0x80) && !(keys[key] & 0x80);
 }
 
 // Transform変数を作る
@@ -747,8 +789,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // マスターボイスを生成
     result = xAudio2->CreateMasteringVoice(&masterVoice);
 
-    //音声読み込み
+    // 音声読み込み
     SoundData soundData1 = SoundLoadWave("resources/mokugyo.wav");
+
+    //DirectInputの初期化
+    IDirectInput8* directInput = nullptr;
+    result = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
+    assert(SUCCEEDED(result));
+
+    //キーボードデバイスの生成
+    IDirectInputDevice8* keyboard = nullptr;
+    result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+    assert(SUCCEEDED(result));
+
+    //排他制御レベルのセット
+    result = keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+    assert(SUCCEEDED(result));
+
+    //入力データ形式のリセット
+    result = keyboard->SetDataFormat(&c_dfDIKeyboard);//標準形式
+    assert(SUCCEEDED(result));
 
     // 使用するアダプタ用の変数。最初にnullptrを入れておく
     Microsoft::WRL::ComPtr<IDXGIAdapter4> useAdapter = nullptr;
@@ -1339,7 +1399,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // ゲームの処理(UpDate)
             //--------------------
 
-            //音声再生
+            //キーボード情報の取得開始
+            keyboard->Acquire();
+
+            // キー状態更新
+            UpdateKeyboard(keyboard);
+
+            //数字の0キーが押されていたら
+            if (IsKeyPressed(DIK_0)) {
+                OutputDebugStringA("Hit 0\n");//出力ウィンドウに「Hit 0」と表示
+            }
+
+            // 数字の1キーが離されていたら
+            if (IsKeyReleased(DIK_1)) {
+                OutputDebugStringA("Hit 1\n"); // 出力ウィンドウに「Hit 1」と表示
+            }
+
+            // 数字の2キーが押された瞬間
+            if (IsKeyJustPressed(DIK_2)) {
+                OutputDebugStringA("Hit 2\n"); // 出力ウィンドウに「Hit 2」と表示
+            }
+
+            // 数字の3キーが離された瞬間
+            if (IsKeyJustReleased(DIK_3)) {
+                OutputDebugStringA("Hit 3\n"); // 出力ウィンドウに「Hit 3」と表示
+            }
+
+            // 音声再生
             SoundPlayWave(xAudio2.Get(), soundData1);
 
             // WorldMatrix作成
@@ -1588,9 +1674,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 解放処理
     CloseHandle(fenceEvent);
 
-    //XAudio2解放
+    // XAudio2解放
     xAudio2.Reset();
-    //音声データ解放
+    // 音声データ解放
     SoundUnload(&soundData1);
 
     // ImGuiの終了処理
