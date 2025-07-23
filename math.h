@@ -6,7 +6,28 @@ struct Vector2 {
 
 struct Vector3 {
     float x, y, z;
+
+    // ベクトル同士の減算
+    Vector3 operator-(const Vector3 rhs) const
+    {
+        return {
+            x - rhs.x,
+            y - rhs.y,
+            z - rhs.z
+        };
+    }
+
+    // 単項マイナス（符号反転）演算子
+    Vector3 operator-() const
+    {
+        return {
+            -x,
+            -y,
+            -z
+        };
+    }
 };
+
 
 struct Vector4 {
     float x, y, z, w;
@@ -18,6 +39,23 @@ struct Matrix3x3 {
 
 struct Matrix4x4 {
     float m[4][4];
+    // 行列同士の掛け算（新しい行列を返す）
+    Matrix4x4 operator*(const Matrix4x4& rhs) const
+    {
+        Matrix4x4 result = {};
+
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                float sum = 0.0f;
+                for (int k = 0; k < 4; ++k) {
+                    sum += m[i][k] * rhs.m[k][j];
+                }
+                result.m[i][j] = sum;
+            }
+        }
+
+        return result;
+    }
 };
 
 class Math {

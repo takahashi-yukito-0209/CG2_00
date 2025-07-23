@@ -25,6 +25,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #include <wrl.h>
 #include <xaudio2.h>
 #define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
+#include "DebugCamera.h"
+#include "Input.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
@@ -639,45 +641,6 @@ void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData)
     result = pSourceVoice->Start();
 }
 
-//キー入力の箱
-constexpr int KEY_COUNT = 256;
-BYTE preKeys[KEY_COUNT] = {};
-BYTE keys[KEY_COUNT] = {};
-
-// 毎フレーム呼び出して状態更新
-void UpdateKeyboard(IDirectInputDevice8* keyboard)
-{
-    std::memcpy(preKeys, keys, KEY_COUNT);
-    if (FAILED(keyboard->GetDeviceState(KEY_COUNT, keys))) {
-        keyboard->Acquire();
-        std::memset(keys, 0, KEY_COUNT);
-    }
-}
-
-// 現在押されているか
-inline bool IsKeyPressed(uint8_t key)
-{
-    return keys[key] & 0x80;
-}
-
-// 現在離されているか
-inline bool IsKeyReleased(uint8_t key)
-{
-    return !(keys[key] & 0x80);
-}
-
-// 押した瞬間か
-inline bool IsKeyJustPressed(uint8_t key)
-{
-    return !(preKeys[key] & 0x80) && (keys[key] & 0x80);
-}
-
-// 離した瞬間か
-inline bool IsKeyJustReleased(uint8_t key)
-{
-    return (preKeys[key] & 0x80) && !(keys[key] & 0x80);
-}
-
 // Transform変数を作る
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 Transform cameraTransform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -10.0f } };
@@ -792,23 +755,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 音声読み込み
     SoundData soundData1 = SoundLoadWave("resources/mokugyo.wav");
 
-    //DirectInputの初期化
+    // DirectInputの初期化
     IDirectInput8* directInput = nullptr;
     result = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
     assert(SUCCEEDED(result));
 
-    //キーボードデバイスの生成
-    IDirectInputDevice8* keyboard = nullptr;
-    result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
-    assert(SUCCEEDED(result));
-
-    //排他制御レベルのセット
-    result = keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-    assert(SUCCEEDED(result));
-
-    //入力データ形式のリセット
-    result = keyboard->SetDataFormat(&c_dfDIKeyboard);//標準形式
-    assert(SUCCEEDED(result));
+    // 初期化時
+    Input::GetInstance()->Initialize(directInput, hwnd);
 
     // 使用するアダプタ用の変数。最初にnullptrを入れておく
     Microsoft::WRL::ComPtr<IDXGIAdapter4> useAdapter = nullptr;
@@ -1370,6 +1323,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         "All" // 両方描画
     };
 
+    DebugCamera debugCamera;
+    debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
+
     // ImGuiの初期化
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -1399,41 +1355,35 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // ゲームの処理(UpDate)
             //--------------------
 
-            //キーボード情報の取得開始
-            keyboard->Acquire();
+            // キー入力毎フレーム更新
+            Input::GetInstance()->Update();
 
-            // キー状態更新
-            UpdateKeyboard(keyboard);
-
-            //数字の0キーが押されていたら
-            if (IsKeyPressed(DIK_0)) {
-                OutputDebugStringA("Hit 0\n");//出力ウィンドウに「Hit 0」と表示
+            // 入力チェック
+            if (Input::GetInstance()->IsKeyReleased(DIK_SPACE)) {
+                // スペースキーが押された瞬間の処理
+                OutputDebugStringA("Hit 1\n");
             }
 
-            // 数字の1キーが離されていたら
-            if (IsKeyReleased(DIK_1)) {
-                OutputDebugStringA("Hit 1\n"); // 出力ウィンドウに「Hit 1」と表示
-            }
+            //マウス入力取得
+            long deltaX = Input::GetInstance()->GetMouseDeltaX();
+            long deltaY = Input::GetInstance()->GetMouseDeltaY();
+            long wheelDelta = Input::GetInstance()->GetMouseDeltaZ();
 
-            // 数字の2キーが押された瞬間
-            if (IsKeyJustPressed(DIK_2)) {
-                OutputDebugStringA("Hit 2\n"); // 出力ウィンドウに「Hit 2」と表示
-            }
+            //デバックカメラマウス操作用
+            debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
+            debugCamera.OnMouseWheel(float(wheelDelta));
 
-            // 数字の3キーが離された瞬間
-            if (IsKeyJustReleased(DIK_3)) {
-                OutputDebugStringA("Hit 3\n"); // 出力ウィンドウに「Hit 3」と表示
-            }
+            //デバックカメラの更新
+            debugCamera.Update();
 
             // 音声再生
             SoundPlayWave(xAudio2.Get(), soundData1);
 
             // WorldMatrix作成
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-            Matrix4x4 cameraMatrix = math.MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
-            Matrix4x4 viewMatrix = math.Inverse(cameraMatrix);
-            Matrix4x4 projectionMatrix = math.MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
-
+            Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
+            Matrix4x4 projectionMatrix = debugCamera.GetProjectionMatrix();
+            
             // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
             // CBufferの中身更新
@@ -1678,6 +1628,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     xAudio2.Reset();
     // 音声データ解放
     SoundUnload(&soundData1);
+
+    Input::GetInstance()->Finalize();
+    // DirectInput の解放
+    directInput->Release();
 
     // ImGuiの終了処理
     ImGui_ImplDX12_Shutdown();
