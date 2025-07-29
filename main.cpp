@@ -436,6 +436,7 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
             Vector4 position;
             s >> position.x >> position.y >> position.z;
             position.w = 1.0f;
+            position.x *= -1.0f;
             positions.push_back(position);
 
         } else if (identifier == "vt") {
@@ -446,6 +447,7 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
         } else if (identifier == "vn") {
             Vector3 normal;
             s >> normal.x >> normal.y >> normal.z;
+            normal.x *= -1.0f;
             normals.push_back(normal);
 
         } else if (identifier == "f") {
@@ -466,8 +468,6 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
                 Vector4 position = positions[elementIndices[0] - 1];
                 Vector2 texcoord = texcoords[elementIndices[1] - 1];
                 Vector3 normal = normals[elementIndices[2] - 1];
-                position.x *= 1.0f;
-                normal.x *= 1.0f;
                 texcoord.y = 1.0f - texcoord.y;
                 triangle[faceVertex] = { position, texcoord, normal };
             }
