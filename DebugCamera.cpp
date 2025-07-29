@@ -25,10 +25,10 @@ void DebugCamera::Update()
 
     // キーボード入力処理（WASD + QE）
     if (input->IsKeyPressed(DIK_W)) {
-        translation_.z -= moveSpeed_;
+        translation_.z += moveSpeed_;
     }
     if (input->IsKeyPressed(DIK_S)) {
-        translation_.z += moveSpeed_;
+        translation_.z -= moveSpeed_;
     }
     if (input->IsKeyPressed(DIK_D)) {
         translation_.x -= moveSpeed_;

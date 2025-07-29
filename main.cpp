@@ -482,6 +482,7 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
             Vector4 position;
             s >> position.x >> position.y >> position.z;
             position.w = 1.0f;
+            position.x *= -1.0f;
             positions.push_back(position);
 
         } else if (identifier == "vt") {
@@ -492,6 +493,7 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
         } else if (identifier == "vn") {
             Vector3 normal;
             s >> normal.x >> normal.y >> normal.z;
+            normal.x *= -1.0f;
             normals.push_back(normal);
 
         } else if (identifier == "f") {
@@ -512,8 +514,6 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
                 Vector4 position = positions[elementIndices[0] - 1];
                 Vector2 texcoord = texcoords[elementIndices[1] - 1];
                 Vector3 normal = normals[elementIndices[2] - 1];
-                position.x *= 1.0f;
-                normal.x *= 1.0f;
                 texcoord.y = 1.0f - texcoord.y;
                 triangle[faceVertex] = { position, texcoord, normal };
             }
@@ -1364,14 +1364,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 OutputDebugStringA("Hit 1\n");
             }
 
-            //マウス入力取得
+            // マウス入力取得
             long deltaX = Input::GetInstance()->GetMouseDeltaX();
             long deltaY = Input::GetInstance()->GetMouseDeltaY();
             long wheelDelta = Input::GetInstance()->GetMouseDeltaZ();
 
-            //デバックカメラマウス操作用
-            debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
-            debugCamera.OnMouseWheel(float(wheelDelta));
+            // ImGui操作中ならマウスによるカメラ回転・ズームは止める
+            if (!ImGui::IsAnyItemActive() && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+                debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
+                debugCamera.OnMouseWheel(float(wheelDelta));
+            }
 
             //デバックカメラの更新
             debugCamera.Update();
@@ -1432,9 +1434,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             // マテリアルオブジェクト
             if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
                 if (ImGui::CollapsingHeader("Object##Material")) {
-                    ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.001f);
-                    ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.001f);
-                    ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.001f);
+                    ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.1f);
+                    ImGui::DragFloat3("Rotate##Material", &(transformSprite.rotate.x), 0.1f);
+                    ImGui::DragFloat3("Translate##Material", &(transformSprite.translate.x), 0.1f);
                     ImGui::ColorEdit4("Color##Material", &(materialDataSprite->color.x));
                 }
             }
@@ -1460,6 +1462,34 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 ImGui::DragFloat2("Translate##UV", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
                 ImGui::DragFloat2("Scale##UV", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
                 ImGui::SliderAngle("Rotate##UV", &uvTransformSprite.rotate.z);
+            }
+
+            //デバッグカメラ
+            if (ImGui::CollapsingHeader("DebugCamera")) {
+                // カメラ位置をドラッグで調整
+                Vector3 camPos = debugCamera.GetTranslation();
+                if (ImGui::DragFloat3("Position", &camPos.x, 0.1f)) {
+                    debugCamera.SetTranslation(camPos);
+                }
+
+                // カメラ回転を角度でスライダー操作
+                Vector3 camRot = debugCamera.GetRotation();
+                float rotX = camRot.x * 180.0f / 3.14159265f; // ラジアン→度変換
+                float rotY = camRot.y * 180.0f / 3.14159265f;
+                float rotZ = camRot.z * 180.0f / 3.14159265f;
+
+                bool changed = false;
+                changed |= ImGui::SliderAngle("Rotation X", &rotX);
+                changed |= ImGui::SliderAngle("Rotation Y", &rotY);
+                changed |= ImGui::SliderAngle("Rotation Z", &rotZ);
+
+                if (changed) {
+                    // 度→ラジアンに戻してセット
+                    camRot.x = rotX * 3.14159265f / 180.0f;
+                    camRot.y = rotY * 3.14159265f / 180.0f;
+                    camRot.z = rotZ * 3.14159265f / 180.0f;
+                    debugCamera.SetRotation(camRot);
+                }
             }
 
             ImGui::End();
