@@ -1377,7 +1377,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             debugCamera.Update();
 
             // 音声再生
-            SoundPlayWave(xAudio2.Get(), soundData1);
+            if (Input::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !Input::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
+                SoundPlayWave(xAudio2.Get(), soundData1);
+            }
 
             // WorldMatrix作成
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
