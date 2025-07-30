@@ -16,8 +16,9 @@ bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
 
     // --- キーボードの初期化 ---
     hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard_, nullptr);
-    if (FAILED(hr))
+    if (FAILED(hr)) {
         return false;
+    }
 
     keyboard_->SetDataFormat(&c_dfDIKeyboard);
     keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
@@ -28,8 +29,9 @@ bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
 
     // --- マウスの初期化 ---
     hr = directInput->CreateDevice(GUID_SysMouse, &mouse_, nullptr);
-    if (FAILED(hr))
+    if (FAILED(hr)) {
         return false;
+    }
 
     mouse_->SetDataFormat(&c_dfDIMouse2); // 拡張マウス情報（ホイール含む）
     mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
