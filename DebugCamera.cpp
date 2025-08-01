@@ -10,7 +10,7 @@ void DebugCamera::Initialize(float screenWidth, float screenHeight)
     screenWidth_ = screenWidth;
     screenHeight_ = screenHeight;
 
-    translation_ = { 0.0f, 0.0f, -50.0f };
+    translation_ = { 0.0f, 0.0f, -10.0f };
     rotation_ = { 0.0f, 0.0f, 0.0f };
 
     UpdateProjectionMatrix();

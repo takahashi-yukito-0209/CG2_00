@@ -1071,7 +1071,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     constexpr uint32_t kIndexCount = kSubdivision * kSubdivision * 6; // インデックス数
 
     // モデル読み込み
-    ModelData modelData = LoadObjFile("resources", "axis.obj");
+    ModelData modelData = LoadObjFile("resources", "plane.obj");
 
     // 頂点リソースの作成
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
@@ -1431,7 +1431,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 }
             }
 
-            // マテリアルオブジェクト
+            // スプライトオブジェクト(2D描画)
             if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
                 if (ImGui::CollapsingHeader("Object##Material")) {
                     ImGui::DragFloat3("Scale##Material", &(transformSprite.scale.x), 0.1f);
