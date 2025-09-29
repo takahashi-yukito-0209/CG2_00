@@ -51,8 +51,10 @@ struct VertexData {
 struct Material {
     Vector4 color;
     int32_t enableLighting;
-    float padding[3];
+    float padding1[3];
     Matrix4x4 uvTransform;
+    int lightingMode;
+    float padding2[3];
 };
 
 struct TransformationMatrix {
@@ -1529,6 +1531,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         "All" // 両方描画
     };
 
+    enum LightingMode {
+        Lighting_None = 0,
+        Lighting_Lambert,
+        Lighting_HalfLambert,
+    };
+
+    int lightingMode = Lighting_HalfLambert; // 初期値
+
+
     DebugCamera debugCamera;
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
@@ -1726,6 +1737,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 }
                 // 明るさ（制限付き）
                 ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
+
+                //ライティング方式
+                ImGui::Text("Lighting Mode");
+                ImGui::RadioButton("None", &lightingMode, 0);
+                ImGui::RadioButton("Lambert", &lightingMode, 1);
+                ImGui::RadioButton("Half Lambert", &lightingMode, 2);
+
             }
 
             // UVTransform
@@ -1767,6 +1785,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             ImGui::Checkbox("Debug Camera Control", &isDebugCameraControl);
 
             ImGui::End();
+
+            // ImGuiのLighting設定をmaterialDataに反映する（毎フレーム）
+            materialDataBunny->enableLighting = (lightingMode != 0);
+            materialDataBunny->lightingMode = lightingMode;
+
+            materialDataChecker->enableLighting = (lightingMode != 0);
+            materialDataChecker->lightingMode = lightingMode;
+
+            sphereMaterialData->enableLighting = (lightingMode != 0);
+            sphereMaterialData->lightingMode = lightingMode;
+
+            materialData->enableLighting = (lightingMode != 0);
+            materialData->lightingMode = lightingMode;
 
             //--------------------
             // 画面のクリア処理(Draw)

@@ -8,6 +8,7 @@ struct Material
     float32_t4 color;
     int32_t enableLighting;
     float32_t4x4 uvTransform;
+    int32_t lightingMode;
 };
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -35,8 +36,20 @@ PixelShaderOutput main(VertexShaderOutput input)
     if (gMaterial.enableLighting != 0)
     {//Lightingする場合
         float NdotL = dot(normalize(input.normal), -gDirectionalLight.direction);
-        float cos = pow(NdotL * 0.5f + 0.5f, 2.0f);
-        output.color = gMaterial.color * textureColor * gDirectionalLight.color * cos * gDirectionalLight.intensity;
+        float lighting = 1.0f;
+        
+        if (gMaterial.lightingMode == 1)
+        {
+            // Lambert
+            lighting = max(NdotL, 0.0f);
+        }
+        else if (gMaterial.lightingMode == 2)
+        {
+            // Half-Lambert
+            lighting = pow(NdotL * 0.5f + 0.5f, 2.0f);
+        }
+        
+        output.color = gMaterial.color * textureColor * gDirectionalLight.color * lighting * gDirectionalLight.intensity;
     }
     else
     {//Lightingしない場合。前回までと同じ演算

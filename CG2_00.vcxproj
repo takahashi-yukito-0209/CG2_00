@@ -92,7 +92,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DebugCamera.cpp" />
-    <ClCompile Include="externals\imgui\imgui.cpp" />
+    <ClCompile Include="externals\imgui\imgui.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MinSpace</Optimization>
+    </ClCompile>
     <ClCompile Include="externals\imgui\imgui_demo.cpp" />
     <ClCompile Include="externals\imgui\imgui_draw.cpp" />
     <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp" />
