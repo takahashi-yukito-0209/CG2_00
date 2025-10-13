@@ -1,0 +1,2 @@
+C:\Users\K024G\OneDrive\デスクトップ\2年次\2年前期\CG2\CG2_00\externals\DirectXTex\Bin\Desktop_2022_Win10\x64\Release\DirectXTex.lib
+C:\Projects\CG2_00\externals\DirectXTex\Bin\Desktop_2022_Win10\x64\Release\DirectXTex.lib

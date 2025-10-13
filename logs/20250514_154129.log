@@ -1,0 +1,23 @@
+Use Adapter:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader, path:Object3d.VS.hlsl,profile:vs_6_0
+
+Object3d.VS.hlsl:11:1: error: unknown type name 'VertexShaderOutput'; did you mean 'VectexShaderoutput'?
+VertexShaderOutput main(VertexShaderInput input)
+^~~~~~~~~~~~~~~~~~
+VectexShaderoutput
+Object3d.VS.hlsl:1:8: note: 'VectexShaderoutput' declared here
+struct VectexShaderoutput
+       ^
+Object3d.VS.hlsl:13:5: error: unknown type name 'VertexShaderOutput'; did you mean 'VectexShaderoutput'?
+    VertexShaderOutput output;
+    ^~~~~~~~~~~~~~~~~~
+    VectexShaderoutput
+Object3d.VS.hlsl:1:8: note: 'VectexShaderoutput' declared here
+struct VectexShaderoutput
+       ^
+

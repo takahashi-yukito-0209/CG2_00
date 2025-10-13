@@ -6,7 +6,7 @@
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
-#include "math.h"
+#include "mathUtility.h"
 #include <cassert>
 #include <d3d12.h>
 #include <dbghelp.h>
@@ -710,7 +710,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // ウィンドウの生成
     HWND hwnd = CreateWindow(
         wc.lpszClassName, // 利用するクラス名
-        L"CG2_LE2C_17_タカハシ_ユキト", // タイトルバーの文字（なんでもいい）
+        L"GE3_LE2B_15_タカハシ_ユキト", // タイトルバーの文字（なんでもいい）
         WS_OVERLAPPEDWINDOW, // よく見るウィンドウタイトル
         CW_USEDEFAULT, // 表示X座標（Windowsに任せる）
         CW_USEDEFAULT, // 表示Y座標（WindowsOSに任せる）
@@ -1027,10 +1027,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
     // Shaderをコンパイルする
-    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"resources/shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
     assert(vertexShaderBlob != nullptr);
 
-    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"resources/shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, includeHandler, logStream);
     assert(pixelShaderBlob != nullptr);
 
     // PSOを生成する
@@ -1069,7 +1069,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     assert(SUCCEEDED(hr));
 
     // 自作した数学関数の使用
-    Math math;
+    MathUtility math;
 
     constexpr uint32_t kSubdivision = 16; // 分割数
     constexpr uint32_t kVertexCount = (kSubdivision + 1) * (kSubdivision + 1); // 頂点数
