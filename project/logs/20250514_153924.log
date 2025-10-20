@@ -1,0 +1,9 @@
+Use Adapter:NVIDIA GeForce RTX 4060 Laptop GPU
+
+FeatureLevel : 12.2
+
+Complete create D3D12Device!!!
+
+Begin CompileShader, path:Object3d.VS.hlsl,profile:vs_6_0
+
+Unknown argument: '-0d'
