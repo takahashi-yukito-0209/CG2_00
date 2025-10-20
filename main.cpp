@@ -1539,7 +1539,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     int lightingMode = Lighting_HalfLambert; // 初期値
 
-
     DebugCamera debugCamera;
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
@@ -1738,12 +1737,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
                 // 明るさ（制限付き）
                 ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
 
-                //ライティング方式
+                // ライティング方式
                 ImGui::Text("Lighting Mode");
                 ImGui::RadioButton("None", &lightingMode, 0);
                 ImGui::RadioButton("Lambert", &lightingMode, 1);
                 ImGui::RadioButton("Half Lambert", &lightingMode, 2);
-
             }
 
             // UVTransform
