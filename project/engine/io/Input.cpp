@@ -15,7 +15,7 @@ bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
     HRESULT hr;
 
     // --- キーボードの初期化 ---
-    hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard_, nullptr);
+    hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr);
     if (FAILED(hr)) {
         return false;
     }
@@ -28,7 +28,7 @@ bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
     std::memset(preKeys_, 0, KEY_COUNT);
 
     // --- マウスの初期化 ---
-    hr = directInput->CreateDevice(GUID_SysMouse, &mouse_, nullptr);
+    hr = directInput->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr);
     if (FAILED(hr)) {
         return false;
     }
@@ -50,14 +50,12 @@ void Input::Finalize()
 {
     if (keyboard_) {
         keyboard_->Unacquire();
-        keyboard_->Release();
-        keyboard_ = nullptr;
+        keyboard_.Reset();
     }
 
     if (mouse_) {
         mouse_->Unacquire();
-        mouse_->Release();
-        mouse_ = nullptr;
+        mouse_.Reset();
     }
 }
 
