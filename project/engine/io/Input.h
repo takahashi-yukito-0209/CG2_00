@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <dinput.h>
+#include <wrl.h>
+
+using Microsoft::WRL::ComPtr;
 
 /// <summary>
 /// キーボード & マウス入力管理クラス（シングルトン）
@@ -48,10 +51,10 @@ private:
     // キーボード入力
     BYTE keys_[KEY_COUNT] {}; // 現在のキー状態
     BYTE preKeys_[KEY_COUNT] {}; // 前フレームのキー状態
-    IDirectInputDevice8* keyboard_ = nullptr;
+    ComPtr<IDirectInputDevice8> keyboard_;
 
     // マウス入力
-    IDirectInputDevice8* mouse_ = nullptr; // マウスデバイス
+    ComPtr<IDirectInputDevice8> mouse_; // マウスデバイス
     DIMOUSESTATE2 mouseState_ {}; // 現在のマウス状態
     DIMOUSESTATE2 preMouseState_ {}; // 前フレームのマウス状態
 };
