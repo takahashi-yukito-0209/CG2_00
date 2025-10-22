@@ -1,6 +1,8 @@
 #include "InputManager.h"
 #include <cstring>
 
+using namespace MyEngine;
+
 InputManager* InputManager::GetInstance()
 {
     static InputManager instance;

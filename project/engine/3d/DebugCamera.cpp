@@ -1,6 +1,8 @@
 #include "DebugCamera.h"
 #include "InputManager.h"
 
+using namespace MyEngine;
+
 DebugCamera::DebugCamera() { }
 
 DebugCamera::~DebugCamera() { }
