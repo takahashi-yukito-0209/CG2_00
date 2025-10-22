@@ -102,7 +102,7 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>externals\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="engine\io\Input.cpp">
+    <ClCompile Include="engine\io\InputManager.cpp">
       <Filter>ソース ファイル\engine\io</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\mathUtility.cpp">
@@ -148,7 +148,7 @@
     <ClInclude Include="engine\3d\DebugCamera.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
-    <ClInclude Include="engine\io\Input.h">
+    <ClInclude Include="engine\io\InputManager.h">
       <Filter>ヘッダー ファイル\engine\io</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\mathUtility.h">

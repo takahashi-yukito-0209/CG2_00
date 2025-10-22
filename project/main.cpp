@@ -26,7 +26,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #include <xaudio2.h>
 #define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
 #include "DebugCamera.h"
-#include "Input.h"
+#include "InputManager.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
@@ -766,7 +766,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     assert(SUCCEEDED(result));
 
     // 初期化時
-    Input::GetInstance()->Initialize(directInput, hwnd);
+    InputManager::GetInstance()->Initialize(directInput, hwnd);
 
     // 使用するアダプタ用の変数。最初にnullptrを入れておく
     Microsoft::WRL::ComPtr<IDXGIAdapter4> useAdapter = nullptr;
@@ -1573,10 +1573,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             //--------------------
 
             // キー入力毎フレーム更新
-            Input::GetInstance()->Update();
+            InputManager::GetInstance()->Update();
 
             // 入力チェック
-            if (Input::GetInstance()->IsKeyReleased(DIK_SPACE)) {
+            if (InputManager::GetInstance()->IsKeyReleased(DIK_SPACE)) {
                 // スペースキーが押された瞬間の処理
                 OutputDebugStringA("Hit 1\n");
             }
@@ -1585,9 +1585,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             if (isDebugCameraControl) {
 
                 // マウス入力取得
-                long deltaX = Input::GetInstance()->GetMouseDeltaX();
-                long deltaY = Input::GetInstance()->GetMouseDeltaY();
-                long wheelDelta = Input::GetInstance()->GetMouseDeltaZ();
+                long deltaX = InputManager::GetInstance()->GetMouseDeltaX();
+                long deltaY = InputManager::GetInstance()->GetMouseDeltaY();
+                long wheelDelta = InputManager::GetInstance()->GetMouseDeltaZ();
 
                 // ImGui操作中ならマウスによるカメラ回転・ズームは止める
                 if (!ImGui::IsAnyItemActive() && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
@@ -1600,7 +1600,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             }
 
             // 音声再生
-            if (Input::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !Input::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
+            if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !InputManager::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
                 SoundPlayWave(xAudio2.Get(), soundData1);
             }
 
@@ -2032,7 +2032,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // 音声データ解放
     SoundUnload(&soundData1);
 
-    Input::GetInstance()->Finalize();
+    InputManager::GetInstance()->Finalize();
     // DirectInput の解放
     directInput->Release();
 
