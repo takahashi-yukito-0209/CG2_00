@@ -8,10 +8,10 @@ using Microsoft::WRL::ComPtr;
 /// <summary>
 /// キーボード & マウス入力管理クラス（シングルトン）
 /// </summary>
-class Input {
+class InputManager {
 public:
     // インスタンス取得（シングルトン）
-    static Input* GetInstance();
+    static InputManager* GetInstance();
 
     // 初期化（DirectInputの生成後に呼ぶ）
     bool Initialize(IDirectInput8* directInput, HWND hwnd);
@@ -40,10 +40,10 @@ public:
 
 private:
     // シングルトン構成
-    Input() = default;
-    ~Input() = default;
-    Input(const Input&) = delete;
-    Input& operator=(const Input&) = delete;
+    InputManager() = default;
+    ~InputManager() = default;
+    InputManager(const InputManager&) = delete;
+    InputManager& operator=(const InputManager&) = delete;
 
 private:
     static constexpr int KEY_COUNT = 256; // キー数（256固定）

@@ -1,5 +1,5 @@
 #include "DebugCamera.h"
-#include "Input.h"
+#include "InputManager.h"
 
 DebugCamera::DebugCamera() { }
 
@@ -21,7 +21,7 @@ void DebugCamera::Initialize(float screenWidth, float screenHeight)
 
 void DebugCamera::Update()
 {
-    Input* input = Input::GetInstance();
+    InputManager* input = InputManager::GetInstance();
 
     // キーボード入力処理（WASD + QE）
     if (input->IsKeyPressed(DIK_W)) {
@@ -50,7 +50,7 @@ void DebugCamera::Update()
 
 void DebugCamera::OnMouseDrag(float deltaX, float deltaY)
 {
-    Input* input = Input::GetInstance();
+    InputManager* input = InputManager::GetInstance();
 
     if (input->IsMouseButtonPressed(0)) {
         // マウス移動に応じて回転を変更

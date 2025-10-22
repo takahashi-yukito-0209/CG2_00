@@ -1,16 +1,16 @@
-#include "Input.h"
+#include "InputManager.h"
 #include <cstring>
 
-Input* Input::GetInstance()
+InputManager* InputManager::GetInstance()
 {
-    static Input instance;
+    static InputManager instance;
     return &instance;
 }
 
 /// <summary>
 /// DirectInput デバイスの初期化（キーボード・マウス）
 /// </summary>
-bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
+bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
 {
     HRESULT hr;
 
@@ -46,7 +46,7 @@ bool Input::Initialize(IDirectInput8* directInput, HWND hwnd)
 /// <summary>
 /// デバイスの解放（終了処理）
 /// </summary>
-void Input::Finalize()
+void InputManager::Finalize()
 {
     if (keyboard_) {
         keyboard_->Unacquire();
@@ -62,7 +62,7 @@ void Input::Finalize()
 /// <summary>
 /// 毎フレーム呼び出して、キーボード・マウス状態を更新
 /// </summary>
-void Input::Update()
+void InputManager::Update()
 {
     // --- キーボードの状態更新 ---
     std::memcpy(preKeys_, keys_, KEY_COUNT);
@@ -82,7 +82,7 @@ void Input::Update()
 /// <summary>
 /// 指定キーが現在押されているか
 /// </summary>
-bool Input::IsKeyPressed(uint8_t key) const
+bool InputManager::IsKeyPressed(uint8_t key) const
 {
     return keys_[key] & 0x80;
 }
@@ -90,7 +90,7 @@ bool Input::IsKeyPressed(uint8_t key) const
 /// <summary>
 /// 指定キーが現在離されているか
 /// </summary>
-bool Input::IsKeyReleased(uint8_t key) const
+bool InputManager::IsKeyReleased(uint8_t key) const
 {
     return !(keys_[key] & 0x80);
 }
@@ -98,7 +98,7 @@ bool Input::IsKeyReleased(uint8_t key) const
 /// <summary>
 /// 指定キーが押された瞬間か
 /// </summary>
-bool Input::IsKeyJustPressed(uint8_t key) const
+bool InputManager::IsKeyJustPressed(uint8_t key) const
 {
     return !(preKeys_[key] & 0x80) && (keys_[key] & 0x80);
 }
@@ -106,7 +106,7 @@ bool Input::IsKeyJustPressed(uint8_t key) const
 /// <summary>
 /// 指定キーが離された瞬間か
 /// </summary>
-bool Input::IsKeyJustReleased(uint8_t key) const
+bool InputManager::IsKeyJustReleased(uint8_t key) const
 {
     return (preKeys_[key] & 0x80) && !(keys_[key] & 0x80);
 }
@@ -118,7 +118,7 @@ bool Input::IsKeyJustReleased(uint8_t key) const
 /// <summary>
 /// 指定ボタン（0～7）が押されているか
 /// </summary>
-bool Input::IsMouseButtonPressed(int button) const
+bool InputManager::IsMouseButtonPressed(int button) const
 {
     return mouseState_.rgbButtons[button] & 0x80;
 }
@@ -126,7 +126,7 @@ bool Input::IsMouseButtonPressed(int button) const
 /// <summary>
 /// 指定ボタンが離されているか
 /// </summary>
-bool Input::IsMouseButtonReleased(int button) const
+bool InputManager::IsMouseButtonReleased(int button) const
 {
     return !(mouseState_.rgbButtons[button] & 0x80);
 }
@@ -134,7 +134,7 @@ bool Input::IsMouseButtonReleased(int button) const
 /// <summary>
 /// 指定ボタンが押された瞬間か
 /// </summary>
-bool Input::IsMouseButtonJustPressed(int button) const
+bool InputManager::IsMouseButtonJustPressed(int button) const
 {
     return !(preMouseState_.rgbButtons[button] & 0x80) && (mouseState_.rgbButtons[button] & 0x80);
 }
@@ -142,7 +142,7 @@ bool Input::IsMouseButtonJustPressed(int button) const
 /// <summary>
 /// 指定ボタンが離された瞬間か
 /// </summary>
-bool Input::IsMouseButtonJustReleased(int button) const
+bool InputManager::IsMouseButtonJustReleased(int button) const
 {
     return (preMouseState_.rgbButtons[button] & 0x80) && !(mouseState_.rgbButtons[button] & 0x80);
 }
@@ -150,7 +150,7 @@ bool Input::IsMouseButtonJustReleased(int button) const
 /// <summary>
 /// マウスのX軸移動量（フレーム間差分）
 /// </summary>
-long Input::GetMouseDeltaX() const
+long InputManager::GetMouseDeltaX() const
 {
     return mouseState_.lX;
 }
@@ -158,7 +158,7 @@ long Input::GetMouseDeltaX() const
 /// <summary>
 /// マウスのY軸移動量（フレーム間差分）
 /// </summary>
-long Input::GetMouseDeltaY() const
+long InputManager::GetMouseDeltaY() const
 {
     return mouseState_.lY;
 }
@@ -166,7 +166,7 @@ long Input::GetMouseDeltaY() const
 /// <summary>
 /// ホイールの回転量（Z軸）
 /// </summary>
-long Input::GetMouseDeltaZ() const
+long InputManager::GetMouseDeltaZ() const
 {
     return mouseState_.lZ;
 }
