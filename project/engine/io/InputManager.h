@@ -5,6 +5,8 @@
 
 using Microsoft::WRL::ComPtr;
 
+namespace MyEngine {
+
 /// <summary>
 /// キーボード & マウス入力管理クラス（シングルトン）
 /// </summary>
@@ -58,3 +60,4 @@ private:
     DIMOUSESTATE2 mouseState_ {}; // 現在のマウス状態
     DIMOUSESTATE2 preMouseState_ {}; // 前フレームのマウス状態
 };
+} // namespace MyEngine
