@@ -111,6 +111,9 @@
     <ClCompile Include="engine\3d\DebugCamera.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
+    <ClCompile Include="WinApp.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -153,6 +156,9 @@
     </ClInclude>
     <ClInclude Include="engine\base\mathUtility.h">
       <Filter>ヘッダー ファイル\engine\math</Filter>
+    </ClInclude>
+    <ClInclude Include="WinApp.h">
+      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

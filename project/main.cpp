@@ -16,7 +16,6 @@
 #include <fstream>
 #include <string>
 #include <strsafe.h>
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
 #include <numbers>
@@ -27,6 +26,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg
 #define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
 #include "DebugCamera.h"
 #include "InputManager.h"
+#include "WinApp.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
@@ -184,26 +184,6 @@ std::string ConvertString(const std::wstring& str)
     std::string result(sizeNeeded, 0);
     WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded, NULL, NULL);
     return result;
-}
-
-// ウィンドウプロシージャ
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-{
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-        return true;
-    }
-
-    // メッセージに応じてゲーム固有の処理を行う
-    switch (msg) {
-        // ウィンドウが破棄された
-    case WM_DESTROY:
-        // OSに対して、アプリの終了を伝える
-        PostQuitMessage(0);
-        return 0;
-    }
-
-    // 標準のメッセージ処理を行う
-    return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
@@ -655,7 +635,7 @@ Transform uvTransformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.
 Transform transformBunny = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f } };
 
 // Windowsアプリでのエントリーポイント（main関数）
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     // COMの初期化
     CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -682,49 +662,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     // ファイルを作って書き込み準備
     std::ofstream logStream(logFilePath);
 
-    WNDCLASS wc {};
+    // WinAppのインスタンスを作成/取得し、Initializeに引数を渡す
+    WinApp::GetInstance()->Initialize(hInstance, nCmdShow, L"GE3_LE2B_15_タカハシ_ユキト");
 
-    // ウィンドウプロシージャ
-    wc.lpfnWndProc = WindowProc;
-
-    // ウィンドウクラス名（なんでもいい）
-    wc.lpszClassName = L"CG2WindowClass";
-
-    // インスタンスハンドル
-    wc.hInstance = GetModuleHandle(nullptr);
-
-    // カーソル
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-
-    // ウィンドウクラスを登録する
-    RegisterClass(&wc);
-
-    // クライアント領域のサイズ
-    const int32_t kClientWidth = 1280;
-    const int32_t kClientHeight = 720;
-
-    // ウィンドウサイズを表す構造体にクライアント領域を入れる
-    RECT wrc = { 0, 0, kClientWidth, kClientHeight };
-
-    // クライアント領域をもとに実際にサイズにwrcを変更してもらう
-    AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
-
-    // ウィンドウの生成
-    HWND hwnd = CreateWindow(
-        wc.lpszClassName, // 利用するクラス名
-        L"GE3_LE2B_15_タカハシ_ユキト", // タイトルバーの文字（なんでもいい）
-        WS_OVERLAPPEDWINDOW, // よく見るウィンドウタイトル
-        CW_USEDEFAULT, // 表示X座標（Windowsに任せる）
-        CW_USEDEFAULT, // 表示Y座標（WindowsOSに任せる）
-        wrc.right - wrc.left, // ウィンドウ横幅
-        wrc.bottom - wrc.top, // ウィンドウ縦幅
-        nullptr, // 親ウィンドウハンドル
-        nullptr, // メニューハンドル
-        wc.hInstance, // インスタンスハンドル
-        nullptr); // オプション
-
-    // ウィンドウを表示する
-    ShowWindow(hwnd, SW_SHOW);
+    // 後続のDirectX初期化のためにHWNDとクライアントサイズを取得
+    HWND hwnd = WinApp::GetInstance()->GetHwnd();
+    const int32_t kClientWidth = WinApp::kWindowWidth;
+    const int32_t kClientHeight = WinApp::kWindowHeight;
 
 #ifdef _DEBUG
 
@@ -764,7 +708,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // DirectInputの初期化
     IDirectInput8* directInput = nullptr;
-    result = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
+    result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
     assert(SUCCEEDED(result));
 
     // 初期化時
@@ -2047,5 +1991,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     CoUninitialize();
 
     return 0;
-
 }
