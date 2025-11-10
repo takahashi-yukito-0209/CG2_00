@@ -17,7 +17,6 @@
 
 # Build results
 generated/
-logs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -318,3 +317,6 @@ DirectXGame/imgui.ini
 
 # DirectXTex Compiled Shaders
 **/DirectXTex/Shaders/Compiled/
+
+*.log
+/logs
