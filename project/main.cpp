@@ -668,9 +668,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // HWND取得
     HWND hwnd = winApp.GetHwnd();
-    // クライアントサイズを取得
-    const int32_t kClientWidth = WinApp::kWindowWidth;
-    const int32_t kClientHeight = WinApp::kWindowHeight;
 
 #ifdef _DEBUG
 
@@ -816,8 +813,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // スワップチェーンを生成する
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain = nullptr;
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc {};
-    swapChainDesc.Width = kClientWidth; // 画面の幅。ウィンドウのクライアント領域を同じものにしておく
-    swapChainDesc.Height = kClientHeight; // 画面の高さ。ウィンドウのクライアント領域を同じものにしておく
+    swapChainDesc.Width = WinApp::kWindowWidth; // 画面の幅。ウィンドウのクライアント領域を同じものにしておく
+    swapChainDesc.Height = WinApp::kWindowHeight; // 画面の高さ。ウィンドウのクライアント領域を同じものにしておく
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // 色の形式
     swapChainDesc.SampleDesc.Count = 1; // マルチサンプルしない
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // 描画のターゲットとして利用する
@@ -1356,8 +1353,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // ビューポート
     D3D12_VIEWPORT viewport {};
     // クライアント領域のサイズと一緒にして画面全体に表示
-    viewport.Width = kClientWidth;
-    viewport.Height = kClientHeight;
+    viewport.Width = WinApp::kWindowWidth;
+    viewport.Height = WinApp::kWindowHeight;
     viewport.TopLeftX = 0;
     viewport.TopLeftY = 0;
     viewport.MinDepth = 0.0f;
@@ -1367,9 +1364,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     D3D12_RECT scissorRect {};
     // 基本的にビューポートと同じ矩形が構成されるようにする
     scissorRect.left = 0;
-    scissorRect.right = kClientWidth;
+    scissorRect.right = WinApp::kWindowWidth;
     scissorRect.top = 0;
-    scissorRect.bottom = kClientHeight;
+    scissorRect.bottom = WinApp::kWindowHeight;
 
     // Textureを読んで転送する
     DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
@@ -1447,7 +1444,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     device->CreateShaderResourceView(textureResource4.Get(), &srvDesc4, textureSrvHandleCPU4);
 
     // DepthStencilTextureをウィンドウのサイズで作成
-    Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource = CreateDepthStencilTextureResource(device, kClientWidth, kClientHeight);
+    Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource = CreateDepthStencilTextureResource(device, WinApp::kWindowWidth, WinApp::kWindowHeight);
 
     // DSVの設定
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc {};
@@ -1595,7 +1592,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // Sprite用のWorldViewProjectionMatrixを作る
             Matrix4x4 worldMatrixSprite = math.MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
             Matrix4x4 viewMatrixSprite = math.MakeIdentity4x4();
-            Matrix4x4 projectionMatrixSprite = math.MakeOrthograhicMatrix(0.0f, 0.0f, float(kClientWidth), float(kClientHeight), 0.0f, 100.0f);
+            Matrix4x4 projectionMatrixSprite = math.MakeOrthograhicMatrix(0.0f, 0.0f, float(WinApp::kWindowWidth), float(WinApp::kWindowHeight), 0.0f, 100.0f);
             Matrix4x4 worldViewProjectionMatrixSprite = math.Multiply(worldMatrixSprite, math.Multiply(viewMatrixSprite, projectionMatrixSprite));
             transformationMatrixDataSprite->WVP = worldViewProjectionMatrixSprite;
 
@@ -1967,7 +1964,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 出力ウィンドウへの文字出力
     Log(logStream, "Hello,DirectX!\n");
-    Log(logStream, ConvertString(std::format(L"ClientSize:{},{}\n", kClientWidth, kClientHeight)));
+    Log(logStream, ConvertString(std::format(L"ClientSize:{},{}\n", WinApp::kWindowWidth, WinApp::kWindowHeight)));
 
     CloseWindow(hwnd);
 
