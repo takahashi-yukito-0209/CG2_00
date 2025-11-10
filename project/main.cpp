@@ -635,7 +635,7 @@ Transform uvTransformSprite = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.
 Transform transformBunny = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f } };
 
 // Windowsアプリでのエントリーポイント（main関数）
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
     // COMの初期化
     CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -662,11 +662,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // ファイルを作って書き込み準備
     std::ofstream logStream(logFilePath);
 
-    // WinAppのインスタンスを作成/取得し、Initializeに引数を渡す
-    WinApp::GetInstance()->Initialize(hInstance, nCmdShow, L"GE3_LE2B_15_タカハシ_ユキト");
+    // WinAppを通常のインスタンスとして生成
+    MyEngine::WinApp winApp;
+    winApp.Initialize(hInstance, nCmdShow, L"GE3_LE2B_15_タカハシ_ユキト");
 
-    // 後続のDirectX初期化のためにHWNDとクライアントサイズを取得
-    HWND hwnd = WinApp::GetInstance()->GetHwnd();
+    // HWND取得
+    HWND hwnd = winApp.GetHwnd();
+    // クライアントサイズを取得
     const int32_t kClientWidth = WinApp::kWindowWidth;
     const int32_t kClientHeight = WinApp::kWindowHeight;
 
@@ -1505,9 +1507,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // ウィンドウのxボタンが押されるまでループ
     while (msg.message != WM_QUIT) {
         // windowにメッセージが来てたら最優先で処理させる
-        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+        if (!winApp.ProcessMessage()) {
+            break;
         } else {
 
             ImGui_ImplDX12_NewFrame();
@@ -1986,6 +1987,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+
+    // ウィンドウ破棄
+    winApp.Finalize();
 
     // COMの終了処理
     CoUninitialize();
