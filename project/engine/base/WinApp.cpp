@@ -4,6 +4,8 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
 
+#pragma comment(lib, "winmm.lib")
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 using namespace MyEngine;
@@ -47,6 +49,9 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
 
     // ウィンドウを表示
     ShowWindow(hwnd_, nCmdShow);
+
+    //システムタイマーの分解能を上げる
+    timeBeginPeriod(1);
 }
 
 /// <summary>
