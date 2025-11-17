@@ -11,8 +11,8 @@ namespace MyEngine {
 class WinApp {
 public:
     // --- 定数 ---
-    static const int kWindowWidth = 1280;
-    static const int kWindowHeight = 720;
+    static constexpr int kWindowWidth = 1280;
+    static constexpr int kWindowHeight = 720;
 
 public:
     // --- コンストラクタ / デストラクタ ---
