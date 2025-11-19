@@ -1,12 +1,12 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <d3d12.h>
 #include <dxcapi.h>
 #include <dxgi1_6.h>
 #include <string>
 #include <wrl.h>
-#include<chrono>
 
 #include "externals/DirectXTex/DirectXTex.h"
 
@@ -83,6 +83,11 @@ public: // 公開メンバ関数
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUDescriptorHandle(uint32_t index) const;
 
+    /// <summary>
+    /// スワップチェーンが実際に使っているフォーマットを取得
+    /// </summary>
+    DXGI_FORMAT GetSwapChainFormat() const { return swapChainFormat_; }
+
     // --- Static メンバ関数（ヘルパー/汎用機能） ---
 
     /// <summary>
@@ -108,6 +113,9 @@ private: // Private メンバ変数
     ComPtr<IDXGISwapChain4> swapChain_;
     std::array<ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_; // バックバッファリソース
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, kBackBufferCount> rtvHandles_; // RTVハンドル
+
+    // スワップチェーンで使われたフォーマットを保持（RTVやImGui初期化で使用）
+    DXGI_FORMAT swapChainFormat_ = DXGI_FORMAT_UNKNOWN;
 
     // ディスクリプタヒープとサイズ
     ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
@@ -135,8 +143,7 @@ private: // Private メンバ変数
     ComPtr<IDxcIncludeHandler> includeHandler_;
 
 private: // メンバ関数
-
-    //初期化関数一覧
+    // 初期化関数一覧
     void CreateDevice();
     void InitCommandRelated();
     void CreateSwapChain();
@@ -150,13 +157,13 @@ private: // メンバ関数
     void CreateDxcCompiler();
     void InitImGui();
 
-    //FPS固定初期化
+    // FPS固定初期化
     void InitializeFixFPS();
 
-    //FPS固定更新
+    // FPS固定更新
     void UpdateFixFPS();
 
-    //記録時間(FPS固定用)
+    // 記録時間(FPS固定用)
     std::chrono::steady_clock::time_point reference_;
 
 private: // Private Static メンバ関数（ディスクリプタヘルパー）
