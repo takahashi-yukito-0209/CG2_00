@@ -429,9 +429,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 #pragma endregion 基盤システムの初期化
 
 #pragma region 最初のシーンの初期化
+    
+    //スプライト複数設定
+    std::vector<Sprite*> sprites;
+    const uint32_t kSpriteCount = 5;
 
-    Sprite* sprite = new Sprite();
-    sprite->Initialize(spriteCommon);
+    for (uint32_t i = 0; i < kSpriteCount; ++i) {
+        Sprite* sprite = new Sprite();
+        sprite->Initialize(spriteCommon);
+        sprites.push_back(sprite);
+    }
 
 #pragma endregion 最初のシーンの終了
 
@@ -1036,7 +1043,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             wvpDataChecker->WVP = wvpMatrixChecker;
 
             //スプライトの更新
-            sprite->Update();
+            for (uint32_t i = 0; i <kSpriteCount; i++) {
+                sprites[i]->Update();
+            }
 
             // imguiの項目内容
             ImGui::Begin("Settings");
@@ -1074,11 +1083,54 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // スプライトオブジェクト(2D描画)
             if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
-                if (ImGui::CollapsingHeader("Object(Sprite)")) {
-                    ImGui::DragFloat3("Scale##Sprite", &(transformSprite.scale.x), 0.1f);
-                    ImGui::DragFloat3("Rotate##Sprite", &(transformSprite.rotate.x), 0.1f);
-                    ImGui::DragFloat3("Translate##Sprite", &(transformSprite.translate.x), 0.1f);
-                    ImGui::ColorEdit4("Color##Sprite", &(materialDataSprite->color.x));
+
+                // ImGuiのスコープ内で名前を一意にするためのヘルパー
+                // (名前を生成する用途はCollapsingHeaderに限定するため、char配列は必須)
+                char nameBuffer[64];
+
+                for (uint32_t i = 0; i < kSpriteCount; i++) {
+                    // 現在操作するスプライトのインスタンス
+                    Sprite* currentSprite = sprites[i];
+
+                    // ヘッダー名にインデックスを付与し、一意にする (例: "Sprite 0", "Sprite 1", ...)
+                    sprintf_s(nameBuffer, "Sprite %d", i);
+
+                    // ImGui::PushID(i) を使用して、ループ内のコントロールを個別化 
+                    ImGui::PushID(i);
+
+                    if (ImGui::CollapsingHeader(nameBuffer)) {
+
+                        // --- Size ---
+                        Vector2 currentSize = currentSprite->GetSize();
+                        // ImGui::DragFloat2 の名前からインデックスを削除
+                        if (ImGui::DragFloat2("Size", &(currentSize.x), 0.1f)) {
+                            currentSprite->SetSize(currentSize);
+                        }
+
+                        // --- Rotate ---
+                        float currentRotation = currentSprite->GetRotation();
+                        // ImGui::DragFloat の名前からインデックスを削除
+                        if (ImGui::DragFloat("Rotate.Z", &currentRotation, 0.01f, -6.28f, 6.28f, "%.2f rad")) {
+                            currentSprite->SetRotation(currentRotation);
+                        }
+
+                        // --- Translate ---
+                        Vector2 currentPos = currentSprite->GetPosition();
+                        // ImGui::DragFloat2 の名前からインデックスを削除
+                        if (ImGui::DragFloat2("Translate", &(currentPos.x), 0.1f)) {
+                            currentSprite->SetPosition(currentPos);
+                        }
+
+                        // --- Color ---
+                        Vector4 currentColor = currentSprite->GetColor();
+                        // ImGui::ColorEdit4 の名前からインデックスを削除
+                        if (ImGui::ColorEdit4("Color", &(currentColor.x))) {
+                            currentSprite->SetColor(currentColor);
+                        }
+                    }
+
+                    //  PushID と対になる PopID を呼び出す
+                    ImGui::PopID();
                 }
             }
 
@@ -1234,7 +1286,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             case DRAW_SPRITE:
 
-                sprite->Draw(textureSrvHandleGPU);
+                for (uint32_t i = 0; i < kSpriteCount; i++) {
+                    sprites[i]->Draw(textureSrvHandleGPU);
+                }
 
                 break;
 
@@ -1312,7 +1366,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     CloseWindow(hwnd);
 
     delete spriteCommon;
-    delete sprite;
+    for (uint32_t i = 0; i < kSpriteCount; i++) {
+        delete sprites[i];
+    }
 
     // XAudio2解放
     xAudio2.Reset();

@@ -44,6 +44,18 @@ public: // メンバ関数
     // 描画
     void Draw(const D3D12_GPU_DESCRIPTOR_HANDLE& textureSrvHandleGPU);
 
+    // getter
+    const Vector2& GetPosition() const { return position_; }
+    float GetRotation() const { return rotation_; }
+    const Vector4& GetColor() const { return materialData_->color; }
+    const Vector2& GetSize() const { return size_; }
+
+    // setter
+    void SetPosition(const Vector2& position) { position_ = position; }
+    void SetRotation(float rotation) { rotation_ = rotation; }
+    void SetColor(const Vector4& color) { materialData_->color = color; }
+    void SetSize(const Vector2& size) { size_ = size; }
+
 private: // メンバ変数
     SpriteCommon* spriteCommon_ = nullptr;
 
@@ -67,6 +79,13 @@ private: // メンバ変数
     Transform transform_ = {};
     // UVテクスチャ変換情報
     Transform uvTransform_ = {};
+
+    //座標
+    Vector2 position_ = { 0.0f, 0.0f };
+    //回転
+    float rotation_ = 0.0f;
+    //サイズ
+    Vector2 size_ = { 1.0f, 1.0f };
 };
 
 } // namespace MyEngine
