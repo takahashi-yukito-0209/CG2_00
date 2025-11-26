@@ -1,5 +1,6 @@
 #include "Sprite.h"
 #include "SpriteCommon.h"
+#include "WinApp.h"
 #include "mathUtility.h"
 
 using namespace MyEngine;
@@ -102,16 +103,20 @@ void Sprite::Update()
 {
     MathUtility math;
 
+    // スケール（サイズ）を反映
+    this->transform_.scale = { size_.x, size_.y, 1.0f };
+    // 回転を反映
+    this->transform_.rotate.z = rotation_;
+    // 座標（平行移動）を反映
+    this->transform_.translate = { position_.x, position_.y, 0.0f };
+
     // World行列の作成
     // ここで this->transform_ の値が外部から更新されている必要がある
     Matrix4x4 worldMatrix = math.MakeAffineMatrix(this->transform_.scale, this->transform_.rotate, this->transform_.translate);
 
     // View/Projection行列の作成 (2Dスプライト用)
     Matrix4x4 viewMatrix = math.MakeIdentity4x4();
-    // 画面サイズはSpriteCommonやWindowAppから取得するのが理想
-    const float kWindowWidth = 1280.0f; // 仮の値
-    const float kWindowHeight = 720.0f; // 仮の値
-    Matrix4x4 projectionMatrix = math.MakeOrthograhicMatrix(0.0f, 0.0f, kWindowWidth, kWindowHeight, 0.0f, 100.0f);
+    Matrix4x4 projectionMatrix = math.MakeOrthograhicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
 
     // WVP行列の計算と定数バッファへの書き込み
     Matrix4x4 wvpMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
