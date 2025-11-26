@@ -4,11 +4,10 @@
 #include "StringUtility.h"
 
 #include <cassert>
+#include <comdef.h> // _com_error 用
 #include <d3d12sdklayers.h>
 #include <externals/DirectXTex/d3dx12.h>
 #include <format>
-#include <comdef.h>  // _com_error 用
-
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -99,32 +98,32 @@ void DirectXCommon::Initialize(WinApp* winApp)
     assert(winApp);
     this->winApp_ = winApp;
 
-    //FPS固定初期化
+    // FPS固定初期化
     InitializeFixFPS();
 
     // デバイスの生成
     CreateDevice();
-    //コマンド関連の生成
+    // コマンド関連の生成
     InitCommandRelated();
-    //スワップチェーンの生成
+    // スワップチェーンの生成
     CreateSwapChain();
-    //深度バッファの生成
+    // 深度バッファの生成
     CreateDepthBuffer();
-    //各種ディスクリプタヒープの生成
+    // 各種ディスクリプタヒープの生成
     CreateDescriptorHeaps();
-    //レンダーターゲットビューの初期化
+    // レンダーターゲットビューの初期化
     InitRenderTargetView();
-    //深度ステンシルビューの初期化
+    // 深度ステンシルビューの初期化
     InitDepthStencilView();
-    //フェンスの生成
+    // フェンスの生成
     CreateFence();
-    //ビューポート矩形の初期化
+    // ビューポート矩形の初期化
     InitViewport();
-    //シザリング矩形の生成
+    // シザリング矩形の生成
     InitScissorRect();
-    //DXCコンパイラの生成
+    // DXCコンパイラの生成
     CreateDxcCompiler();
-    //ImGuiの初期化
+    // ImGuiの初期化
     InitImGui();
 }
 
@@ -201,7 +200,7 @@ void DirectXCommon::PostDraw()
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
-    //FPS固定
+    // FPS固定
     UpdateFixFPS();
 }
 
@@ -268,16 +267,24 @@ ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& 
     hr = DirectX::PrepareUpload(device_.Get(), mipImages.GetImages(), mipImages.GetImageCount(), metadata, subresources);
     assert(SUCCEEDED(hr));
 
-    // テクスチャデータ転送に必要なトータルサイズを計算
     UINT64 uploadBufferSize = GetRequiredIntermediateSize(texture.Get(), 0, (UINT)subresources.size());
 
     // アップロード用バッファリソース (UPLOADヒープ) を生成
     ComPtr<ID3D12Resource> uploadBuffer = CreateBufferResource(uploadBufferSize);
 
-    // アップロードバッファにテクスチャデータを転送
-    UpdateSubresources(commandList_.Get(), texture.Get(), uploadBuffer.Get(), 0, 0, (UINT)subresources.size(), subresources.data());
+    // --- アップロード専用コマンドアロケータ／コマンドリストを作成して記録・実行・同期する ---
+    ComPtr<ID3D12CommandAllocator> uploadAllocator;
+    hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&uploadAllocator));
+    assert(SUCCEEDED(hr));
 
-    // テクスチャをシェーダーから読み取り可能な状態に遷移させる
+    ComPtr<ID3D12GraphicsCommandList> uploadCmdList;
+    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator.Get(), nullptr, IID_PPV_ARGS(&uploadCmdList));
+    assert(SUCCEEDED(hr));
+
+    // データ転送を記録
+    UpdateSubresources(uploadCmdList.Get(), texture.Get(), uploadBuffer.Get(), 0, 0, (UINT)subresources.size(), subresources.data());
+
+    // テクスチャをシェーダー読み取り可能状態へ遷移
     D3D12_RESOURCE_BARRIER barrier {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -285,7 +292,23 @@ ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& 
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    commandList_->ResourceBarrier(1, &barrier);
+    uploadCmdList->ResourceBarrier(1, &barrier);
+
+    // クローズして実行
+    hr = uploadCmdList->Close();
+    assert(SUCCEEDED(hr));
+
+    ID3D12CommandList* lists[] = { uploadCmdList.Get() };
+    commandQueue_->ExecuteCommandLists(_countof(lists), lists);
+
+    // GPU に対してシグナルして待機（同期）
+    fenceValue_++;
+    hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    assert(SUCCEEDED(hr));
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
 
     return uploadBuffer;
 }
@@ -359,12 +382,13 @@ void DirectXCommon::CreateDevice()
 {
     HRESULT hr;
 
-// デバッグレイヤーを有効にする (デバッグビルド時のみ)
 #ifdef _DEBUG
     ComPtr<ID3D12Debug1> debugController;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
-        debugController->SetEnableGPUBasedValidation(TRUE);
+        // GPU-Based Validation は非常に遅くなるのでデバッグ時でもOFFにすることを推奨します。
+        // 必要なら true に戻してください。
+        debugController->SetEnableGPUBasedValidation(FALSE);
     }
 #endif
 
@@ -439,15 +463,15 @@ void DirectXCommon::CreateSwapChain()
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc {};
     swapChainDesc.Width = WinApp::kWindowWidth;
     swapChainDesc.Height = WinApp::kWindowHeight;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // sRGB OFFで互換性向上
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.BufferCount = kBackBufferCount;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 
-    // IDXGISwapChain1 で作成
     ComPtr<IDXGISwapChain1> swapChain1;
+
     hr = dxgiFactory_->CreateSwapChainForHwnd(
         commandQueue_.Get(),
         winApp_->GetHwnd(),
@@ -456,27 +480,16 @@ void DirectXCommon::CreateSwapChain()
         nullptr,
         &swapChain1);
 
-    // デバイス削除やその他エラーのチェック
-    if (FAILED(hr)) {
-        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            HRESULT reason = device_->GetDeviceRemovedReason();
-            wchar_t buf[256];
-            swprintf_s(buf, L"SwapChain creation failed: device removed. Reason=0x%08X\n", reason);
-            OutputDebugString(buf);
-        } else {
-            OutputDebugString(L"SwapChain creation failed with unknown HRESULT.\n");
-        }
-        assert(false);
-        return;
-    }
-
-    // IDXGISwapChain3 に変換
+    // IDXGISwapChain4 に変換
     hr = swapChain1.As(&swapChain_);
     if (FAILED(hr)) {
         OutputDebugString(L"QueryInterface for IDXGISwapChain3 failed.\n");
         assert(false);
         return;
     }
+
+    // スワップチェーンのフォーマットを記録
+    swapChainFormat_ = swapChainDesc.Format;
 
     // バックバッファ取得
     for (int i = 0; i < kBackBufferCount; ++i) {
@@ -492,8 +505,6 @@ void DirectXCommon::CreateSwapChain()
 
     OutputDebugString(L"SwapChain created successfully.\n");
 }
-
-
 
 void DirectXCommon::CreateDepthBuffer()
 {
@@ -560,12 +571,11 @@ void DirectXCommon::CreateDescriptorHeaps()
 
 void DirectXCommon::InitRenderTargetView()
 {
-    // RTV (レンダーターゲットビュー) の設定
+    // RTV のフォーマット
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc {};
     rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
-    // 各バックバッファに対してRTVを生成し、ハンドルを保持
     for (int i = 0; i < kBackBufferCount; ++i) {
         rtvHandles_[i] = GetCPUDescriptorHandle(rtvDescriptorHeap_, descriptorSizeRTV_, i);
         device_->CreateRenderTargetView(swapChainResources_[i].Get(), &rtvDesc, rtvHandles_[i]);
@@ -629,20 +639,21 @@ void DirectXCommon::CreateDxcCompiler()
 
 void DirectXCommon::InitImGui()
 {
-    // Win32+DX12 用の ImGui 初期化
+    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
-    // ImGui_ImplDX12_Init の引数に合わせる
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+
+    DXGI_FORMAT imguiFormat = (swapChainFormat_ == DXGI_FORMAT_UNKNOWN) ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : swapChainFormat_;
 
     ImGui_ImplDX12_Init(
         device_.Get(),
         kBackBufferCount,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        imguiFormat,
         srvDescriptorHeap_.Get(),
         cpuHandle,
         gpuHandle);
@@ -650,33 +661,32 @@ void DirectXCommon::InitImGui()
 
 void DirectXCommon::InitializeFixFPS()
 {
-    //現在時間を記録する
+    // 現在時間を記録する
     reference_ = std::chrono::steady_clock::now();
 }
 
 void DirectXCommon::UpdateFixFPS()
 {
-    //1/60秒ぴったりの時間
+    // 1/60秒ぴったりの時間
     const std::chrono::microseconds kMinTime(uint64_t(1000000.0f / 60.0f));
 
-    //1/60秒よりわずかに短い時間
+    // 1/60秒よりわずかに短い時間
     const std::chrono::microseconds kMinCheckTime(uint64_t(1000000.0f / 65.0f));
 
-    //現在時刻を取得する
+    // 現在時刻を取得する
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-    //前回記録からの経過時間を取得する
+    // 前回記録からの経過時間を取得する
     std::chrono::microseconds elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - reference_);
 
-    //1/60秒(よりわずかに短い時間)経っていない場合
+    // 1/60秒(よりわずかに短い時間)経っていない場合
     if (elapsed < kMinCheckTime) {
-        //1/60秒経過するまで微小なスリープを繰り返す
+        // 1/60秒経過するまで微小なスリープを繰り返す
         while (std::chrono::steady_clock::now() - reference_ < kMinTime) {
-            //1マイクロ秒スリープ
+            // 1マイクロ秒スリープ
             std::this_thread::sleep_for(std::chrono::microseconds(1));
         }
     }
 
-    //現在の時間を記録する
+    // 現在の時間を記録する
     reference_ = std::chrono::steady_clock::now();
-
 }

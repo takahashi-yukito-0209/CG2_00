@@ -367,41 +367,41 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 //    return intermediateResource;
 //}
 
-Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(const Microsoft::WRL::ComPtr<ID3D12Device> device, int32_t width, int32_t height)
-{
-    // 生成するResourceの設定
-    D3D12_RESOURCE_DESC resourceDesc {};
-    resourceDesc.Width = width; // Textureの幅
-    resourceDesc.Height = height; // Textureの高さ
-    resourceDesc.MipLevels = 1; // mipmapの数
-    resourceDesc.DepthOrArraySize = 1; // 奥行き or 配列Textureの配列数
-    resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // DepthStencilとして利用可能なフォーマット
-    resourceDesc.SampleDesc.Count = 1; // サンプリングカウント。1固定。
-    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; // 2次元
-    resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // DepthStencilとして扱う通知
-
-    // 利用するHeapの設定
-    D3D12_HEAP_PROPERTIES heapProperties {};
-    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT; // VRAM状に作る
-
-    // 深度値のクリア設定
-    D3D12_CLEAR_VALUE depthClearValue {};
-    depthClearValue.DepthStencil.Depth = 1.0f; // 1.0f(最大値)でクリア
-    depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // フォーマット。Resourceと合わせる
-
-    // Resourceの生成
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProperties, // Heapの設定
-        D3D12_HEAP_FLAG_NONE, // Heapの特殊な設定。特になし
-        &resourceDesc, // Resourceの設定
-        D3D12_RESOURCE_STATE_DEPTH_WRITE, // 深度値を書き込む状態にしておく
-        &depthClearValue, // Clear最適地
-        IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
-    assert(SUCCEEDED(hr));
-
-    return resource;
-}
+//Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(const Microsoft::WRL::ComPtr<ID3D12Device> device, int32_t width, int32_t height)
+//{
+//     生成するResourceの設定
+//    D3D12_RESOURCE_DESC resourceDesc {};
+//    resourceDesc.Width = width; // Textureの幅
+//    resourceDesc.Height = height; // Textureの高さ
+//    resourceDesc.MipLevels = 1; // mipmapの数
+//    resourceDesc.DepthOrArraySize = 1; // 奥行き or 配列Textureの配列数
+//    resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // DepthStencilとして利用可能なフォーマット
+//    resourceDesc.SampleDesc.Count = 1; // サンプリングカウント。1固定。
+//    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; // 2次元
+//    resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // DepthStencilとして扱う通知
+//
+//     利用するHeapの設定
+//    D3D12_HEAP_PROPERTIES heapProperties {};
+//    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT; // VRAM状に作る
+//
+//     深度値のクリア設定
+//    D3D12_CLEAR_VALUE depthClearValue {};
+//    depthClearValue.DepthStencil.Depth = 1.0f; // 1.0f(最大値)でクリア
+//    depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // フォーマット。Resourceと合わせる
+//
+//     Resourceの生成
+//    Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
+//    HRESULT hr = device->CreateCommittedResource(
+//        &heapProperties, // Heapの設定
+//        D3D12_HEAP_FLAG_NONE, // Heapの特殊な設定。特になし
+//        &resourceDesc, // Resourceの設定
+//        D3D12_RESOURCE_STATE_DEPTH_WRITE, // 深度値を書き込む状態にしておく
+//        &depthClearValue, // Clear最適地
+//        IID_PPV_ARGS(&resource)); // 作成するResourceポインタへのポインタ
+//    assert(SUCCEEDED(hr));
+//
+//    return resource;
+//}
 
 //D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index)
 //{
@@ -691,13 +691,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
     IXAudio2MasteringVoice* masterVoice;
 
-    // DXGIファクトリーの生成
-    Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
-    // HRESULTはWindows系のエラーコードであり、
-    //  関数が成功したかどうかをSUCCEEDEDマクロで判定できる
-    HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
-    // 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
-    assert(SUCCEEDED(hr));
+    //// DXGIファクトリーの生成
+    //Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
+    //// HRESULTはWindows系のエラーコードであり、
+    ////  関数が成功したかどうかをSUCCEEDEDマクロで判定できる
+    //HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
+    //// 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
+    //assert(SUCCEEDED(hr));
+
+    HRESULT hr;
 
     // COMライブラリの初期化
     HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -1454,8 +1456,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // SRVの生成
     dxCommon->GetDevice()->CreateShaderResourceView(textureResource4.Get(), &srvDesc4, textureSrvHandleCPU4);
 
-    // DepthStencilTextureをウィンドウのサイズで作成
-    Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource = CreateDepthStencilTextureResource(dxCommon->GetDevice(), winApp.kWindowWidth, winApp.kWindowHeight);
+    //// DepthStencilTextureをウィンドウのサイズで作成
+    //Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource = CreateDepthStencilTextureResource(dxCommon->GetDevice(), winApp.kWindowWidth, winApp.kWindowHeight);
 
     //// DSVの設定
     //D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc {};
@@ -1475,7 +1477,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         DRAW_ALL
     };
 
-    DrawType selectedDrawType = DRAW_ALL; // 初期値
+    DrawType selectedDrawType = DRAW_SPHERE; // 初期値
 
     const char* drawOptions[] = {
         "None", // 何も描画しない
@@ -1499,17 +1501,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
 
-    // ImGuiの初期化
+    /*ImGuiの初期化
     IMGUI_CHECKVERSION();
-    //ImGui::CreateContext();
-    //ImGui::StyleColorsDark();
-    //ImGui_ImplWin32_Init(hwnd);
-    //ImGui_ImplDX12_Init(dxCommon->GetDevice(),
-    //    swapChainDesc.BufferCount,
-    //    rtvDesc.Format,
-    //    srvDescriptorHeap.Get(),
-    //    srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-    //    srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplDX12_Init(dxCommon->GetDevice(),
+        swapChainDesc.BufferCount,
+        rtvDesc.Format,
+        srvDescriptorHeap.Get(),
+        srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());*/
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
@@ -1531,7 +1533,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             InputManager::GetInstance()->Update();
 
             // 入力チェック
-            if (InputManager::GetInstance()->IsKeyReleased(DIK_SPACE)) {
+            if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE)) {
                 // スペースキーが押された瞬間の処理
                 OutputDebugStringA("Hit 1\n");
             }
@@ -1801,7 +1803,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             dxCommon->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
             dxCommon->GetCommandList()->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
 
-            selectedDrawType = DRAW_SPHERE;
 
             // 描画対象に応じた処理
             switch (selectedDrawType) {
@@ -1929,9 +1930,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // ===================== スプライトの描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
                 dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress()); // マテリアル
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress()); // 行列
+                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+                // マテリアルCBufferの場所を指定
+                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
+                // TransformationMatrixBufferの箇所を設定
+                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+                // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
                 dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU); // SRV
+                // 描画！
                 dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0); // スプライト描画
 
                 break;
