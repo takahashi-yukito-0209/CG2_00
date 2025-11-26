@@ -463,7 +463,7 @@ void DirectXCommon::CreateSwapChain()
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc {};
     swapChainDesc.Width = WinApp::kWindowWidth;
     swapChainDesc.Height = WinApp::kWindowHeight;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; 
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.BufferCount = kBackBufferCount;
@@ -480,33 +480,6 @@ void DirectXCommon::CreateSwapChain()
         nullptr,
         &swapChain1);
 
-    if (FAILED(hr)) {
-        // 詳細ログ
-        Logger::Log(std::format("SwapChain creation failed (attempt sRGB). hr=0x{:08X}\n", hr));
-        _com_error err(hr);
-        Logger::Log(std::format("HRESULT message: {}\n", StringUtility::ConvertString(err.ErrorMessage())));
-
-        // フォールバック: sRGB がサポートされない場合は UNORM に戻す
-        Logger::Log("Attempting fallback to DXGI_FORMAT_R8G8B8A8_UNORM...\n");
-        swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        hr = dxgiFactory_->CreateSwapChainForHwnd(
-            commandQueue_.Get(),
-            winApp_->GetHwnd(),
-            &swapChainDesc,
-            nullptr,
-            nullptr,
-            &swapChain1);
-
-        if (FAILED(hr)) {
-            // ここで失敗する場合は環境依存の問題（HW/ドライバ/ウィンドウハンドル等）を疑う
-            Logger::Log(std::format("SwapChain creation fallback also failed. hr=0x{:08X}\n", hr));
-            _com_error err2(hr);
-            Logger::Log(std::format("HRESULT message: {}\n", StringUtility::ConvertString(err2.ErrorMessage())));
-            assert(false);
-            return;
-        }
-    }
-
     // IDXGISwapChain4 に変換
     hr = swapChain1.As(&swapChain_);
     if (FAILED(hr)) {
@@ -515,7 +488,7 @@ void DirectXCommon::CreateSwapChain()
         return;
     }
 
-    // スワップチェーンのフォーマットを記録（swapChainDesc.Format を記録）
+    // スワップチェーンのフォーマットを記録
     swapChainFormat_ = swapChainDesc.Format;
 
     // バックバッファ取得
@@ -666,6 +639,7 @@ void DirectXCommon::CreateDxcCompiler()
 
 void DirectXCommon::InitImGui()
 {
+    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 

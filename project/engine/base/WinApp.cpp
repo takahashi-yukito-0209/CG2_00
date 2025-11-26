@@ -61,7 +61,7 @@ void WinApp::RegisterWindowClass()
 {
     WNDCLASSEX w = {};
     w.cbSize = sizeof(WNDCLASSEX);
-    w.lpfnWndProc = WindowProc;
+    w.lpfnWndProc = WinApp::WindowProc;
     w.lpszClassName = kWindowClassName;
     w.hInstance = hInstance_;
     w.hCursor = LoadCursor(nullptr, IDC_ARROW);
@@ -104,14 +104,17 @@ void WinApp::Finalize()
 /// </summary>
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-        return true;
-    }
-
+    // アプリ側のメッセージ処理を先に行う
     switch (msg) {
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
     }
+
+    // ImGui のハンドラは最後にする
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
+        return 1;
+    }
+
     return DefWindowProc(hwnd, msg, wparam, lparam);
 }

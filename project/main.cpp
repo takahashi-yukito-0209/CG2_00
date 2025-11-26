@@ -691,13 +691,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
     IXAudio2MasteringVoice* masterVoice;
 
-    // DXGIファクトリーの生成
-    Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
-    // HRESULTはWindows系のエラーコードであり、
-    //  関数が成功したかどうかをSUCCEEDEDマクロで判定できる
+    //// DXGIファクトリーの生成
+    //Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
+    //// HRESULTはWindows系のエラーコードであり、
+    ////  関数が成功したかどうかをSUCCEEDEDマクロで判定できる
     //HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
-    // 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
+    //// 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、どうにもできない場合が多いのでassertにしておく
     //assert(SUCCEEDED(hr));
+
     HRESULT hr;
 
     // COMライブラリの初期化
@@ -1500,17 +1501,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
 
-    // ImGuiの初期化
+    /*ImGuiの初期化
     IMGUI_CHECKVERSION();
-    //ImGui::CreateContext();
-    //ImGui::StyleColorsDark();
-    //ImGui_ImplWin32_Init(hwnd);
-    //ImGui_ImplDX12_Init(dxCommon->GetDevice(),
-    //    swapChainDesc.BufferCount,
-    //    rtvDesc.Format,
-    //    srvDescriptorHeap.Get(),
-    //    srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-    //    srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplDX12_Init(dxCommon->GetDevice(),
+        swapChainDesc.BufferCount,
+        rtvDesc.Format,
+        srvDescriptorHeap.Get(),
+        srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());*/
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
@@ -1532,7 +1533,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             InputManager::GetInstance()->Update();
 
             // 入力チェック
-            if (InputManager::GetInstance()->IsKeyReleased(DIK_SPACE)) {
+            if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE)) {
                 // スペースキーが押された瞬間の処理
                 OutputDebugStringA("Hit 1\n");
             }
