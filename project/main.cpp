@@ -32,6 +32,8 @@
 #include "Logger.h"
 #include "StringUtility.h"
 #include "D3DResourceLeakChecker.h"
+#include "Sprite.h"
+#include "SpriteCommon.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -44,29 +46,7 @@
 
 using namespace MyEngine;
 
-struct Transform {
-    Vector3 scale, rotate, translate;
-};
 
-struct VertexData {
-    Vector4 position;
-    Vector2 texcoord;
-    Vector3 normal;
-};
-
-struct Material {
-    Vector4 color;
-    int32_t enableLighting;
-    float padding1[3];
-    Matrix4x4 uvTransform;
-    int lightingMode;
-    float padding2[3];
-};
-
-struct TransformationMatrix {
-    Matrix4x4 WVP;
-    Matrix4x4 World;
-};
 
 struct DirectionalLight {
     Vector4 color; //!< ライトの色
@@ -110,7 +90,6 @@ struct SoundData {
     // バッファのサイズ
     unsigned int bufferSize;
 };
-
 
 static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 {
@@ -433,13 +412,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // 初期化時
     InputManager::GetInstance()->Initialize(directInput, hwnd);
 
-    //ポインタ
+    // ポインタ
     DirectXCommon* dxCommon = nullptr;
 
-    //DirectXの初期化
+    // DirectXの初期化
     dxCommon = new DirectXCommon();
     dxCommon->Initialize(&winApp);
 
+#pragma region 基盤システムの初期化
+
+    SpriteCommon* spriteCommon = nullptr;
+    // スプライト共通部の初期化
+    spriteCommon = new SpriteCommon();
+    spriteCommon->Initialize(dxCommon);
+
+#pragma endregion 基盤システムの初期化
+
+#pragma region 最初のシーンの初期化
+
+    Sprite* sprite = new Sprite();
+    sprite->Initialize(spriteCommon);
+
+#pragma endregion 最初のシーンの終了
 
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
     descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
@@ -773,69 +767,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     wvpData->WVP = math.MakeIdentity4x4();
     wvpData->World = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 
-    // Sprite用の頂点リソースを作る
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResourceSprite = dxCommon->CreateBufferResource(sizeof(VertexData) * 4);
-
-    // 頂点バッファビューを作成する
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSprite {};
-    // リソースの先頭アドレスから使う
-    vertexBufferViewSprite.BufferLocation = vertexResourceSprite->GetGPUVirtualAddress();
-    // 使用するリソースのサイズは頂点4つ分のサイズ
-    vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 4;
-    // 1頂点当たりのサイズ
-    vertexBufferViewSprite.StrideInBytes = sizeof(VertexData);
-
-    VertexData* vertexDataSprite = nullptr;
-    vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
-    // 1枚目の三角形
-    vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f }; // 左下
-    vertexDataSprite[0].texcoord = { 0.0f, 1.0f };
-    vertexDataSprite[0].normal = { 0.0f, 0.0f, -1.0f };
-
-    vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f }; // 左上
-    vertexDataSprite[1].texcoord = { 0.0f, 0.0f };
-    vertexDataSprite[1].normal = { 0.0f, 0.0f, -1.0f };
-
-    vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f }; // 右下
-    vertexDataSprite[2].texcoord = { 1.0f, 1.0f };
-    vertexDataSprite[2].normal = { 0.0f, 0.0f, -1.0f };
-
-    vertexDataSprite[3].position = { 640.0f, 0.0f, 0.0f, 1.0f }; // 右上
-    vertexDataSprite[3].texcoord = { 1.0f, 0.0f };
-    vertexDataSprite[3].normal = { 0.0f, 0.0f, -1.0f };
-
-    // Sprite用のTransformationMatrix用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResourceSprite = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
-    // データを書き込む
-    TransformationMatrix* transformationMatrixDataSprite = nullptr;
-    // 書き込むためのアドレスを取得
-    transformationMatrixResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
-    // 単位行列を書き込んでおく
-    transformationMatrixDataSprite->WVP = math.MakeIdentity4x4();
-    transformationMatrixDataSprite->World = math.MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
-
-    // IndexResourceSpriteの生成
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexResourceSprite = dxCommon->CreateBufferResource(sizeof(uint32_t) * 6);
-
-    // IndexBufferViewの生成
-    D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite {};
-    // リソースの先頭アドレスから使う
-    indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
-    // 使用するリソースのサイズはインデックス6つ分のサイズ
-    indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
-    // インデックスはuint32_tとする
-    indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
-
-    // インデックスリソースにデータを書き込む
-    uint32_t* indexDataSprite = nullptr;
-    indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
-    indexDataSprite[0] = 0;
-    indexDataSprite[1] = 1;
-    indexDataSprite[2] = 2;
-    indexDataSprite[3] = 1;
-    indexDataSprite[4] = 3;
-    indexDataSprite[5] = 2;
-
     // モデル読み込み
     ModelData bunnyModel = LoadObjFile("resources", "bunny.obj");
 
@@ -991,7 +922,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         DRAW_ALL
     };
 
-    DrawType selectedDrawType = DRAW_SPHERE; // 初期値
+    DrawType selectedDrawType = DRAW_SPRITE; // 初期値
 
     const char* drawOptions[] = {
         "None", // 何も描画しない
@@ -1104,18 +1035,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             wvpDataChecker->World = worldMatrixChecker;
             wvpDataChecker->WVP = wvpMatrixChecker;
 
-            // Sprite用のWorldViewProjectionMatrixを作る
-            Matrix4x4 worldMatrixSprite = math.MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
-            Matrix4x4 viewMatrixSprite = math.MakeIdentity4x4();
-            Matrix4x4 projectionMatrixSprite = math.MakeOrthograhicMatrix(0.0f, 0.0f, float(winApp.kWindowWidth), float(winApp.kWindowHeight), 0.0f, 100.0f);
-            Matrix4x4 worldViewProjectionMatrixSprite = math.Multiply(worldMatrixSprite, math.Multiply(viewMatrixSprite, projectionMatrixSprite));
-            transformationMatrixDataSprite->WVP = worldViewProjectionMatrixSprite;
-
-            // UVTransform用の行列を作る
-            Matrix4x4 uvTransformMatrix = math.MakeScaleMatrix(uvTransformSprite.scale);
-            uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeRotateZMatrix(uvTransformSprite.rotate.z));
-            uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeTranslateMatrix(uvTransformSprite.translate));
-            materialDataSprite->uvTransform = uvTransformMatrix;
+            //スプライトの更新
+            sprite->Update();
 
             // imguiの項目内容
             ImGui::Begin("Settings");
@@ -1260,14 +1181,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // 画面のクリア処理(Draw)
             //--------------------
 
-            //描画前処理
+            // 描画前処理
             dxCommon->PreDraw();
+
+            // Sprite描画準備。Spriteの描画に共通のグラフィクスコマンドを積む
+            spriteCommon->SetCommonDrawSetting();
 
             // ImGuiの内部コマンドを生成する
             ImGui::Render();
 
             dxCommon->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
             dxCommon->GetCommandList()->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
+            dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 
             // 描画対象に応じた処理
             switch (selectedDrawType) {
@@ -1281,7 +1206,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // ===================== 球体モデルの描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &sphereVertexBufferView); // VBVを設定
                 dxCommon->GetCommandList()->IASetIndexBuffer(&sphereIndexBufferView); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, sphereMaterialResource->GetGPUVirtualAddress()); // マテリアル
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, sphereWvpResource->GetGPUVirtualAddress()); // WVP行列
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
@@ -1295,7 +1219,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // ===================== モデルの描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
                 dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferView); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
                 // マテリアルCBufferの場所を指定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
                 // wvp用のCBufferの場所を設定
@@ -1308,21 +1231,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 dxCommon->GetCommandList()->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
 
                 break;
-                
+
             case DRAW_SPRITE:
 
-                // ===================== スプライトの描画 ===================== //
-                dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
-                dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
-                // マテリアルCBufferの場所を指定
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
-                // TransformationMatrixBufferの箇所を設定
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-                // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
-                dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-                // 描画！
-                dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
+                sprite->Draw(textureSrvHandleGPU);
 
                 break;
 
@@ -1330,7 +1242,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // ===================== bunny.obj の描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewBunny); // VBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // //形状を設定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceBunny->GetGPUVirtualAddress()); // マテリアル
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, wvpResourceBunny->GetGPUVirtualAddress()); // WVP行列
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
@@ -1343,7 +1254,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // ティーポット描画
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewChecker);
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceChecker->GetGPUVirtualAddress());
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, wvpResourceChecker->GetGPUVirtualAddress());
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
@@ -1357,7 +1267,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // ===================== 球体モデルの描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &sphereVertexBufferView); // VBVを設定
                 dxCommon->GetCommandList()->IASetIndexBuffer(&sphereIndexBufferView); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, sphereMaterialResource->GetGPUVirtualAddress()); // マテリアル
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, sphereWvpResource->GetGPUVirtualAddress()); // WVP行列
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
@@ -1367,7 +1276,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // ===================== モデルの描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
                 dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferView); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress()); // マテリアル
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress()); // WVP行列
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
@@ -1376,7 +1284,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // ===================== bunny.obj の描画 ===================== //
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewBunny); // VBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // //形状を設定
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceBunny->GetGPUVirtualAddress()); // マテリアル
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, wvpResourceBunny->GetGPUVirtualAddress()); // WVP行列
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress()); // 光源
@@ -1385,25 +1292,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // ティーポット描画
                 dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewChecker);
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceChecker->GetGPUVirtualAddress());
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, wvpResourceChecker->GetGPUVirtualAddress());
                 dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
                 dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU4);
                 dxCommon->GetCommandList()->DrawInstanced(UINT(checkerModel.vertices.size()), 1, 0, 0);
-
-                // ===================== スプライトの描画 ===================== //
-                dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
-                dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
-                dxCommon->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
-                // マテリアルCBufferの場所を指定
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
-                // TransformationMatrixBufferの箇所を設定
-                dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-                // SRVのDescriptorTableの先頭を指定。2はrootParameter[2]である。
-                dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU); // SRV
-                // 描画！
-                dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0); // スプライト描画
 
                 break;
             }
@@ -1411,14 +1304,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // 実際のcommandListのImGuiの描画コマンドを積む
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), dxCommon->GetCommandList());
 
-            //描画後処理
+            // 描画後処理
             dxCommon->PostDraw();
-
         }
     }
 
     CloseWindow(hwnd);
 
+    delete spriteCommon;
+    delete sprite;
 
     // XAudio2解放
     xAudio2.Reset();
@@ -1434,7 +1328,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    //DirectX解放
+    // DirectX解放
     delete dxCommon;
 
     // ウィンドウ破棄

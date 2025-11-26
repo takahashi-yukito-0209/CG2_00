@@ -426,10 +426,44 @@ void DirectXCommon::CreateDevice()
         assert(SUCCEEDED(hr));
     }
 
+    #ifdef _DEBUG
+
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue = nullptr;
+    if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
+        // やばいエラー時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+
+        // エラー時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+
+        // 警告時に止まる
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+
+        // 抑制するメッセージのID
+        D3D12_MESSAGE_ID denyIds[] = {
+            // Windows11でのDXGIデバックレイヤーとDX12デバッグレイヤーの相互作用バグによるエラーメッセージ
+            // https://stackoverflow.com/questions/69805245/directx-12-application-is-crashing-in-windows-11
+            D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
+        };
+
+        // 抑制するレベル
+        D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
+        D3D12_INFO_QUEUE_FILTER filter {};
+        filter.DenyList.NumIDs = _countof(denyIds);
+        filter.DenyList.pIDList = denyIds;
+        filter.DenyList.NumSeverities = _countof(severities);
+        filter.DenyList.pSeverityList = severities;
+        // 指定したメッセージの表示を抑制する
+        infoQueue->PushStorageFilter(&filter);
+    }
+
+#endif
+
     // 3. デスクリプタサイズを取得
     descriptorSizeRTV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     descriptorSizeSRV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     descriptorSizeDSV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
 }
 
 void DirectXCommon::InitCommandRelated()
@@ -648,12 +682,10 @@ void DirectXCommon::InitImGui()
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
 
-    DXGI_FORMAT imguiFormat = (swapChainFormat_ == DXGI_FORMAT_UNKNOWN) ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : swapChainFormat_;
-
     ImGui_ImplDX12_Init(
         device_.Get(),
         kBackBufferCount,
-        imguiFormat,
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         srvDescriptorHeap_.Get(),
         cpuHandle,
         gpuHandle);
