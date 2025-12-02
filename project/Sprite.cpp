@@ -2,10 +2,11 @@
 #include "SpriteCommon.h"
 #include "WinApp.h"
 #include "mathUtility.h"
+#include "TextureManager.h"
 
 using namespace MyEngine;
 
-void Sprite::Initialize(SpriteCommon* spriteCommon)
+void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 {
     // 引数で受け取ってメンバ変数に記録する
     this->spriteCommon_ = spriteCommon;
@@ -97,6 +98,9 @@ void Sprite::Initialize(SpriteCommon* spriteCommon)
     // 変換行列データの内容を書き込む（初期値）
     transformationMatrixData_->WVP = math.MakeIdentity4x4();
     transformationMatrixData_->World = math.MakeIdentity4x4();
+
+    // 単位行列を書き込んでおく
+    textureIndex_ = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
 }
 
 void Sprite::Update()
@@ -134,7 +138,7 @@ void Sprite::Update()
     materialData_->uvTransform = uvTransformMatrix;
 }
 
-void Sprite::Draw(const D3D12_GPU_DESCRIPTOR_HANDLE& textureSrvHandleGPU)
+void Sprite::Draw()
 {
     DirectXCommon* dxCommon = spriteCommon_->GetDxCommon();
 
@@ -151,7 +155,7 @@ void Sprite::Draw(const D3D12_GPU_DESCRIPTOR_HANDLE& textureSrvHandleGPU)
     dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
 
     // SRVのDescriptorTableの先頭を指定
-    dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+    dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, TextureManager::GetInstance()->GetSrvHandleGPU(textureIndex_));
 
     // 描画！(インデックス数6)
     dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);

@@ -7,10 +7,6 @@ class SpriteCommon {
 public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon);
-    // 更新
-    void Update();
-    // 描画
-    void Draw();
 
     // getter
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
