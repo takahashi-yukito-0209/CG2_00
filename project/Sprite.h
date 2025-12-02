@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
+#include <string>
 
 using Microsoft::WRL::ComPtr;
 
@@ -38,11 +39,11 @@ class Sprite {
 
 public: // メンバ関数
     // 初期化
-    void Initialize(SpriteCommon* spriteCommon);
+    void Initialize(SpriteCommon* spriteCommon,std::string textureFilePath);
     // 更新
     void Update();
     // 描画
-    void Draw(const D3D12_GPU_DESCRIPTOR_HANDLE& textureSrvHandleGPU);
+    void Draw();
 
     // getter
     const Vector2& GetPosition() const { return position_; }
@@ -74,6 +75,9 @@ private: // メンバ変数
     // バッファリソースの使い道を補足するバッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ = {};
     D3D12_INDEX_BUFFER_VIEW indexBufferView_ = {};
+
+    //テクスチャ番号
+    uint32_t textureIndex_ = 0;
 
     // スプライトの変換情報
     Transform transform_ = {};

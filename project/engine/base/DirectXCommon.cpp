@@ -22,6 +22,11 @@
 using namespace Microsoft::WRL;
 using namespace MyEngine;
 
+// 静的インスタンスを定義
+DirectXCommon* DirectXCommon::instance_ = nullptr;
+// 最大SRV数を定義
+const uint32_t DirectXCommon::kMaxSRVCount = 512;
+
 // ----------------------------------------------------------------------
 // Static メンバ関数の実装
 // ----------------------------------------------------------------------
@@ -48,33 +53,70 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetGPUDescriptorHandle(
     return handle;
 }
 
-// ... LoadTextureの実装 (DirectXTex::LoadFromWICFileなどを利用) ...
-DirectX::ScratchImage DirectXCommon::LoadTexture(const std::string& filePath)
+DirectXCommon* DirectXCommon::GetInstance()
 {
-
-    // std::string を std::wstring に変換
-    std::wstring wfilePath = StringUtility::ConvertString(filePath);
-    Logger::Log(std::format("DEBUG wfilePath = {}\n", StringUtility::ConvertString(wfilePath)));
-
-    DirectX::ScratchImage image {};
-    HRESULT hr = DirectX::LoadFromWICFile(wfilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
-    Logger::Log(std::format("DEBUG hr = 0x{:08X}\n", hr));
-
-    if (FAILED(hr)) {
-        Logger::Log(std::format("Error: Failed to load texture file: {}\n", filePath));
-        assert(false);
-        return {};
+    if (instance_ == nullptr) {
+        // インスタンスがなければ新しく生成
+        instance_ = new DirectXCommon();
     }
+    return instance_;
+}
 
-    // ミップマップ生成
-    DirectX::ScratchImage mipImages {};
-    hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
-
-    if (SUCCEEDED(hr)) {
-        return mipImages;
-    } else {
-        return image; // ミップマップ生成失敗時はオリジナルを返す
+void DirectXCommon::Finalize()
+{
+    // ImGuiの終了処理
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+    // フェンスイベントのクローズ
+    if (fenceEvent_) {
+        CloseHandle(fenceEvent_);
+        fenceEvent_ = nullptr;
     }
+    // シングルトンインスタンスの解放
+    if (instance_ != nullptr) {
+        delete instance_;
+        instance_ = nullptr;
+    }
+}
+
+// コマンドリストを実行し、フェンスにシグナルを送る
+void DirectXCommon::ExecuteCommandList()
+{
+    // GPUコマンドの実行
+    ID3D12CommandList* commandLists[] = { commandList_.Get() };
+    commandQueue_->ExecuteCommandLists(1, commandLists);
+
+    // Fenceの値を更新し、シグナルを送る
+    fenceValue_++;
+    HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    assert(SUCCEEDED(hr));
+}
+
+// GPUコマンドの完了を待機する
+void DirectXCommon::WaitForCommandExecution()
+{
+    // コマンド完了待ち (GPU同期)
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        // GPUの処理完了時にイベントを通知するように設定
+        HRESULT hr = fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+        assert(SUCCEEDED(hr));
+        // イベントが発生するまで待機
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+}
+
+// コマンドアロケータとコマンドリストをリセットする
+void DirectXCommon::ResetCommandList()
+{
+    // コマンドアロケータをリセット
+    HRESULT hr = commandAllocator_->Reset();
+    assert(SUCCEEDED(hr));
+
+    // コマンドリストをリセット（アロケータを再設定）
+    // 第二引数（PipelineStateObject）はnullでOK
+    hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
+    assert(SUCCEEDED(hr));
 }
 
 // ----------------------------------------------------------------------
@@ -130,11 +172,6 @@ void DirectXCommon::Initialize(WinApp* winApp)
 // PreDraw関数 (描画前処理)
 void DirectXCommon::PreDraw()
 {
-    // フレームの開始時に必ずリセットしてから記録を始める
-    HRESULT hr = commandAllocator_->Reset();
-    assert(SUCCEEDED(hr));
-    hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
-    assert(SUCCEEDED(hr));
 
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
@@ -178,27 +215,19 @@ void DirectXCommon::PostDraw()
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     commandList_->ResourceBarrier(1, &barrier);
-
-    // グラフィックスコマンドをクローズ
+    
+    // コマンドリストを閉じる（記録終了）
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
-    // GPUコマンドの実行
-    ID3D12CommandList* commandLists[] = { commandList_.Get() };
-    commandQueue_->ExecuteCommandLists(1, commandLists);
-
-    // GPU画面の交換を通知 (Present)
+    // コマンドをGPUへ送信しフェンスをシグナル
+    ExecuteCommandList();
+    // Present（描画結果を画面に送る）
     swapChain_->Present(1, 0);
-
-    // Fenceの値を更新し、シグナルを送る
-    fenceValue_++;
-    commandQueue_->Signal(fence_.Get(), fenceValue_);
-
-    // コマンド完了待ち (GPU同期)
-    if (fence_->GetCompletedValue() < fenceValue_) {
-        fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
-        WaitForSingleObject(fenceEvent_, INFINITE);
-    }
+    //GPUコマンドの完了を待機
+    WaitForCommandExecution();
+    // allocator と commandList をリセット
+    ResetCommandList(); 
 
     // FPS固定
     UpdateFixFPS();
@@ -426,7 +455,7 @@ void DirectXCommon::CreateDevice()
         assert(SUCCEEDED(hr));
     }
 
-    #ifdef _DEBUG
+#ifdef _DEBUG
 
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue = nullptr;
     if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
@@ -463,7 +492,6 @@ void DirectXCommon::CreateDevice()
     descriptorSizeRTV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     descriptorSizeSRV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     descriptorSizeDSV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
 }
 
 void DirectXCommon::InitCommandRelated()
@@ -485,8 +513,6 @@ void DirectXCommon::InitCommandRelated()
     hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
     assert(SUCCEEDED(hr));
 
-    hr = commandList_->Close();
-    assert(SUCCEEDED(hr));
 }
 
 void DirectXCommon::CreateSwapChain()
@@ -586,7 +612,7 @@ void DirectXCommon::CreateDescriptorHeaps()
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc {};
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.NumDescriptors = 128; // 任意の十分な数
+        desc.NumDescriptors = kMaxSRVCount; // 任意の十分な数
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvDescriptorHeap_));
         assert(SUCCEEDED(hr));

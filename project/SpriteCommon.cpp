@@ -14,13 +14,6 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 
 }
 
-void SpriteCommon::Update()
-{
-}
-
-void SpriteCommon::Draw()
-{
-}
 
 void SpriteCommon::SetCommonDrawSetting()
 {

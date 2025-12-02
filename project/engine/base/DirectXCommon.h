@@ -90,14 +90,31 @@ public: // 公開メンバ関数
 
     // --- Static メンバ関数（ヘルパー/汎用機能） ---
 
-    /// <summary>
-    /// テクスチャファイルの読み込み
-    /// </summary>
-    static DirectX::ScratchImage LoadTexture(const std::string& filePath);
+    // 最大SRV数（最大テクスチャ枚数）
+    static const uint32_t kMaxSRVCount;
+
+    // シングルトンインスタンスを取得するための静的メソッドの宣言
+    static DirectXCommon* GetInstance();
+
+    //終了
+    void Finalize();
+
+    // コマンドリストを実行し、フェンスにシグナルを送る
+    void ExecuteCommandList();
+   
+    // GPUコマンドの完了を待機する
+    void WaitForCommandExecution();
+
+    // コマンドアロケータとコマンドリストをリセットする
+    void ResetCommandList();
+
 
 private: // Private メンバ変数
     // WinAppのポインタ
     WinApp* winApp_ = nullptr;
+
+    // シングルトンインスタンスを保持するための静的メンバ変数の宣言
+    static DirectXCommon* instance_;
 
     // デバイス関連
     ComPtr<ID3D12Device> device_;
