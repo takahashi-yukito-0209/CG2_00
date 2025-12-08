@@ -87,15 +87,16 @@ void DirectXCommon::ExecuteCommandList()
     ID3D12CommandList* commandLists[] = { commandList_.Get() };
     commandQueue_->ExecuteCommandLists(1, commandLists);
 
-    // Fenceの値を更新し、シグナルを送る
-    fenceValue_++;
-    HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
-    assert(SUCCEEDED(hr));
 }
 
 // GPUコマンドの完了を待機する
 void DirectXCommon::WaitForCommandExecution()
 {
+    // Fenceの値を更新し、シグナルを送る
+    fenceValue_++;
+    HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    assert(SUCCEEDED(hr));
+
     // コマンド完了待ち (GPU同期)
     if (fence_->GetCompletedValue() < fenceValue_) {
         // GPUの処理完了時にイベントを通知するように設定
@@ -215,7 +216,7 @@ void DirectXCommon::PostDraw()
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     commandList_->ResourceBarrier(1, &barrier);
-    
+
     // コマンドリストを閉じる（記録終了）
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
@@ -224,10 +225,10 @@ void DirectXCommon::PostDraw()
     ExecuteCommandList();
     // Present（描画結果を画面に送る）
     swapChain_->Present(1, 0);
-    //GPUコマンドの完了を待機
+    // GPUコマンドの完了を待機
     WaitForCommandExecution();
     // allocator と commandList をリセット
-    ResetCommandList(); 
+    ResetCommandList();
 
     // FPS固定
     UpdateFixFPS();
@@ -512,7 +513,6 @@ void DirectXCommon::InitCommandRelated()
 
     hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
     assert(SUCCEEDED(hr));
-
 }
 
 void DirectXCommon::CreateSwapChain()
@@ -530,23 +530,13 @@ void DirectXCommon::CreateSwapChain()
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 
-    ComPtr<IDXGISwapChain1> swapChain1;
-
     hr = dxgiFactory_->CreateSwapChainForHwnd(
         commandQueue_.Get(),
         winApp_->GetHwnd(),
         &swapChainDesc,
         nullptr,
         nullptr,
-        &swapChain1);
-
-    // IDXGISwapChain4 に変換
-    hr = swapChain1.As(&swapChain_);
-    if (FAILED(hr)) {
-        OutputDebugString(L"QueryInterface for IDXGISwapChain3 failed.\n");
-        assert(false);
-        return;
-    }
+        reinterpret_cast<IDXGISwapChain1**>(swapChain_.GetAddressOf()));
 
     // スワップチェーンのフォーマットを記録
     swapChainFormat_ = swapChainDesc.Format;
