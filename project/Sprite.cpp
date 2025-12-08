@@ -101,6 +101,8 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 
     // 単位行列を書き込んでおく
     textureIndex_ = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
+    // テクスチャサイズに合わせてスプライトのサイズを調整
+    AdjustTextureSize();
 }
 
 void Sprite::Update()
@@ -113,6 +115,43 @@ void Sprite::Update()
     this->transform_.rotate.z = rotation_;
     // 座標（平行移動）を反映
     this->transform_.translate = { position_.x, position_.y, 0.0f };
+
+    // アンカーポイントの反映
+    float left = 0.0f - anchorPoint_.x;
+    float right = 1.0f - anchorPoint_.x;
+    float top = 0.0f - anchorPoint_.y;
+    float bottom = 1.0f - anchorPoint_.y;
+
+    // 左右反転
+    if (isFlipX_) {
+        left = -left;
+        right = -right;
+    }
+
+    // 上下反転
+    if (isFlipY_) {
+        top = -top;
+        bottom = -bottom;
+    }
+
+    // 頂点位置を反映
+    vertexData_[0].position = { left, bottom, 0.0f, 1.0f }; // 左下
+    vertexData_[1].position = { left, top, 0.0f, 1.0f }; // 左上
+    vertexData_[2].position = { right, bottom, 0.0f, 1.0f }; // 右下
+    vertexData_[3].position = { right, top, 0.0f, 1.0f }; // 右上
+
+    // テクスチャUV座標の計算
+    const DirectX::TexMetadata& metadata = TextureManager::GetInstance()->GetMetadata(textureIndex_);
+    float tex_left = textureLeftTop_.x / static_cast<float>(metadata.width);
+    float tex_right = (textureLeftTop_.x + textureSize_.x) / static_cast<float>(metadata.width);
+    float tex_top = textureLeftTop_.y / static_cast<float>(metadata.height);
+    float tex_bottom = (textureLeftTop_.y + textureSize_.y) / static_cast<float>(metadata.height);
+
+    // 頂点リソースにデータを書き込む
+    vertexData_[0].texcoord = { tex_left, tex_bottom }; // 左下
+    vertexData_[1].texcoord = { tex_left, tex_top }; // 左上
+    vertexData_[2].texcoord = { tex_right, tex_bottom }; // 右下
+    vertexData_[3].texcoord = { tex_right, tex_top }; // 右上
 
     // World行列の作成
     // ここで this->transform_ の値が外部から更新されている必要がある
@@ -159,4 +198,16 @@ void Sprite::Draw()
 
     // 描画！(インデックス数6)
     dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
+}
+
+void Sprite::AdjustTextureSize()
+{
+    // テクスチャメタデータを取得
+    const DirectX::TexMetadata& metadata = TextureManager::GetInstance()->GetMetadata(textureIndex_);
+
+    // テクスチャサイズを反映
+    textureSize_.x = static_cast<float>(metadata.width);
+    textureSize_.y = static_cast<float>(metadata.height);
+    //画像サイズをテクスチャサイズに合わせつ
+    size_ = textureSize_;
 }
