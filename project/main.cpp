@@ -1072,6 +1072,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                         if (ImGui::ColorEdit4("Color", &(currentColor.x))) {
                             currentSprite->SetColor(currentColor);
                         }
+
+                        // --- Anchor Point ---
+                        Vector2 currentAnchor = currentSprite->GetAnchorPoint();
+                        if (ImGui::DragFloat2("AnchorPoint", &(currentAnchor.x), 0.01f, 0.0f, 1.0f)) {
+                            currentSprite->SetAnchorPoint(currentAnchor);
+                        }
+
+                        // --- Flip X / Y ---
+                        bool flipX = currentSprite->GetIsFlipX();
+                        bool flipY = currentSprite->GetIsFlipY();
+                        if (ImGui::Checkbox("FlipX", &flipX)) {
+                            currentSprite->SetIsFlipX(flipX);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Checkbox("FlipY", &flipY)) {
+                            currentSprite->SetIsFlipY(flipY);
+                        }
+
+                        // --- Texture region (left-top and size in pixels) ---
+                        Vector2 texLeftTop = currentSprite->GetTextureLeftTop();
+                        Vector2 texSize = currentSprite->GetTextureSize();
+                        if (ImGui::DragFloat2("TextureLeftTop", &(texLeftTop.x), 1.0f, 0.0f, 8192.0f)) {
+                            currentSprite->SetTextureLeftTop(texLeftTop);
+                        }
+                        if (ImGui::DragFloat2("TextureSize", &(texSize.x), 1.0f, 1.0f, 8192.0f)) {
+                            currentSprite->SetTextureSize(texSize);
+                        }
                     }
 
                     //  PushID と対になる PopID を呼び出す
