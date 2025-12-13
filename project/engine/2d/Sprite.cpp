@@ -122,18 +122,6 @@ void Sprite::Update()
     float top = 0.0f - anchorPoint_.y;
     float bottom = 1.0f - anchorPoint_.y;
 
-    // 左右反転
-    if (isFlipX_) {
-        left = -left;
-        right = -right;
-    }
-
-    // 上下反転
-    if (isFlipY_) {
-        top = -top;
-        bottom = -bottom;
-    }
-
     // 頂点位置を反映
     vertexData_[0].position = { left, bottom, 0.0f, 1.0f }; // 左下
     vertexData_[1].position = { left, top, 0.0f, 1.0f }; // 左上
@@ -148,10 +136,19 @@ void Sprite::Update()
     float tex_bottom = (textureLeftTop_.y + textureSize_.y) / static_cast<float>(metadata.height);
 
     // 頂点リソースにデータを書き込む
-    vertexData_[0].texcoord = { tex_left, tex_bottom }; // 左下
-    vertexData_[1].texcoord = { tex_left, tex_top }; // 左上
-    vertexData_[2].texcoord = { tex_right, tex_bottom }; // 右下
-    vertexData_[3].texcoord = { tex_right, tex_top }; // 右上
+    float tleft = tex_left;
+    float tright = tex_right;
+    float ttop = tex_top;
+    float tbottom = tex_bottom;
+
+    // フリップ時はUVを入れ替える
+    if (isFlipX_) std::swap(tleft, tright);
+    if (isFlipY_) std::swap(ttop, tbottom);
+
+    vertexData_[0].texcoord = { tleft, tbottom }; // 左下
+    vertexData_[1].texcoord = { tleft, ttop }; // 左上
+    vertexData_[2].texcoord = { tright, tbottom }; // 右下
+    vertexData_[3].texcoord = { tright, ttop }; // 右上
 
     // World行列の作成
     // ここで this->transform_ の値が外部から更新されている必要がある
