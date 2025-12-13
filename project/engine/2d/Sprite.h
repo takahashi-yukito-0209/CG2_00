@@ -1,34 +1,11 @@
 #pragma once
-#include "mathUtility.h"
 #include <cstdint>
+#include <MathTypes.h>
 #include <d3d12.h>
 #include <string>
 #include <wrl.h>
 
-using Microsoft::WRL::ComPtr;
-
-// 頂点データ構造体
-struct VertexData {
-    Vector4 position;
-    Vector2 texcoord;
-    Vector3 normal;
-};
-
-// マテリアル構造体
-struct Material {
-    Vector4 color;
-    int32_t enableLighting;
-    float padding1[3];
-    Matrix4x4 uvTransform;
-    int lightingMode;
-    float padding2[3];
-};
-
-// 座標変換行列データ
-struct TransformationMatrix {
-    Matrix4x4 WVP;
-    Matrix4x4 World;
-};
+using namespace Math;
 
 namespace MyEngine {
 
@@ -36,6 +13,30 @@ namespace MyEngine {
 class SpriteCommon;
 
 class Sprite {
+
+public: // メンバ構造体
+    // 頂点データ構造体
+    struct VertexData {
+        Vector4 position;
+        Vector2 texcoord;
+        Vector3 normal;
+    };
+
+    // マテリアル構造体
+    struct Material {
+        Vector4 color;
+        int32_t enableLighting;
+        float padding1[3];
+        Matrix4x4 uvTransform;
+        int lightingMode;
+        float padding2[3];
+    };
+
+    // 座標変換行列データ
+    struct TransformationMatrix {
+        Matrix4x4 WVP;
+        Matrix4x4 World;
+    };
 
 public: // メンバ関数
     // 初期化
@@ -68,18 +69,17 @@ public: // メンバ関数
     void SetTextureSize(const Vector2& textureSize) { textureSize_ = textureSize; }
 
 private: // メンバ関数
-
-    //テクスチャサイズをイメージに合わせる
+    // テクスチャサイズをイメージに合わせる
     void AdjustTextureSize();
 
 private: // メンバ変数
     SpriteCommon* spriteCommon_ = nullptr;
 
     // バッファリソース
-    ComPtr<ID3D12Resource> vertexResource_ = nullptr;
-    ComPtr<ID3D12Resource> indexResource_ = nullptr;
-    ComPtr<ID3D12Resource> materialResource_ = nullptr;
-    ComPtr<ID3D12Resource> transformationMatrixResource_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_ = nullptr;
 
     // バッファリソース内のデータを指すポインタ
     VertexData* vertexData_ = nullptr;
