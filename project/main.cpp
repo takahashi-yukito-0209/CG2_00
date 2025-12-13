@@ -1355,10 +1355,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     CloseWindow(hwnd);
 
-    // DirectX のシステム系（レンダーターゲット・スワップチェーン等）
-    DirectXCommon::GetInstance()->Finalize(); // ★ デバイス破棄は必ず最後
+    // DirectX のシステム系
+    DirectXCommon::GetInstance()->Finalize(); 
 
-    // 自作リソース解放（ここではもうGPUは完全停止して安全）
+    // 自作リソース解放
     TextureManager::GetInstance()->Finalize();
 
     delete spriteCommon;
