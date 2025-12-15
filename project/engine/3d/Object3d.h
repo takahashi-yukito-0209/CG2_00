@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <wrl.h>
+#include <cmath>
+#include <sstream>
+#include "Logger.h"
 
 using namespace Math;
 
@@ -11,10 +14,12 @@ namespace MyEngine {
 
 // 前方宣言
 class Object3dCommon;
+class Model; 
+class ModelCommon; 
 
 class Object3d {
 public: // メンバ構造体
-        // 頂点データ構造体
+    // 頂点データ構造体
     struct VertexData {
         Vector4 position;
         Vector2 texcoord;
@@ -46,7 +51,7 @@ public: // メンバ構造体
     // マテリアルデータ構造体
     struct MaterialData {
         std::string textureFilePath;
-        uint32_t textureIndex = 0;
+        uint32_t textureIndex = UINT32_MAX;
     };
 
     // モデルデータ構造体
@@ -58,7 +63,9 @@ public: // メンバ構造体
 public: // メンバ関数
     // 初期化
     void Initialize(Object3dCommon* object3dCommon);
-    // 更新（WVP等の書き込み）
+    // 終了
+    ~Object3d();
+    // 更新
     void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
     // 描画
     void Draw();
@@ -68,6 +75,17 @@ public: // メンバ関数
 
     //.objファイルを読みこむ
     static ModelData LoadObjFile(const std::string& directoryPath, const std::string& filename);
+
+    // モデル用ポインタのセット・ゲット
+    void SetModel(Model* model) { model_ = model; }
+    Model* GetModel() const { return model_; }
+
+    // モデル共通情報用ポインタのセット・ゲット
+    D3D12_VERTEX_BUFFER_VIEW const& GetVertexBufferView() const { return vertexBufferView_; }
+    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const { return materialResource_; }
+    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
+    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetDirectionalLightResource() const { return directionalLightResource_; }
+    const ModelData& GetModelData() const { return modelData_; }
 
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr;
@@ -91,6 +109,35 @@ private: // メンバ変数
 
     Transform transform_;
     Transform cameraTransform_;
+
+    // Model pointer
+    Model* model_ = nullptr;
+    // ModelCommon owned by this Object3d for the model
+    ModelCommon* modelCommon_ = nullptr;
+
+public:
+    // setters
+    void SetScale(const Vector3& scale) { transform_.scale = scale; }
+    void SetRotate(const Vector3& rotate) { transform_.rotate = rotate; }
+    void SetTranslate(const Vector3& translate) {
+        // 入力値の妥当性チェック
+        auto invalid = [](float v) {
+            return !std::isfinite(v) || std::fabs(v) > 1e6f;
+        };
+        
+        if (invalid(translate.x) || invalid(translate.y) || invalid(translate.z)) {
+            std::ostringstream oss;
+            oss << "Warning: Rejecting invalid translate set = " << translate.x << " " << translate.y << " " << translate.z << "\n";
+            Logger::Log(oss.str());
+            return; // ignore invalid assignment
+        }
+        transform_.translate = translate;
+    }
+
+    // Getter
+    const Vector3 GetScale() const { return transform_.scale; }
+    const Vector3 GetRotate() const { return transform_.rotate; }
+    const Vector3 GetTranslate() const { return transform_.translate; }
 
 private:
     // 初期化補助

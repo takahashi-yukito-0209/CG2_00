@@ -37,6 +37,7 @@
 #include "TextureManager.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
+#include "ModelManager.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -312,13 +313,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 #pragma region 最初のシーンの初期化
     
     //スプライト複数設定
-    std::vector<Sprite*> sprites;
-    const uint32_t kSpriteCount = 5;
+    std::vector<Sprite*> sprites; // Sprite クラスのポインタを格納するための動的配列
+    const uint32_t kSpriteCount = 5; // 描画対象とするスプライトの総数
+    // スプライトに使用するテクスチャのファイル名を格納する配列
     std::array<std::string, 2> spriteNames = {
         "resources/uvChecker",
         "resources/monsterBall",
     };
 
+    // 指定された数だけスプライトを生成・設定するループ
     for (uint32_t i = 0; i < kSpriteCount; ++i) {
         if (i / 2 == 0) {             
             Sprite* sprite = new Sprite();
@@ -331,9 +334,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         }
     }
 
-    // 3dオブジェクト初期化
-    Object3d* object3d = new Object3d();
-    object3d->Initialize(object3dCommon);
+    // 3dオブジェクト複数初期化
+    std::vector<Object3d*> objects3d;// Object3d クラスのポインタを格納するための動的配列
+    const uint32_t kObject3DCount = 3; // 描画対象とする 3D オブジェクトの総数
+    // 指定された数だけ 3D オブジェクトを生成・設定するループ
+    for (uint32_t i = 0; i < kObject3DCount; ++i) {
+        Object3d* obj = new Object3d();
+        obj->Initialize(object3dCommon);
+        objects3d.push_back(obj);
+    }
 
 #pragma endregion 最初のシーンの終了
 
@@ -377,6 +386,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 全てのロード完了後、まとめて転送を実行
     TextureManager::GetInstance()->ExecuteResourceUpload();
+
+    // デバッグ: 読み込んだテクスチャ情報をログ出力
+    {
+        uint32_t count = TextureManager::GetInstance()->GetLoadedTextureCount();
+        Logger::Log(std::format("Debug: Loaded texture count = {}\n", count));
+        for (uint32_t ti = 0; ti < count; ++ti) {
+            auto meta = TextureManager::GetInstance()->GetMetadata(ti);
+            auto handle = TextureManager::GetInstance()->GetSrvHandleGPU(ti);
+            Logger::Log(std::format("Debug: Texture[{}] size={}x{} format={} srv.ptr=0x{:016X}\n", ti, meta.width, meta.height, static_cast<int>(meta.format), handle.ptr));
+        }
+    }
 
     // 描画対象をUIで切り替えるための変数と選択肢
     enum DrawType {
@@ -471,9 +491,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             wvpData->WVP = worldViewProjectionMatrix;
             wvpData->World = worldMatrix;
 
-            // Object3Dの更新
-            if (object3d) {
-                object3d->Update(viewMatrix, projectionMatrix);
+            // Object3Dの更新（複数）
+            for (auto obj : objects3d) {
+                if (obj) obj->Update(viewMatrix, projectionMatrix);
             }
 
             //スプライトの更新
@@ -489,11 +509,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // メインオブジェクト
             if (selectedDrawType == DRAW_MODEL || selectedDrawType == DRAW_ALL) {
-                if (ImGui::CollapsingHeader("Object(Main)")) {
-                    ImGui::DragFloat3("Scale##Object", &transform.scale.x, 0.01f);
-                    ImGui::DragFloat3("Rotate##Object", &transform.rotate.x, 0.01f);
-                    ImGui::DragFloat3("Translate##Object", &transform.translate.x, 0.01f);
-                    ImGui::ColorEdit4("Color##Object", &(materialData->color.x));
+                // 各Object3dの個別編集UI
+                for (uint32_t oi = 0; oi < objects3d.size(); ++oi) {
+                    Object3d* o = objects3d[oi];
+                    if (!o)
+                        continue;
+                    char headerName[64];
+                    sprintf_s(headerName, "Object %d", oi);
+                    ImGui::PushID(oi);
+                    if (ImGui::CollapsingHeader(headerName)) {
+                        Vector3 s = o->GetScale();
+                        Vector3 r = o->GetRotate();
+                        Vector3 t = o->GetTranslate();
+                        if (ImGui::DragFloat3("Scale", &s.x, 0.01f))
+                            o->SetScale(s);
+                        if (ImGui::DragFloat3("Rotate", &r.x, 0.01f))
+                            o->SetRotate(r);
+                        if (ImGui::DragFloat3("Translate", &t.x, 0.1f))
+                            o->SetTranslate(t);
+                    }
+                    ImGui::PopID();
                 }
             }
 
@@ -501,14 +536,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
 
                 // ImGuiのスコープ内で名前を一意にするためのヘルパー
-                // (名前を生成する用途はCollapsingHeaderに限定するため、char配列は必須)
                 char nameBuffer[64];
 
                 for (uint32_t i = 0; i < kSpriteCount; i++) {
                     // 現在操作するスプライトのインスタンス
                     Sprite* currentSprite = sprites[i];
 
-                    // ヘッダー名にインデックスを付与し、一意にする (例: "Sprite 0", "Sprite 1", ...)
+                    // ヘッダー名にインデックスを付与し、一意にする 
                     sprintf_s(nameBuffer, "Sprite %d", i);
 
                     // ImGui::PushID(i) を使用して、ループ内のコントロールを個別化 
@@ -639,11 +673,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // 描画前処理
             DirectXCommon::GetInstance()->PreDraw();
 
-            // 3Dオブジェクトの描画準備。3Dオブジェクトの描画に共通のグラフィクスコマンドを積む
-            object3dCommon->SetCommonDrawSetting();
-
-            // Sprite描画準備。Spriteの描画に共通のグラフィクスコマンドを積む
-            spriteCommon->SetCommonDrawSetting();
+            // 描画準備は描画対象ごとに行う（PSO/RootSignatureを切り替えるため）
 
             // ImGuiの内部コマンドを生成する
             ImGui::Render();
@@ -661,25 +691,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             case DRAW_MODEL:
 
-                // オブジェクトの描画
-                if (object3d) {
-                    object3d->Draw();
+                // 3D描画の共通設定
+                object3dCommon->SetCommonDrawSetting();
+
+                // オブジェクトの描画（複数）
+                for (auto obj : objects3d) {
+                    if (obj) obj->Draw();
                 }
 
                 break;
 
             case DRAW_SPRITE:
 
+                // Sprite描画準備
+                spriteCommon->SetCommonDrawSetting();
+
                 // スプライトの描画
                 for (uint32_t i = 0; i < kSpriteCount; i++) {
-                    // 描画に使用するテクスチャのGPUハンドルを取得して渡す
-                    if (i / 2 == 0) {
-                        // 偶数番目のスプライトはモンスターボールテクスチャ
-                        sprites[i]->Draw();
-                    } else {
-                        // 奇数番目のスプライトはチェッカーテクスチャ
-                        sprites[i]->Draw();
-                    }
+                    sprites[i]->Draw();
                 }
 
                 break;
@@ -696,21 +725,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             case DRAW_ALL:
 
-                // スプライトの描画
-                for (uint32_t i = 0; i < kSpriteCount; i++) {
-                    // 描画に使用するテクスチャのGPUハンドルを取得して渡す
-                    if (i / 2 == 0) {
-                        // 偶数番目のスプライトはモンスターボールテクスチャ
-                        sprites[i]->Draw();
-                    } else {
-                        // 奇数番目のスプライトはチェッカーテクスチャ
-                        sprites[i]->Draw();
-                    }
+                // 3Dオブジェクトの描画（複数）
+                object3dCommon->SetCommonDrawSetting();
+                for (auto obj : objects3d) {
+                    if (obj) obj->Draw();
                 }
 
-                // オブジェクトの描画
-                if (object3d) {
-                    object3d->Draw();
+                // スプライトの描画
+                spriteCommon->SetCommonDrawSetting();
+                for (uint32_t i = 0; i < kSpriteCount; i++) {
+                    sprites[i]->Draw();
                 }
 
                 break;
@@ -726,19 +750,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     CloseWindow(hwnd);
 
-    // DirectX のシステム系
-    DirectXCommon::GetInstance()->Finalize(); 
 
     // 自作リソース解放
+    // 3D/2D オブジェクトを先に破棄
+    for (auto obj : objects3d) {
+        delete obj;
+    }
+    objects3d.clear();
     delete object3dCommon;
-    delete object3d;
 
+    // テクスチャ/モデル管理の解放
     TextureManager::GetInstance()->Finalize();
+    ModelManager::GetInstance()->Finalize();
 
+    // スプライト等
     delete spriteCommon;
     for (uint32_t i = 0; i < kSpriteCount; i++) {
         delete sprites[i];
     }
+
+    // DirectX のシステム系は最後に破棄
+    DirectXCommon::GetInstance()->Finalize(); 
 
     // 音・入力など DirectX 依存していないもの
     xAudio2.Reset();

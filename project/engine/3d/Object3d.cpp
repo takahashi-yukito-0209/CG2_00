@@ -4,8 +4,11 @@
 #include <fstream>
 #include "Logger.h"
 #include "StringUtility.h"
-#include "engine/utility/mathUtility.h"
-#include "engine/2d/TextureManager.h"
+#include "mathUtility.h"
+#include "TextureManager.h"
+#include "Model.h"
+#include "ModelCommon.h"
+#include "ModelManager.h"
 
 using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
@@ -18,37 +21,30 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     // Transformの初期化
     transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
     cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
-
-    // モデル読み込み
-    modelData_ = LoadObjFile("resources", "plane.obj");
-
-    // VertexResourceの作成
-    DirectXCommon* dxCommon = object3dCommon->GetDxCommon();
-    // 頂点バッファを作成し、中身を書き込む
-    if (!modelData_.vertices.empty()) {
-        vertexResource_ = dxCommon->CreateBufferResource(sizeof(VertexData) * modelData_.vertices.size());
-        // マップしてデータを書き込む
-        VertexData* mapped = nullptr;
-        vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
-        assert(mapped != nullptr);
-        std::memcpy(mapped, modelData_.vertices.data(), sizeof(VertexData) * modelData_.vertices.size());
-        // vertexData_ はマップしたポインタを保持しておく
-        vertexData_ = mapped;
-
-        // 頂点バッファビューを設定
-        vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-        vertexBufferView_.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * modelData_.vertices.size());
-        vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(VertexData));
-    }
-
     // マテリアル用リソース作成
     CreateMaterialResource();
+    // テクスチャ割り当て
+    AssignTexture();
+
     // 座標変換行列用リソース作成
     CreateTransformationMatrixResource();
     // 平行光源用リソース作成
     CreateDirectionalLightResource();
-    // テクスチャ割り当て
-    AssignTexture();
+
+    // ModelCommon を生成して初期化
+    modelCommon_ = new ModelCommon();
+    modelCommon_->Initialize(object3dCommon->GetDxCommon());
+
+    // Model を読み込んでセット
+    ModelManager* mgr = ModelManager::GetInstance();
+    model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
+}
+
+Object3d::~Object3d()
+{
+    // ModelCommon を解放
+    delete modelCommon_;
+    modelCommon_ = nullptr;
 }
 
 Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename)
@@ -90,7 +86,8 @@ void Object3d::CreateMaterialResource()
     materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
     // デフォルト値
     materialData_->color = {1.0f,1.0f,1.0f,1.0f};
-    materialData_->enableLighting = 1;
+    // ライティング無効
+    materialData_->enableLighting = 0;
     // 初期UV変換は単位行列にする
     MathUtility math;
     materialData_->uvTransform = math.MakeIdentity4x4();
@@ -125,10 +122,26 @@ void Object3d::CreateDirectionalLightResource()
 void Object3d::AssignTexture()
 {
     // テクスチャマネージャからインデックスを取得してモデルデータに格納
+    auto texMgr = TextureManager::GetInstance();
     if (!modelData_.material.textureFilePath.empty()) {
-        uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        modelData_.material.textureIndex = idx;
-        Logger::Log(std::format("Object3d::AssignTexture: file={} -> index={}\n", modelData_.material.textureFilePath, idx));
+        uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
+        // 成功したら格納して終了
+        if (idx != UINT32_MAX) {
+            modelData_.material.textureIndex = idx;
+            Logger::Log(std::format("Object3d::AssignTexture: file={} -> index={}\n", modelData_.material.textureFilePath, idx));
+            return;
+        }
+    }
+
+    // テクスチャ指定がない、もしくは見つからなかった場合の処理
+    uint32_t loadedCount = texMgr->GetLoadedTextureCount();
+    // デフォルトテクスチャを割り当てる
+    if (loadedCount > 0) {
+        modelData_.material.textureIndex = 0;
+        Logger::Log(std::format("Object3d::AssignTexture: no material texture specified, defaulting to index=0\n"));
+    } else {
+        modelData_.material.textureIndex = UINT32_MAX;
+        Logger::Log("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");
     }
 }
 
@@ -149,22 +162,81 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
 
 void Object3d::Draw()
 {
+    // 各種ポインタのチェック
+    if (!object3dCommon_) {
+        Logger::Log("Object3d::Draw skipped: object3dCommon_ is null\n");
+        return;
+    }
+    if (!object3dCommon_->GetDxCommon()) {
+        Logger::Log("Object3d::Draw skipped: DxCommon is null\n");
+        return;
+    }
     // 描画に必要なコマンドを積む
     auto cmdList = object3dCommon_->GetDxCommon()->GetCommandList();
+    if (!cmdList) {
+        Logger::Log("Object3d::Draw skipped: command list is null\n");
+        return;
+    }
+    // ログ：描画開始、状態確認
+    Logger::Log(std::format("Object3d::Draw start: model={} materialRes={} transformRes={} lightRes={}\n",
+        reinterpret_cast<uintptr_t>(model_),
+        reinterpret_cast<uintptr_t>(materialResource_.Get()),
+        reinterpret_cast<uintptr_t>(transformationMatrixResource_.Get()),
+        reinterpret_cast<uintptr_t>(directionalLightResource_.Get())));
+
+    // モデルがセットされていればモデル描画に任せる
+    if (model_) {
+        model_->Draw(this);
+        return;
+    }
+
+    // モデルがセットされていない場合は頂点バッファから直接描画する
+    if (vertexBufferView_.SizeInBytes == 0) {
+        Logger::Log("Object3d::Draw skipped: no vertex buffer for non-model draw\n");
+        return;
+    }
     // VBVを設定
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-    // マテリアルCBV
-    cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-    // WVP CBV
-    cmdList->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
-    // 光源CBV
-    cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+
+    // マテリアルCBV (必須)
+    if (!materialResource_) {
+        Logger::Log("Object3d::Draw skipped: materialResource_ is null\n");
+        return;
+    }
+    auto matAddr = materialResource_->GetGPUVirtualAddress();
+    Logger::Log(std::format("Object3d::Draw: material GPUAddr=0x{:016X}\n", matAddr));
+    cmdList->SetGraphicsRootConstantBufferView(0, matAddr);
+
+    // 座標変換行列CBV (必須)
+    if (!transformationMatrixResource_) {
+        Logger::Log("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
+        return;
+    }
+    auto wvpAddr = transformationMatrixResource_->GetGPUVirtualAddress();
+    Logger::Log(std::format("Object3d::Draw: WVP GPUAddr=0x{:016X}\n", wvpAddr));
+    cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
+
+    // 光源CBV (必須)
+    if (!directionalLightResource_) {
+        Logger::Log("Object3d::Draw skipped: directionalLightResource_ is null\n");
+        return;
+    }
+    auto lightAddr = directionalLightResource_->GetGPUVirtualAddress();
+    Logger::Log(std::format("Object3d::Draw: Light GPUAddr=0x{:016X}\n", lightAddr));
+    cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+
     // SRVはTextureManagerからハンドルを取り出してRootDescriptorTableにセット
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(modelData_.material.textureIndex);
-    // ログ出力
-    Logger::Log(std::format("Object3d::Draw: textureIndex={} srv.ptr=0x{:016X}\n", modelData_.material.textureIndex, srvHandle.ptr));
-    // SRV DescriptorTable
-    cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    uint32_t texIndex = modelData_.material.textureIndex;
+    auto texMgr = TextureManager::GetInstance();
+    if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
+        // ログ出力
+        Logger::Log(std::format("Object3d::Draw: textureIndex={} srv.ptr=0x{:016X}\n", texIndex, srvHandle.ptr));
+        // SRV DescriptorTable
+        cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    } else {
+        Logger::Log(std::format("Object3d::Draw: no valid texture assigned (index={}) - skipping SRV\n", texIndex));
+    }
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
 }
