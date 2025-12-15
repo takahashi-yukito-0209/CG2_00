@@ -30,6 +30,9 @@ public:
     //テクスチャ番号からGPUハンドルを取得
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(uint32_t textureIndex);
 
+    // 現在ロード済みのテクスチャ数を返す
+    uint32_t GetLoadedTextureCount() const { return static_cast<uint32_t>(textureDatas.size()); }
+
     //メタデータを取得
     const DirectX::TexMetadata& GetMetadata(uint32_t textureIndex);
 

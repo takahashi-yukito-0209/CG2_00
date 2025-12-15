@@ -114,7 +114,12 @@ void TextureManager::LoadTexture(const std::string& filePath)
         mipImages // アップロードするデータ
     );
 
-    // void型なので、ここでreturn srvIndex; は削除
+    // SRVハンドルの生成確認
+    if (textureData.srvHandleGPU.ptr == 0) {
+        Logger::Log(std::format("ERROR LoadTexture: SRV GPU handle is null for {}\n", filePath));
+    }
+
+    // ロード成功のログ出力
     Logger::Log(std::format("DEBUG LoadTexture: Loaded new texture: {} (Index: {})\n", filePath, srvIndex));
 }
 
@@ -152,10 +157,10 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
         return textureIndex;
     }
 
-    // 検索がヒットしない場合は、テクスチャが事前に読み込まれていないので assert で停止させる
+    // 検索がヒットしない場合は、テクスチャが事前に読み込まれていないのでエラーをログして無効値を返す
     Logger::Log(std::format("ERROR GetTextureIndexByFilePath: Texture not found: {}\n", filePath));
-    assert(false);
-    return 0;
+    // 呼び出し元で範囲チェックできるように 無効値 UINT32_MAX を返す
+    return UINT32_MAX;
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureIndex)
@@ -164,7 +169,10 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureInde
     assert(textureIndex < textureDatas.size()); 
 
     TextureData& textureData = textureDatas[textureIndex];
-
+    // ハンドルの有効性チェック
+    if (textureData.srvHandleGPU.ptr == 0) {
+        Logger::Log(std::format("Warning: Requested SRV GPU handle is null for index {}\n", textureIndex));
+    }
     return textureData.srvHandleGPU;
 }
 
