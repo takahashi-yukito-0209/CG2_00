@@ -28,6 +28,8 @@ static const char* LevelToString(Level l) {
     case Level::Error:
         return "ERROR"; // NOLINT(clang-diagnostic-switch-enum)
     }
+    // 保険: すべての経路で文字列を返す
+    return "UNKNOWN";
 }
 
 // タイムスタンプ取得

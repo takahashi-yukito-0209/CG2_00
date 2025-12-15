@@ -52,10 +52,18 @@ void Model::Draw(Object3d* owner)
     auto texMgr = TextureManager::GetInstance();
     if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        Logger::Log(std::format("Model::Draw: textureIndex={} srv.ptr=0x{:016X}\n", texIndex, srvHandle.ptr));
+        {
+            char buf[256];
+            sprintf_s(buf, "Model::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, static_cast<unsigned long long>(srvHandle.ptr));
+            Logger::Log(buf);
+        }
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
     } else {
-        Logger::Log(std::format("Model::Draw: no valid texture assigned (index={}) - drawing without SRV\n", texIndex));
+        {
+            char buf[256];
+            sprintf_s(buf, "Model::Draw: no valid texture assigned (index=%u) - drawing without SRV\n", texIndex);
+            Logger::Log(buf);
+        }
     }
 
     // 描画コマンド
