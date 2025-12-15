@@ -433,8 +433,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         for (uint32_t ti = 0; ti < count; ++ti) {
             auto meta = TextureManager::GetInstance()->GetMetadata(ti);
             auto handle = TextureManager::GetInstance()->GetSrvHandleGPU(ti);
-            sprintf_s(buf, "Debug: Texture[%u] size=%u x %u format=%d srv.ptr=0x%016llX\n", ti, meta.width, meta.height, static_cast<int>(meta.format), handle.ptr);
-            Logger::Log(buf);
+            {
+                std::ostringstream oss;
+                oss << "Debug: Texture[" << ti << "] size=" << meta.width << " x " << meta.height
+                    << " format=" << static_cast<int>(meta.format)
+                    << " srv.ptr=0x" << std::hex << std::uppercase << std::setw(16) << std::setfill('0') << handle.ptr;
+                Logger::Log(oss.str());
+            }
         }
     }
 
