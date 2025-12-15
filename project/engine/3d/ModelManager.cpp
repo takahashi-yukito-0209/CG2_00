@@ -13,27 +13,45 @@ ModelManager* ModelManager::GetInstance()
 
 void ModelManager::Finalize()
 {
+    // すべてのモデルを解放
     models_.clear();
+    // シングルトン自身を破棄
     delete instance_;
     instance_ = nullptr;
 }
 
 Model* ModelManager::LoadModel(const std::string& directory, const std::string& filename, ModelCommon* modelCommon)
 {
-    // 読み込み済みモデルを検索
-    for (auto& m : models_) {
-        // naive: compare by first vertex count or filepath isn't stored yet
-        // TODO: store filepath in Model
+    // ファイルパスをキーとして結合
+    std::string filePath = directory + "/" + filename;
+
+    // すでに読み込まれているかチェック（早期リターン）
+    if (models_.find(filePath) != models_.end()) {
+        // 既にある場合はそのポインタを返す
+        return models_[filePath].get();
     }
 
-    // モデルの新規読み込み
+    // 新規モデルを生成して読み込む
     auto model = std::make_unique<Model>();
     if (model->LoadFromFile(directory, filename)) {
+        // モデルの初期化
         model->Initialize(modelCommon);
         Model* ptr = model.get();
-        models_.push_back(std::move(model));
+        // コンテナに格納（所有権を移す）
+        models_.insert(std::make_pair(filePath, std::move(model)));
         return ptr;
     }
 
+    // 読み込み失敗時はnullptrを返す
+    return nullptr;
+}
+
+Model* ModelManager::FindModel(const std::string& filePath)
+{
+    // コンテナ内を検索し、存在すれば生ポインタを返す
+    auto it = models_.find(filePath);
+    if (it != models_.end()) {
+        return it->second.get();
+    }
     return nullptr;
 }

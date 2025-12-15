@@ -37,7 +37,17 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
 
     // Model を読み込んでセット
     ModelManager* mgr = ModelManager::GetInstance();
+    // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
     model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
+}
+
+// ファイル名を指定してモデルを読み込み、設定する
+void Object3d::SetModel(const std::string& filePath)
+{
+    // resources ディレクトリを前提として ModelManager に読み込みを依頼
+    ModelManager* mgr = ModelManager::GetInstance();
+    Model* m = mgr->LoadModel("resources", filePath, modelCommon_);
+    model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
 }
 
 Object3d::~Object3d()
