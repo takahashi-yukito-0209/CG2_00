@@ -65,7 +65,12 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
 
     // 2.ファイルを開く
     std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
-    assert(file.is_open()); // とりあえず開けなかったら止める
+    if (!file.is_open()) {
+        char buf[256];
+        sprintf_s(buf, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
+        Logger::Log(buf);
+        return materialData;
+    }
 
     // 3.実際にファイルを読み、MaterialDataを構築していく
     while (std::getline(file, line)) {
@@ -138,7 +143,9 @@ void Object3d::AssignTexture()
         // 成功したら格納して終了
         if (idx != UINT32_MAX) {
             modelData_.material.textureIndex = idx;
-            Logger::Log(std::format("Object3d::AssignTexture: file={} -> index={}\n", modelData_.material.textureFilePath, idx));
+            char buf[256];
+            sprintf_s(buf, "Object3d::AssignTexture: file=%s -> index=%u\n", modelData_.material.textureFilePath.c_str(), idx);
+            Logger::Log(buf);
             return;
         }
     }
@@ -148,7 +155,7 @@ void Object3d::AssignTexture()
     // デフォルトテクスチャを割り当てる
     if (loadedCount > 0) {
         modelData_.material.textureIndex = 0;
-        Logger::Log(std::format("Object3d::AssignTexture: no material texture specified, defaulting to index=0\n"));
+        Logger::Log("Object3d::AssignTexture: no material texture specified, defaulting to index=0\n");
     } else {
         modelData_.material.textureIndex = UINT32_MAX;
         Logger::Log("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");
@@ -188,11 +195,15 @@ void Object3d::Draw()
         return;
     }
     // ログ：描画開始、状態確認
-    Logger::Log(std::format("Object3d::Draw start: model={} materialRes={} transformRes={} lightRes={}\n",
-        reinterpret_cast<uintptr_t>(model_),
-        reinterpret_cast<uintptr_t>(materialResource_.Get()),
-        reinterpret_cast<uintptr_t>(transformationMatrixResource_.Get()),
-        reinterpret_cast<uintptr_t>(directionalLightResource_.Get())));
+    {
+        char buf[256];
+        sprintf_s(buf, "Object3d::Draw start: model=%p materialRes=%p transformRes=%p lightRes=%p\n",
+            reinterpret_cast<void*>(model_),
+            reinterpret_cast<void*>(materialResource_.Get()),
+            reinterpret_cast<void*>(transformationMatrixResource_.Get()),
+            reinterpret_cast<void*>(directionalLightResource_.Get()));
+        Logger::Log(buf);
+    }
 
     // モデルがセットされていればモデル描画に任せる
     if (model_) {
@@ -214,7 +225,11 @@ void Object3d::Draw()
         return;
     }
     auto matAddr = materialResource_->GetGPUVirtualAddress();
-    Logger::Log(std::format("Object3d::Draw: material GPUAddr=0x{:016X}\n", matAddr));
+    {
+        char buf[128];
+        sprintf_s(buf, "Object3d::Draw: material GPUAddr=0x%016llX\n", matAddr);
+        Logger::Log(buf);
+    }
     cmdList->SetGraphicsRootConstantBufferView(0, matAddr);
 
     // 座標変換行列CBV (必須)
@@ -223,7 +238,11 @@ void Object3d::Draw()
         return;
     }
     auto wvpAddr = transformationMatrixResource_->GetGPUVirtualAddress();
-    Logger::Log(std::format("Object3d::Draw: WVP GPUAddr=0x{:016X}\n", wvpAddr));
+    {
+        char buf[128];
+        sprintf_s(buf, "Object3d::Draw: WVP GPUAddr=0x%016llX\n", wvpAddr);
+        Logger::Log(buf);
+    }
     cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
     // 光源CBV (必須)
@@ -232,7 +251,11 @@ void Object3d::Draw()
         return;
     }
     auto lightAddr = directionalLightResource_->GetGPUVirtualAddress();
-    Logger::Log(std::format("Object3d::Draw: Light GPUAddr=0x{:016X}\n", lightAddr));
+    {
+        char buf[128];
+        sprintf_s(buf, "Object3d::Draw: Light GPUAddr=0x%016llX\n", lightAddr);
+        Logger::Log(buf);
+    }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
     // SRVはTextureManagerからハンドルを取り出してRootDescriptorTableにセット
@@ -241,11 +264,19 @@ void Object3d::Draw()
     if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
         // ログ出力
-        Logger::Log(std::format("Object3d::Draw: textureIndex={} srv.ptr=0x{:016X}\n", texIndex, srvHandle.ptr));
+        {
+            char buf[128];
+            sprintf_s(buf, "Object3d::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, srvHandle.ptr);
+            Logger::Log(buf);
+        }
         // SRV DescriptorTable
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
     } else {
-        Logger::Log(std::format("Object3d::Draw: no valid texture assigned (index={}) - skipping SRV\n", texIndex));
+        {
+            char buf[128];
+            sprintf_s(buf, "Object3d::Draw: no valid texture assigned (index=%u) - skipping SRV\n", texIndex);
+            Logger::Log(buf);
+        }
     }
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
@@ -261,7 +292,12 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
 
     // 2.ファイルを開く
     std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
-    assert(file.is_open()); // とりあえず開けなかったら止める
+    if (!file.is_open()) {
+        char buf[256];
+        sprintf_s(buf, "Warning: LoadObjFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
+        Logger::Log(buf);
+        return modelData;
+    }
 
     // 3.実際にファイルを読み、ModelDataを構築していく
     while (std::getline(file, line)) {

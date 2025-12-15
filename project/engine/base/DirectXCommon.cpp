@@ -7,7 +7,6 @@
 #include <comdef.h> // _com_error 用
 #include <d3d12sdklayers.h>
 #include <externals/DirectXTex/d3dx12.h>
-#include <format>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -352,7 +351,8 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     // DXCユーティリティを使用して、指定されたファイルパスのシェーダーコードをBlobとして読み込む
     hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
     if (FAILED(hr)) {
-        Logger::Log(std::format("Error: Failed to load shader file: {}\n", StringUtility::ConvertString(filePath)));
+        std::string msg = std::string("Error: Failed to load shader file: ") + StringUtility::ConvertString(filePath) + "\n";
+        Logger::Log(msg);
         assert(false);
         return nullptr;
     }
@@ -391,7 +391,8 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errorBlob), nullptr);
     if (errorBlob && errorBlob->GetStringLength() > 0) {
         // エラーが存在する場合、ログ出力してアサート
-        Logger::Log(std::format("Shader Compile Error ({}):\n{}\n", StringUtility::ConvertString(filePath), errorBlob->GetStringPointer()));
+        std::string msg = std::string("Shader Compile Error (") + StringUtility::ConvertString(filePath) + "):\n" + errorBlob->GetStringPointer() + "\n";
+        Logger::Log(msg);
         assert(false);
         return nullptr;
     }
@@ -436,7 +437,9 @@ void DirectXCommon::CreateDevice()
 
         // ソフトウェアアダプター(WARP)でなければ採用
         if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) {
-            Logger::Log(std::format("Use Adapter: {}\n", StringUtility::ConvertString(adapterDesc.Description)));
+            std::wstring descW(adapterDesc.Description);
+            std::string desc = StringUtility::ConvertString(descW);
+            Logger::Log(std::string("Use Adapter: ") + desc + "\n");
             hr = D3D12CreateDevice(useAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
             if (SUCCEEDED(hr)) {
                 break; // デバイス生成に成功したらループを抜ける
@@ -715,26 +718,19 @@ void DirectXCommon::InitializeFixFPS()
 
 void DirectXCommon::UpdateFixFPS()
 {
-    // 1/60秒ぴったりの時間
-    const std::chrono::microseconds kMinTime(uint64_t(1000000.0f / 60.0f));
+    // 目標フレーム時間 (1/60秒)
+    const std::chrono::microseconds kFrameTime(1000000 / 60);
 
-    // 1/60秒よりわずかに短い時間
-    const std::chrono::microseconds kMinCheckTime(uint64_t(1000000.0f / 65.0f));
+    // 現在時刻を取得し、前回からの経過時間を求める
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - reference_);
 
-    // 現在時刻を取得する
-    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-    // 前回記録からの経過時間を取得する
-    std::chrono::microseconds elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - reference_);
-
-    // 1/60秒(よりわずかに短い時間)経っていない場合
-    if (elapsed < kMinCheckTime) {
-        // 1/60秒経過するまで微小なスリープを繰り返す
-        while (std::chrono::steady_clock::now() - reference_ < kMinTime) {
-            // 1マイクロ秒スリープ
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
-        }
+    // まだフレーム時間に満たない場合は残り時間だけsleepする
+    if (elapsed < kFrameTime) {
+        auto remaining = kFrameTime - elapsed;
+        std::this_thread::sleep_for(remaining);
     }
 
-    // 現在の時間を記録する
+    // 次フレームの基準時間を更新
     reference_ = std::chrono::steady_clock::now();
 }

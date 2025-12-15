@@ -18,10 +18,11 @@
 #include <strsafe.h>
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
-#include <numbers>
 #include <sstream>
+#include <iomanip>
 #include <vector>
 #include <wrl.h>
+#include <memory>
 #include <xaudio2.h>
 #define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
 #include "DebugCamera.h"
@@ -46,7 +47,6 @@
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "dinput8.lib")
-#pragma comment(lib, "dxguid.lib")
 
 using namespace MyEngine;
 
@@ -101,6 +101,9 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
     // Dumpを出力。MiniDumpNormalは最低限の情報を出力するフラグ
     MiniDumpWriteDump(GetCurrentProcess(), processId, dumpFileHandle, MiniDumpNormal, &minidumpInformation, nullptr, nullptr);
 
+    // ダンプファイルハンドルを閉じる
+    CloseHandle(dumpFileHandle);
+
     // 他に関連付けられているSEH例外ハンドラがあれば実行。通常はプロセスを終了する
     return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -114,7 +117,12 @@ SoundData SoundLoadWave(const char* filename)
     //.wavファイルをバイナリモードで開く
     file.open(filename, std::ios_base::binary);
     // ファイルオープン失敗を検知する
-    assert(file.is_open());
+    if (!file.is_open()) {
+        char buf[256];
+        sprintf_s(buf, "Error: Failed to open WAV file: %s\n", filename);
+        Logger::Log(buf);
+        return SoundData{};
+    }
 
     // 2..wavデータ読み込み
 
@@ -123,11 +131,15 @@ SoundData SoundLoadWave(const char* filename)
     file.read((char*)&riff, sizeof(riff));
     // ファイルがRIFFかチェック
     if (strncmp(riff.chunk.id, "RIFF", 4) != 0) {
-        assert(0);
+        Logger::Log("Error: Not a RIFF file.\n");
+        file.close();
+        return SoundData{};
     }
     // タイプがWAVEかチェック
     if (strncmp(riff.type, "WAVE", 4) != 0) {
-        assert(0);
+        Logger::Log("Error: Not a WAVE file.\n");
+        file.close();
+        return SoundData{};
     }
 
     // Formatチャンクの読み込み
@@ -135,11 +147,17 @@ SoundData SoundLoadWave(const char* filename)
     // チャンクヘッダーの確認
     file.read((char*)&format, sizeof(ChunkHeader));
     if (strncmp(format.chunk.id, "fmt ", 4) != 0) {
-        assert(0);
+        Logger::Log("Error: fmt chunk not found.\n");
+        file.close();
+        return SoundData{};
     }
 
     // チャンク本体の読み込み
-    assert(format.chunk.size <= sizeof(format.fmt));
+    if (format.chunk.size > sizeof(format.fmt)) {
+        Logger::Log("Error: fmt chunk size too large.\n");
+        file.close();
+        return SoundData{};
+    }
     file.read((char*)&format.fmt, format.chunk.size);
 
     // Dataチャンクの読み込み
@@ -154,12 +172,15 @@ SoundData SoundLoadWave(const char* filename)
     }
 
     if (strncmp(data.id, "data", 4) != 0) {
-        assert(0);
+        Logger::Log("Error: data chunk not found.\n");
+        file.close();
+        return SoundData{};
     }
 
     // Dataチャンクのデータ部(波型データ)の読み込み
-    char* pBuffer = new char[data.size];
-    file.read(pBuffer, data.size);
+    // バッファを BYTE 配列として確保して読み込む
+    BYTE* pBuffer = new BYTE[data.size];
+    file.read(reinterpret_cast<char*>(pBuffer), data.size);
 
     // 3.ファイルクローズ
 
@@ -172,7 +193,7 @@ SoundData SoundLoadWave(const char* filename)
     SoundData soundData = {};
 
     soundData.wfex = format.fmt;
-    soundData.pBuffer = reinterpret_cast<BYTE*>(pBuffer);
+    soundData.pBuffer = pBuffer;
     soundData.bufferSize = data.size;
 
     return soundData;
@@ -227,15 +248,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     std::filesystem::create_directory("logs");
 
     // ここからファイルを作成し、ofStreamを取得する
-    // 現在時刻を取得（UTC時刻）
-    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-    // ログファイルの名前にコンマ何秒はいらないので削って秒にする
-    std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>
-        nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
-    // 日本時間（PCの設定時間）に変更
-    std::chrono::zoned_time localTime { std::chrono::current_zone(), nowSeconds };
-    // formatを使って年月日_時分秒の文字列に変換
-    std::string dateString = std::format("{:%Y%m%d_%H%M%S}", localTime);
+    // 現在時刻を取得してログ名用の文字列を作成（C++14互換）
+    std::time_t now_c = std::time(nullptr);
+    struct tm local_tm;
+    localtime_s(&local_tm, &now_c);
+    char dateBuf[32];
+    std::strftime(dateBuf, sizeof(dateBuf), "%Y%m%d_%H%M%S", &local_tm);
+    std::string dateString(dateBuf);
     // 時刻を使ってファイル名を指定
     std::string logFilePath = std::string("logs/") + dateString + ".log";
     // ファイルを作って書き込み準備
@@ -268,8 +287,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     /*HRESULT hr;*/
 
-    // COMライブラリの初期化
-    HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    // COMライブラリの初期化は先頭で行っているためここではHRESULT変数のみ用意する
+    HRESULT result = S_OK;
     // XAudioエンジンのインスタンスを生成
     result = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     // マスターボイスを生成
@@ -278,30 +297,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // 音声読み込み
     SoundData soundData1 = SoundLoadWave("resources/mokugyo.wav");
 
-    // DirectInputの初期化
-    IDirectInput8* directInput = nullptr;
-    result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
-    assert(SUCCEEDED(result));
+    // DirectInputの初期化 (ComPtrで管理)
+    Microsoft::WRL::ComPtr<IDirectInput8> directInput;
+    result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(directInput.GetAddressOf()), nullptr);
+    if (FAILED(result)) {
+        Logger::Log("Error: DirectInput8Create failed.\n");
+        // フェールセーフでウィンドウを破棄して終了
+        winApp.Finalize();
+        CoUninitialize();
+        return 1;
+    }
 
     // 初期化時
-    InputManager::GetInstance()->Initialize(directInput, hwnd);
+    InputManager::GetInstance()->Initialize(directInput.Get(), hwnd);
 
     // DirectXの初期化
     DirectXCommon::GetInstance()->Initialize(&winApp);
 
 #pragma region 基盤システムの初期化
 
-    SpriteCommon* spriteCommon = nullptr;
+    std::unique_ptr<SpriteCommon> spriteCommon = std::make_unique<SpriteCommon>();
     // スプライト共通部の初期化
-    spriteCommon = new SpriteCommon();
     spriteCommon->Initialize(DirectXCommon::GetInstance());
 
     //テクスチャマネージャーの初期化
     TextureManager::GetInstance()->Initialize();
 
-    Object3dCommon* object3dCommon = nullptr;
+    std::unique_ptr<Object3dCommon> object3dCommon = std::make_unique<Object3dCommon>();
     // 3Dオブジェクト共通部の初期化
-    object3dCommon = new Object3dCommon();
     object3dCommon->Initialize(DirectXCommon::GetInstance());
 
 #pragma endregion 基盤システムの初期化
@@ -313,7 +336,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 #pragma region 最初のシーンの初期化
     
     //スプライト複数設定
-    std::vector<Sprite*> sprites; // Sprite クラスのポインタを格納するための動的配列
+    std::vector<std::unique_ptr<Sprite>> sprites; // Sprite クラスのポインタを格納するための動的配列
     const uint32_t kSpriteCount = 5; // 描画対象とするスプライトの総数
     // スプライトに使用するテクスチャのファイル名を格納する配列
     std::array<std::string, 2> spriteNames = {
@@ -323,19 +346,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 指定された数だけスプライトを生成・設定するループ
     for (uint32_t i = 0; i < kSpriteCount; ++i) {
-        if (i / 2 == 0) {             
-            Sprite* sprite = new Sprite();
-            sprite->Initialize(spriteCommon, spriteNames[0] + ".png");
-            sprites.push_back(sprite);
+        if (i / 2 == 0) {
+            auto sprite = std::make_unique<Sprite>();
+            sprite->Initialize(spriteCommon.get(), spriteNames[0] + ".png");
+            sprites.push_back(std::move(sprite));
         } else {
-            Sprite* sprite = new Sprite();
-            sprite->Initialize(spriteCommon, spriteNames[1] + ".png");
-            sprites.push_back(sprite);
+            auto sprite = std::make_unique<Sprite>();
+            sprite->Initialize(spriteCommon.get(), spriteNames[1] + ".png");
+            sprites.push_back(std::move(sprite));
         }
     }
 
     // 3dオブジェクト複数初期化
-    std::vector<Object3d*> objects3d;// Object3d クラスのポインタを格納するための動的配列
+    std::vector<std::unique_ptr<Object3d>> objects3d;// Object3d クラスのポインタを格納するための動的配列
     const uint32_t kObject3DCount = 3; // 描画対象とする 3D オブジェクトの総数
     // 複数モデルを割り当てるためのファイル名リスト
     std::vector<std::string> modelFileNames = {
@@ -347,8 +370,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         // 指定された数だけ 3D オブジェクトを生成・設定するループ
     for (uint32_t i = 0; i < kObject3DCount; ++i) {
         // オブジェクトの生成
-        Object3d* obj = new Object3d();
-        obj->Initialize(object3dCommon);
+        auto obj = std::make_unique<Object3d>();
+        obj->Initialize(object3dCommon.get());
 
         // モデルファイル名を選択（リストの範囲外アクセスを避けるため modulo を使用）
         std::string modelFile = modelFileNames.empty() ? std::string("plane.obj") : modelFileNames[i % modelFileNames.size()];
@@ -356,7 +379,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         obj->SetModel(modelFile);
 
         // 配列に格納
-        objects3d.push_back(obj);
+        objects3d.push_back(std::move(obj));
     }
 
 #pragma endregion 最初のシーンの終了
@@ -404,11 +427,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // デバッグ: 読み込んだテクスチャ情報をログ出力
     {
         uint32_t count = TextureManager::GetInstance()->GetLoadedTextureCount();
-        Logger::Log(std::format("Debug: Loaded texture count = {}\n", count));
+        char buf[256];
+        sprintf_s(buf, "Debug: Loaded texture count = %u\n", count);
+        Logger::Log(buf);
         for (uint32_t ti = 0; ti < count; ++ti) {
             auto meta = TextureManager::GetInstance()->GetMetadata(ti);
             auto handle = TextureManager::GetInstance()->GetSrvHandleGPU(ti);
-            Logger::Log(std::format("Debug: Texture[{}] size={}x{} format={} srv.ptr=0x{:016X}\n", ti, meta.width, meta.height, static_cast<int>(meta.format), handle.ptr));
+            sprintf_s(buf, "Debug: Texture[%u] size=%u x %u format=%d srv.ptr=0x%016llX\n", ti, meta.width, meta.height, static_cast<int>(meta.format), handle.ptr);
+            Logger::Log(buf);
         }
     }
 
@@ -506,7 +532,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             wvpData->World = worldMatrix;
 
             // Object3Dの更新（複数）
-            for (auto obj : objects3d) {
+            for (auto& obj : objects3d) {
                 if (obj) {
                     obj->Update(viewMatrix, projectionMatrix);
                 }
@@ -514,7 +540,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             //スプライトの更新
             for (uint32_t i = 0; i <kSpriteCount; i++) {
-                sprites[i]->Update();
+                if (sprites[i]) sprites[i]->Update();
             }
 
             // imguiの項目内容
@@ -527,7 +553,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             if (selectedDrawType == DRAW_MODEL || selectedDrawType == DRAW_ALL) {
                 // 各Object3dの個別編集UI
                 for (uint32_t oi = 0; oi < objects3d.size(); ++oi) {
-                    Object3d* o = objects3d[oi];
+                    Object3d* o = objects3d[oi].get();
                     if (!o) {
                         continue;
                     }
@@ -563,7 +589,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 for (uint32_t i = 0; i < kSpriteCount; i++) {
                     // 現在操作するスプライトのインスタンス
-                    Sprite* currentSprite = sprites[i];
+                    Sprite* currentSprite = sprites[i].get();
 
                     // ヘッダー名にインデックスを付与し、一意にする 
                     sprintf_s(nameBuffer, "Sprite %d", i);
@@ -718,7 +744,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 object3dCommon->SetCommonDrawSetting();
 
                 // オブジェクトの描画（複数）
-                for (auto obj : objects3d) {
+                for (auto& obj : objects3d) {
                     if (obj) {
                         obj->Draw();
                     }
@@ -752,7 +778,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // 3Dオブジェクトの描画（複数）
                 object3dCommon->SetCommonDrawSetting();
-                for (auto obj : objects3d) {
+                for (auto& obj : objects3d) {
                     if (obj) {
                         obj->Draw();
                     }
@@ -779,32 +805,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 
     // 自作リソース解放
-    // 3D/2D オブジェクトを先に破棄
-    for (auto obj : objects3d) {
-        delete obj;
-    }
+    // 3D/2D オブジェクト（unique_ptrで管理しているため自動破棄）
     objects3d.clear();
-    delete object3dCommon;
+    object3dCommon.reset();
 
     // テクスチャ/モデル管理の解放
     TextureManager::GetInstance()->Finalize();
     ModelManager::GetInstance()->Finalize();
 
     // スプライト等
-    delete spriteCommon;
-    for (uint32_t i = 0; i < kSpriteCount; i++) {
-        delete sprites[i];
-    }
+    spriteCommon.reset();
+    sprites.clear();
 
     // DirectX のシステム系は最後に破棄
     DirectXCommon::GetInstance()->Finalize(); 
 
     // 音・入力など DirectX 依存していないもの
+    // マスターボイスが存在する場合は破棄しておく
+    if (masterVoice) {
+        masterVoice->DestroyVoice();
+        masterVoice = nullptr;
+    }
     xAudio2.Reset();
     SoundUnload(&soundData1);
 
     InputManager::GetInstance()->Finalize();
-    directInput->Release();
+    directInput.Reset();
 
     // OS側のウィンドウ破棄
     winApp.Finalize();
