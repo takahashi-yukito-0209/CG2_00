@@ -78,6 +78,8 @@ public: // メンバ関数
 
     // モデル用ポインタのセット・ゲット
     void SetModel(Model* model) { model_ = model; }
+    // ファイル名を指定してモデルを設定する（resourcesフォルダを想定）
+    void SetModel(const std::string& filePath);
     Model* GetModel() const { return model_; }
 
     // モデル共通情報用ポインタのセット・ゲット

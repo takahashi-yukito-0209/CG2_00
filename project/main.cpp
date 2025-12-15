@@ -337,10 +337,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // 3dオブジェクト複数初期化
     std::vector<Object3d*> objects3d;// Object3d クラスのポインタを格納するための動的配列
     const uint32_t kObject3DCount = 3; // 描画対象とする 3D オブジェクトの総数
-    // 指定された数だけ 3D オブジェクトを生成・設定するループ
+    // 複数モデルを割り当てるためのファイル名リスト
+    std::vector<std::string> modelFileNames = {
+        "plane.obj",
+        "bunny.obj",
+        "teapot.obj",
+    };
+
+        // 指定された数だけ 3D オブジェクトを生成・設定するループ
     for (uint32_t i = 0; i < kObject3DCount; ++i) {
+        // オブジェクトの生成
         Object3d* obj = new Object3d();
         obj->Initialize(object3dCommon);
+
+        // モデルファイル名を選択（リストの範囲外アクセスを避けるため modulo を使用）
+        std::string modelFile = modelFileNames.empty() ? std::string("plane.obj") : modelFileNames[i % modelFileNames.size()];
+        // 指定したファイルのモデルを読み込んでオブジェクトに紐づける
+        obj->SetModel(modelFile);
+
+        // 配列に格納
         objects3d.push_back(obj);
     }
 
@@ -348,7 +363,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 自作した数学関数の使用
     MathUtility math;
-
     
     // マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = DirectXCommon::GetInstance()->CreateBufferResource(sizeof(Material));
@@ -493,7 +507,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // Object3Dの更新（複数）
             for (auto obj : objects3d) {
-                if (obj) obj->Update(viewMatrix, projectionMatrix);
+                if (obj) {
+                    obj->Update(viewMatrix, projectionMatrix);
+                }
             }
 
             //スプライトの更新
@@ -512,8 +528,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 各Object3dの個別編集UI
                 for (uint32_t oi = 0; oi < objects3d.size(); ++oi) {
                     Object3d* o = objects3d[oi];
-                    if (!o)
+                    if (!o) {
                         continue;
+                    }
                     char headerName[64];
                     sprintf_s(headerName, "Object %d", oi);
                     ImGui::PushID(oi);
@@ -521,12 +538,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                         Vector3 s = o->GetScale();
                         Vector3 r = o->GetRotate();
                         Vector3 t = o->GetTranslate();
-                        if (ImGui::DragFloat3("Scale", &s.x, 0.01f))
+
+                        if (ImGui::DragFloat3("Scale", &s.x, 0.01f)) {
                             o->SetScale(s);
-                        if (ImGui::DragFloat3("Rotate", &r.x, 0.01f))
+                        }
+
+                        if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
                             o->SetRotate(r);
-                        if (ImGui::DragFloat3("Translate", &t.x, 0.1f))
+                        }
+
+                        if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
                             o->SetTranslate(t);
+                        }
                     }
                     ImGui::PopID();
                 }
@@ -696,7 +719,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // オブジェクトの描画（複数）
                 for (auto obj : objects3d) {
-                    if (obj) obj->Draw();
+                    if (obj) {
+                        obj->Draw();
+                    }
                 }
 
                 break;
@@ -728,7 +753,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3Dオブジェクトの描画（複数）
                 object3dCommon->SetCommonDrawSetting();
                 for (auto obj : objects3d) {
-                    if (obj) obj->Draw();
+                    if (obj) {
+                        obj->Draw();
+                    }
                 }
 
                 // スプライトの描画
