@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <wrl.h>
+#include <memory>
 #include <cmath>
 #include <sstream>
 #include "Logger.h"

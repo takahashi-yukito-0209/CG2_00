@@ -39,30 +39,44 @@ void TextureManager::LoadTexture(const std::string& filePath)
             return textureData.filePath == filePath;
         });
 
-    // 見つかった場合は、ログを出力して終了する (SRVインデックスを返さない)
+    // 見つかった場合はログして終了
     if (it != textureDatas.end()) {
-        // ロード済みのインデックスを計算してログに出力
         uint32_t index = static_cast<uint32_t>(std::distance(textureDatas.begin(), it)) + kSRVIndexTop_;
-        Logger::Log(std::format("DEBUG LoadTexture: Already loaded texture: {} (Index: {})\n", filePath, index));
-        // void型なのでここでreturn
+        char buf[256];
+        sprintf_s(buf, "DEBUG LoadTexture: Already loaded texture: %s (Index: %u)\n", filePath.c_str(), index);
+        Logger::Log(buf);
         return;
     }
 
     // テクスチャ枚数上限チェック
-    assert(textureDatas.size() + kSRVIndexTop_ < DirectXCommon::kMaxSRVCount);
+    if (textureDatas.size() + kSRVIndexTop_ >= DirectXCommon::kMaxSRVCount) {
+        Logger::Log("ERROR LoadTexture: Exceeded maximum SRV count.\n");
+        return;
+    }
 
     // std::string を std::wstring に変換
     std::wstring wfilePath = StringUtility::ConvertString(filePath);
-    Logger::Log(std::format("DEBUG wfilePath = {}\n", StringUtility::ConvertString(wfilePath)));
+    {
+        char buf[256];
+        std::string tmp = StringUtility::ConvertString(wfilePath);
+        sprintf_s(buf, "DEBUG wfilePath = %s\n", tmp.c_str());
+        Logger::Log(buf);
+    }
 
     // テクスチャファイルの読んでプログラムで扱えるようにする
     DirectX::ScratchImage image {};
     HRESULT hr = DirectX::LoadFromWICFile(wfilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
-    Logger::Log(std::format("DEBUG hr = 0x{:08X}\n", hr));
+    {
+        char buf[128];
+        sprintf_s(buf, "DEBUG hr = 0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(buf);
+    }
 
     // ロード失敗時の処理 (エラーハンドリング) を追加することが望ましい
     if (FAILED(hr)) {
-        Logger::Log(std::format("ERROR LoadTexture: Failed to load texture: {}\n", filePath));
+        char buf[256];
+        sprintf_s(buf, "ERROR LoadTexture: Failed to load texture: %s\n", filePath.c_str());
+        Logger::Log(buf);
         return; // ロードに失敗した場合はここで終了
     }
 
@@ -116,11 +130,17 @@ void TextureManager::LoadTexture(const std::string& filePath)
 
     // SRVハンドルの生成確認
     if (textureData.srvHandleGPU.ptr == 0) {
-        Logger::Log(std::format("ERROR LoadTexture: SRV GPU handle is null for {}\n", filePath));
+        char buf[256];
+        sprintf_s(buf, "ERROR LoadTexture: SRV GPU handle is null for %s\n", filePath.c_str());
+        Logger::Log(buf);
     }
 
     // ロード成功のログ出力
-    Logger::Log(std::format("DEBUG LoadTexture: Loaded new texture: {} (Index: {})\n", filePath, srvIndex));
+    {
+        char buf[256];
+        sprintf_s(buf, "DEBUG LoadTexture: Loaded new texture: %s (Index: %u)\n", filePath.c_str(), srvIndex);
+        Logger::Log(buf);
+    }
 }
 
 // すべてのテクスチャリソースの転送を実行し、中間リソースを解放
@@ -158,7 +178,9 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
     }
 
     // 検索がヒットしない場合は、テクスチャが事前に読み込まれていないのでエラーをログして無効値を返す
-    Logger::Log(std::format("ERROR GetTextureIndexByFilePath: Texture not found: {}\n", filePath));
+    char buf[256];
+    sprintf_s(buf, "ERROR GetTextureIndexByFilePath: Texture not found: %s\n", filePath.c_str());
+    Logger::Log(buf);
     // 呼び出し元で範囲チェックできるように 無効値 UINT32_MAX を返す
     return UINT32_MAX;
 }
@@ -166,20 +188,35 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureIndex)
 {
     // 配列の範囲チェック
-    assert(textureIndex < textureDatas.size()); 
+    D3D12_GPU_DESCRIPTOR_HANDLE nullHandle{};
+    nullHandle.ptr = 0;
+    if (textureIndex >= textureDatas.size()) {
+        char buf[128];
+        sprintf_s(buf, "Warning: Requested SRV index out of range: %u\n", textureIndex);
+        Logger::Log(buf);
+        return nullHandle;
+    }
 
     TextureData& textureData = textureDatas[textureIndex];
     // ハンドルの有効性チェック
     if (textureData.srvHandleGPU.ptr == 0) {
-        Logger::Log(std::format("Warning: Requested SRV GPU handle is null for index {}\n", textureIndex));
+        char buf[128];
+        sprintf_s(buf, "Warning: Requested SRV GPU handle is null for index %u\n", textureIndex);
+        Logger::Log(buf);
     }
     return textureData.srvHandleGPU;
 }
 
 const DirectX::TexMetadata& TextureManager::GetMetadata(uint32_t textureIndex)
 {
-    //範囲外指定違反チェック
-    assert(textureIndex < textureDatas.size());
+    // 範囲外指定違反チェック -> 範囲外の場合はデフォルトの安全なメタデータを返す
+    static DirectX::TexMetadata defaultMeta = [](){ DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
+    if (textureIndex >= textureDatas.size()) {
+        char buf[128];
+        sprintf_s(buf, "Warning: GetMetadata called with out-of-range index %u, returning default metadata\n", textureIndex);
+        Logger::Log(buf);
+        return defaultMeta;
+    }
 
     TextureData& textureData = textureDatas[textureIndex];
     return textureData.metadata;
