@@ -9,6 +9,8 @@
 #include "Model.h"
 #include "ModelCommon.h"
 #include "ModelManager.h"
+#include <filesystem>
+#include <algorithm>
 
 using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
@@ -23,13 +25,10 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
     // マテリアル用リソース作成
     CreateMaterialResource();
-    // テクスチャ割り当て
-    AssignTexture();
 
     // 座標変換行列用リソース作成
     CreateTransformationMatrixResource();
-    // 平行光源用リソース作成
-    CreateDirectionalLightResource();
+    // 平行光源は Object3dCommon に統合されたため個別の作成は不要
 
     // ModelCommon を生成して初期化
     modelCommon_ = new ModelCommon();
@@ -39,6 +38,34 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     ModelManager* mgr = ModelManager::GetInstance();
     // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
     model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
+    // モデルを読み込んだ後でテクスチャ割り当てを行う（MTLが先に読み込まれるように）
+    AssignTexture();
+}
+
+// ファイル名を指定してテクスチャを設定する
+void Object3d::SetTexture(const std::string& filePath)
+{
+    // テクスチャをロードしてインデックスを取得
+    auto texMgr = TextureManager::GetInstance();
+    // 既にロード済みでなければロードを依頼
+    uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
+    if (idx == UINT32_MAX) {
+        texMgr->LoadTexture(filePath);
+        // 転送を実行して SRV を作成する
+        texMgr->ExecuteResourceUpload();
+        idx = texMgr->GetTextureIndexByFilePath(filePath);
+    }
+
+    // 設定
+    modelData_.material.textureFilePath = filePath;
+    modelData_.material.textureIndex = (idx == UINT32_MAX) ? UINT32_MAX : idx;
+
+    // Model が既に持つマテリアル側も更新しておく
+    if (model_) {
+        // Model::Initialize がセットする textureIndex_ は読み込み時のみ反映するため
+        // ここではモデルに保持されている textureIndex_ を直接更新するための accessor はない。
+        // 代わりに、Model 側で描画時に Object3d の modelData を参照するので十分。
+    }
 }
 
 // ファイル名を指定してモデルを読み込み、設定する
@@ -48,6 +75,8 @@ void Object3d::SetModel(const std::string& filePath)
     ModelManager* mgr = ModelManager::GetInstance();
     Model* m = mgr->LoadModel("resources", filePath, modelCommon_);
     model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
+    // モデル読み込み後にテクスチャの割り当てを行う
+    AssignTexture();
 }
 
 Object3d::~Object3d()
@@ -84,6 +113,12 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
             s >> textureFilename;
             // 連結してファイルパスにする
             materialData.textureFilePath = directoryPath + "/" + textureFilename;
+            // ログ出力: mtlで指定されたテクスチャパス
+            {
+                char buf[256];
+                sprintf_s(buf, "LoadMaterialTemplateFile: map_Kd -> %s\n", materialData.textureFilePath.c_str());
+                Logger::Log(buf);
+            }
         }
     }
 
@@ -120,19 +155,7 @@ void Object3d::CreateTransformationMatrixResource()
     transformationMatrixResource_->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData_));
 }
 
-void Object3d::CreateDirectionalLightResource()
-{
-    // 平行光源用リソース作成
-    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon();
-    // 平行光源用バッファリソースを作成
-    directionalLightResource_ = dxCommon->CreateBufferResource(sizeof(DirectionalLight));
-    // マップしてデータを書き込む
-    directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
-    // デフォルト値
-    directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f }; // 白色光
-    directionalLightData_->direction = { 0.0f, -1.0f, 0.0f }; // 真下に向ける
-    directionalLightData_->intensity = 1.0f; // 輝度1.0f
-}
+// Directional light is now handled by Object3dCommon (shared resource)
 
 void Object3d::AssignTexture()
 {
@@ -197,11 +220,10 @@ void Object3d::Draw()
     // ログ：描画開始、状態確認
     {
         char buf[256];
-        sprintf_s(buf, "Object3d::Draw start: model=%p materialRes=%p transformRes=%p lightRes=%p\n",
+        sprintf_s(buf, "Object3d::Draw start: model=%p materialRes=%p transformRes=%p\n",
             reinterpret_cast<void*>(model_),
             reinterpret_cast<void*>(materialResource_.Get()),
-            reinterpret_cast<void*>(transformationMatrixResource_.Get()),
-            reinterpret_cast<void*>(directionalLightResource_.Get()));
+            reinterpret_cast<void*>(transformationMatrixResource_.Get()));
         Logger::Log(buf);
     }
 
@@ -245,12 +267,12 @@ void Object3d::Draw()
     }
     cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
-    // 光源CBV (必須)
-    if (!directionalLightResource_) {
-        Logger::Log("Object3d::Draw skipped: directionalLightResource_ is null\n");
+    // 光源CBV (shared in Object3dCommon)
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
+    if (lightAddr == 0) {
+        Logger::Log("Object3d::Draw skipped: directional light GPU address is null\n");
         return;
     }
-    auto lightAddr = directionalLightResource_->GetGPUVirtualAddress();
     {
         char buf[128];
         sprintf_s(buf, "Object3d::Draw: Light GPUAddr=0x%016llX\n", lightAddr);
@@ -296,8 +318,60 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
         char buf[256];
         sprintf_s(buf, "Warning: LoadObjFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
         Logger::Log(buf);
-        return modelData;
+    // If no texture specified in MTL, try to find an image in the same directory
+    if (modelData.material.textureFilePath.empty()) {
+        // try same base name first (e.g. model.obj -> model.png)
+        std::string base = filename;
+        auto pos = base.find_last_of('.');
+        if (pos != std::string::npos) base = base.substr(0, pos);
+
+        const std::vector<std::string> exts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
+        for (const auto& ext : exts) {
+            std::string tryPath = directoryPath + "/" + base + ext;
+            if (std::filesystem::exists(tryPath)) {
+                modelData.material.textureFilePath = tryPath;
+                char buf[256];
+                sprintf_s(buf, "Object3d::LoadObjFile: found texture by basename %s\n", tryPath.c_str());
+                Logger::Log(buf);
+                break;
+            }
+        }
+
+        // if still empty, scan directory for any image file
+        if (modelData.material.textureFilePath.empty()) {
+            for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
+                if (!entry.is_regular_file()) continue;
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (std::find(exts.begin(), exts.end(), ext) != exts.end()) {
+                    modelData.material.textureFilePath = entry.path().string();
+                    char buf[256];
+                    sprintf_s(buf, "Object3d::LoadObjFile: found texture in dir %s\n", modelData.material.textureFilePath.c_str());
+                    Logger::Log(buf);
+                    break;
+                }
+            }
+        }
     }
+
+    // If still not found, fallback to default checker texture in resources
+    if (modelData.material.textureFilePath.empty()) {
+        modelData.material.textureFilePath = "resources/uvChecker.png";
+        Logger::Log(std::string("Object3d::LoadObjFile: no texture found, defaulting to resources/uvChecker.png\n"));
+    }
+
+    // 最終的に選ばれたテクスチャパスをログ出力
+    {
+        char buf[256];
+        sprintf_s(buf, "LoadObjFile: final textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
+        Logger::Log(buf);
+    }
+
+    return modelData;
+    }
+
+    // If no texture was specified via mtllib/mtl, try to find any image file in the same directory
+    // (handled below before returning)
 
     // 3.実際にファイルを読み、ModelDataを構築していく
     while (std::getline(file, line)) {

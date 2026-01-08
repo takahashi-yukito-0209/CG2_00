@@ -8,6 +8,16 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 {
     // 引数で受け取ってメンバ変数に記録する
     dxCommon_ = dxCommon;
+    // Create a shared directional light constant buffer
+    // This allows main/ImGui to edit a single light used by all Object3d instances
+    directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
+    if (directionalLightResource_) {
+        directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
+        // default values
+        directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
+        directionalLightData_->intensity = 1.0f;
+    }
     // グラフィックスパイプラインの生成
     CreateGraphicsPipeline();
 }
@@ -50,6 +60,8 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ1: 光源CBV)
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    // Note: directional light CBV will be bound per-object using the GPU address stored in Object3dCommon
 
     /// ルートシグネチャの説明
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
