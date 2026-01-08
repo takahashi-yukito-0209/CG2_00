@@ -41,6 +41,11 @@ void SpriteCommon::SetCommonDrawSetting()
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 }
 
+bool SpriteCommon::IsReady() const
+{
+    return dxCommon_ && rootSignature_ && graphicsPipelineState_;
+}
+
 void SpriteCommon::CreateRootSignature()
 {
     HRESULT hr;

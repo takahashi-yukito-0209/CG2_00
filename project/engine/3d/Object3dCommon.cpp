@@ -1,6 +1,7 @@
 #include "Object3dCommon.h"
 #include "Logger.h"
 #include "StringUtility.h"
+#include "mathUtility.h"
 
 using namespace MyEngine;
 
@@ -20,6 +21,49 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     }
     // グラフィックスパイプラインの生成
     CreateGraphicsPipeline();
+
+    // Create instancing resources (structured buffer + SRV)
+    const uint32_t kNumInstance = 10; // default maximum instances for particle demo
+    kNumInstance_ = kNumInstance;
+
+    // Create a GPU-visible SRV for a StructuredBuffer containing TransformationMatrix[kNumInstance]
+    D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
+    instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // structured buffer
+    instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    instancingSrvDesc.Buffer.FirstElement = 0;
+    instancingSrvDesc.Buffer.NumElements = kNumInstance;
+    instancingSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
+    instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    // Create a default-size buffer resource in UPLOAD heap to store instance data
+    size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kNumInstance;
+    instancingResource_ = dxCommon_->CreateBufferResource(instancingBufferSize);
+    // Map for CPU write
+    if (instancingResource_) {
+        instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
+        // initialize to identity
+        MathUtility math;
+        for (uint32_t i = 0; i < kNumInstance; ++i) {
+            instancingData_[i].WVP = math.MakeIdentity4x4();
+            instancingData_[i].World = math.MakeIdentity4x4();
+        }
+    }
+
+    // Create SRV descriptor in the global SRV heap
+    // Choose a descriptor slot unlikely to be used by TextureManager: use the last slot in the heap
+    uint32_t srvIndex = DirectXCommon::kMaxSRVCount - 1;
+    instancingSrvHandleCPU_ = dxCommon_->GetSRVCPUDescriptorHandle(srvIndex);
+    instancingSrvHandleGPU_ = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
+    dxCommon_->GetDevice()->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
+
+    // Debug log
+    {
+        char buf[256];
+        sprintf_s(buf, "Object3dCommon::Initialize: created instancingResource size=%zu srvIndex=%u srvGPU=0x%016llX\n",
+            instancingBufferSize, srvIndex, static_cast<unsigned long long>(instancingSrvHandleGPU_.ptr));
+        Logger::Log(buf);
+    }
 }
 
 void Object3dCommon::SetBlendMode(MyEngine::BlendMode mode)
@@ -28,6 +72,27 @@ void Object3dCommon::SetBlendMode(MyEngine::BlendMode mode)
     blendMode_ = mode;
     // 新しいブレンドステートを適用するためパイプラインを再生成
     CreateGraphicsPipeline();
+}
+
+void Object3dCommon::SetInstancingDrawSetting()
+{
+    auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
+    if (!cmdList) {
+        Logger::Log("Object3dCommon::SetInstancingDrawSetting: command list is null\n");
+        return;
+    }
+    if (!rootSignature_) {
+        Logger::Log("Object3dCommon::SetInstancingDrawSetting: rootSignature_ is null\n");
+        return;
+    }
+    if (!instancingPipelineState_) {
+        Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null\n");
+        return;
+    }
+
+    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+    cmdList->SetPipelineState(instancingPipelineState_.Get());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void Object3dCommon::SetCommonDrawSetting()
@@ -57,19 +122,28 @@ void Object3dCommon::SetCommonDrawSetting()
 
 void Object3dCommon::CreateRootSignature() {
     HRESULT hr;
-    // ディスクリプタレンジ作成
+    // ディスクリプタレンジ作成 (pixel texture SRV)
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
     descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
     descriptorRange[0].NumDescriptors = 1; // 数は1つ
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
 
+    // ディスクリプタレンジ作成 (vertex instancing SRV)
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
+    descriptorRangeForInstancing[0].BaseShaderRegister = 0; // t0 in VS
+    descriptorRangeForInstancing[0].NumDescriptors = 1;
+    descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     // RootSignature作成
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature {};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     // RootParameter作成。複数設定できるので配列。
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
+    // Note: keep existing indices for compatibility: 0=material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
+    // We'll append instancing SRV Table at index 4 (Vertex) so existing code does not need to change indices.
+    D3D12_ROOT_PARAMETER rootParameters[5] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -83,6 +157,12 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ1: 光源CBV)
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    // rootParameters[4] : DescriptorTable for instancing StructuredBuffer (Vertex shader, t0)
+    rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[4].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing;
+    rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing);
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 
@@ -277,4 +357,31 @@ void Object3dCommon::CreateGraphicsPipeline() {
     // 実際に生成し、メンバ変数に保持する
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
     assert(SUCCEEDED(hr));
+
+    // Create separate PSO for instancing/particle rendering using Particle shaders
+    Microsoft::WRL::ComPtr<IDxcBlob> instVS = dxCommon_->CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");
+    Microsoft::WRL::ComPtr<IDxcBlob> instPS = dxCommon_->CompileShader(L"resources/shaders/Particle.PS.hlsl", L"ps_6_0");
+    if (instVS && instPS) {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC instDesc = {};
+        instDesc.pRootSignature = rootSignature_.Get();
+        instDesc.InputLayout = inputLayoutDesc;
+        instDesc.VS = { instVS->GetBufferPointer(), instVS->GetBufferSize() };
+        instDesc.PS = { instPS->GetBufferPointer(), instPS->GetBufferSize() };
+        instDesc.BlendState = blendDesc;
+        instDesc.RasterizerState = rasterizerDesc;
+        instDesc.NumRenderTargets = 1;
+        instDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        instDesc.SampleDesc.Count = 1;
+        instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+        instDesc.DepthStencilState = depthStencilDesc;
+        instDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        HRESULT r = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&instDesc, IID_PPV_ARGS(&instancingPipelineState_));
+        if (FAILED(r)) {
+            char buf[256]; sprintf_s(buf, "Object3dCommon::CreateGraphicsPipeline: failed to create instancing PSO hr=0x%08X\n", static_cast<unsigned int>(r)); Logger::Log(buf);
+            instancingPipelineState_.Reset();
+        }
+    } else {
+        Logger::Log("Object3dCommon::CreateGraphicsPipeline: Particle shaders not found, instancing PSO not created\n");
+    }
 }

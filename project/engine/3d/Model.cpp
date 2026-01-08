@@ -20,6 +20,7 @@ void Model::Draw(Object3d* owner)
         Logger::Log("Model::Draw skipped: modelCommon_->GetDxCommon() is null\n");
         return;
     }
+
     auto cmdList = modelCommon_->GetDxCommon()->GetCommandList();
     if (!cmdList) {
         Logger::Log("Model::Draw skipped: command list is null from modelCommon_->GetDxCommon()\n");
@@ -67,6 +68,14 @@ void Model::Draw(Object3d* owner)
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
+    // Bind instancing SRV from owner common if available (so shaders using gTransformationMatrices can access it)
+    if (common) {
+        D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = common->GetInstancingSrvGPUHandle();
+        if (instancingSrv.ptr != 0) {
+            cmdList->SetGraphicsRootDescriptorTable(4, instancingSrv);
+        }
+    }
+
     // テクスチャSRV設定 (モデルまたはオーナーから)
     uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex; // テクスチャインデックスのロジックを更新
     auto texMgr = TextureManager::GetInstance();
@@ -109,6 +118,54 @@ void Model::Draw(Object3d* owner)
         return;
     }
     cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
+}
+
+void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
+{
+    if (!modelCommon_ || !owner) return;
+    auto cmdList = modelCommon_->GetDxCommon()->GetCommandList();
+    if (!cmdList) return;
+
+    // set VB
+    D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
+    cmdList->IASetVertexBuffers(0, 1, &vbv);
+
+    // material CBV
+    if (materialResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+    } else if (owner->GetMaterialResource()) {
+        cmdList->SetGraphicsRootConstantBufferView(0, owner->GetMaterialResource()->GetGPUVirtualAddress());
+    } else return;
+
+    // transformation (owner's CBV is unused when using instancing)
+    if (owner->GetTransformationMatrixResource()) {
+        cmdList->SetGraphicsRootConstantBufferView(1, owner->GetTransformationMatrixResource()->GetGPUVirtualAddress());
+    }
+
+    // light
+    Object3dCommon* common = owner->GetObject3dCommon();
+    if (!common) return;
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddr = common->GetDirectionalLightGPUAddress();
+    if (lightAddr == 0) return;
+    cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+
+    // texture
+    uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex;
+    auto texMgr = TextureManager::GetInstance();
+    if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
+        if (srvHandle.ptr != 0) cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    }
+
+    // instancing SRV
+    D3D12_GPU_DESCRIPTOR_HANDLE instSrv = common->GetInstancingSrvGPUHandle();
+    if (instSrv.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
+    }
+
+    const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
+    if (verts.empty()) return;
+    cmdList->DrawInstanced(static_cast<UINT>(verts.size()), instanceCount, 0, 0);
 }
 
 bool Model::LoadFromFile(const std::string& directoryPath, const std::string& filename)
