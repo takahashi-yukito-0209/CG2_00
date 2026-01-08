@@ -16,7 +16,15 @@ void Model::Draw(Object3d* owner)
 {
     if (!modelCommon_ || !owner) return;
 
+    if (!modelCommon_->GetDxCommon()) {
+        Logger::Log("Model::Draw skipped: modelCommon_->GetDxCommon() is null\n");
+        return;
+    }
     auto cmdList = modelCommon_->GetDxCommon()->GetCommandList();
+    if (!cmdList) {
+        Logger::Log("Model::Draw skipped: command list is null from modelCommon_->GetDxCommon()\n");
+        return;
+    }
 
     // 頂点バッファの設定 (モデルまたはオーナーから)
     D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
@@ -24,9 +32,15 @@ void Model::Draw(Object3d* owner)
 
     // マテリアル定数バッファのCBV設定 (モデルまたはオーナーから)
     if (materialResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+        auto addr = materialResource_->GetGPUVirtualAddress();
+        if (addr == 0) { Logger::Log("Model::Draw: materialResource_ GPU address is 0 - skipping\n"); return; }
+        cmdList->SetGraphicsRootConstantBufferView(0, addr);
     } else if (owner->GetMaterialResource()) {
-        cmdList->SetGraphicsRootConstantBufferView(0, owner->GetMaterialResource()->GetGPUVirtualAddress());
+        auto res = owner->GetMaterialResource();
+        if (!res) { Logger::Log("Model::Draw: owner material resource null - skipping\n"); return; }
+        auto addr = res->GetGPUVirtualAddress();
+        if (addr == 0) { Logger::Log("Model::Draw: owner material GPU address is 0 - skipping\n"); return; }
+        cmdList->SetGraphicsRootConstantBufferView(0, addr);
     } else {
         Logger::Log("Model::Draw skipped: material CBV missing\n");
         return;
@@ -54,20 +68,36 @@ void Model::Draw(Object3d* owner)
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
     // テクスチャSRV設定 (モデルまたはオーナーから)
-    uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex; // Updated texture index logic
+    uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex; // テクスチャインデックスのロジックを更新
     auto texMgr = TextureManager::GetInstance();
-    if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
+    uint32_t loadedCount = texMgr->GetLoadedTextureCount();
+    if (texIndex != UINT32_MAX && texIndex < loadedCount) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
+        if (srvHandle.ptr == 0) {
+            char buf[256]; sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
+            Logger::Log(buf);
+        } else {
         {
             char buf[256];
             sprintf_s(buf, "Model::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, static_cast<unsigned long long>(srvHandle.ptr));
             Logger::Log(buf);
         }
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        }
+    } else if (loadedCount > 0) {
+        // シェーダーが有効な SRV を持つようにデフォルトのテクスチャ（インデックス0）にフォールバックする
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(0);
+        if (srvHandle.ptr == 0) {
+            Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
+        } else {
+            char buf[256]; sprintf_s(buf, "Model::Draw: using fallback texture index=0 srv.ptr=0x%016llX\n", static_cast<unsigned long long>(srvHandle.ptr));
+            Logger::Log(buf);
+            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        }
     } else {
         {
             char buf[256];
-            sprintf_s(buf, "Model::Draw: no valid texture assigned (index=%u) - drawing without SRV\n", texIndex);
+            sprintf_s(buf, "Model::Draw: no textures loaded at all (index=%u) - drawing without SRV\n", texIndex);
             Logger::Log(buf);
         }
     }
@@ -87,6 +117,8 @@ bool Model::LoadFromFile(const std::string& directoryPath, const std::string& fi
     modelData_ = Object3d::LoadObjFile(directoryPath, filename);
     return !modelData_.vertices.empty();
 }
+
+// CreateFence は削除済み — 手続き的フォールバックはもはや使用されない。
 
 void Model::Initialize(ModelCommon* modelCommon)
 {

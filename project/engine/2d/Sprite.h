@@ -46,7 +46,7 @@ public: // メンバ関数
     // 描画
     void Draw();
 
-    // getter
+    // ゲッター (取得関数)
     const Vector2& GetPosition() const { return position_; }
     float GetRotation() const { return rotation_; }
     const Vector4& GetColor() const { return materialData_->color; }
@@ -57,7 +57,7 @@ public: // メンバ関数
     const Vector2& GetTextureLeftTop() const { return textureLeftTop_; }
     const Vector2& GetTextureSize() const { return textureSize_; }
 
-    // setter
+    // セッター (設定関数)
     void SetPosition(const Vector2& position) { position_ = position; }
     void SetRotation(float rotation) { rotation_ = rotation; }
     void SetColor(const Vector4& color) { materialData_->color = color; }

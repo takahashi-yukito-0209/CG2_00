@@ -136,14 +136,24 @@ void Object3d::CreateMaterialResource()
     materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
     // デフォルト値
     materialData_->color = {1.0f,1.0f,1.0f,1.0f};
-    // ライティング無効
-    materialData_->enableLighting = 0;
+    // ライティングを有効化(3Dオブジェクトはライティング対象)
+    materialData_->enableLighting = 1;
     // 初期UV変換は単位行列にする
     MathUtility math;
     materialData_->uvTransform = math.MakeIdentity4x4();
     // ライティングモードは通常のものにする
     materialData_->lightingMode = 2;
+    // default: do not force alpha-cutout sampler
+    // fence model may set this to true after initialization
+    useAlphaCutoutSampler_ = false;
+    // initialize GPU-visible flag to 0
+    materialData_->useAlphaCutoutSampler = 0;
 }
+
+bool Object3d::GetEnableLighting() const { return materialData_ ? materialData_->enableLighting != 0 : false; }
+void Object3d::SetEnableLighting(bool enable) { if (materialData_) materialData_->enableLighting = enable ? 1 : 0; }
+int Object3d::GetLightingMode() const { return materialData_ ? materialData_->lightingMode : 0; }
+void Object3d::SetLightingMode(int mode) { if (materialData_) materialData_->lightingMode = mode; }
 
 void Object3d::CreateTransformationMatrixResource()
 {
@@ -155,7 +165,7 @@ void Object3d::CreateTransformationMatrixResource()
     transformationMatrixResource_->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData_));
 }
 
-// Directional light is now handled by Object3dCommon (shared resource)
+    // 平行光源は現在 Object3dCommon が扱う（共有リソース）
 
 void Object3d::AssignTexture()
 {
@@ -267,7 +277,7 @@ void Object3d::Draw()
     }
     cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
-    // 光源CBV (shared in Object3dCommon)
+    // 光源CBV (Object3dCommon で共有されている)
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
     if (lightAddr == 0) {
         Logger::Log("Object3d::Draw skipped: directional light GPU address is null\n");
@@ -280,7 +290,7 @@ void Object3d::Draw()
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
-    // SRVはTextureManagerからハンドルを取り出してRootDescriptorTableにセット
+    // SRVは TextureManager からハンドルを取り出して RootDescriptorTable にセット
     uint32_t texIndex = modelData_.material.textureIndex;
     auto texMgr = TextureManager::GetInstance();
     if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
@@ -291,7 +301,12 @@ void Object3d::Draw()
             sprintf_s(buf, "Object3d::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, srvHandle.ptr);
             Logger::Log(buf);
         }
-        // SRV DescriptorTable
+        // SRV DescriptorTable - validate handle
+        if (srvHandle.ptr == 0) {
+            char buf[128]; sprintf_s(buf, "Object3d::Draw: SRV handle for index %u is null - skipping draw\n", texIndex);
+            Logger::Log(buf);
+            return;
+        }
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
     } else {
         {
@@ -312,66 +327,19 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
     std::vector<Vector2> texcoords; // テクスチャ座標
     std::string line; // ファイルから読んだ1行を格納するもの
 
+    // Build full path to the obj and determine its directory for resource lookups
+    std::string fullPath = directoryPath + "/" + filename;
+    std::filesystem::path objPath(fullPath);
+    std::string objDir = objPath.parent_path().string();
+
     // 2.ファイルを開く
-    std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
+    std::ifstream file(fullPath); // ファイルを開く
     if (!file.is_open()) {
         char buf[256];
-        sprintf_s(buf, "Warning: LoadObjFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
+        sprintf_s(buf, "Warning: LoadObjFile failed to open %s\n", fullPath.c_str());
         Logger::Log(buf);
-    // If no texture specified in MTL, try to find an image in the same directory
-    if (modelData.material.textureFilePath.empty()) {
-        // try same base name first (e.g. model.obj -> model.png)
-        std::string base = filename;
-        auto pos = base.find_last_of('.');
-        if (pos != std::string::npos) base = base.substr(0, pos);
-
-        const std::vector<std::string> exts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
-        for (const auto& ext : exts) {
-            std::string tryPath = directoryPath + "/" + base + ext;
-            if (std::filesystem::exists(tryPath)) {
-                modelData.material.textureFilePath = tryPath;
-                char buf[256];
-                sprintf_s(buf, "Object3d::LoadObjFile: found texture by basename %s\n", tryPath.c_str());
-                Logger::Log(buf);
-                break;
-            }
-        }
-
-        // if still empty, scan directory for any image file
-        if (modelData.material.textureFilePath.empty()) {
-            for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
-                if (!entry.is_regular_file()) continue;
-                std::string ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                if (std::find(exts.begin(), exts.end(), ext) != exts.end()) {
-                    modelData.material.textureFilePath = entry.path().string();
-                    char buf[256];
-                    sprintf_s(buf, "Object3d::LoadObjFile: found texture in dir %s\n", modelData.material.textureFilePath.c_str());
-                    Logger::Log(buf);
-                    break;
-                }
-            }
-        }
+        return modelData;
     }
-
-    // If still not found, fallback to default checker texture in resources
-    if (modelData.material.textureFilePath.empty()) {
-        modelData.material.textureFilePath = "resources/uvChecker.png";
-        Logger::Log(std::string("Object3d::LoadObjFile: no texture found, defaulting to resources/uvChecker.png\n"));
-    }
-
-    // 最終的に選ばれたテクスチャパスをログ出力
-    {
-        char buf[256];
-        sprintf_s(buf, "LoadObjFile: final textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
-        Logger::Log(buf);
-    }
-
-    return modelData;
-    }
-
-    // If no texture was specified via mtllib/mtl, try to find any image file in the same directory
-    // (handled below before returning)
 
     // 3.実際にファイルを読み、ModelDataを構築していく
     while (std::getline(file, line)) {
@@ -428,9 +396,55 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
             // materialTemplateLibraryファイルの名前を取得する
             std::string materialFilename;
             s >> materialFilename;
-            // 基本的にobjファイルと同一階層にmtlは存在させるので、ディレクトリ名とファイル名を渡す
-            modelData.material = LoadMaterialTemplateFile(directoryPath, materialFilename);
+            // mtl は obj と同じフォルダにあるはずなので objDir を渡す
+            modelData.material = LoadMaterialTemplateFile(objDir, materialFilename);
         }
+    }
+
+    // If no texture specified via MTL, try to find an image file in the same directory as the OBJ
+    if (modelData.material.textureFilePath.empty()) {
+        // try same base name first (e.g. fence.obj -> fence.png)
+        std::string base = objPath.stem().string();
+        const std::vector<std::string> exts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
+        for (const auto& ext : exts) {
+            std::string tryPath = objDir + "/" + base + ext;
+            if (std::filesystem::exists(tryPath)) {
+                modelData.material.textureFilePath = tryPath;
+                char buf[256];
+                sprintf_s(buf, "Object3d::LoadObjFile: found texture by basename %s\n", tryPath.c_str());
+                Logger::Log(buf);
+                break;
+            }
+        }
+
+        // if still empty, scan directory for any image file
+        if (modelData.material.textureFilePath.empty()) {
+            for (const auto& entry : std::filesystem::directory_iterator(objDir)) {
+                if (!entry.is_regular_file()) continue;
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (std::find(exts.begin(), exts.end(), ext) != exts.end()) {
+                    modelData.material.textureFilePath = entry.path().string();
+                    char buf[256];
+                    sprintf_s(buf, "Object3d::LoadObjFile: found texture in dir %s\n", modelData.material.textureFilePath.c_str());
+                    Logger::Log(buf);
+                    break;
+                }
+            }
+        }
+    }
+
+    // If still not found, fallback to default checker texture in resources
+    if (modelData.material.textureFilePath.empty()) {
+        modelData.material.textureFilePath = "resources/uvChecker.png";
+        Logger::Log(std::string("Object3d::LoadObjFile: no texture found, defaulting to resources/uvChecker.png\n"));
+    }
+
+    // Log final chosen texture
+    {
+        char buf[256];
+        sprintf_s(buf, "LoadObjFile: final textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
+        Logger::Log(buf);
     }
 
     return modelData;

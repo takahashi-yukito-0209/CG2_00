@@ -33,7 +33,7 @@ void TextureManager::Initialize()
 void TextureManager::LoadTexture(const std::string& filePath)
 {
     // 読み込み済みテクスチャを検索 (正規化されたパスで比較)
-    // Use the provided filePath as key (no canonicalization on C++14 build)
+    // 提供された filePath をキーとして使用する（C++14 ビルドでは正規化を行わない）
     std::string key = filePath;
     auto it = std::find_if(
         textureDatas.begin(), textureDatas.end(),
@@ -139,6 +139,11 @@ void TextureManager::LoadTexture(const std::string& filePath)
         Logger::Log(buf);
     }
 
+    // After creating the SRV in CPU heap, ensure the descriptor is visible by copying
+    // it to the shader-visible heap if necessary. In this app we used a single shader-visible
+    // heap created in DirectXCommon; ensure ImGui and other code can use it.
+    // No-op here because we created SRV directly into the shader-visible heap's CPU handle.
+
     // ロード成功のログ出力
     {
         char buf[256];
@@ -150,15 +155,6 @@ void TextureManager::LoadTexture(const std::string& filePath)
 // すべてのテクスチャリソースの転送を実行し、中間リソースを解放
 void TextureManager::ExecuteResourceUpload()
 {
-    //// DirectXCommonの転送コマンド実行関数を呼び出す
-    //DirectXCommon::GetInstance()->ExecuteCommandList();
-     
-    //// 実行完了を待機
-    //DirectXCommon::GetInstance()->WaitForCommandExecution();
-    
-    //// 実行が完了したので、allocatorとcommandListをResetする
-    //DirectXCommon::GetInstance()->ResetCommandList();
-
     // すべての中間リソースを解放する
     for (TextureData& data : textureDatas) {
         // ComPtr::Reset() で内部のID3D12Resource::Release() が呼ばれる
@@ -169,7 +165,7 @@ void TextureManager::ExecuteResourceUpload()
 uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 {
     // 正規化してから検索
-    // Use provided filePath for lookup (no canonicalization)
+    // 検索には提供された filePath をそのまま使用する（正規化は行わない）
     std::string key = filePath;
     for (uint32_t i = 0; i < static_cast<uint32_t>(textureDatas.size()); ++i) {
         if (textureDatas[i].filePath == key) return i;

@@ -285,8 +285,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
     IXAudio2MasteringVoice* masterVoice;
 
-    /*HRESULT hr;*/
-
     // COMライブラリの初期化は先頭で行っているためここではHRESULT変数のみ用意する
     HRESULT result = S_OK;
     // XAudioエンジンのインスタンスを生成
@@ -359,15 +357,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 3dオブジェクト複数初期化
     std::vector<std::unique_ptr<Object3d>> objects3d;// Object3d クラスのポインタを格納するための動的配列
-    const uint32_t kObject3DCount = 3; // 描画対象とする 3D オブジェクトの総数
+    const uint32_t kObject3DCount = 4; // 描画対象とする 3D オブジェクトの総数 (fence を追加)
     // 複数モデルを割り当てるためのファイル名リスト
     std::vector<std::string> modelFileNames = {
         "plane.obj",
         "bunny.obj",
         "teapot.obj",
+        "models/fence/fence.obj",
     };
 
-        // 指定された数だけ 3D オブジェクトを生成・設定するループ
+    // 指定された数だけ 3D オブジェクトを生成・設定するループ
     for (uint32_t i = 0; i < kObject3DCount; ++i) {
         // オブジェクトの生成
         auto obj = std::make_unique<Object3d>();
@@ -378,29 +377,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         // 指定したファイルのモデルを読み込んでオブジェクトに紐づける
         obj->SetModel(modelFile);
 
+        // fence モデルの場合、アルファカットアウトサンプラーを使用する設定にする
+        if (modelFile.find("fence") != std::string::npos) {
+            obj->SetUseAlphaCutoutSampler(true);
+        }
+
         // 配列に格納
         objects3d.push_back(std::move(obj));
     }
+
+    
 
 #pragma endregion 最初のシーンの終了
 
     // 自作した数学関数の使用
     MathUtility math;
     
-    // マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = DirectXCommon::GetInstance()->CreateBufferResource(sizeof(Material));
-    // マテリアルにデータを書き込む
-    Material* materialData = nullptr;
-    // 書き込むためのアドレスを取得
-    materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
-    // 今回は赤を書き込んでみる
-    materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-    // SpriteはLightingするのでtrueを設定する
-    materialData->enableLighting = true;
-    // UVTransformは単位行列で初期化
-    materialData->uvTransform = math.MakeIdentity4x4();
-
-    // Use shared directional light owned by object3dCommon
+   
+    // 平行光源データの取得
     DirectionalLight* directionalLightData = object3dCommon->GetDirectionalLightData();
     if (!directionalLightData) {
         Logger::Log("Warning: Failed to get shared directional light data from Object3dCommon\n");
@@ -430,11 +424,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 描画対象をUIで切り替えるための変数と選択肢
     enum DrawType {
-        DRAW_NONE,
-        DRAW_SPHERE,
         DRAW_MODEL,
         DRAW_SPRITE,
         DRAW_BUNNY,
+        DRAW_FENCE,
         DRAW_CHECKER,
         DRAW_ALL
     };
@@ -442,23 +435,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     DrawType selectedDrawType = DRAW_SPRITE; // 初期値
 
     const char* drawOptions[] = {
-        "None", // 何も描画しない
-        "Sphere", // 球体の描画
         "Model", // モデルのみ描画
         "Sprite", // スプライトのみ描画
         "Bunny", // bunnyのみ描画
+        "Fence", // fenceのみ描画
         "Checker", // ティーポットのみを描画
         "All" // 両方描画
     };
 
-    enum LightingMode {
-        Lighting_None = 0,
-        Lighting_Lambert,
-        Lighting_HalfLambert,
-    };
-
-    int lightingMode = Lighting_HalfLambert; // 初期値
-
+    // デバッグカメラの生成
     DebugCamera debugCamera;
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
@@ -471,6 +456,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             break;
         } else {
 
+            // ImGuiフレーム開始
             ImGui_ImplDX12_NewFrame();
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();
@@ -537,9 +523,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // ImGuiのUIで描画対象を選択
             ImGui::Combo("Model", (int*)&selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
 
-            // メインオブジェクト
-            if (selectedDrawType == DRAW_MODEL || selectedDrawType == DRAW_ALL) {
-                // 各Object3dの個別編集UI
+            // 各描画対象の個別編集UI
+            if (selectedDrawType == DRAW_ALL) {
+                // 各Object3dの個別編集UI (すべて表示)
                 for (uint32_t i = 0; i < objects3d.size(); ++i) {
                     Object3d* object = objects3d[i].get();
                     if (!object) {
@@ -565,10 +551,190 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                             object->SetTranslate(translate);
                         }
                         // テクスチャ設定欄
-                        static char texPathBuf[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBuf, sizeof(texPathBuf));
+                        static char texPathBufAll[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufAll, sizeof(texPathBufAll));
                         if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBuf));
+                            object->SetTexture(std::string(texPathBufAll));
+                        }
+
+                        // ライティング設定を追加
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }  
+            
+            // planeオブジェクト
+            if (selectedDrawType == DRAW_MODEL) {
+                const int idx = 0; // plane index
+                if (objects3d.size() > static_cast<size_t>(idx) && objects3d[idx]) {
+                    Object3d* object = objects3d[idx].get();
+                    ImGui::PushID(2000 + idx);
+                    if (ImGui::CollapsingHeader("Plane")) {
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
+
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
+                        }
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
+                        }
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+
+                        static char texPathBufP[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufP, sizeof(texPathBufP));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBufP));
+                        }
+
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }
+
+            // fenceオブジェクト
+            if (selectedDrawType == DRAW_FENCE) {
+                const int idx = 3; // fence index
+                if (objects3d.size() > idx && objects3d[idx]) {
+                    Object3d* object = objects3d[idx].get();
+                    ImGui::PushID(1000 + idx);
+                    if (ImGui::CollapsingHeader("Fence")) {
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
+
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
+                        }
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
+                        }
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+
+                        static char texPathBufF[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufF, sizeof(texPathBufF));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBufF));
+                        }
+
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }
+
+            // bunnyオブジェクト
+            if (selectedDrawType == DRAW_BUNNY) {
+                const int idx = 1; // bunny index
+                if (objects3d.size() > idx && objects3d[idx]) {
+                    Object3d* object = objects3d[idx].get();
+                    ImGui::PushID(1000 + idx);
+                    if (ImGui::CollapsingHeader("Bunny")) {
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
+
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
+                        }
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
+                        }
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+
+                        static char texPathBufB[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufB, sizeof(texPathBufB));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBufB));
+                        }
+
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }
+
+            // チェッカー/ティーポットオブジェクト
+            if (selectedDrawType == DRAW_CHECKER) {
+                const int idx = 2; // teapot/checker index
+                if (objects3d.size() > idx && objects3d[idx]) {
+                    Object3d* object = objects3d[idx].get();
+                    ImGui::PushID(1000 + idx);
+                    if (ImGui::CollapsingHeader("Checker/Teapot")) {
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
+
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
+                        }
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
+                        }
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+
+                        static char texPathBufC[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufC, sizeof(texPathBufC));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBufC));
+                        }
+
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
                         }
                     }
                     ImGui::PopID();
@@ -638,7 +804,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                             currentSprite->SetIsFlipY(flipY);
                         }
 
-                        // --- Texture region (left-top and size in pixels) ---
+                        // --- Texture LeftTop / Size ---
                         Vector2 texLeftTop = currentSprite->GetTextureLeftTop();
                         Vector2 texSize = currentSprite->GetTextureSize();
                         if (ImGui::DragFloat2("TextureLeftTop", &(texLeftTop.x), 1.0f, 0.0f, 8192.0f)) {
@@ -669,11 +835,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 明るさ（制限付き）
                 ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
 
-                // ライティング方式
-                ImGui::Text("Lighting Mode");
-                ImGui::RadioButton("None", &lightingMode, 0);
-                ImGui::RadioButton("Lambert", &lightingMode, 1);
-                ImGui::RadioButton("Half Lambert", &lightingMode, 2);
+                // ライティング方式はオブジェクト毎に設定してください (Object の項目で編集可)
             }
 
             // デバッグカメラ
@@ -724,24 +886,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // 描画対象に応じた処理
             switch (selectedDrawType) {
 
-            case DRAW_NONE:
-                // 何も描画しない（スキップ）
-                break;
-
-            case DRAW_SPHERE:
-
-                break;
-
             case DRAW_MODEL:
 
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // オブジェクトの描画（複数）
-                for (auto& obj : objects3d) {
-                    if (obj) {
-                        obj->Draw();
-                    }
+                // Draw only the plane model (index 0)
+                if (objects3d.size() > 0 && objects3d[0]) {
+                    objects3d[0]->Draw();
                 }
 
                 break;
@@ -760,11 +912,37 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             case DRAW_BUNNY:
 
+                // 3D描画の共通設定
+                object3dCommon->SetCommonDrawSetting();
+
+                // Draw only the bunny model (index 1)
+                if (objects3d.size() > 1 && objects3d[1]) {
+                    objects3d[1]->Draw();
+                }
+
+                break;
+
+            case DRAW_FENCE:
+                
+                // 3D描画の共通設定
+                object3dCommon->SetCommonDrawSetting();
+
+                // Draw only the fence model (index 3)
+                if (objects3d.size() > 3 && objects3d[3]) {
+                    objects3d[3]->Draw();
+                }
 
                 break;
 
             case DRAW_CHECKER:
-
+                
+                // 3D描画の共通設定
+                object3dCommon->SetCommonDrawSetting();
+                
+                // Draw only the teapot model (index 2)
+                if (objects3d.size() > 2 && objects3d[2]) {
+                    objects3d[2]->Draw();
+                }
 
                 break;
 

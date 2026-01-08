@@ -1,5 +1,6 @@
 #pragma once
 #include "DirectXCommon.h"
+#include "../RenderState.h"
 
 namespace MyEngine {
 
@@ -13,6 +14,8 @@ public: // メンバ関数
 
     //共通描画設定
     void SetCommonDrawSetting();
+
+    void SetBlendMode(MyEngine::BlendMode mode);
 
 private: // メンバ関数
     // ルートシグネチャの作成
@@ -29,6 +32,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     // パイプラインステートを保持
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+    MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::Alpha;
 };
 
 } // namespace MyEngine
