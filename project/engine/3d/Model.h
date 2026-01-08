@@ -25,6 +25,8 @@ public: // メンバ関数
 
     // 描画
     void Draw(Object3d* owner);
+    // 描画（インスタンス数指定）
+    void DrawInstanced(Object3d* owner, uint32_t instanceCount);
 
 private: // メンバ変数
     // モデル共通情報へのポインタ

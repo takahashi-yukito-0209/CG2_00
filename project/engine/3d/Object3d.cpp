@@ -290,6 +290,12 @@ void Object3d::Draw()
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
+    // If an instancing SRV is available, bind it to root parameter 4 (vertex shader) so shader can index by SV_InstanceID
+    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = object3dCommon_->GetInstancingSrvGPUHandle();
+    if (instancingSrv.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(4, instancingSrv);
+    }
+
     // SRVは TextureManager からハンドルを取り出して RootDescriptorTable にセット
     uint32_t texIndex = modelData_.material.textureIndex;
     auto texMgr = TextureManager::GetInstance();

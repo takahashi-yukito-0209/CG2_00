@@ -7,6 +7,7 @@
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "mathUtility.h"
+#include <cmath>
 #include <cassert>
 #include <d3d12.h>
 #include <dbghelp.h>
@@ -38,6 +39,7 @@
 #include "TextureManager.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
+#include "Model.h"
 #include "ModelManager.h"
 
 #pragma comment(lib, "d3d12.lib")
@@ -386,8 +388,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         objects3d.push_back(std::move(obj));
     }
 
-    
-
 #pragma endregion 最初のシーンの終了
 
     // 自作した数学関数の使用
@@ -425,6 +425,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // 描画対象をUIで切り替えるための変数と選択肢
     enum DrawType {
         DRAW_MODEL,
+        DRAW_PARTICLE,
         DRAW_SPRITE,
         DRAW_BUNNY,
         DRAW_FENCE,
@@ -434,8 +435,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     DrawType selectedDrawType = DRAW_SPRITE; // 初期値
 
+    // パーティクル数の取得
+    int particleCount = 1;
+    if (object3dCommon) {
+        particleCount = static_cast<int>(object3dCommon->GetInstancingSlotCount());
+        if (particleCount <= 0) particleCount = 1;
+    }
+
     const char* drawOptions[] = {
         "Model", // モデルのみ描画
+        "Particle", // インスタンシング（パーティクル）描画
         "Sprite", // スプライトのみ描画
         "Bunny", // bunnyのみ描画
         "Fence", // fenceのみ描画
@@ -504,6 +513,48 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
 
+            // 平行光源データ設定
+            if (object3dCommon) {
+                auto instData = object3dCommon->GetInstancingData();
+                uint32_t instSlots = object3dCommon->GetInstancingSlotCount();
+                if (instData && instSlots > 0) {
+                    // Arrange instances in a grid, with a small deterministic jitter per instance
+                    int count = std::min<int>(static_cast<int>(instSlots), particleCount);
+                    int safeCount = (count > 1) ? count : 1;
+                    int cols = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(safeCount))));
+                    float spacing = 0.6f;
+                    float halfW = (cols - 1) * spacing * 0.5f;
+                    for (int i = 0; i < static_cast<int>(instSlots); ++i) {
+                        if (i < count) {
+                            int col = i % cols;
+                            int row = i / cols;
+                            // base grid position
+                            float baseX = col * spacing - halfW;
+                            float baseZ = row * spacing - halfW;
+                            // deterministic pseudo-random jitter via simple LCG
+                            uint32_t seed = static_cast<uint32_t>(i) * 1664525u + 1013904223u;
+                            float jitterX = ((seed & 0xFFFFu) / 65535.0f - 0.5f) * 0.3f; // ±0.15
+                            float jitterY = (((seed >> 16) & 0xFFFFu) / 65535.0f - 0.5f) * 0.2f; // ±0.1
+                            float jitterZ = ((((seed >> 8) ^ (seed << 8)) & 0xFFFFu) / 65535.0f - 0.5f) * 0.3f;
+
+                            Transform t;
+                            t.scale = { 1.0f, 1.0f, 1.0f };
+                            t.rotate = { 0.0f, 0.0f, 0.0f };
+                            t.translate = { baseX + jitterX, jitterY, baseZ + jitterZ };
+
+                            Matrix4x4 worldI = math.MakeAffineMatrix(t.scale, t.rotate, t.translate);
+                            Matrix4x4 wvpI = math.Multiply(worldI, math.Multiply(viewMatrix, projectionMatrix));
+                            instData[i].World = worldI;
+                            instData[i].WVP = wvpI;
+                        } else {
+                            // zero/identity for unused slots
+                            instData[i].World = math.MakeIdentity4x4();
+                            instData[i].WVP = math.MakeIdentity4x4();
+                        }
+                    }
+                }
+            }
+
 
             // Object3Dの更新（複数）
             for (auto& obj : objects3d) {
@@ -522,6 +573,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // ImGuiのUIで描画対象を選択
             ImGui::Combo("Model", (int*)&selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
+
+            // パーティクル数設定UI
+            if (selectedDrawType == DRAW_PARTICLE) {
+                if (object3dCommon) {
+                    int maxSlots = static_cast<int>(object3dCommon->GetInstancingSlotCount());
+                    if (maxSlots <= 0) maxSlots = 1;
+                    ImGui::SliderInt("Particle Count", &particleCount, 1, maxSlots);
+                } else {
+                    ImGui::Text("Instancing not available (Object3dCommon not initialized)");
+                }
+            }
 
             // 各描画対象の個別編集UI
             if (selectedDrawType == DRAW_ALL) {
@@ -886,6 +948,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // 描画対象に応じた処理
             switch (selectedDrawType) {
 
+            case DRAW_PARTICLE:
+
+                // 3D描画の共通設定
+                if (object3dCommon) {
+                    object3dCommon->SetInstancingDrawSetting();
+                    // Draw instanced plane (index 0) 
+                    const int idx = 0;
+                    if (objects3d.size() > static_cast<size_t>(idx) && objects3d[idx]) {
+                        // If model is set on object, prefer Model::DrawInstanced
+                        Model* m = objects3d[idx]->GetModel();
+                        if (m) {
+                            m->DrawInstanced(objects3d[idx].get(), static_cast<uint32_t>(particleCount));
+                        } else {
+                            // fallback: draw owner mesh instanced
+                            objects3d[idx]->Draw();
+                        }
+                    }
+                }
+
+                break;
+
             case DRAW_MODEL:
 
                 // 3D描画の共通設定
@@ -974,7 +1057,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     }
 
     CloseWindow(hwnd);
-
 
     // 自作リソース解放
     // 3D/2D オブジェクト（unique_ptrで管理しているため自動破棄）
