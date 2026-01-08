@@ -34,7 +34,8 @@ public: // メンバ構造体
         float padding[3];
         Matrix4x4 uvTransform;
         int lightingMode;
-        float padding2[3];
+        int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
+        float padding2[2];
     };
 
     // 座標変換行列データ
@@ -106,7 +107,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
     TransformationMatrix* transformationMatrixData_ = nullptr;
     // 平行光源用リソース
-    // Note: directional light is now owned by Object3dCommon (shared global light)
+    // 注: 平行光源は現在 Object3dCommon が所有する共有リソースとなっている
     // 頂点バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
     // バッファリソース内のデータを指すポインタ
@@ -121,6 +122,9 @@ private: // メンバ変数
     Model* model_ = nullptr;
     // ModelCommon owned by this Object3d for the model
     ModelCommon* modelCommon_ = nullptr;
+
+    // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
+    bool useAlphaCutoutSampler_ = false;
 
 public:
     // setters
@@ -145,6 +149,16 @@ public:
     const Vector3 GetScale() const { return transform_.scale; }
     const Vector3 GetRotate() const { return transform_.rotate; }
     const Vector3 GetTranslate() const { return transform_.translate; }
+
+    // material controls
+    bool GetEnableLighting() const;
+    void SetEnableLighting(bool enable);
+    int GetLightingMode() const;
+    void SetLightingMode(int mode);
+
+    // sampler control: some objects (fence) need point+clamp sampler for alpha cutout
+    void SetUseAlphaCutoutSampler(bool use) { useAlphaCutoutSampler_ = use; if (materialData_) materialData_->useAlphaCutoutSampler = use ? 1 : 0; }
+    bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
 private:
     // 初期化補助

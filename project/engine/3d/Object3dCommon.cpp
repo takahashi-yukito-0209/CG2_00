@@ -8,8 +8,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 {
     // 引数で受け取ってメンバ変数に記録する
     dxCommon_ = dxCommon;
-    // Create a shared directional light constant buffer
-    // This allows main/ImGui to edit a single light used by all Object3d instances
+    // 共有の平行光源用定数バッファを作成
+    // これにより main/ImGui からすべての Object3d インスタンスで使用する単一のライトを編集できる
     directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
     if (directionalLightResource_) {
         directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
@@ -22,14 +22,37 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     CreateGraphicsPipeline();
 }
 
+void Object3dCommon::SetBlendMode(MyEngine::BlendMode mode)
+{
+    // 選択されたブレンドモードを保存し、PSOを再生成する
+    blendMode_ = mode;
+    // 新しいブレンドステートを適用するためパイプラインを再生成
+    CreateGraphicsPipeline();
+}
+
 void Object3dCommon::SetCommonDrawSetting()
 {
+    // 実行時のヌル参照を回避するための防御チェック
+    auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
+    if (!cmdList) {
+        Logger::Log("Object3dCommon::SetCommonDrawSetting: command list is null\n");
+        return;
+    }
+    if (!rootSignature_) {
+        Logger::Log("Object3dCommon::SetCommonDrawSetting: rootSignature_ is null\n");
+        return;
+    }
+    if (!graphicsPipelineState_) {
+        Logger::Log("Object3dCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
+        return;
+    }
+
     // ルートシグネチャをセットするコマンド
-    dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature_.Get());
+    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
     // パイプラインステートをセットするコマンド
-    dxCommon_->GetCommandList()->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定                                                                         
+    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定                                                                          
     // プリミティブトポロジーをセットするコマンド
-    dxCommon_->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 }
 
 void Object3dCommon::CreateRootSignature() {
@@ -61,22 +84,42 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
 
-    // Note: directional light CBV will be bound per-object using the GPU address stored in Object3dCommon
+    // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 
     /// ルートシグネチャの説明
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
 
     // スタティックサンプラーの設定
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 倍リニアフィルタ
-    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0~1の範囲外をリピート
+    // スタティックサンプラーを2つ用意する:
+    //  - s0: 線形フィルタ、ラップアドレッシング（ほとんどのモデルの既定）
+    //  - s1: ポイントフィルタ、クランプアドレッシング（フェンスのようなアルファカットアウト用テクスチャ向け）
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+
+    // s0: linear + wrap
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
-    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipmapを使う
-    staticSamplers[0].ShaderRegister = 0; // レジスタ番号0を使う
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[0].MipLODBias = 0.0f;
+    staticSamplers[0].MinLOD = 0.0f;
+    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // s1: ポイントフィルタ + クランプ（アルファカットアウトテクスチャのブリーディングを防ぐために有用）
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[1].MipLODBias = 0.0f;
+    staticSamplers[1].MinLOD = 0.0f;
+    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
@@ -119,10 +162,58 @@ void Object3dCommon::CreateGraphicsPipeline() {
     inputLayoutDesc.pInputElementDescs = inputElementDescs;
     inputLayoutDesc.NumElements = _countof(inputElementDescs);
 
-    // BlendStateの設定
+    // BlendState の設定を blendMode_ に応じて切り替える
     D3D12_BLEND_DESC blendDesc {};
-    // すべての色要素を書き込む
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0];
+    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    rtBlend.LogicOpEnable = FALSE;
+    rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
+    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+    switch (blendMode_) {
+    case BlendMode::None:
+        rtBlend.BlendEnable = FALSE;
+        rtBlend.SrcBlend = D3D12_BLEND_ONE;
+        rtBlend.DestBlend = D3D12_BLEND_ZERO;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Alpha:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Add:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_ONE;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+        break;
+    case BlendMode::Multiply:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; // src * dest
+        rtBlend.DestBlend = D3D12_BLEND_ZERO;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Screen:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_ONE;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    default:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    }
 
     // RasiterzerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
@@ -130,6 +221,15 @@ void Object3dCommon::CreateGraphicsPipeline() {
     rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
     // 三角形の中を塗りつぶす
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+    // デフォルトのワインディング（時計回りを前面）を使用し、多くのOBJエクスポートと整合させる
+    // もしモデルの一部が裏返しに見える場合は、ここでこのフラグを切り替えるよりも
+    // カリングを無効にするか OBJ ローダー側でワインディングを修正することを検討してください。
+    rasterizerDesc.FrontCounterClockwise = FALSE;
+    rasterizerDesc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+    rasterizerDesc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    rasterizerDesc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    rasterizerDesc.DepthClipEnable = TRUE;
+    rasterizerDesc.MultisampleEnable = FALSE;
 
     // Shaderをコンパイルする
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3D.VS.hlsl", L"vs_6_0");
@@ -159,8 +259,14 @@ void Object3dCommon::CreateGraphicsPipeline() {
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc {};
     // Depthの機能を有効化する
     depthStencilDesc.DepthEnable = true;
-    // 書き込みします
-    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    // Depth write mask: disable depth writes for blend modes that use
+    // transparency (e.g. Alpha) to prevent incorrect occlusion. For opaque
+    // (None) rendering, enable depth writes.
+    if (blendMode_ == BlendMode::Alpha || blendMode_ == BlendMode::Add || blendMode_ == BlendMode::Multiply || blendMode_ == BlendMode::Screen) {
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    } else {
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    }
     // 比較関数はLessEqual。つまり、近ければ描画される
     depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 

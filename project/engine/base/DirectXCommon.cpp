@@ -195,6 +195,12 @@ void DirectXCommon::PreDraw()
 
     // SRV用ディスクリプタヒープを指定
     ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
+    // 診断用ログ
+    if (!srvDescriptorHeap_) {
+        Logger::Log("DirectXCommon::PreDraw: srvDescriptorHeap_ is null\n");
+    } else {
+        Logger::Log("DirectXCommon::PreDraw: setting SRV descriptor heap for command list\n");
+    }
     commandList_->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
     // ビューポート、シザー矩形の設定

@@ -84,6 +84,11 @@ public: // 公開メンバ関数
     D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUDescriptorHandle(uint32_t index) const;
 
     /// <summary>
+    /// SRV用ディスクリプタヒープの生ポインタを取得（コマンドリストへのバインド用）
+    /// </summary>
+    ID3D12DescriptorHeap* GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
+
+    /// <summary>
     /// スワップチェーンが実際に使っているフォーマットを取得
     /// </summary>
     DXGI_FORMAT GetSwapChainFormat() const { return swapChainFormat_; }

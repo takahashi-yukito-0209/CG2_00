@@ -17,9 +17,28 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 
 void SpriteCommon::SetCommonDrawSetting()
 {
-    dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature_.Get());
-    dxCommon_->GetCommandList()->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
-    dxCommon_->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
+    // 実行時のヌル参照を回避するための防御チェック
+    if (!dxCommon_) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: dxCommon_ is null\n");
+        return;
+    }
+    auto cmdList = dxCommon_->GetCommandList();
+    if (!cmdList) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: command list is null\n");
+        return;
+    }
+    if (!rootSignature_) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: rootSignature_ is null\n");
+        return;
+    }
+    if (!graphicsPipelineState_) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
+        return;
+    }
+
+    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 }
 
 void SpriteCommon::CreateRootSignature()
@@ -55,15 +74,35 @@ void SpriteCommon::CreateRootSignature()
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 倍リニアフィルタ
-    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0~1の範囲外をリピート
+    // Object3d シェーダーの期待に合わせたスタティックサンプラーを2つ用意する:
+    // s0: 線形フィルタ + ラップ（既定）
+    // s1: ポイントフィルタ + クランプ（アルファカットアウト用）
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+
+    // s0: 線形フィルタ + ラップ
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
-    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipmapを使う
-    staticSamplers[0].ShaderRegister = 0; // レジスタ番号0を使う
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[0].MipLODBias = 0.0f;
+    staticSamplers[0].MinLOD = 0.0f;
+    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // s1: ポイントフィルタ + クランプ
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[1].MipLODBias = 0.0f;
+    staticSamplers[1].MinLOD = 0.0f;
+    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
@@ -107,10 +146,58 @@ void SpriteCommon::CreateGraphicsPipeline()
     inputLayoutDesc.pInputElementDescs = inputElementDescs;
     inputLayoutDesc.NumElements = _countof(inputElementDescs);
 
-    // BlendStateの設定
+    // BlendState の設定を blendMode_ に応じて切り替える
     D3D12_BLEND_DESC blendDesc {};
-    // すべての色要素を書き込む
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0];
+    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    rtBlend.LogicOpEnable = FALSE;
+    rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
+    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+    switch (blendMode_) {
+    case BlendMode::None:
+        rtBlend.BlendEnable = FALSE;
+        rtBlend.SrcBlend = D3D12_BLEND_ONE;
+        rtBlend.DestBlend = D3D12_BLEND_ZERO;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Alpha:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Add:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_ONE;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+        break;
+    case BlendMode::Multiply:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; // src * dest
+        rtBlend.DestBlend = D3D12_BLEND_ZERO;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    case BlendMode::Screen:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_ONE;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    default:
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        break;
+    }
 
     // RasiterzerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
@@ -156,7 +243,31 @@ void SpriteCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
     graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
+    // PSO生成前のデバッグ情報
+    {
+        char buf[512];
+        sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: creating PSO. device=%p rootSig=%p VS_sz=%zu PS_sz=%zu RTVFormat=%d DSVFormat=%d\n",
+            dxCommon_->GetDevice(),
+            rootSignature_.Get(),
+            vertexShaderBlob ? vertexShaderBlob->GetBufferSize() : 0,
+            pixelShaderBlob ? pixelShaderBlob->GetBufferSize() : 0,
+            graphicsPipelineStateDesc.RTVFormats[0],
+            graphicsPipelineStateDesc.DSVFormat);
+        Logger::Log(buf);
+    }
+
     // 実際に生成し、メンバ変数に保持する
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr) || !graphicsPipelineState_) {
+        char buf[512];
+        sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(buf);
+        // If device reports removed reason, log it too
+        HRESULT removedHr = dxCommon_->GetDevice()->GetDeviceRemovedReason();
+        if (removedHr != S_OK) {
+            char buf2[256]; sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr)); Logger::Log(buf2);
+        }
+        graphicsPipelineState_.Reset();
+        return;
+    }
 }
