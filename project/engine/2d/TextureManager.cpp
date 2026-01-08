@@ -32,11 +32,13 @@ void TextureManager::Initialize()
 
 void TextureManager::LoadTexture(const std::string& filePath)
 {
-    // 読み込み済みテクスチャを検索
+    // 読み込み済みテクスチャを検索 (正規化されたパスで比較)
+    // Use the provided filePath as key (no canonicalization on C++14 build)
+    std::string key = filePath;
     auto it = std::find_if(
         textureDatas.begin(), textureDatas.end(),
         [&](const TextureData& textureData) {
-            return textureData.filePath == filePath;
+            return textureData.filePath == key;
         });
 
     // 見つかった場合はログして終了
@@ -54,8 +56,10 @@ void TextureManager::LoadTexture(const std::string& filePath)
         return;
     }
 
+    // 正規化されたファイルパスを使う
+    std::string storePath = key;
     // std::string を std::wstring に変換
-    std::wstring wfilePath = StringUtility::ConvertString(filePath);
+    std::wstring wfilePath = StringUtility::ConvertString(storePath);
     {
         char buf[256];
         std::string tmp = StringUtility::ConvertString(wfilePath);
@@ -89,7 +93,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
     // 追加したテクスチャデータの参照を取得
     TextureData& textureData = textureDatas.back();
 
-    textureData.filePath = filePath;
+    textureData.filePath = storePath;
     textureData.metadata = mipImages.GetMetadata();
     // テクスチャリソースの生成
     textureData.Resource = DirectXCommon::GetInstance()->CreateTextureResource(textureData.metadata);
@@ -138,7 +142,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
     // ロード成功のログ出力
     {
         char buf[256];
-        sprintf_s(buf, "DEBUG LoadTexture: Loaded new texture: %s (Index: %u)\n", filePath.c_str(), srvIndex);
+        sprintf_s(buf, "DEBUG LoadTexture: Loaded new texture: %s (Index: %u)\n", textureData.filePath.c_str(), srvIndex);
         Logger::Log(buf);
     }
 }
@@ -164,24 +168,28 @@ void TextureManager::ExecuteResourceUpload()
 
 uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 {
-    // 読み込み済みテクスチャを検索
-    auto it = std::find_if(
-        textureDatas.begin(), textureDatas.end(),
-        [&](const TextureData& textureData) {
-            return textureData.filePath == filePath;
-        });
-
-    if (it != textureDatas.end()) {
-        // 見つかった場合はSRVインデックスを返す
-        uint32_t textureIndex = static_cast<uint32_t>(std::distance(textureDatas.begin(), it));
-        return textureIndex;
+    // 正規化してから検索
+    // Use provided filePath for lookup (no canonicalization)
+    std::string key = filePath;
+    for (uint32_t i = 0; i < static_cast<uint32_t>(textureDatas.size()); ++i) {
+        if (textureDatas[i].filePath == key) return i;
     }
 
-    // 検索がヒットしない場合は、テクスチャが事前に読み込まれていないのでエラーをログして無効値を返す
+    // デバッグ用: 現在の登録一覧を出力
+    {
+        char buf[512];
+        sprintf_s(buf, "GetTextureIndexByFilePath: lookup failed for '%s'. Registered count=%zu\n", filePath.c_str(), textureDatas.size());
+        Logger::Log(buf);
+        for (uint32_t i = 0; i < static_cast<uint32_t>(textureDatas.size()); ++i) {
+            char buf2[512];
+            sprintf_s(buf2, "  idx=%u path=%s\n", i, textureDatas[i].filePath.c_str());
+            Logger::Log(buf2);
+        }
+    }
+
     char buf[256];
     sprintf_s(buf, "ERROR GetTextureIndexByFilePath: Texture not found: %s\n", filePath.c_str());
     Logger::Log(buf);
-    // 呼び出し元で範囲チェックできるように 無効値 UINT32_MAX を返す
     return UINT32_MAX;
 }
 

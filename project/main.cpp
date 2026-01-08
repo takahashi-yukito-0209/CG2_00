@@ -400,26 +400,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // UVTransformは単位行列で初期化
     materialData->uvTransform = math.MakeIdentity4x4();
 
-    // 平行光源用のResourceを作る
-    Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource = DirectXCommon::GetInstance()->CreateBufferResource(sizeof(DirectionalLight));
-    // データを書き込む
-    DirectionalLight* directionalLightData = nullptr;
-    // 書き込むためのアドレスを取得
-    directionalLightResource->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData));
-    directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
-    directionalLightData->intensity = 1.0f;
-    directionalLightData->direction = math.Normalize(directionalLightData->direction);
-
-    // WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
-    Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource = DirectXCommon::GetInstance()->CreateBufferResource(sizeof(TransformationMatrix));
-    // データを書き込む
-    TransformationMatrix* wvpData = nullptr;
-    // 書き込むためのアドレスを取得
-    wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpData));
-    // 単位行列を書き込んでおく
-    wvpData->WVP = math.MakeIdentity4x4();
-    wvpData->World = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+    // Use shared directional light owned by object3dCommon
+    DirectionalLight* directionalLightData = object3dCommon->GetDirectionalLightData();
+    if (!directionalLightData) {
+        Logger::Log("Warning: Failed to get shared directional light data from Object3dCommon\n");
+    }
 
     // 全てのロード完了後、まとめて転送を実行
     TextureManager::GetInstance()->ExecuteResourceUpload();
@@ -532,9 +517,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             Matrix4x4 projectionMatrix = debugCamera.GetProjectionMatrix();
             // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
-            // CBufferの中身更新
-            wvpData->WVP = worldViewProjectionMatrix;
-            wvpData->World = worldMatrix;
+
 
             // Object3Dの更新（複数）
             for (auto& obj : objects3d) {
@@ -557,29 +540,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // メインオブジェクト
             if (selectedDrawType == DRAW_MODEL || selectedDrawType == DRAW_ALL) {
                 // 各Object3dの個別編集UI
-                for (uint32_t oi = 0; oi < objects3d.size(); ++oi) {
-                    Object3d* o = objects3d[oi].get();
-                    if (!o) {
+                for (uint32_t i = 0; i < objects3d.size(); ++i) {
+                    Object3d* object = objects3d[i].get();
+                    if (!object) {
                         continue;
                     }
                     char headerName[64];
-                    sprintf_s(headerName, "Object %d", oi);
-                    ImGui::PushID(oi);
+                    sprintf_s(headerName, "Object %d", i);
+                    ImGui::PushID(i);
                     if (ImGui::CollapsingHeader(headerName)) {
-                        Vector3 s = o->GetScale();
-                        Vector3 r = o->GetRotate();
-                        Vector3 t = o->GetTranslate();
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
 
-                        if (ImGui::DragFloat3("Scale", &s.x, 0.01f)) {
-                            o->SetScale(s);
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
                         }
 
-                        if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
-                            o->SetRotate(r);
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
                         }
 
-                        if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
-                            o->SetTranslate(t);
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+                        // テクスチャ設定欄
+                        static char texPathBuf[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBuf, sizeof(texPathBuf));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBuf));
                         }
                     }
                     ImGui::PopID();

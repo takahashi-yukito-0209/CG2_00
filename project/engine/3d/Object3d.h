@@ -43,6 +43,7 @@ public: // メンバ構造体
         Matrix4x4 World;
     };
 
+    // 平行光源データ構造体
     struct DirectionalLight {
         Vector4 color; //!< ライトの色
         Vector3 direction; //!< ライトの向き
@@ -81,14 +82,18 @@ public: // メンバ関数
     void SetModel(Model* model) { model_ = model; }
     // ファイル名を指定してモデルを設定する（resourcesフォルダを想定）
     void SetModel(const std::string& filePath);
+    // テクスチャファイルを指定してオブジェクトに割り当てる
+    void SetTexture(const std::string& filePath);
     Model* GetModel() const { return model_; }
 
     // モデル共通情報用ポインタのセット・ゲット
     D3D12_VERTEX_BUFFER_VIEW const& GetVertexBufferView() const { return vertexBufferView_; }
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const { return materialResource_; }
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
-    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetDirectionalLightResource() const { return directionalLightResource_; }
     const ModelData& GetModelData() const { return modelData_; }
+
+    // Access to owning Object3dCommon
+    Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
 
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr;
@@ -101,8 +106,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
     TransformationMatrix* transformationMatrixData_ = nullptr;
     // 平行光源用リソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
-    DirectionalLight* directionalLightData_ = nullptr;
+    // Note: directional light is now owned by Object3dCommon (shared global light)
     // 頂点バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
     // バッファリソース内のデータを指すポインタ
@@ -146,7 +150,6 @@ private:
     // 初期化補助
     void CreateMaterialResource();
     void CreateTransformationMatrixResource();
-    void CreateDirectionalLightResource();
     void AssignTexture();
 };
 

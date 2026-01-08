@@ -1,11 +1,12 @@
 #include "Model.h"
 #include "ModelCommon.h"
 #include "Object3d.h"
+#include "Object3dCommon.h"
 #include "DirectXCommon.h"
-#include "engine/2d/TextureManager.h"
+#include "TextureManager.h"
 #include "Logger.h"
 #include "StringUtility.h"
-#include "engine/utility/mathUtility.h"
+#include "mathUtility.h"
 #include <cassert>
 #include <cstring>
 
@@ -39,13 +40,18 @@ void Model::Draw(Object3d* owner)
         return;
     }
 
-    // 平行光源CBV設定 (オーナーから)
-    if (owner->GetDirectionalLightResource()) {
-        cmdList->SetGraphicsRootConstantBufferView(3, owner->GetDirectionalLightResource()->GetGPUVirtualAddress());
-    } else {
+    // 平行光源CBV設定 (shared in Object3dCommon)
+    Object3dCommon* common = owner->GetObject3dCommon();
+    if (!common) {
+        Logger::Log("Model::Draw skipped: missing Object3dCommon\n");
+        return;
+    }
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddr = common->GetDirectionalLightGPUAddress();
+    if (lightAddr == 0) {
         Logger::Log("Model::Draw skipped: directional light CBV missing\n");
         return;
     }
+    cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
     // テクスチャSRV設定 (モデルまたはオーナーから)
     uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex; // Updated texture index logic
@@ -105,7 +111,14 @@ void Model::Initialize(ModelCommon* modelCommon)
 
     // マテリアル用定数バッファの生成
     if (!modelData_.material.textureFilePath.empty()) {
-        uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
+        auto texMgr = TextureManager::GetInstance();
+        uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
+        if (idx == UINT32_MAX) {
+            // テクスチャがまだロードされていなければ読み込んでアップロードする
+            texMgr->LoadTexture(modelData_.material.textureFilePath);
+            texMgr->ExecuteResourceUpload();
+            idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
+        }
         if (idx != UINT32_MAX) textureIndex_ = idx;
     }
 }
