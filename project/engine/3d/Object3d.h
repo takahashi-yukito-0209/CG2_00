@@ -42,6 +42,7 @@ public: // メンバ構造体
     struct TransformationMatrix {
         Matrix4x4 WVP;
         Matrix4x4 World;
+        Vector4 color; // per-instance color (w = alpha)
     };
 
     // 平行光源データ構造体

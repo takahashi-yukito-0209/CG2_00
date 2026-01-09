@@ -21,6 +21,9 @@ void SetLevel(Level level);
 // ログファイルを設定する（空文字でファイル出力を無効化）
 bool SetLogFile(const std::string& filePath);
 
+// 異常系（Warn/Error）専用のログファイルを設定する（空文字で無効化）
+bool SetErrorLogFile(const std::string& filePath);
+
 // レベル付きログ出力
 void Log(Level level, const std::string& message);
 

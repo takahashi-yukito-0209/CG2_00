@@ -44,8 +44,8 @@ PixelShaderOutput main(VertexShaderOutput input)
     float3 matRGB = gMaterial.color.rgb;
     float matA = gMaterial.color.a;
 
-    float3 finalRGB = matRGB * texRGB;
-    float finalA = matA * texA;
+    float3 finalRGB = matRGB * texRGB * input.color.rgb;
+    float finalA = matA * texA * input.color.a;
 
     if (gMaterial.enableLighting != 0)
     {

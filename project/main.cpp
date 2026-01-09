@@ -17,6 +17,8 @@
 #include <fstream>
 #include <string>
 #include <strsafe.h>
+#include <list>
+#include <random>
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
 #include <sstream>
@@ -109,6 +111,8 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
     // 他に関連付けられているSEH例外ハンドラがあれば実行。通常はプロセスを終了する
     return EXCEPTION_EXECUTE_HANDLER;
 }
+
+// (Emit は後方で宣言される構造体定義後に実装)
 
 SoundData SoundLoadWave(const char* filename)
 {
@@ -236,6 +240,81 @@ void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData)
 // Transform変数を作る
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 
+// 簡易Particle構造体（CPU側管理用）
+struct CpuParticle {
+    Transform transform;
+    Math::Vector3 velocity;
+    Math::Vector4 color;
+    float lifeTime;
+    float currentTime;
+    float spawnTime; // 生成時刻（安定ソート用）
+};
+
+// パーティクル発生装置（Emitter）
+struct Emitter {
+    Transform transform; // どこから発生するか
+    uint32_t count = 1;   // 何個発生するか（1フレームあたり）
+    float frequency = 1.0f; // どのくらいの頻度で発生するか（秒）
+    float frequencyTime = 0.0f; // 経過時間
+};
+
+// 加速度フィールド（例：風）
+struct AABB { Math::Vector3 min; Math::Vector3 max; };
+struct AccelerationField {
+    Math::Vector3 acceleration; // 加速度
+    AABB area;                  // 効果範囲
+};
+
+// AABB と点の当たり判定
+static bool IsCollision(const AABB& aabb, const Math::Vector3& point)
+{
+    return (point.x >= aabb.min.x && point.x <= aabb.max.x) &&
+           (point.y >= aabb.min.y && point.y <= aabb.max.y) &&
+           (point.z >= aabb.min.z && point.z <= aabb.max.z);
+}
+
+// 生成用ランダム器
+static std::random_device seedGenerator;
+static std::mt19937 randomEngine(seedGenerator());
+
+// 寿命UIから参照されるグローバル設定（このファイル内）
+static bool autoRespawn = true;
+static float gParticleLifeMin = 5.0f;
+static float gParticleLifeMax = 10.0f;
+static float gGlobalTime = 0.0f;
+
+static CpuParticle MakeNewParticle(std::mt19937& eng, const Math::Vector3& baseTranslate)
+{
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    std::uniform_real_distribution<float> distPos(-0.5f, 0.5f);
+    std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
+    float lifeMin = (gParticleLifeMin > 0.01f) ? gParticleLifeMin : 1.0f;
+    float lifeMax = (gParticleLifeMax > lifeMin) ? gParticleLifeMax : (lifeMin + 2.0f);
+    std::uniform_real_distribution<float> distTime(lifeMin, lifeMax);
+    CpuParticle p{};
+    p.transform.scale = { 1.0f, 1.0f, 1.0f };
+    p.transform.rotate = { 0.0f, 0.0f, 0.0f };
+    p.transform.translate = { baseTranslate.x + distPos(eng), baseTranslate.y + distPos(eng), baseTranslate.z + distPos(eng) };
+    p.velocity = { dist(eng) * 0.25f, std::fabs(dist(eng)) * 0.5f, dist(eng) * 0.25f };
+    p.color = { distColor(eng), distColor(eng), distColor(eng), 1.0f };
+    p.lifeTime = distTime(eng);
+    p.currentTime = 0.0f;
+    // 生成時刻を設定（安定ソートに使用）
+    p.spawnTime = gGlobalTime;
+    return p;
+}
+
+// Emitter から Particle を生成して返す（構造体定義後）
+static std::list<CpuParticle> Emit(const Emitter& emitter, std::mt19937& eng)
+{
+    std::list<CpuParticle> listOut;
+    for (uint32_t i = 0; i < emitter.count; ++i) {
+        CpuParticle p = MakeNewParticle(eng, emitter.transform.translate);
+        listOut.push_back(p);
+    }
+    return listOut;
+}
+
 // Windowsアプリでのエントリーポイント（main関数）
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
@@ -249,7 +328,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // log出力用のフォルダ「logs」の作成
     std::filesystem::create_directory("logs");
 
-    // ここからファイルを作成し、ofStreamを取得する
+    // ここからログファイルのパスを生成してLoggerへ設定
     // 現在時刻を取得してログ名用の文字列を作成（C++14互換）
     std::time_t now_c = std::time(nullptr);
     struct tm local_tm;
@@ -259,8 +338,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     std::string dateString(dateBuf);
     // 時刻を使ってファイル名を指定
     std::string logFilePath = std::string("logs/") + dateString + ".log";
-    // ファイルを作って書き込み準備
-    std::ofstream logStream(logFilePath);
+    // ロガーへ出力先を設定（一般ログ）
+    Logger::SetLogFile(logFilePath);
+    // 異常系ログ（Warn/Error）も同じファイルへ出力
+    Logger::SetErrorLogFile(logFilePath);
 
     // WinAppを通常のインスタンスとして生成
     MyEngine::WinApp winApp;
@@ -332,6 +413,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // Textureを読んで転送する
     TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
     TextureManager::GetInstance()->LoadTexture("resources/monsterBall.png");
+    TextureManager::GetInstance()->LoadTexture("resources/circle.png");
 
 #pragma region 最初のシーンの初期化
     
@@ -388,6 +470,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         objects3d.push_back(std::move(obj));
     }
 
+    // パーティクル用のプレーンに circle.png を割り当てる
+    if (objects3d.size() > 0 && objects3d[0]) {
+        objects3d[0]->SetTexture("resources/circle.png");
+    }
+
 #pragma endregion 最初のシーンの終了
 
     // 自作した数学関数の使用
@@ -435,6 +522,29 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     DrawType selectedDrawType = DRAW_SPRITE; // 初期値
 
+    // CPU側のParticleリスト
+    std::list<CpuParticle> particles;
+    // 単一のエミッタ
+    Emitter emitter{};
+    emitter.transform.scale = {1.0f,1.0f,1.0f};
+    emitter.transform.rotate = {0.0f,0.0f,0.0f};
+    emitter.transform.translate = {0.0f,0.0f,0.0f};
+    emitter.count = 3;         // 一度に3つ生成
+    emitter.frequency = 0.5f;  // 0.5秒ごとに生成
+    emitter.frequencyTime = 0.0f;
+
+    // 初期パーティクルを増やす（起動時に複数バッチ生成）
+    for (int i = 0; i < 20; ++i) {
+        particles.splice(particles.end(), Emit(emitter, randomEngine));
+    }
+
+    // ここで定義済みのグローバルを使用
+
+    // 風フィールドの例 (+X方向に加速、原点中心に±1mのAABB)
+    AccelerationField accelerationField{};
+    accelerationField.acceleration = { 15.0f, 0.0f, 0.0f }; // 15 m/s^2 相当の加速度
+    accelerationField.area.min = { -1.0f, -1.0f, -1.0f };
+    accelerationField.area.max = {  1.0f,  1.0f,  1.0f };
     // パーティクル数の取得
     int particleCount = 1;
     if (object3dCommon) {
@@ -456,6 +566,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     DebugCamera debugCamera;
     debugCamera.Initialize(1280.0f, 720.0f); // 画面サイズを指定
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
+    bool useBillboard = true; // パーティクルのビルボード有効/無効
 
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
@@ -506,6 +617,84 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 SoundPlayWave(xAudio2.Get(), soundData1);
             }
 
+            // Particle 専用ウィンドウ
+            ImGui::Begin("Particle");
+            ImGui::Text("Emitter");
+            ImGui::DragFloat3("Translate", &emitter.transform.translate.x, 0.01f, -100.0f, 100.0f);
+            ImGui::DragInt("Spawn Count", reinterpret_cast<int*>(&emitter.count), 1, 1, 100);
+            ImGui::DragFloat("Frequency (sec)", &emitter.frequency, 0.01f, 0.0f, 10.0f);
+            ImGui::Checkbox("Use Billboard", &useBillboard);
+            // 再生成（現在のEmitter設定で一括生成し直す）
+            if (ImGui::Button("Regenerate Particles")) {
+                particles.clear();
+                // 現在の設定で複数回Emit（画面に十分に見えるように10回）
+                for (int i = 0; i < 10; ++i) {
+                    particles.splice(particles.end(), Emit(emitter, randomEngine));
+                }
+                emitter.frequencyTime = 0.0f; // タイマーをリセット
+            }
+            ImGui::Separator();
+            ImGui::Text("Field (AABB)");
+            static bool fieldEnabled = false;
+            ImGui::Checkbox("Enable Field", &fieldEnabled);
+            ImGui::DragFloat3("Accel", &accelerationField.acceleration.x, 0.1f, -100.0f, 100.0f);
+            ImGui::DragFloat3("AABB Min", &accelerationField.area.min.x, 0.1f, -100.0f, 100.0f);
+            ImGui::DragFloat3("AABB Max", &accelerationField.area.max.x, 0.1f, -100.0f, 100.0f);
+
+            ImGui::Separator();
+            ImGui::Text("Lifetime");
+            ImGui::Checkbox("Auto Respawn", &autoRespawn);
+            ImGui::DragFloatRange2("Life Min/Max (sec)", &gParticleLifeMin, &gParticleLifeMax, 0.01f, 0.1f, 10.0f, "Min: %.2f", "Max: %.2f");
+            ImGui::End();
+
+            // Emitter による自動生成（頻度ベース、余剰時間も考慮）
+            {
+                const float dt = 1.0f / 60.0f; // 仮のフレーム時間
+                emitter.frequencyTime += dt;
+                if (emitter.frequency > 0.0f) {
+                    while (emitter.frequencyTime >= emitter.frequency) {
+                        emitter.frequencyTime -= emitter.frequency; // 余剰分を残す
+                        particles.splice(particles.end(), Emit(emitter, randomEngine));
+                    }
+                }
+            }
+
+            // Field を適用 + 寿命で破棄/再生成（有効時のみ）
+            {
+                const float dt = 1.0f / 60.0f;
+                // グローバル時間更新（MakeNewParticleで参照）
+                gGlobalTime += dt;
+                for (auto it = particles.begin(); it != particles.end(); ) {
+                    // AABB 内なら加速度を適用
+                    if (fieldEnabled && IsCollision(accelerationField.area, it->transform.translate)) {
+                        it->velocity.x += accelerationField.acceleration.x * dt;
+                        it->velocity.y += accelerationField.acceleration.y * dt;
+                        it->velocity.z += accelerationField.acceleration.z * dt;
+                    }
+                    // 速度による移動
+                    it->transform.translate.x += it->velocity.x * dt;
+                    it->transform.translate.y += it->velocity.y * dt;
+                    it->transform.translate.z += it->velocity.z * dt;
+
+                    // 寿命更新と破棄/再生成
+                    it->currentTime += dt;
+                    if (it->currentTime >= it->lifeTime) {
+                        // 破棄
+                        it = particles.erase(it);
+                        // 再生成（オプション）。総数はGPUのinstancing最大数までに固定
+                        if (autoRespawn) {
+                            uint32_t instSlots = object3dCommon ? object3dCommon->GetInstancingSlotCount() : 100;
+                            if (particles.size() < instSlots) {
+                                particles.splice(particles.end(), Emit(emitter, randomEngine));
+                            }
+                        }
+                        continue;
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+
             // WorldMatrix作成(model)
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
@@ -513,44 +702,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
 
-            // 平行光源データ設定
+            // CPU側 Particles を GPU インスタンシングへ同期（生成時刻で安定ソート）
             if (object3dCommon) {
                 auto instData = object3dCommon->GetInstancingData();
                 uint32_t instSlots = object3dCommon->GetInstancingSlotCount();
                 if (instData && instSlots > 0) {
-                    // Arrange instances in a grid, with a small deterministic jitter per instance
-                    int count = std::min<int>(static_cast<int>(instSlots), particleCount);
-                    int safeCount = (count > 1) ? count : 1;
-                    int cols = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(safeCount))));
-                    float spacing = 0.6f;
-                    float halfW = (cols - 1) * spacing * 0.5f;
-                    for (int i = 0; i < static_cast<int>(instSlots); ++i) {
-                        if (i < count) {
-                            int col = i % cols;
-                            int row = i / cols;
-                            // base grid position
-                            float baseX = col * spacing - halfW;
-                            float baseZ = row * spacing - halfW;
-                            // deterministic pseudo-random jitter via simple LCG
-                            uint32_t seed = static_cast<uint32_t>(i) * 1664525u + 1013904223u;
-                            float jitterX = ((seed & 0xFFFFu) / 65535.0f - 0.5f) * 0.3f; // ±0.15
-                            float jitterY = (((seed >> 16) & 0xFFFFu) / 65535.0f - 0.5f) * 0.2f; // ±0.1
-                            float jitterZ = ((((seed >> 8) ^ (seed << 8)) & 0xFFFFu) / 65535.0f - 0.5f) * 0.3f;
-
-                            Transform t;
-                            t.scale = { 1.0f, 1.0f, 1.0f };
-                            t.rotate = { 0.0f, 0.0f, 0.0f };
-                            t.translate = { baseX + jitterX, jitterY, baseZ + jitterZ };
-
-                            Matrix4x4 worldI = math.MakeAffineMatrix(t.scale, t.rotate, t.translate);
-                            Matrix4x4 wvpI = math.Multiply(worldI, math.Multiply(viewMatrix, projectionMatrix));
-                            instData[i].World = worldI;
-                            instData[i].WVP = wvpI;
-                        } else {
-                            // zero/identity for unused slots
-                            instData[i].World = math.MakeIdentity4x4();
-                            instData[i].WVP = math.MakeIdentity4x4();
-                        }
+                    // 使う数は particles のサイズに制限（最大 instSlots）
+                    uint32_t count = std::min<uint32_t>(static_cast<uint32_t>(particles.size()), instSlots);
+                    // 安定ソートのため、一時ベクタへコピー
+                    std::vector<std::reference_wrapper<const CpuParticle>> sorted;
+                    sorted.reserve(particles.size());
+                    for (const auto& p : particles) { sorted.emplace_back(std::cref(p)); }
+                    std::stable_sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b){
+                        return a.get().spawnTime < b.get().spawnTime;
+                    });
+                    // 転送
+                    uint32_t i = 0;
+                    for (; i < count; ++i) {
+                        const auto& pt = sorted[i].get();
+                        Transform tr;
+                        tr.scale = pt.transform.scale;
+                        // フルビルボードはVSで処理するため、CPU側で回転は変更しない
+                        tr.rotate = pt.transform.rotate;
+                        tr.translate = pt.transform.translate;
+                        // 微小ZオフセットでZファイティング低減
+                        tr.translate.z += static_cast<float>(i) * 1e-3f;
+                        Matrix4x4 worldI = math.MakeAffineMatrix(tr.scale, tr.rotate, tr.translate);
+                        Matrix4x4 wvpI = math.Multiply(worldI, math.Multiply(viewMatrix, projectionMatrix));
+                        instData[i].World = worldI;
+                        instData[i].WVP = wvpI;
+                        instData[i].color = pt.color;
+                    }
+                    // 残りは未使用としてクリア
+                    for (; i < instSlots; ++i) {
+                        instData[i].World = math.MakeIdentity4x4();
+                        instData[i].WVP = math.MakeIdentity4x4();
+                        instData[i].color = {1.0f,1.0f,1.0f,0.0f};
                     }
                 }
             }
@@ -574,16 +761,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             // ImGuiのUIで描画対象を選択
             ImGui::Combo("Model", (int*)&selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
 
-            // パーティクル数設定UI
-            if (selectedDrawType == DRAW_PARTICLE) {
-                if (object3dCommon) {
-                    int maxSlots = static_cast<int>(object3dCommon->GetInstancingSlotCount());
-                    if (maxSlots <= 0) maxSlots = 1;
-                    ImGui::SliderInt("Particle Count", &particleCount, 1, maxSlots);
-                } else {
-                    ImGui::Text("Instancing not available (Object3dCommon not initialized)");
+            // Blend Mode (3D Object pipeline)
+            {
+                const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
+                int blendIdx = (int)object3dCommon->GetBlendMode();
+                if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
+                    object3dCommon->SetBlendMode(static_cast<MyEngine::BlendMode>(blendIdx));
                 }
             }
+
+            // パーティクルの設定は別ウィンドウに移動済み
 
             // 各描画対象の個別編集UI
             if (selectedDrawType == DRAW_ALL) {
@@ -952,6 +1139,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
                 // 3D描画の共通設定
                 if (object3dCommon) {
+                    // カメラベクトルを更新（右/上）
+                    // 簡易算出: View行列からRight/Upを取り出す
+                    Matrix4x4 view = debugCamera.GetViewMatrix();
+                    Matrix4x4 proj = debugCamera.GetProjectionMatrix();
+                    Matrix4x4 vp = math.Multiply(view, proj);
+                    Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
+                    Vector3 up    = { view.m[0][1], view.m[1][1], view.m[2][1] };
+                    object3dCommon->SetBillboardCameraWithVP(right, up, vp, useBillboard);
                     object3dCommon->SetInstancingDrawSetting();
                     // Draw instanced plane (index 0) 
                     const int idx = 0;
