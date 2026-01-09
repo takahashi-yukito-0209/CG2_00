@@ -28,7 +28,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         cameraCBData_->up    = {0.0f, 1.0f, 0.0f};
         cameraCBData_->enable = 0.0f;
         // 初期のViewProjは単位行列
-        MathUtility mu; cameraCBData_->pad0 = 0.0f; // ensure padding write
+        cameraCBData_->pad0 = 0.0f; // ensure padding write
         cameraCBData_->enable = 0.0f;
     }
     // Camera constant buffer
