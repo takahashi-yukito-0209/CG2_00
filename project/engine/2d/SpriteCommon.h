@@ -15,7 +15,7 @@ public: // メンバ関数
     //共通描画設定
     void SetCommonDrawSetting();
 
-    // Returns true when root signature and PSO are ready for drawing
+    // ルートシグネチャとPSOが描画可能状態であれば true を返す
     bool IsReady() const;
 
     void SetBlendMode(MyEngine::BlendMode mode);

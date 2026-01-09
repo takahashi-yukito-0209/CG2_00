@@ -14,13 +14,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
     if (directionalLightResource_) {
         directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
-        // default values
+        // 既定値の設定
         directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
     }
   
-    // Create camera CB for billboard (b2)
+    // ビルボード用のカメラ定数バッファ（b2）を作成
     cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
     if (cameraCBResource_) {
         cameraCBResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraCBData_));
@@ -28,10 +28,10 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         cameraCBData_->up    = {0.0f, 1.0f, 0.0f};
         cameraCBData_->enable = 0.0f;
         // 初期のViewProjは単位行列
-        cameraCBData_->pad0 = 0.0f; // ensure padding write
+        cameraCBData_->pad0 = 0.0f; // パディングを書き込むことを保証
         cameraCBData_->enable = 0.0f;
     }
-    // Camera constant buffer
+    // カメラ用定数バッファ
     cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
     if (cameraResource_) {
         cameraResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraData_));
@@ -41,13 +41,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     // グラフィックスパイプラインの生成
     CreateGraphicsPipeline();
 
-    // Create instancing resources (structured buffer + SRV)
-    const uint32_t kNumInstance = 100; // increased maximum instances for particle demo
+    // インスタンシング用リソースの作成（構造化バッファ + SRV）
+    const uint32_t kNumInstance = 100; // パーティクルデモ用に最大インスタンス数を増加
     kNumInstance_ = kNumInstance;
 
-    // Create a GPU-visible SRV for a StructuredBuffer containing TransformationMatrix[kNumInstance]
+    // TransformationMatrix[kNumInstance] を格納する構造化バッファ向けのGPU可視SRVを作成
     D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
-    instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // structured buffer
+    instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // 構造化バッファ
     instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
     instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     instancingSrvDesc.Buffer.FirstElement = 0;
@@ -55,13 +55,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     instancingSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
     instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-    // Create a default-size buffer resource in UPLOAD heap to store instance data
+    // インスタンスデータを格納するため、UPLOADヒープに既定サイズのバッファリソースを作成
     size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kNumInstance;
     instancingResource_ = dxCommon_->CreateBufferResource(instancingBufferSize);
-    // Map for CPU write
+    // CPUからの書き込みのためにマップ
     if (instancingResource_) {
         instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
-        // initialize to identity
+        // 単位行列で初期化
         MathUtility math;
         for (uint32_t i = 0; i < kNumInstance; ++i) {
             instancingData_[i].WVP = math.MakeIdentity4x4();
@@ -70,14 +70,14 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         }
     }
 
-    // Create SRV descriptor in the global SRV heap
-    // Choose a descriptor slot unlikely to be used by TextureManager: use the last slot in the heap
+    // グローバルSRVヒープにSRVディスクリプタを作成
+    // TextureManagerと競合しにくいディスクリプタスロットとして、ヒープの最後のスロットを使用
     uint32_t srvIndex = DirectXCommon::kMaxSRVCount - 1;
     instancingSrvHandleCPU_ = dxCommon_->GetSRVCPUDescriptorHandle(srvIndex);
     instancingSrvHandleGPU_ = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
     dxCommon_->GetDevice()->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
 
-    // Debug log
+    // デバッグログ
     {
         char buf[256];
         sprintf_s(buf, "Object3dCommon::Initialize: created instancingResource size=%zu srvIndex=%u srvGPU=0x%016llX\n",
@@ -105,7 +105,7 @@ void Object3dCommon::SetInstancingDrawSetting()
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: rootSignature_ is null\n");
         return;
     }
-    // Fallback: if instancing PSO is not ready, use standard graphics PSO to avoid GPU crash
+    // フォールバック: インスタンシング用PSOが未準備なら標準のグラフィックスPSOを使用してGPUクラッシュを回避
     if (!instancingPipelineState_) {
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null, falling back to graphicsPipelineState_\n");
         if (!graphicsPipelineState_) {
@@ -120,7 +120,7 @@ void Object3dCommon::SetInstancingDrawSetting()
     }
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // Bind camera billboard CB (VS, b2 -> root index 5) if available
+    // 使用可能ならビルボード用カメラCB（VSのb2 -> ルートインデックス5）をバインド
     if (cameraCBResource_) {
         cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResource_->GetGPUVirtualAddress());
     }
@@ -167,23 +167,23 @@ void Object3dCommon::CreateRootSignature() {
     descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    // RootSignature作成
+    // ルートシグネチャ作成
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature {};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     // RootParameter作成。複数設定できるので配列。
 
-    // Index map:
-    // 0 = Material CBV (Pixel, b0)
-    // 1 = WVP CBV (Vertex, b0)
-    // 2 = Texture SRV table (Pixel, t0)
-    // 3 = Light CBV (Pixel, b1)
-    // 4 = Instancing SRV table (Vertex, t1)
-    // 5 = CameraVectors CBV (Vertex, b2)  ← Billboarding用
-    // 6 = Camera CBV (Pixel, b3)         ← Specular用
+    // インデックス割り当て:
+    // 0 = マテリアルCBV（ピクセル, b0）
+    // 1 = WVP CBV（頂点, b0）
+    // 2 = テクスチャSRVテーブル（ピクセル, t0）
+    // 3 = 光源CBV（ピクセル, b1）
+    // 4 = インスタンシングSRVテーブル（頂点, t1）
+    // 5 = カメラベクトルCBV（頂点, b2）  ← ビルボード用
+    // 6 = カメラCBV（ピクセル, b3）     ← スペキュラ用
   
-    // Note: keep existing indices for compatibility: 0=material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
-    // We'll append instancing SRV Table at index 4 (Vertex) so existing code does not need to change indices.
+    // 注意: 互換性のため既存のインデックスを維持する: 0=Material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
+    // 既存コードのインデックスを変更せずに済むよう、インスタンシングSRVテーブルはインデックス4（頂点）に追加する。
     D3D12_ROOT_PARAMETER rootParameters[7] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -227,7 +227,7 @@ void Object3dCommon::CreateRootSignature() {
     //  - s1: ポイントフィルタ、クランプアドレッシング（フェンスのようなアルファカットアウト用テクスチャ向け）
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
 
-    // s0: linear + wrap
+    // s0: 線形 + ラップ
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -362,7 +362,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     rasterizerDesc.DepthClipEnable = TRUE;
     rasterizerDesc.MultisampleEnable = FALSE;
 
-    // Shaderをコンパイルする
+    // シェーダーをコンパイルする
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3D.VS.hlsl", L"vs_6_0");
     assert(vertexShaderBlob != nullptr);
 
@@ -380,7 +380,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     // 書き込むRTVの情報
     graphicsPipelineStateDesc.NumRenderTargets = 1;
     graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    // 利用するトロポジ（形状）のタイプ。三角形
+    // 利用するトポロジ（形状）のタイプ。三角形
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）
     graphicsPipelineStateDesc.SampleDesc.Count = 1;
@@ -390,9 +390,8 @@ void Object3dCommon::CreateGraphicsPipeline() {
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc {};
     // Depthの機能を有効化する
     depthStencilDesc.DepthEnable = true;
-    // Depth write mask: disable depth writes for blend modes that use
-    // transparency (e.g. Alpha) to prevent incorrect occlusion. For opaque
-    // (None) rendering, enable depth writes.
+    // Depth書き込みマスク: 透明表現（例: Alpha）を使用するブレンドモードでは不正なオクルージョンを防ぐため深度書き込みを無効化。
+    // 不透明（None）のレンダリングでは深度書き込みを有効化する。
     if (blendMode_ == BlendMode::Alpha || blendMode_ == BlendMode::Add || blendMode_ == BlendMode::Multiply || blendMode_ == BlendMode::Screen) {
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     } else {
@@ -409,7 +408,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
     assert(SUCCEEDED(hr));
 
-    // Create separate PSO for instancing/particle rendering using Particle shaders
+    // Particleシェーダーを用いて、インスタンシング／パーティクル描画用の別PSOを作成
     Microsoft::WRL::ComPtr<IDxcBlob> instVS = dxCommon_->CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> instPS = dxCommon_->CompileShader(L"resources/shaders/Particle.PS.hlsl", L"ps_6_0");
     if (instVS && instPS) {
@@ -433,6 +432,6 @@ void Object3dCommon::CreateGraphicsPipeline() {
             instancingPipelineState_.Reset();
         }
     } else {
-        Logger::Log("Object3dCommon::CreateGraphicsPipeline: Particle shaders not found, instancing PSO not created\n");
+        Logger::Log("Object3dCommon::CreateGraphicsPipeline: Particleシェーダーが見つからなかったため、インスタンシング用PSOは作成されませんでした\n");
     }
 }

@@ -121,12 +121,12 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
     if (idx == UINT32_MAX) {
         uint32_t loaded = TextureManager::GetInstance()->GetLoadedTextureCount();
         if (loaded > 0) {
-            textureIndex_ = 0; // fallback to first texture
+            textureIndex_ = 0; // 既定として最初のテクスチャを使用
             char buf[256];
             sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to index 0\n", textureFilePath.c_str());
             Logger::Log(buf);
         } else {
-            textureIndex_ = UINT32_MAX; // no texture available
+            textureIndex_ = UINT32_MAX; // 利用可能なテクスチャがない
             char buf[256];
             sprintf_s(buf, "Warning: Sprite texture not found (%s) and no textures loaded\n", textureFilePath.c_str());
             Logger::Log(buf);

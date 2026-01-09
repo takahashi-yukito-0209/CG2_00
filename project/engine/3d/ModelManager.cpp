@@ -30,9 +30,9 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     std::string requestedFilename = filename;
     std::string filePath = requestedDir + "/" + requestedFilename;
 
-    // If the file does not exist, try a few alternate locations and a limited search
+    // ファイルが存在しない場合、いくつかの代替ディレクトリを試し、限定的な探索を行う
     if (!std::filesystem::exists(filePath)) {
-        // Try alternate common directories
+        // よく使われる代替ディレクトリを試す
         std::vector<std::string> tryDirs = { requestedDir, requestedDir + "s", "resources", "resource", requestedDir + "/models", "models" };
         bool found = false;
         for (const auto& d : tryDirs) {
@@ -45,7 +45,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
             }
         }
 
-        // If still not found, perform a short recursive search from project root (current path)
+        // それでも見つからない場合、プロジェクトルート（現在のパス）から短い再帰検索を行う
         if (!found) {
             const int maxSearchResults = 4;
             int foundCount = 0;
@@ -57,7 +57,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
                     filePath = entry.path().string();
                     found = true;
                     ++foundCount;
-                    break; // take first match
+                    break; // 最初に見つかったものを採用
                 }
                 if (foundCount >= maxSearchResults) break;
             }
@@ -70,7 +70,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
         }
     }
 
-    // Use the resolved filePath as cache key
+    // 解決された filePath をキャッシュキーとして使用
     std::string cacheKey = filePath;
 
     // すでに読み込まれているかチェック（早期リターン）
@@ -81,7 +81,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
 
     // 新規モデルを生成して読み込む
     auto model = std::make_unique<Model>();
-    // If we found a concrete filePath, split into dir+filename for loader
+    // 実際の filePath が確定している場合、ローダー用にディレクトリとファイル名に分割
     std::filesystem::path p(filePath);
     std::string useDir = p.parent_path().string();
     std::string useFile = p.filename().string();
@@ -94,7 +94,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
         return ptr;
     }
 
-    // No procedural fallback; return nullptr on failure
+    // 手続き的フォールバックは無し。失敗時は nullptr を返す
 
     // 読み込み失敗時はnullptrを返す
     return nullptr;

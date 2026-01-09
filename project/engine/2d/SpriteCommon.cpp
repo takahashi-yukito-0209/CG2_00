@@ -72,7 +72,7 @@ void SpriteCommon::CreateRootSignature()
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
-    // no light CBV for sprite
+    // スプライトにはライト用CBVは不要
 
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
@@ -265,7 +265,7 @@ void SpriteCommon::CreateGraphicsPipeline()
         char buf[512];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
         Logger::Log(buf);
-        // If device reports removed reason, log it too
+        // デバイスが削除理由を返す場合はそれもログ出力
         HRESULT removedHr = dxCommon_->GetDevice()->GetDeviceRemovedReason();
         if (removedHr != S_OK) {
             char buf2[256]; sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr)); Logger::Log(buf2);

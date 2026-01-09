@@ -32,8 +32,8 @@ void TextureManager::Initialize()
 
 void TextureManager::LoadTexture(const std::string& filePath)
 {
-    // 読み込み済みテクスチャを検索 (正規化されたパスで比較)
-    // 提供された filePath をキーとして使用する（C++14 ビルドでは正規化を行わない）
+    // 読み込み済みテクスチャを検索（パス文字列で比較）
+    // 提供された filePath をキーとして使用（C++14ビルドでは正規化しない）
     std::string key = filePath;
     auto it = std::find_if(
         textureDatas.begin(), textureDatas.end(),
@@ -50,13 +50,13 @@ void TextureManager::LoadTexture(const std::string& filePath)
         return;
     }
 
-    // テクスチャ枚数上限チェック
+    // テクスチャ枚数の上限チェック
     if (textureDatas.size() + kSRVIndexTop_ >= DirectXCommon::kMaxSRVCount) {
         Logger::Log("ERROR LoadTexture: Exceeded maximum SRV count.\n");
         return;
     }
 
-    // 正規化されたファイルパスを使う
+    // 保管するファイルパスを決定
     std::string storePath = key;
     // std::string を std::wstring に変換
     std::wstring wfilePath = StringUtility::ConvertString(storePath);
@@ -76,7 +76,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
         Logger::Log(buf);
     }
 
-    // ロード失敗時の処理 (エラーハンドリング) を追加することが望ましい
+    // ロード失敗時の処理（エラーハンドリング）
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "ERROR LoadTexture: Failed to load texture: %s\n", filePath.c_str());
@@ -110,14 +110,14 @@ void TextureManager::LoadTexture(const std::string& filePath)
     srvDesc.Format = textureData.metadata.format; // リソースのフォーマットに合わせる
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 標準的なRGBAマッピング
 
-    // リソースの種類に応じてViewDimensionを設定
+    // リソースの種類に応じて ViewDimension を設定
     if (textureData.metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
         // 2Dテクスチャの場合
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        // mipmapのすべてのレベルを使用するように設定
+        // mipmap のすべてのレベルを使用するように設定
         srvDesc.Texture2D.MipLevels = static_cast<UINT>(textureData.metadata.mipLevels);
     } else {
-        // その他のテクスチャ (必要に応じて処理を追加)
+        // その他のテクスチャ（必要に応じて処理を追加）
     }
 
     // 設定をもとにSRVの生成
@@ -139,10 +139,9 @@ void TextureManager::LoadTexture(const std::string& filePath)
         Logger::Log(buf);
     }
 
-    // After creating the SRV in CPU heap, ensure the descriptor is visible by copying
-    // it to the shader-visible heap if necessary. In this app we used a single shader-visible
-    // heap created in DirectXCommon; ensure ImGui and other code can use it.
-    // No-op here because we created SRV directly into the shader-visible heap's CPU handle.
+    // SRV を CPU ヒープに作成した後、必要に応じてシェーダー可視ヒープへコピーして可視にすることを検討。
+    // このアプリでは `DirectXCommon` で単一のシェーダー可視ヒープを使用しているため、ImGui 等からも利用可能。
+    // ここではシェーダー可視ヒープの CPU ハンドルに直接 SRV を作成しているため追加処理は不要。
 
     // ロード成功のログ出力
     {
@@ -164,8 +163,7 @@ void TextureManager::ExecuteResourceUpload()
 
 uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 {
-    // 正規化してから検索
-    // 検索には提供された filePath をそのまま使用する（正規化は行わない）
+    // ファイルパス文字列で探索（正規化は行わない）
     std::string key = filePath;
     for (uint32_t i = 0; i < static_cast<uint32_t>(textureDatas.size()); ++i) {
         if (textureDatas[i].filePath == key) return i;
@@ -213,7 +211,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureInde
 
 const DirectX::TexMetadata& TextureManager::GetMetadata(uint32_t textureIndex)
 {
-    // 範囲外指定違反チェック -> 範囲外の場合はデフォルトの安全なメタデータを返す
+    // 範囲外指定チェック -> 範囲外の場合はデフォルトの安全なメタデータを返す
     static DirectX::TexMetadata defaultMeta = [](){ DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
     if (textureIndex >= textureDatas.size()) {
         char buf[128];

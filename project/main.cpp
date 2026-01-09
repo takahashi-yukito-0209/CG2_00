@@ -1209,8 +1209,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     Vector3 up    = { view.m[0][1], view.m[1][1], view.m[2][1] };
                     object3dCommon->SetBillboardCameraWithVP(right, up, vp, useBillboard);
                     object3dCommon->SetInstancingDrawSetting();
-                    // Draw instanced plane (index 0) 
-                    // パーティクル専用プレーンを使用してインスタンシング描画
+            // インスタンス描画用プレーン（インデックス0）を使用
+            // パーティクル専用プレーンを使用してインスタンシング描画
                     if (particlePlane) {
                         Model* m = particlePlane->GetModel();
                         if (m) {
@@ -1228,7 +1228,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // Draw only the plane model (index 0)
+                // planeモデルのみ描画（インデックス0）
                 if (objects3d.size() > 0 && objects3d[0]) {
                     objects3d[0]->Draw();
                 }
@@ -1252,7 +1252,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // Draw only the bunny model (index 1)
+                // bunnyモデルのみ描画（インデックス1）
                 if (objects3d.size() > 1 && objects3d[1]) {
                     objects3d[1]->Draw();
                 }
@@ -1264,7 +1264,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // Draw only the fence model (index 3)
+                // fenceモデルのみ描画（インデックス3）
                 if (objects3d.size() > 3 && objects3d[3]) {
                     objects3d[3]->Draw();
                 }
@@ -1276,7 +1276,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
                 
-                // Draw only the teapot model (index 2)
+                // teapotモデルのみ描画（インデックス2）
                 if (objects3d.size() > 2 && objects3d[2]) {
                     objects3d[2]->Draw();
                 }
@@ -1288,7 +1288,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // Draw only the sphere model (index 4)
+                // sphereモデルのみ描画（インデックス4）
                 if (objects3d.size() > 4 && objects3d[4]) {
                     objects3d[4]->Draw();
                 }

@@ -74,7 +74,7 @@ void Model::Draw(Object3d* owner)
         cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
     }
 
-    // Non-instanced path: do not bind instancing SRV (root param 4) to avoid unintended descriptor table conflicts.
+    // 非インスタンス描画パス: 予期せぬディスクリプタテーブルの競合を避けるため、インスタンシングSRV（ルートパラメータ4）はバインドしない。
 
     // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
     uint32_t texIndex = UINT32_MAX;
@@ -104,7 +104,7 @@ void Model::Draw(Object3d* owner)
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
     } else if (loadedCount > 0) {
-        // シェーダーが有効な SRV を持つようにデフォルトのテクスチャ（インデックス0）にフォールバックする
+        // シェーダーが有効なSRVを持てるよう、デフォルトのテクスチャ（インデックス0）にフォールバックする
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(0);
         if (srvHandle.ptr == 0) {
             Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
@@ -147,7 +147,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(0, owner->GetMaterialResource()->GetGPUVirtualAddress());
     } else return;
 
-    // transformation (owner's CBV is unused when using instancing)
+    // 変換行列（インスタンシング使用時はオーナーのCBVは未使用）
     if (owner->GetTransformationMatrixResource()) {
         cmdList->SetGraphicsRootConstantBufferView(1, owner->GetTransformationMatrixResource()->GetGPUVirtualAddress());
     }
@@ -161,7 +161,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
     if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(6, camAddr); }
 
-    // texture: owner override > model texture
+    // テクスチャ: オーナー指定があればそれを優先 > 無ければモデル側テクスチャ
     uint32_t texIndex = UINT32_MAX;
     const auto& ownerMat2 = owner->GetModelData().material;
     if (!ownerMat2.textureFilePath.empty()) {
@@ -177,7 +177,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         if (srvHandle.ptr != 0) cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
     }
 
-    // instancing SRV
+    // インスタンシング用SRV
     D3D12_GPU_DESCRIPTOR_HANDLE instSrv = common->GetInstancingSrvGPUHandle();
     if (instSrv.ptr != 0) {
         cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
@@ -190,7 +190,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
 
 bool Model::LoadFromFile(const std::string& directoryPath, const std::string& filename)
 {
-    // Objファイルを読みこむ
+    // Objファイルを読み込む
     modelData_ = Object3d::LoadObjFile(directoryPath, filename);
     return !modelData_.vertices.empty();
 }
