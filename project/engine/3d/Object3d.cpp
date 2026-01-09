@@ -175,7 +175,6 @@ void Object3d::AssignTexture()
     auto texMgr = TextureManager::GetInstance();
     if (!modelData_.material.textureFilePath.empty()) {
         uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        // 成功したら格納して終了
         if (idx != UINT32_MAX) {
             modelData_.material.textureIndex = idx;
             char buf[256];
@@ -183,11 +182,16 @@ void Object3d::AssignTexture()
             Logger::Log(buf);
             return;
         }
+        // パスはあるが、まだロードされていない場合はモデル側に任せる（上書きしない）
+        modelData_.material.textureIndex = UINT32_MAX;
+        char buf[256];
+        sprintf_s(buf, "Object3d::AssignTexture: pending texture load for %s (keep invalid index)\n", modelData_.material.textureFilePath.c_str());
+        Logger::Log(buf);
+        return;
     }
 
-    // テクスチャ指定がない、もしくは見つからなかった場合の処理
+    // パス自体が無い場合のみデフォルトを割り当てる
     uint32_t loadedCount = texMgr->GetLoadedTextureCount();
-    // デフォルトテクスチャを割り当てる
     if (loadedCount > 0) {
         modelData_.material.textureIndex = 0;
         Logger::Log("Object3d::AssignTexture: no material texture specified, defaulting to index=0\n");
@@ -296,17 +300,13 @@ void Object3d::Draw()
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
-    // Camera CBV (b2) at root parameter 5
+    // Camera CBV (Pixel b3) at root parameter 6
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();
     if (camAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(5, camAddr);
+        cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
     }
 
-    // If an instancing SRV is available, bind it to root parameter 4 (vertex shader) so shader can index by SV_InstanceID
-    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = object3dCommon_->GetInstancingSrvGPUHandle();
-    if (instancingSrv.ptr != 0) {
-        cmdList->SetGraphicsRootDescriptorTable(4, instancingSrv);
-    }
+    // Non-instanced draw path: do not bind the instancing SRV to root parameter 4.
 
     // SRVは TextureManager からハンドルを取り出して RootDescriptorTable にセット
     uint32_t texIndex = modelData_.material.textureIndex;

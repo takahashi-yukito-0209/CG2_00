@@ -5,7 +5,8 @@ SamplerState gSampler : register(s0);
 SamplerState gSamplerPointClamp : register(s1);
 
 ConstantBuffer<Material> gMaterial : register(b0);
-ConstantBuffer<Camera> gCamera : register(b2);
+// Camera CB is bound at b3 (separate from particle billboard CB at b2)
+ConstantBuffer<Camera> gCamera : register(b3);
 
 struct DirectionalLight
 {

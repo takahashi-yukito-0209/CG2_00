@@ -30,6 +30,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         // 初期のViewProjは単位行列
         MathUtility mu; cameraCBData_->pad0 = 0.0f; // ensure padding write
         cameraCBData_->enable = 0.0f;
+    }
     // Camera constant buffer
     cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
     if (cameraResource_) {
@@ -161,7 +162,7 @@ void Object3dCommon::CreateRootSignature() {
 
     // ディスクリプタレンジ作成 (vertex instancing SRV)
     D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
-    descriptorRangeForInstancing[0].BaseShaderRegister = 0; // t0 in VS
+    descriptorRangeForInstancing[0].BaseShaderRegister = 1; // t1 in VS
     descriptorRangeForInstancing[0].NumDescriptors = 1;
     descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -177,12 +178,13 @@ void Object3dCommon::CreateRootSignature() {
     // 1 = WVP CBV (Vertex, b0)
     // 2 = Texture SRV table (Pixel, t0)
     // 3 = Light CBV (Pixel, b1)
-    // 4 = Instancing SRV table (Vertex, t0)
+    // 4 = Instancing SRV table (Vertex, t1)
     // 5 = CameraVectors CBV (Vertex, b2)  ← Billboarding用
+    // 6 = Camera CBV (Pixel, b3)         ← Specular用
   
     // Note: keep existing indices for compatibility: 0=material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // We'll append instancing SRV Table at index 4 (Vertex) so existing code does not need to change indices.
-    D3D12_ROOT_PARAMETER rootParameters[6] = {};
+    D3D12_ROOT_PARAMETER rootParameters[7] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -197,7 +199,7 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
 
-    // rootParameters[4] : DescriptorTable for instancing StructuredBuffer (Vertex shader, t0)
+    // rootParameters[4] : DescriptorTable for instancing StructuredBuffer (Vertex shader, t1)
     rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[4].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing;
@@ -208,10 +210,10 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[5].Descriptor.ShaderRegister = 2; // b2
 
-    // rootParameters[5] : Camera CBV (Pixel shader, b2)
-    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[5].Descriptor.ShaderRegister = 2;
+    // rootParameters[6] : Camera CBV (Pixel shader, b3)
+    rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[6].Descriptor.ShaderRegister = 3; // b3
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 

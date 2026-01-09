@@ -4,7 +4,8 @@ struct TransformationMatrix
 {
     float4x4 WVP;
     float4x4 World;
-    float4x4 WorldInverseTranspose;
+    float4   color;                 // match CPU-side layout
+    float4x4 WorldInverseTranspose; // used for normal transform
 };
 
 // Non-instanced path: single constant buffer

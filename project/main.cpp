@@ -439,7 +439,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         }
     }
 
-    // 3dオブジェクト複数初期化
+    // 3dオブジェクト複数初期化（通常描画用）
     std::vector<std::unique_ptr<Object3d>> objects3d;// Object3d クラスのポインタを格納するための動的配列
     const uint32_t kObject3DCount = 5; // 描画対象とする 3D オブジェクトの総数
     // 複数モデルを割り当てるためのファイル名リスト
@@ -471,10 +471,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         objects3d.push_back(std::move(obj));
     }
 
-    // パーティクル用のプレーンに circle.png を割り当てる
-    if (objects3d.size() > 0 && objects3d[0]) {
-        objects3d[0]->SetTexture("resources/circle.png");
-    }
+    // パーティクル専用のプレーン（通常描画リストには含めない）
+    std::unique_ptr<Object3d> particlePlane = std::make_unique<Object3d>();
+    particlePlane->Initialize(object3dCommon.get());
+    particlePlane->SetModel("plane.obj");
+    particlePlane->SetTexture("resources/circle.png");
 
 #pragma endregion 最初のシーンの終了
 
@@ -742,15 +743,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                         tr.translate.z += static_cast<float>(i) * 1e-3f;
                         Matrix4x4 worldI = math.MakeAffineMatrix(tr.scale, tr.rotate, tr.translate);
                         Matrix4x4 wvpI = math.Multiply(worldI, math.Multiply(viewMatrix, projectionMatrix));
+                        // 法線用の逆転置行列を用意
+                        Matrix4x4 worldInvI = math.Inverse(worldI);
+                        Matrix4x4 worldInvTransposeI = math.Transpose(worldInvI);
                         instData[i].World = worldI;
                         instData[i].WVP = wvpI;
                         instData[i].color = pt.color;
+                        instData[i].WorldInverseTranspose = worldInvTransposeI;
                     }
                     // 残りは未使用としてクリア
                     for (; i < instSlots; ++i) {
                         instData[i].World = math.MakeIdentity4x4();
                         instData[i].WVP = math.MakeIdentity4x4();
                         instData[i].color = {1.0f,1.0f,1.0f,0.0f};
+                        instData[i].WorldInverseTranspose = math.MakeIdentity4x4();
                     }
                 }
             }
@@ -1204,15 +1210,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     object3dCommon->SetBillboardCameraWithVP(right, up, vp, useBillboard);
                     object3dCommon->SetInstancingDrawSetting();
                     // Draw instanced plane (index 0) 
-                    const int idx = 0;
-                    if (objects3d.size() > static_cast<size_t>(idx) && objects3d[idx]) {
-                        // If model is set on object, prefer Model::DrawInstanced
-                        Model* m = objects3d[idx]->GetModel();
+                    // パーティクル専用プレーンを使用してインスタンシング描画
+                    if (particlePlane) {
+                        Model* m = particlePlane->GetModel();
                         if (m) {
-                            m->DrawInstanced(objects3d[idx].get(), static_cast<uint32_t>(particleCount));
+                            m->DrawInstanced(particlePlane.get(), static_cast<uint32_t>(particleCount));
                         } else {
-                            // fallback: draw owner mesh instanced
-                            objects3d[idx]->Draw();
+                            particlePlane->Draw();
                         }
                     }
                 }
