@@ -29,7 +29,10 @@ public: // メンバ構造体
         float padding1[3];
         Matrix4x4 uvTransform;
         int lightingMode;
-        float padding2[3];
+        int32_t useAlphaCutoutSampler;
+        float padding2[2];
+        float shininess;
+        float pad3[3];
     };
 
     // 座標変換行列データ

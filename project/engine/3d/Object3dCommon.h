@@ -26,6 +26,10 @@ public: // メンバ関数
 
     // getter
     DirectXCommon* GetDxCommon() { return dxCommon_; }
+    // Camera data access
+    struct CameraForGPU { Math::Vector3 worldPosition; float pad; };
+    CameraForGPU* GetCameraData() { return cameraData_; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetCameraGPUAddress() const { return cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0; }
 
     // Blend mode control
     void SetBlendMode(MyEngine::BlendMode mode);
@@ -57,6 +61,9 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
     Object3d::DirectionalLight* directionalLightData_ = nullptr;
     MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::None;
+    // Camera constant buffer (world position)
+    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
+    CameraForGPU* cameraData_ = nullptr;
     
     // Instancing resources
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_ = nullptr; // upload buffer that stores transformations

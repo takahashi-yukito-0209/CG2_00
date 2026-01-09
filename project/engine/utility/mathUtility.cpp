@@ -21,6 +21,18 @@ Vector3 MathUtility::Normalize(const Vector3& v)
     return result;
 }
 
+// 転置行列
+Matrix4x4 MathUtility::Transpose(const Matrix4x4& m)
+{
+    Matrix4x4 r = {};
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            r.m[i][j] = m.m[j][i];
+        }
+    }
+    return r;
+}
+
 // 1.平行移動行列
 Matrix4x4 MathUtility::MakeTranslateMatrix(const Vector3& translate)
 {
