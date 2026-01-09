@@ -82,8 +82,13 @@ void Model::Draw(Object3d* owner)
         }
     }
 
-    // テクスチャSRV設定 (モデルまたはオーナーから)
-    uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex; // テクスチャインデックスのロジックを更新
+    // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
+    uint32_t texIndex = UINT32_MAX;
+    if (owner->GetModelData().material.textureIndex != UINT32_MAX) {
+        texIndex = owner->GetModelData().material.textureIndex; // Object3d::SetTexture で上書きされたテクスチャ
+    } else if (textureIndex_ != UINT32_MAX) {
+        texIndex = textureIndex_; // モデルの.mtlに記載されたテクスチャ
+    }
     auto texMgr = TextureManager::GetInstance();
     uint32_t loadedCount = texMgr->GetLoadedTextureCount();
     if (texIndex != UINT32_MAX && texIndex < loadedCount) {
@@ -157,8 +162,13 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
     if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(5, camAddr); }
 
-    // texture
-    uint32_t texIndex = (textureIndex_ != UINT32_MAX) ? textureIndex_ : owner->GetModelData().material.textureIndex;
+    // texture: owner override > model texture
+    uint32_t texIndex = UINT32_MAX;
+    if (owner->GetModelData().material.textureIndex != UINT32_MAX) {
+        texIndex = owner->GetModelData().material.textureIndex;
+    } else if (textureIndex_ != UINT32_MAX) {
+        texIndex = textureIndex_;
+    }
     auto texMgr = TextureManager::GetInstance();
     if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);

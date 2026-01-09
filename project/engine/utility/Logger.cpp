@@ -14,6 +14,8 @@ static Level s_minLevel = Level::Debug;
 static std::mutex s_mutex;
 // ログファイルストリーム
 static std::ofstream s_logFile;
+// 異常系ログファイルストリーム（Warn/Error）
+static std::ofstream s_errorLogFile;
 
 // レベルを文字列に変換
 static const char* LevelToString(Level l) {
@@ -73,6 +75,21 @@ bool SetLogFile(const std::string& filePath) {
     return s_logFile.is_open();
 }
 
+// 異常系（Warn/Error）専用のログファイルを設定
+bool SetErrorLogFile(const std::string& filePath) {
+    std::lock_guard<std::mutex> lk(s_mutex);
+    if (s_errorLogFile.is_open()) {
+        s_errorLogFile.close();
+    }
+
+    if (filePath.empty()) {
+        return true;
+    }
+
+    s_errorLogFile.open(filePath.c_str(), std::ios::out | std::ios::app);
+    return s_errorLogFile.is_open();
+}
+
 // 最小出力レベルを設定
 void SetLevel(Level level) {
     std::lock_guard<std::mutex> lk(s_mutex);
@@ -99,9 +116,15 @@ void Log(Level level, const std::string& message) {
     {
         std::lock_guard<std::mutex> lk(s_mutex);
         OutputDebugStringA((out + "\n").c_str());
-        if (s_logFile.is_open()) {
-            s_logFile << out << std::endl;
-            s_logFile.flush();
+        // ファイル出力は異常系（Warn/Error）のみ
+        if (level == Level::Warn || level == Level::Error) {
+            if (s_errorLogFile.is_open()) {
+                s_errorLogFile << out << std::endl;
+                s_errorLogFile.flush();
+            } else if (s_logFile.is_open()) {
+                s_logFile << out << std::endl;
+                s_logFile.flush();
+            }
         }
     }
 }

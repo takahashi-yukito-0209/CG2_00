@@ -23,6 +23,20 @@ public: // メンバ関数
 
     // Instancing draw setting (exposed so external code can select instancing/particle PSO)
     void SetInstancingDrawSetting();
+    // Billboard camera vectors update
+    void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable) {
+        if (!cameraCBData_) return;
+        cameraCBData_->right = right;
+        cameraCBData_->up = up;
+        cameraCBData_->enable = enable ? 1.0f : 0.0f;
+    }
+    void SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Matrix4x4& viewProj, bool enable) {
+        if (!cameraCBData_) return;
+        cameraCBData_->right = right;
+        cameraCBData_->up = up;
+        cameraCBData_->enable = enable ? 1.0f : 0.0f;
+        cameraCBData_->viewProj = viewProj;
+    }
 
     // getter
     DirectXCommon* GetDxCommon() { return dxCommon_; }
@@ -34,6 +48,8 @@ public: // メンバ関数
     // Blend mode control
     void SetBlendMode(MyEngine::BlendMode mode);
     MyEngine::BlendMode GetBlendMode() const { return blendMode_; }
+    // PSO等の再生成（明示的に呼び出して再構築する）
+    void RecreatePipelines() { CreateGraphicsPipeline(); }
 
     // Instancing helpers
     // Pointer to CPU-mapped array of per-instance TransformationMatrix (nullable)
@@ -71,6 +87,15 @@ private: // メンバ変数
     D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_ = {};
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_ = {};
     uint32_t kNumInstance_ = 0;
+
+    // Camera vectors for billboard (b2)
+    struct CameraCB {
+        Math::Vector3 right; float pad0;
+        Math::Vector3 up;    float enable;
+        Matrix4x4 viewProj;
+    };
+    Microsoft::WRL::ComPtr<ID3D12Resource> cameraCBResource_ = nullptr;
+    CameraCB* cameraCBData_ = nullptr;
 
 };
 

@@ -19,6 +19,17 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
     }
+  
+    // Create camera CB for billboard (b2)
+    cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
+    if (cameraCBResource_) {
+        cameraCBResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraCBData_));
+        cameraCBData_->right = {1.0f, 0.0f, 0.0f};
+        cameraCBData_->up    = {0.0f, 1.0f, 0.0f};
+        cameraCBData_->enable = 0.0f;
+        // 初期のViewProjは単位行列
+        MathUtility mu; cameraCBData_->pad0 = 0.0f; // ensure padding write
+        cameraCBData_->enable = 0.0f;
     // Camera constant buffer
     cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
     if (cameraResource_) {
@@ -30,7 +41,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     CreateGraphicsPipeline();
 
     // Create instancing resources (structured buffer + SRV)
-    const uint32_t kNumInstance = 10; // default maximum instances for particle demo
+    const uint32_t kNumInstance = 100; // increased maximum instances for particle demo
     kNumInstance_ = kNumInstance;
 
     // Create a GPU-visible SRV for a StructuredBuffer containing TransformationMatrix[kNumInstance]
@@ -54,6 +65,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         for (uint32_t i = 0; i < kNumInstance; ++i) {
             instancingData_[i].WVP = math.MakeIdentity4x4();
             instancingData_[i].World = math.MakeIdentity4x4();
+            instancingData_[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
         }
     }
 
@@ -92,14 +104,25 @@ void Object3dCommon::SetInstancingDrawSetting()
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: rootSignature_ is null\n");
         return;
     }
+    // Fallback: if instancing PSO is not ready, use standard graphics PSO to avoid GPU crash
     if (!instancingPipelineState_) {
-        Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null\n");
-        return;
+        Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null, falling back to graphicsPipelineState_\n");
+        if (!graphicsPipelineState_) {
+            Logger::Log("Object3dCommon::SetInstancingDrawSetting: graphicsPipelineState_ also null\n");
+            return;
+        }
+        cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+        cmdList->SetPipelineState(graphicsPipelineState_.Get());
+    } else {
+        cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+        cmdList->SetPipelineState(instancingPipelineState_.Get());
     }
-
-    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-    cmdList->SetPipelineState(instancingPipelineState_.Get());
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // Bind camera billboard CB (VS, b2 -> root index 5) if available
+    if (cameraCBResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResource_->GetGPUVirtualAddress());
+    }
 }
 
 void Object3dCommon::SetCommonDrawSetting()
@@ -148,6 +171,15 @@ void Object3dCommon::CreateRootSignature() {
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     // RootParameter作成。複数設定できるので配列。
+
+    // Index map:
+    // 0 = Material CBV (Pixel, b0)
+    // 1 = WVP CBV (Vertex, b0)
+    // 2 = Texture SRV table (Pixel, t0)
+    // 3 = Light CBV (Pixel, b1)
+    // 4 = Instancing SRV table (Vertex, t0)
+    // 5 = CameraVectors CBV (Vertex, b2)  ← Billboarding用
+  
     // Note: keep existing indices for compatibility: 0=material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // We'll append instancing SRV Table at index 4 (Vertex) so existing code does not need to change indices.
     D3D12_ROOT_PARAMETER rootParameters[6] = {};
@@ -170,6 +202,11 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[4].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing);
+
+    // rootParameters[5] : Camera vectors CBV (Vertex shader, b2)
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[5].Descriptor.ShaderRegister = 2; // b2
 
     // rootParameters[5] : Camera CBV (Pixel shader, b2)
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
