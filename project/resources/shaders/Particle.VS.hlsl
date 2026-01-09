@@ -4,6 +4,7 @@ struct TransformationMatrix
 {
     float4x4 WVP;
     float4x4 World;
+    float4x4 WorldInverseTranspose;
 };
 
 // StructuredBuffer for instancing (vertex shader, t0)
@@ -23,6 +24,7 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     TransformationMatrix tm = gTransformationMatrices[instanceId];
     output.position = mul(input.position, tm.WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul(input.normal, (float3x3)tm.World));
+    output.normal = normalize(mul(input.normal, (float3x3)tm.WorldInverseTranspose));
+    output.worldPosition = mul(input.position, tm.World).xyz;
     return output;
 }

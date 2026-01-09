@@ -36,12 +36,15 @@ public: // メンバ構造体
         int lightingMode;
         int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
         float padding2[2];
+        float shininess; // 反射の鋭さ（スペキュラー強度の指数）
+        float pad3[3];
     };
 
     // 座標変換行列データ
     struct TransformationMatrix {
         Matrix4x4 WVP;
         Matrix4x4 World;
+        Matrix4x4 WorldInverseTranspose;
     };
 
     // 平行光源データ構造体

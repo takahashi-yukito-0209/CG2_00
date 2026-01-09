@@ -97,6 +97,9 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
         materialData_->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
         materialData_->enableLighting = false; // SpriteはLightingしない
         materialData_->uvTransform = math.MakeIdentity4x4();
+        materialData_->lightingMode = 0;
+        materialData_->useAlphaCutoutSampler = 0;
+        materialData_->shininess = 1.0f;
     }
 
     // Sprite用のTransformationMatrix用のリソースを作る

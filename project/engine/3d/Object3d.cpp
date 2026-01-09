@@ -148,6 +148,8 @@ void Object3d::CreateMaterialResource()
     useAlphaCutoutSampler_ = false;
     // initialize GPU-visible flag to 0
     materialData_->useAlphaCutoutSampler = 0;
+    // shininess default
+    materialData_->shininess = 32.0f;
 }
 
 bool Object3d::GetEnableLighting() const { return materialData_ ? materialData_->enableLighting != 0 : false; }
@@ -201,12 +203,16 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
     MathUtility math;
     // ワールド行列
     Matrix4x4 world = math.MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    // 逆転置行列（正規行列用にスケール影響除去）
+    Matrix4x4 worldInv = math.Inverse(world);
+    Matrix4x4 worldInvTranspose = math.Transpose(worldInv);
     // ワールドビュー射影行列
     Matrix4x4 wvp = math.Multiply(world, math.Multiply(viewMatrix, projectionMatrix));
     // 定数バッファに転送
     if (transformationMatrixData_) {
         transformationMatrixData_->World = world;
         transformationMatrixData_->WVP = wvp;
+        transformationMatrixData_->WorldInverseTranspose = worldInvTranspose;
     }
 }
 
@@ -289,6 +295,12 @@ void Object3d::Draw()
         Logger::Log(buf);
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+
+    // Camera CBV (b2) at root parameter 5
+    D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();
+    if (camAddr != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(5, camAddr);
+    }
 
     // If an instancing SRV is available, bind it to root parameter 4 (vertex shader) so shader can index by SV_InstanceID
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = object3dCommon_->GetInstancingSrvGPUHandle();
