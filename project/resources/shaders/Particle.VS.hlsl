@@ -8,8 +8,8 @@ struct ParticleForGPU
     float4x4 WorldInverseTranspose;
 };
 
-// StructuredBuffer for instancing (vertex shader, t0)
-StructuredBuffer<ParticleForGPU> gParticle : register(t0);
+// StructuredBuffer for instancing (vertex shader, t1)
+StructuredBuffer<ParticleForGPU> gParticle : register(t1);
 
 struct VertexShaderInput
 {
@@ -36,13 +36,16 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
         nrm = normalize(cross(right, up));
         // ViewProj を使用してスクリーンへ投影
         output.position = mul(pos, gViewProj);
+        // ワールド座標は billboard 計算後の位置
+        output.worldPosition = billboardPos;
     } else {
         output.position = mul(pos, p.WVP);
+        // 非ビルボード時は通常のワールド変換で座標を出力
+        output.worldPosition = mul(pos, p.World).xyz;
     }
     output.texcoord = input.texcoord;
-    output.normal = nrm;
+    // 法線はインスタンス毎の行列で変換（逆転置行列を使用）
+    output.normal = normalize(mul(nrm, (float3x3)p.WorldInverseTranspose));
     output.color = p.color;
-    output.normal = normalize(mul(input.normal, (float3x3)tm.WorldInverseTranspose));
-    output.worldPosition = mul(input.position, tm.World).xyz;
     return output;
 }

@@ -21,4 +21,5 @@ struct Material
 };
 
 // Camera (world position only for specular direction)
+// Bound at b3 in pixel shader to avoid clashing with particle billboard VS constants
 struct Camera { float3 worldPosition; };

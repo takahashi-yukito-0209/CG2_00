@@ -13,6 +13,8 @@ struct Material
     int lightingMode;
     int useAlphaCutoutSampler;
     float2 _pad1;
+    float shininess; // align with Object3d material layout
+    float3 _pad2;
 };
 
 ConstantBuffer<Material> gMaterial : register(b0);
@@ -31,8 +33,8 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
-struct Camera { float3 worldPosition; };
-ConstantBuffer<Camera> gCamera : register(b2);
+// Note: b2 is reserved for billboard camera vectors in the vertex shader path.
+// No pixel shader camera constant buffer is required for particles currently.
 
 PixelShaderOutput main(VertexShaderOutput input)
 {

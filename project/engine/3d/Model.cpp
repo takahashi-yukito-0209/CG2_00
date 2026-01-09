@@ -71,23 +71,22 @@ void Model::Draw(Object3d* owner)
     // camera CBV
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
     if (camAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(5, camAddr);
+        cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
     }
 
-    // Bind instancing SRV from owner common if available (so shaders using gTransformationMatrices can access it)
-    if (common) {
-        D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = common->GetInstancingSrvGPUHandle();
-        if (instancingSrv.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(4, instancingSrv);
-        }
-    }
+    // Non-instanced path: do not bind instancing SRV (root param 4) to avoid unintended descriptor table conflicts.
 
     // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
     uint32_t texIndex = UINT32_MAX;
-    if (owner->GetModelData().material.textureIndex != UINT32_MAX) {
-        texIndex = owner->GetModelData().material.textureIndex; // Object3d::SetTexture で上書きされたテクスチャ
+    const auto& ownerMat = owner->GetModelData().material;
+    if (!ownerMat.textureFilePath.empty()) {
+        // オーナーが明示的にテクスチャを指定している場合のみオーナーの index を優先
+        if (ownerMat.textureIndex != UINT32_MAX) {
+            texIndex = ownerMat.textureIndex;
+        }
     } else if (textureIndex_ != UINT32_MAX) {
-        texIndex = textureIndex_; // モデルの.mtlに記載されたテクスチャ
+        // 通常はモデル側のテクスチャを使う
+        texIndex = textureIndex_;
     }
     auto texMgr = TextureManager::GetInstance();
     uint32_t loadedCount = texMgr->GetLoadedTextureCount();
@@ -160,12 +159,15 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     if (lightAddr == 0) return;
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
-    if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(5, camAddr); }
+    if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(6, camAddr); }
 
     // texture: owner override > model texture
     uint32_t texIndex = UINT32_MAX;
-    if (owner->GetModelData().material.textureIndex != UINT32_MAX) {
-        texIndex = owner->GetModelData().material.textureIndex;
+    const auto& ownerMat2 = owner->GetModelData().material;
+    if (!ownerMat2.textureFilePath.empty()) {
+        if (ownerMat2.textureIndex != UINT32_MAX) {
+            texIndex = ownerMat2.textureIndex;
+        }
     } else if (textureIndex_ != UINT32_MAX) {
         texIndex = textureIndex_;
     }
