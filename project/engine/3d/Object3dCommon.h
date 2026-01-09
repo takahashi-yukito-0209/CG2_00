@@ -21,9 +21,9 @@ public: // メンバ関数
     //  共通描画設定
     void SetCommonDrawSetting();
 
-    // Instancing draw setting (exposed so external code can select instancing/particle PSO)
+    // インスタンシング描画設定（外部コードからインスタンシング／パーティクルPSOを選択できるよう公開）
     void SetInstancingDrawSetting();
-    // Billboard camera vectors update
+    // ビルボード用カメラベクトルの更新
     void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable) {
         if (!cameraCBData_) return;
         cameraCBData_->right = right;
@@ -40,23 +40,23 @@ public: // メンバ関数
 
     // getter
     DirectXCommon* GetDxCommon() { return dxCommon_; }
-    // Camera data access
+    // カメラデータへのアクセス
     struct CameraForGPU { Math::Vector3 worldPosition; float pad; };
     CameraForGPU* GetCameraData() { return cameraData_; }
     D3D12_GPU_VIRTUAL_ADDRESS GetCameraGPUAddress() const { return cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0; }
 
-    // Blend mode control
+    // ブレンドモード制御
     void SetBlendMode(MyEngine::BlendMode mode);
     MyEngine::BlendMode GetBlendMode() const { return blendMode_; }
     // PSO等の再生成（明示的に呼び出して再構築する）
     void RecreatePipelines() { CreateGraphicsPipeline(); }
 
-    // Instancing helpers
-    // Pointer to CPU-mapped array of per-instance TransformationMatrix (nullable)
+    // インスタンシング用ヘルパー
+    // インスタンス毎の TransformationMatrix 配列へのCPUマップ済みポインタ（null許可）
     TransformationMatrix* GetInstancingData() const { return instancingData_; }
-    // GPU-visible SRV handle for the instancing StructuredBuffer (nullable)
+    // インスタンシング用構造化バッファのGPU可視SRVハンドル（null許可）
     D3D12_GPU_DESCRIPTOR_HANDLE GetInstancingSrvGPUHandle() const { return instancingSrvHandleGPU_; }
-    // Number of instance slots allocated
+    // 割り当て済みインスタンススロット数
     uint32_t GetInstancingSlotCount() const { return kNumInstance_; }
 
 private: // メンバ関数
@@ -64,31 +64,31 @@ private: // メンバ関数
     void CreateRootSignature();
     // グラフィックスパイプラインの作成
     void CreateGraphicsPipeline();
-    // Create and set draw settings for instancing/particle pipeline
-    // (implementation provided in .cpp)
+    // インスタンシング／パーティクル用パイプラインの描画設定を作成・適用
+    // （実装は .cpp 側）
 
 private: // メンバ変数
     DirectXCommon* dxCommon_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
-    // PSO used for instancing/particle rendering
+    // インスタンシング／パーティクル描画に使用するPSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancingPipelineState_;
-    // Shared directional light resource for all Object3d instances
+    // すべての Object3d インスタンスで共有される平行光源リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
     Object3d::DirectionalLight* directionalLightData_ = nullptr;
     MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::None;
-    // Camera constant buffer (world position)
+    // カメラ定数バッファ（ワールド位置）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
     CameraForGPU* cameraData_ = nullptr;
     
-    // Instancing resources
-    Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_ = nullptr; // upload buffer that stores transformations
-    Object3d::TransformationMatrix* instancingData_ = nullptr; // mapped CPU pointer
+    // インスタンシング用リソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_ = nullptr; // 変換を格納するアップロードバッファ
+    Object3d::TransformationMatrix* instancingData_ = nullptr; // マップ済みCPUポインタ
     D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_ = {};
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_ = {};
     uint32_t kNumInstance_ = 0;
 
-    // Camera vectors for billboard (b2)
+    // ビルボード用カメラベクトル（b2）
     struct CameraCB {
         Math::Vector3 right; float pad0;
         Math::Vector3 up;    float enable;

@@ -38,7 +38,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     ModelManager* mgr = ModelManager::GetInstance();
     // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
     model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
-    // モデルを読み込んだ後でテクスチャ割り当てを行う（MTLが先に読み込まれるように）
+    // モデル読み込み後にテクスチャ割り当てを行う（MTLが先に読み込まれるように）
     AssignTexture();
 }
 
@@ -62,9 +62,9 @@ void Object3d::SetTexture(const std::string& filePath)
 
     // Model が既に持つマテリアル側も更新しておく
     if (model_) {
-        // Model::Initialize がセットする textureIndex_ は読み込み時のみ反映するため
-        // ここではモデルに保持されている textureIndex_ を直接更新するための accessor はない。
-        // 代わりに、Model 側で描画時に Object3d の modelData を参照するので十分。
+        // Model::Initialize がセットする textureIndex_ は読み込み時のみ反映されるため
+        // ここではモデルが保持する textureIndex_ を直接更新するためのアクセサはない。
+        // 代わりに、Model 側の描画時に Object3d の modelData を参照するので十分。
     }
 }
 
@@ -143,12 +143,12 @@ void Object3d::CreateMaterialResource()
     materialData_->uvTransform = math.MakeIdentity4x4();
     // ライティングモードは通常のものにする
     materialData_->lightingMode = 2;
-    // default: do not force alpha-cutout sampler
-    // fence model may set this to true after initialization
+    // 既定: アルファカットアウト用サンプラーを強制しない
+    // フェンスモデルは初期化後にこれを true に設定する場合がある
     useAlphaCutoutSampler_ = false;
-    // initialize GPU-visible flag to 0
+    // GPU可視フラグを0で初期化
     materialData_->useAlphaCutoutSampler = 0;
-    // shininess default
+    // 光沢（shininess）の既定値
     materialData_->shininess = 32.0f;
 }
 
@@ -345,7 +345,7 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
     std::vector<Vector2> texcoords; // テクスチャ座標
     std::string line; // ファイルから読んだ1行を格納するもの
 
-    // Build full path to the obj and determine its directory for resource lookups
+    // OBJのフルパスを構築し、リソース探索のためにそのディレクトリを取得
     std::string fullPath = directoryPath + "/" + filename;
     std::filesystem::path objPath(fullPath);
     std::string objDir = objPath.parent_path().string();
@@ -419,9 +419,9 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
         }
     }
 
-    // If no texture specified via MTL, try to find an image file in the same directory as the OBJ
+    // MTLでテクスチャが指定されていない場合、OBJと同じディレクトリ内で画像ファイルを探索する
     if (modelData.material.textureFilePath.empty()) {
-        // try same base name first (e.g. fence.obj -> fence.png)
+        // まず同じベース名を試す（例: fence.obj -> fence.png）
         std::string base = objPath.stem().string();
         const std::vector<std::string> exts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
         for (const auto& ext : exts) {
@@ -429,13 +429,13 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
             if (std::filesystem::exists(tryPath)) {
                 modelData.material.textureFilePath = tryPath;
                 char buf[256];
-                sprintf_s(buf, "Object3d::LoadObjFile: found texture by basename %s\n", tryPath.c_str());
+                sprintf_s(buf, "Object3d::LoadObjFile: ベース名からテクスチャを検出 %s\n", tryPath.c_str());
                 Logger::Log(buf);
                 break;
             }
         }
 
-        // if still empty, scan directory for any image file
+        // それでも空なら、ディレクトリ内の任意の画像ファイルを走査
         if (modelData.material.textureFilePath.empty()) {
             for (const auto& entry : std::filesystem::directory_iterator(objDir)) {
                 if (!entry.is_regular_file()) continue;
@@ -444,7 +444,7 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
                 if (std::find(exts.begin(), exts.end(), ext) != exts.end()) {
                     modelData.material.textureFilePath = entry.path().string();
                     char buf[256];
-                    sprintf_s(buf, "Object3d::LoadObjFile: found texture in dir %s\n", modelData.material.textureFilePath.c_str());
+                    sprintf_s(buf, "Object3d::LoadObjFile: ディレクトリ内でテクスチャを検出 %s\n", modelData.material.textureFilePath.c_str());
                     Logger::Log(buf);
                     break;
                 }
@@ -452,16 +452,16 @@ Object3d::ModelData Object3d::LoadObjFile(const std::string& directoryPath, cons
         }
     }
 
-    // If still not found, fallback to default checker texture in resources
+    // それでも見つからない場合、resources 内の既定のチェッカーテクスチャにフォールバック
     if (modelData.material.textureFilePath.empty()) {
         modelData.material.textureFilePath = "resources/uvChecker.png";
-        Logger::Log(std::string("Object3d::LoadObjFile: no texture found, defaulting to resources/uvChecker.png\n"));
+        Logger::Log(std::string("Object3d::LoadObjFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     }
 
-    // Log final chosen texture
+    // 最終的に選択されたテクスチャをログ出力
     {
         char buf[256];
-        sprintf_s(buf, "LoadObjFile: final textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
+        sprintf_s(buf, "LoadObjFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
         Logger::Log(buf);
     }
 

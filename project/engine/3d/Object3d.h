@@ -44,7 +44,7 @@ public: // メンバ構造体
     struct TransformationMatrix {
         Matrix4x4 WVP;
         Matrix4x4 World;
-        Vector4 color; // per-instance color (w = alpha)
+        Vector4 color; // インスタンス毎のカラー（w = アルファ）
         Matrix4x4 WorldInverseTranspose;
 
     };
@@ -98,7 +98,7 @@ public: // メンバ関数
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
     const ModelData& GetModelData() const { return modelData_; }
 
-    // Access to owning Object3dCommon
+    // 所有する `Object3dCommon` へのアクセス
     Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
 
 private: // メンバ変数
@@ -112,7 +112,7 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
     TransformationMatrix* transformationMatrixData_ = nullptr;
     // 平行光源用リソース
-    // 注: 平行光源は現在 Object3dCommon が所有する共有リソースとなっている
+    // 注: 平行光源は現在 `Object3dCommon` が所有する共有リソースとなっている
     // 頂点バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
     // バッファリソース内のデータを指すポインタ
@@ -123,9 +123,9 @@ private: // メンバ変数
     Transform transform_;
     Transform cameraTransform_;
 
-    // Model pointer
+    // `Model` へのポインタ
     Model* model_ = nullptr;
-    // ModelCommon owned by this Object3d for the model
+    // モデル用にこの `Object3d` が所有する `ModelCommon`
     ModelCommon* modelCommon_ = nullptr;
 
     // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
@@ -161,7 +161,7 @@ public:
     int GetLightingMode() const;
     void SetLightingMode(int mode);
 
-    // sampler control: some objects (fence) need point+clamp sampler for alpha cutout
+    // サンプラー制御: 一部のオブジェクト（フェンスなど）はアルファカットアウトのため point+clamp サンプラーが必要
     void SetUseAlphaCutoutSampler(bool use) { useAlphaCutoutSampler_ = use; if (materialData_) materialData_->useAlphaCutoutSampler = use ? 1 : 0; }
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
@@ -174,7 +174,7 @@ private:
 
 } // namespace MyEngine
 
-// Backwards-compatible type aliases (keep names used by legacy code)
+// 後方互換の型エイリアス（レガシーコードで使用されている名前を保持）
 namespace MyEngine {
     using VertexData = Object3d::VertexData;
     using Material = Object3d::Material;
@@ -184,7 +184,7 @@ namespace MyEngine {
     using ModelData = Object3d::ModelData;
 }
 
-// Also provide unqualified aliases for legacy code that expects these names in global scope
+// グローバルスコープにこれらの名前があることを前提とするレガシーコード向けに非修飾エイリアスも提供
 using VertexData = MyEngine::Object3d::VertexData;
 using Material = MyEngine::Object3d::Material;
 using TransformationMatrix = MyEngine::Object3d::TransformationMatrix;

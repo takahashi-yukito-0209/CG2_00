@@ -30,7 +30,7 @@ static const char* LevelToString(Level l) {
     case Level::Error:
         return "ERROR"; // NOLINT(clang-diagnostic-switch-enum)
     }
-    // 保険: すべての経路で文字列を返す
+    // 安全策: すべての経路で文字列を返す
     return "UNKNOWN";
 }
 
@@ -49,7 +49,7 @@ static std::string GetTimestamp() {
     char buf[64];
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
 
-    // ミリ秒追加
+    // ミリ秒を追加
     auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
     char out[80];
     sprintf_s(out, "%s.%03d", buf, static_cast<int>(ms.count()));
@@ -65,7 +65,7 @@ bool SetLogFile(const std::string& filePath) {
         s_logFile.close();
     }
 
-    //  空文字ならファイル出力無効化
+    // 空文字ならファイル出力を無効化
     if (filePath.empty()) {
         return true;
     }
@@ -75,7 +75,7 @@ bool SetLogFile(const std::string& filePath) {
     return s_logFile.is_open();
 }
 
-// 異常系（Warn/Error）専用のログファイルを設定
+// 異常系（Warn/Error）専用ログファイルを設定
 bool SetErrorLogFile(const std::string& filePath) {
     std::lock_guard<std::mutex> lk(s_mutex);
     if (s_errorLogFile.is_open()) {
@@ -96,18 +96,18 @@ void SetLevel(Level level) {
     s_minLevel = level;
 }
 
-// レベル付きログ出力
+// レベル付きログを出力
 void Log(Level level, const std::string& message) {
-    // レベルフィルタリング
+    // レベルによるフィルタリング
     if (level < s_minLevel) {
         return;
     }
 
-    // タイムスタンプ取得とフォーマット
+    // タイムスタンプ取得と整形
     std::string ts = GetTimestamp();
-    // フォーマット整形
+    // 出力フォーマット整形
     std::ostringstream oss;
-    // [timestamp] [LEVEL] message
+    // 形式: [timestamp] [LEVEL] message
     oss << "[" << ts << "] [" << LevelToString(level) << "] " << message;
     // 出力文字列
     std::string out = oss.str();

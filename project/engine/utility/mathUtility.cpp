@@ -201,7 +201,7 @@ Matrix4x4 MathUtility::MakeAffineMatrix(const Vector3& scale, const Vector3& rot
 	return result;
 }
 
-// 透視投影行列（透視変換行列）
+// 透視投影行列
 Matrix4x4 MathUtility::MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip)
 {
     Matrix4x4 result = {};
