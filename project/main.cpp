@@ -441,13 +441,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 3dオブジェクト複数初期化
     std::vector<std::unique_ptr<Object3d>> objects3d;// Object3d クラスのポインタを格納するための動的配列
-    const uint32_t kObject3DCount = 4; // 描画対象とする 3D オブジェクトの総数 (fence を追加)
+    const uint32_t kObject3DCount = 5; // 描画対象とする 3D オブジェクトの総数
     // 複数モデルを割り当てるためのファイル名リスト
     std::vector<std::string> modelFileNames = {
         "plane.obj",
         "bunny.obj",
         "teapot.obj",
         "models/fence/fence.obj",
+        "models/sphere/sphere.obj", 
     };
 
     // 指定された数だけ 3D オブジェクトを生成・設定するループ
@@ -517,6 +518,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         DRAW_BUNNY,
         DRAW_FENCE,
         DRAW_CHECKER,
+        DRAW_SPHERE, // <--- 追加
         DRAW_ALL
     };
 
@@ -559,6 +561,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         "Bunny", // bunnyのみ描画
         "Fence", // fenceのみ描画
         "Checker", // ティーポットのみを描画
+        "Sphere", // 球体のみを描画
         "All" // 両方描画
     };
 
@@ -703,6 +706,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
 
             // CPU側 Particles を GPU インスタンシングへ同期（生成時刻で安定ソート）
+            // Camera position to GPU (Object3dCommon camera CB)
+            if (object3dCommon) {
+                auto cam = object3dCommon->GetCameraData();
+                if (cam) {
+                    cam->worldPosition = debugCamera.GetTranslation();
+                }
+            }
+
+            // 平行光源データ設定
+
             if (object3dCommon) {
                 auto instData = object3dCommon->GetInstancingData();
                 uint32_t instSlots = object3dCommon->GetInstancingSlotCount();
@@ -990,6 +1003,48 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 }
             }
 
+            // Sphereオブジェクト 
+            if (selectedDrawType == DRAW_SPHERE) {
+                const int idx = 4; // sphere index 
+                if (objects3d.size() > idx && objects3d[idx]) {
+                    Object3d* object = objects3d[idx].get();
+                    ImGui::PushID(1000 + idx);
+                    if (ImGui::CollapsingHeader("Sphere")) {
+                        Vector3 scale = object->GetScale();
+                        Vector3 rotate = object->GetRotate();
+                        Vector3 translate = object->GetTranslate();
+
+                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                            object->SetScale(scale);
+                        }
+                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
+                            object->SetRotate(rotate);
+                        }
+                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
+                            object->SetTranslate(translate);
+                        }
+
+                        static char texPathBufS[256] = "resources/uvChecker.png";
+                        ImGui::InputText("Texture Path", texPathBufS, sizeof(texPathBufS));
+                        if (ImGui::Button("Apply Texture")) {
+                            object->SetTexture(std::string(texPathBufS));
+                        }
+
+                        bool enableLighting = object->GetEnableLighting();
+                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
+                            object->SetEnableLighting(enableLighting);
+                        }
+
+                        int lm = object->GetLightingMode();
+                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
+                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
+                            object->SetLightingMode(lm);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }
+
             // スプライトオブジェクト(2D描画)
             if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
 
@@ -1222,6 +1277,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     objects3d[2]->Draw();
                 }
 
+                break;
+
+            case DRAW_SPHERE: 
+
+                // 3D描画の共通設定
+                object3dCommon->SetCommonDrawSetting();
+
+                // Draw only the sphere model (index 4)
+                if (objects3d.size() > 4 && objects3d[4]) {
+                    objects3d[4]->Draw();
+                }
                 break;
 
             case DRAW_ALL:

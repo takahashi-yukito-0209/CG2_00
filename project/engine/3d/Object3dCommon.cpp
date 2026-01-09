@@ -19,8 +19,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
     }
-
-
+  
     // Create camera CB for billboard (b2)
     cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
     if (cameraCBResource_) {
@@ -31,6 +30,12 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         // 初期のViewProjは単位行列
         MathUtility mu; cameraCBData_->pad0 = 0.0f; // ensure padding write
         cameraCBData_->enable = 0.0f;
+    // Camera constant buffer
+    cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
+    if (cameraResource_) {
+        cameraResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraData_));
+        cameraData_->worldPosition = { 0.0f, 0.0f, 0.0f };
+        cameraData_->pad = 0.0f;
     }
     // グラフィックスパイプラインの生成
     CreateGraphicsPipeline();
@@ -166,6 +171,7 @@ void Object3dCommon::CreateRootSignature() {
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     // RootParameter作成。複数設定できるので配列。
+
     // Index map:
     // 0 = Material CBV (Pixel, b0)
     // 1 = WVP CBV (Vertex, b0)
@@ -173,6 +179,9 @@ void Object3dCommon::CreateRootSignature() {
     // 3 = Light CBV (Pixel, b1)
     // 4 = Instancing SRV table (Vertex, t0)
     // 5 = CameraVectors CBV (Vertex, b2)  ← Billboarding用
+  
+    // Note: keep existing indices for compatibility: 0=material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
+    // We'll append instancing SRV Table at index 4 (Vertex) so existing code does not need to change indices.
     D3D12_ROOT_PARAMETER rootParameters[6] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -198,6 +207,11 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[5].Descriptor.ShaderRegister = 2; // b2
+
+    // rootParameters[5] : Camera CBV (Pixel shader, b2)
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[5].Descriptor.ShaderRegister = 2;
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 

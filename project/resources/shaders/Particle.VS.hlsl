@@ -5,6 +5,7 @@ struct ParticleForGPU
     float4x4 WVP;
     float4x4 World;
     float4 color;
+    float4x4 WorldInverseTranspose;
 };
 
 // StructuredBuffer for instancing (vertex shader, t0)
@@ -41,5 +42,7 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     output.texcoord = input.texcoord;
     output.normal = nrm;
     output.color = p.color;
+    output.normal = normalize(mul(input.normal, (float3x3)tm.WorldInverseTranspose));
+    output.worldPosition = mul(input.position, tm.World).xyz;
     return output;
 }

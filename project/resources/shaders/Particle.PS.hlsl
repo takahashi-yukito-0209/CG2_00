@@ -31,6 +31,9 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
+struct Camera { float3 worldPosition; };
+ConstantBuffer<Camera> gCamera : register(b2);
+
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;

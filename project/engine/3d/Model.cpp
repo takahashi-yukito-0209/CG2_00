@@ -68,6 +68,12 @@ void Model::Draw(Object3d* owner)
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
+    // camera CBV
+    D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
+    if (camAddr != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(5, camAddr);
+    }
+
     // Bind instancing SRV from owner common if available (so shaders using gTransformationMatrices can access it)
     if (common) {
         D3D12_GPU_DESCRIPTOR_HANDLE instancingSrv = common->GetInstancingSrvGPUHandle();
@@ -153,6 +159,8 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = common->GetDirectionalLightGPUAddress();
     if (lightAddr == 0) return;
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+    D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
+    if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(5, camAddr); }
 
     // texture: owner override > model texture
     uint32_t texIndex = UINT32_MAX;

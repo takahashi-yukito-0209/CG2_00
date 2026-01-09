@@ -4,18 +4,8 @@ Texture2D<float4> gtexture : register(t0);
 SamplerState gSampler : register(s0);
 SamplerState gSamplerPointClamp : register(s1);
 
-struct Material
-{
-    float4 color;
-    int enableLighting;
-    float3 _pad0; // padding to keep 16-byte slot after color
-    float4x4 uvTransform;
-    int lightingMode;
-    int useAlphaCutoutSampler;
-    float2 _pad1; // padding to complete 16-byte slot
-};
-
 ConstantBuffer<Material> gMaterial : register(b0);
+ConstantBuffer<Camera> gCamera : register(b2);
 
 struct DirectionalLight
 {
@@ -57,7 +47,9 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     if (gMaterial.enableLighting != 0)
     {
-        float NdotL = dot(normalize(input.normal), -gDirectionalLight.direction);
+        float3 N = normalize(input.normal);
+        float3 L = normalize(-gDirectionalLight.direction);
+        float NdotL = dot(N, L);
         float lighting = 1.0f;
 
         if (gMaterial.lightingMode == 1)
@@ -71,8 +63,15 @@ PixelShaderOutput main(VertexShaderOutput input)
             lighting = pow(NdotL * 0.5f + 0.5f, 2.0f);
         }
 
+        // Specular: reflect light vector around normal and compute view direction
+        float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
+        float3 halfVector = normalize(L + toEye);
+        float NdotH = dot(N, halfVector);
+        float specularPow = pow(saturate(NdotH), gMaterial.shininess);
+        float3 specular = gDirectionalLight.color.rgb * specularPow * gDirectionalLight.intensity;
+
         // Apply lighting only to RGB channels
-        finalRGB = finalRGB * gDirectionalLight.color.rgb * lighting * gDirectionalLight.intensity;
+        finalRGB = finalRGB * gDirectionalLight.color.rgb * lighting * gDirectionalLight.intensity + specular;
     }
 
     output.color = float4(finalRGB, finalA);
