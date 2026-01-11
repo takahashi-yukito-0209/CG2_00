@@ -39,6 +39,7 @@
 #include "Sprite.h"
 #include "SpriteCommon.h"
 #include "TextureManager.h"
+#include "engine/base/SrvManager.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Model.h"
@@ -403,7 +404,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     spriteCommon->Initialize(DirectXCommon::GetInstance());
 
     //テクスチャマネージャーの初期化
-    TextureManager::GetInstance()->Initialize();
+    SrvManager srvManager;
+    srvManager.Initialize(DirectXCommon::GetInstance());
+    // ImGui の DX12 初期化を SrvManager へ委譲（SRVヒープを使用）
+    srvManager.InitImGui();
+    TextureManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), &srvManager);
 
     std::unique_ptr<Object3dCommon> object3dCommon = std::make_unique<Object3dCommon>();
     // 3Dオブジェクト共通部の初期化
@@ -1232,6 +1237,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // 描画前処理
             DirectXCommon::GetInstance()->PreDraw();
+            // SRVヒープをセット（1フレーム1回）
+            srvManager.PreDraw();
 
             // 描画準備は描画対象ごとに行う（PSO/RootSignatureを切り替えるため）
 
@@ -1375,6 +1382,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // テクスチャ/モデル管理の解放
     TextureManager::GetInstance()->Finalize();
+    srvManager.Finalize();
     ModelManager::GetInstance()->Finalize();
 
     // スプライト等

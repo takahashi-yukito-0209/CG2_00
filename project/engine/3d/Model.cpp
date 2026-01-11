@@ -89,8 +89,7 @@ void Model::Draw(Object3d* owner)
         texIndex = textureIndex_;
     }
     auto texMgr = TextureManager::GetInstance();
-    uint32_t loadedCount = texMgr->GetLoadedTextureCount();
-    if (texIndex != UINT32_MAX && texIndex < loadedCount) {
+    if (texIndex != UINT32_MAX) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
         if (srvHandle.ptr == 0) {
             char buf[256]; sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
@@ -103,21 +102,21 @@ void Model::Draw(Object3d* owner)
         }
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
-    } else if (loadedCount > 0) {
-        // シェーダーが有効なSRVを持てるよう、デフォルトのテクスチャ（インデックス0）にフォールバックする
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(0);
+    } else {
+        // フォールバック: 既定のチェッカーテクスチャを使用（SRV絶対インデックス）
+        uint32_t fallbackIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+        if (fallbackIdx == UINT32_MAX) {
+            texMgr->LoadTexture("resources/uvChecker.png");
+            texMgr->ExecuteResourceUpload();
+            fallbackIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+        }
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
         if (srvHandle.ptr == 0) {
             Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
         } else {
-            char buf[256]; sprintf_s(buf, "Model::Draw: using fallback texture index=0 srv.ptr=0x%016llX\n", static_cast<unsigned long long>(srvHandle.ptr));
+            char buf[256]; sprintf_s(buf, "Model::Draw: using fallback uvChecker srvIndex=%u srv.ptr=0x%016llX\n", fallbackIdx, static_cast<unsigned long long>(srvHandle.ptr));
             Logger::Log(buf);
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-    } else {
-        {
-            char buf[256];
-            sprintf_s(buf, "Model::Draw: no textures loaded at all (index=%u) - drawing without SRV\n", texIndex);
-            Logger::Log(buf);
         }
     }
 
@@ -172,9 +171,17 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         texIndex = textureIndex_;
     }
     auto texMgr = TextureManager::GetInstance();
-    if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
+    if (texIndex != UINT32_MAX) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        if (srvHandle.ptr != 0) cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        if (srvHandle.ptr != 0) {
+            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        } else {
+            // フォールバック
+            uint32_t fb = texMgr->GetSrvIndex("resources/uvChecker.png");
+            if (fb == UINT32_MAX) { texMgr->LoadTexture("resources/uvChecker.png"); texMgr->ExecuteResourceUpload(); fb = texMgr->GetSrvIndex("resources/uvChecker.png"); }
+            D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
+            if (fbHandle.ptr != 0) { cmdList->SetGraphicsRootDescriptorTable(2, fbHandle); }
+        }
     }
 
     // インスタンシング用SRV

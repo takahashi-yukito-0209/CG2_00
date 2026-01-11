@@ -4,7 +4,10 @@
 #include <d3d12.h>
 #include <string>
 #include <wrl/client.h>
-// no extra includes
+#include "engine/base/DirectXCommon.h"
+
+namespace MyEngine { class SrvManager; }
+#include <unordered_map>
 
 namespace MyEngine {
 
@@ -17,7 +20,7 @@ public:
     void Finalize();
 
     // 初期化
-    void Initialize();
+    void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager);
 
     // テクスチャファイルの読み込み
     void LoadTexture(const std::string& filePath);
@@ -27,6 +30,18 @@ public:
 
     //SRVインデックスの開始番号
     uint32_t GetTextureIndexByFilePath(const std::string& filePath);
+
+    // 新getter: メタデータ取得（filePathキー）
+    const DirectX::TexMetadata& GetMetaData(const std::string& filePath);
+    // 新getter: SRVインデックス取得（filePathキー）
+    uint32_t GetSrvIndex(const std::string& filePath);
+    // 新getter: GPUハンドル取得（filePathキー）
+    D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(const std::string& filePath);
+
+    // SRV確保可能チェック（上限に達していなければ true）
+    bool CanAllocateMore() const {
+        return (static_cast<uint32_t>(textureDatas.size()) + kSRVIndexTop_) < DirectXCommon::kMaxSRVCount;
+    }
 
     //テクスチャ番号からGPUハンドルを取得
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(uint32_t textureIndex);
@@ -49,7 +64,7 @@ private:
 private:
     // テクスチャ1枚分のデータ
     struct TextureData {
-        std::string filePath; // ファイルパス
+        uint32_t srvIndex = 0; // SRVインデックス
         DirectX::TexMetadata metadata; // メタデータ
         Microsoft::WRL::ComPtr<ID3D12Resource> Resource; // リソース
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU; // SRVハンドル(CPU)
@@ -57,7 +72,11 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> IntermediateResource; // 中間リソース
     };
 
-    // テクスチャデータ
-    std::vector<TextureData> textureDatas;
+    // 参照先
+    DirectXCommon* dxCommon_ = nullptr;
+    SrvManager* srvManager_ = nullptr;
+
+    // テクスチャデータ（filePath をキーとして保持）
+    std::unordered_map<std::string, TextureData> textureDatas;
 };
 } // namespace MyEngine

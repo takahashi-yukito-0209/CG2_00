@@ -63,10 +63,6 @@ DirectXCommon* DirectXCommon::GetInstance()
 
 void DirectXCommon::Finalize()
 {
-    // ImGuiの終了処理
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
     // フェンスイベントのクローズ
     if (fenceEvent_) {
         CloseHandle(fenceEvent_);
@@ -701,19 +697,7 @@ void DirectXCommon::InitImGui()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
-
     ImGui_ImplWin32_Init(winApp_->GetHwnd());
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
-
-    ImGui_ImplDX12_Init(
-        device_.Get(),
-        kBackBufferCount,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-        srvDescriptorHeap_.Get(),
-        cpuHandle,
-        gpuHandle);
 }
 
 void DirectXCommon::InitializeFixFPS()
