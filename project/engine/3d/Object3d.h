@@ -128,6 +128,9 @@ private: // メンバ変数
     // モデル用にこの `Object3d` が所有する `ModelCommon`
     ModelCommon* modelCommon_ = nullptr;
 
+    // 参照するカメラ（既定は Object3dCommon のデフォルトカメラ）
+    class Camera* camera_ = nullptr;
+
     // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
     bool useAlphaCutoutSampler_ = false;
 

@@ -43,6 +43,7 @@
 #include "Object3dCommon.h"
 #include "Model.h"
 #include "ModelManager.h"
+#include "Camera.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -408,6 +409,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // 3Dオブジェクト共通部の初期化
     object3dCommon->Initialize(DirectXCommon::GetInstance());
 
+    // デフォルトカメラを生成して共通部に登録
+    auto camera = std::make_unique<MyEngine::Camera>();
+    camera->SetRotate({0.0f, 0.0f, 0.0f});
+    camera->SetTranslate({0.0f, 0.0f, -10.0f});
+    camera->Update();
+    object3dCommon->SetDefaultCamera(camera.get());
+
 #pragma endregion 基盤システムの初期化
 
     // Textureを読んで転送する
@@ -701,8 +709,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // WorldMatrix作成(model)
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-            Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
-            Matrix4x4 projectionMatrix = debugCamera.GetProjectionMatrix();
+            // まずデフォルトカメラを更新
+            if (camera) { camera->Update(); }
+            Matrix4x4 viewMatrix = camera ? camera->GetViewMatrix() : debugCamera.GetViewMatrix();
+            Matrix4x4 projectionMatrix = camera ? camera->GetProjectionMatrix() : debugCamera.GetProjectionMatrix();
             // WVPMatrixを作る
             Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
 
@@ -1175,6 +1185,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     debugCamera.SetRotation(camRot);
                 }
             }
+
+            // 新規: デフォルトカメラ制御ウィンドウ
+            ImGui::Begin("Camera");
+            if (camera) {
+                Vector3 camPos = camera->GetTranslate();
+                if (ImGui::DragFloat3("Position", &camPos.x, 0.1f)) { camera->SetTranslate(camPos); }
+
+                Vector3 camRot = camera->GetRotate();
+                float rotXdeg = camRot.x * 180.0f / 3.14159265f;
+                float rotYdeg = camRot.y * 180.0f / 3.14159265f;
+                float rotZdeg = camRot.z * 180.0f / 3.14159265f;
+                bool changed = false;
+                changed |= ImGui::SliderAngle("Rotation X", &rotXdeg);
+                changed |= ImGui::SliderAngle("Rotation Y", &rotYdeg);
+                changed |= ImGui::SliderAngle("Rotation Z", &rotZdeg);
+                if (changed) {
+                    camRot.x = rotXdeg * 3.14159265f / 180.0f;
+                    camRot.y = rotYdeg * 3.14159265f / 180.0f;
+                    camRot.z = rotZdeg * 3.14159265f / 180.0f;
+                    camera->SetRotate(camRot);
+                }
+
+                static float fovY = 0.45f; // 表示用の初期値
+                static float aspect = 1280.0f / 720.0f;
+                static float nearClip = 0.1f;
+                static float farClip = 1000.0f;
+                if (ImGui::SliderAngle("FOV Y", &fovY, 10.0f, 120.0f)) { camera->SetFovY(fovY * 3.14159265f / 180.0f); }
+                if (ImGui::DragFloat("Aspect", &aspect, 0.001f, 0.1f, 10.0f)) { camera->SetAspectRatio(aspect); }
+                if (ImGui::DragFloat("Near", &nearClip, 0.001f, 0.001f, 10.0f)) { camera->SetNearClip(nearClip); }
+                if (ImGui::DragFloat("Far", &farClip, 1.0f, 10.0f, 10000.0f)) { camera->SetFarClip(farClip); }
+
+                // 値を反映
+                camera->Update();
+            }
+            ImGui::End();
 
             // カメラ操作の有効/無効を切り替えるチェックボックス
             ImGui::Checkbox("Debug Camera Control", &isDebugCameraControl);
