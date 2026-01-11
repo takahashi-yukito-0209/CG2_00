@@ -179,17 +179,15 @@ void Object3d::AssignTexture()
     auto texMgr = TextureManager::GetInstance();
     if (!modelData_.material.textureFilePath.empty()) {
         uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        if (idx != UINT32_MAX) {
-            modelData_.material.textureIndex = idx;
-            char buf[256];
-            sprintf_s(buf, "Object3d::AssignTexture: file=%s -> index=%u\n", modelData_.material.textureFilePath.c_str(), idx);
-            Logger::Log(buf);
-            return;
+        if (idx == UINT32_MAX) {
+            // 未ロードならロードしてSRVインデックスを取得
+            texMgr->LoadTexture(modelData_.material.textureFilePath);
+            texMgr->ExecuteResourceUpload();
+            idx = texMgr->GetSrvIndex(modelData_.material.textureFilePath);
         }
-        // パスはあるが、まだロードされていない場合はモデル側に任せる（上書きしない）
-        modelData_.material.textureIndex = UINT32_MAX;
+        modelData_.material.textureIndex = idx;
         char buf[256];
-        sprintf_s(buf, "Object3d::AssignTexture: pending texture load for %s (keep invalid index)\n", modelData_.material.textureFilePath.c_str());
+        sprintf_s(buf, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), idx);
         Logger::Log(buf);
         return;
     }
@@ -197,8 +195,18 @@ void Object3d::AssignTexture()
     // パス自体が無い場合のみデフォルトを割り当てる
     uint32_t loadedCount = texMgr->GetLoadedTextureCount();
     if (loadedCount > 0) {
-        modelData_.material.textureIndex = 0;
-        Logger::Log("Object3d::AssignTexture: no material texture specified, defaulting to index=0\n");
+        // 既定のチェッカーテクスチャへフォールバックし、そのSRV絶対インデックスを使用
+        uint32_t srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+        if (srvIdx == UINT32_MAX) {
+            // 未ロードならロードして割り当て
+            texMgr->LoadTexture("resources/uvChecker.png");
+            texMgr->ExecuteResourceUpload();
+            srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+        }
+        modelData_.material.textureIndex = srvIdx;
+        char buf[256];
+        sprintf_s(buf, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", srvIdx);
+        Logger::Log(buf);
     } else {
         modelData_.material.textureIndex = UINT32_MAX;
         Logger::Log("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");

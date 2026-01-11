@@ -153,6 +153,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\base\D3DResourceLeakChecker.cpp" />
     <ClCompile Include="engine\base\DirectXCommon.cpp" />
     <ClCompile Include="engine\3d\DebugCamera.cpp" />
+    <ClCompile Include="engine\base\SrvManager.cpp" />
     <ClCompile Include="externals\imgui\imgui.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MinSpace</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MinSpace</Optimization>
@@ -225,6 +226,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\D3DResourceLeakChecker.h" />
     <ClInclude Include="engine\base\DirectXCommon.h" />
     <ClInclude Include="engine\3d\DebugCamera.h" />
+    <ClInclude Include="engine\base\SrvManager.h" />
     <ClInclude Include="engine\RenderState.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />

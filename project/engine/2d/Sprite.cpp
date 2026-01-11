@@ -119,18 +119,17 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
     // 単位行列を書き込んでおく
     uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
     if (idx == UINT32_MAX) {
-        uint32_t loaded = TextureManager::GetInstance()->GetLoadedTextureCount();
-        if (loaded > 0) {
-            textureIndex_ = 0; // 既定として最初のテクスチャを使用
-            char buf[256];
-            sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to index 0\n", textureFilePath.c_str());
-            Logger::Log(buf);
-        } else {
-            textureIndex_ = UINT32_MAX; // 利用可能なテクスチャがない
-            char buf[256];
-            sprintf_s(buf, "Warning: Sprite texture not found (%s) and no textures loaded\n", textureFilePath.c_str());
-            Logger::Log(buf);
+        // 指定が未ロード/不明なら既定のチェッカーテクスチャへフォールバックし、SRV絶対インデックスを使用
+        uint32_t srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
+        if (srvIdx == UINT32_MAX) {
+            TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
+            TextureManager::GetInstance()->ExecuteResourceUpload();
+            srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
         }
+        textureIndex_ = srvIdx;
+        char buf[256];
+        sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to uvChecker srvIndex=%u\n", textureFilePath.c_str(), srvIdx);
+        Logger::Log(buf);
     } else {
         textureIndex_ = idx;
     }
