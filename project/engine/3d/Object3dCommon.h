@@ -45,6 +45,10 @@ public: // メンバ関数
     CameraForGPU* GetCameraData() { return cameraData_; }
     D3D12_GPU_VIRTUAL_ADDRESS GetCameraGPUAddress() const { return cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0; }
 
+    // デフォルトカメラの管理
+    void SetDefaultCamera(class Camera* camera) { defaultCamera_ = camera; }
+    class Camera* GetDefaultCamera() const { return defaultCamera_; }
+
     // ブレンドモード制御
     void SetBlendMode(MyEngine::BlendMode mode);
     MyEngine::BlendMode GetBlendMode() const { return blendMode_; }
@@ -96,6 +100,9 @@ private: // メンバ変数
     };
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraCBResource_ = nullptr;
     CameraCB* cameraCBData_ = nullptr;
+
+    // 3Dオブジェクトが参照するデフォルトカメラ
+    class Camera* defaultCamera_ = nullptr;
 
 };
 

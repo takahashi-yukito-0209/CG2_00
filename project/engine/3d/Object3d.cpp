@@ -11,6 +11,7 @@
 #include "ModelManager.h"
 #include <filesystem>
 #include <algorithm>
+#include "Camera.h"
 
 using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
@@ -40,6 +41,9 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
     // モデル読み込み後にテクスチャ割り当てを行う（MTLが先に読み込まれるように）
     AssignTexture();
+
+    // 既定のカメラを参照
+    camera_ = object3dCommon->GetDefaultCamera();
 }
 
 // ファイル名を指定してテクスチャを設定する
@@ -211,7 +215,14 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
     Matrix4x4 worldInv = math.Inverse(world);
     Matrix4x4 worldInvTranspose = math.Transpose(worldInv);
     // ワールドビュー射影行列
-    Matrix4x4 wvp = math.Multiply(world, math.Multiply(viewMatrix, projectionMatrix));
+    // カメラが設定されていればそれを使用
+    Matrix4x4 camView = viewMatrix;
+    Matrix4x4 camProj = projectionMatrix;
+    if (camera_) {
+        camView = camera_->GetViewMatrix();
+        camProj = camera_->GetProjectionMatrix();
+    }
+    Matrix4x4 wvp = math.Multiply(world, math.Multiply(camView, camProj));
     // 定数バッファに転送
     if (transformationMatrixData_) {
         transformationMatrixData_->World = world;
