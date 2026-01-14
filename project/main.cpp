@@ -289,6 +289,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 #endif
 
+    // リークチェッカーの生成
     D3DResourceLeakChecker leakCheck;
 
     // XAudio2
@@ -340,7 +341,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     object3dCommon->Initialize(DirectXCommon::GetInstance());
 
     // デフォルトカメラを生成して共通部に登録
-    auto camera = std::make_unique<MyEngine::Camera>();
+    auto camera = std::make_unique<Camera>();
     camera->SetRotate({0.0f, 0.0f, 0.0f});
     camera->SetTranslate({0.0f, 0.0f, -10.0f});
     camera->Update();
@@ -430,7 +431,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 自作した数学関数の使用
     MathUtility math;
-    
    
     // 平行光源データの取得
     DirectionalLight* directionalLightData = object3dCommon->GetDirectionalLightData();
@@ -627,7 +627,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             {
                 const float dt = 1.0f / 60.0f;
                 pmEmitter.Update(dt);
-                auto* pm = MyEngine::ParticleManager::GetInstance();
+                auto* pm = ParticleManager::GetInstance();
                 pm->SetFieldEnabled(uiFieldEnabled);
                 pm->SetFieldAccel(uiFieldAccel);
                 pm->SetFieldAABB(uiFieldMin, uiFieldMax);
@@ -685,7 +685,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
                 int blendIdx = (int)object3dCommon->GetBlendMode();
                 if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-                    object3dCommon->SetBlendMode(static_cast<MyEngine::BlendMode>(blendIdx));
+                    object3dCommon->SetBlendMode(static_cast<BlendMode>(blendIdx));
                 }
             }
 
@@ -1143,7 +1143,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
                     Vector3 up    = { view.m[0][1], view.m[1][1], view.m[2][1] };
                     object3dCommon->SetBillboardCameraWithVP(right, up, vp, useBillboard);
-                    MyEngine::ParticleManager::GetInstance()->Draw();
+                    ParticleManager::GetInstance()->Draw();
                 }
 
                 break;
@@ -1237,7 +1237,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
                     Vector3 up    = { view.m[0][1], view.m[1][1], view.m[2][1] };
                     object3dCommon->SetBillboardCameraWithVP(right, up, vp, useBillboard);
-                    MyEngine::ParticleManager::GetInstance()->Draw();
+                    ParticleManager::GetInstance()->Draw();
                 }
 
                 // スプライトの描画
