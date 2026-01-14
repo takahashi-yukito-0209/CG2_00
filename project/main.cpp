@@ -116,8 +116,6 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-// (Emit は後方で宣言される構造体定義後に実装)
-
 SoundData SoundLoadWave(const char* filename)
 {
     // 1.ファイルオープン
@@ -243,8 +241,6 @@ void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData)
 
 // Transform変数を作る
 Transform transform = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-
-// 旧パーティクル処理は `ParticleManager` にリファクタリング済み
 
 // Windowsアプリでのエントリーポイント（main関数）
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
@@ -420,15 +416,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     particlePlane->SetTexture("resources/circle.png");
 
     // ParticleManager 初期化とグループ作成
-    MyEngine::ParticleManager::GetInstance()->Initialize(
+    ParticleManager::GetInstance()->Initialize(
         DirectXCommon::GetInstance(),
         object3dCommon.get(),
         &srvManager,
         TextureManager::GetInstance());
-    MyEngine::ParticleManager::GetInstance()->SetParticlePlane(particlePlane.get());
-    MyEngine::ParticleManager::GetInstance()->CreateParticleGroup("Circle", "resources/circle.png");
-    MyEngine::ParticleManager::GetInstance()->CreateParticleGroup("Checker", "resources/uvChecker.png");
-    MyEngine::ParticleManager::GetInstance()->CreateParticleGroup("Ball", "resources/monsterBall.png");
+    ParticleManager::GetInstance()->SetParticlePlane(particlePlane.get());
+    ParticleManager::GetInstance()->CreateParticleGroup("Circle", "resources/circle.png");
+    ParticleManager::GetInstance()->CreateParticleGroup("Checker", "resources/uvChecker.png");
+    ParticleManager::GetInstance()->CreateParticleGroup("Ball", "resources/monsterBall.png");
 
 #pragma endregion 最初のシーンの終了
 
@@ -472,22 +468,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         DRAW_BUNNY,
         DRAW_FENCE,
         DRAW_CHECKER,
-        DRAW_SPHERE, // <--- 追加
+        DRAW_SPHERE,
         DRAW_ALL
     };
 
     DrawType selectedDrawType = DRAW_SPRITE; // 初期値
 
-    // 旧CPUパーティクルは廃止
-
-    // 新しいパーティクルエミッタ（マネージャ使用）
+    // パーティクルエミッタ
     ParticleEmitter pmEmitter;
     pmEmitter.groupName = "Circle";
     pmEmitter.transform.translate = {0.0f,0.0f,0.0f};
     pmEmitter.count = 3;
     pmEmitter.frequency = 0.5f;
 
-    // 起動時の初期バースト（旧デモの初期生成に相当）
+    // 起動時の初期バースト
     for (int i = 0; i < 20; ++i) {
         pmEmitter.Emit();
     }
@@ -668,9 +662,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 }
             }
 
-            // 平行光源データ設定（旧CPU粒子の転送は削除）
-
-
             // Object3Dの更新（複数）
             for (auto& obj : objects3d) {
                 if (obj) {
@@ -683,7 +674,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 if (sprites[i]) sprites[i]->Update();
             }
 
-            // imguiの項目内容
+            // ImGuiの項目内容
             ImGui::Begin("Settings");
 
             // ImGuiのUIで描画対象を選択
@@ -697,8 +688,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                     object3dCommon->SetBlendMode(static_cast<MyEngine::BlendMode>(blendIdx));
                 }
             }
-
-            // パーティクルの設定は別ウィンドウに移動済み
 
             // 各描画対象の個別編集UI
             if (selectedDrawType == DRAW_ALL) {
@@ -1092,17 +1081,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 if (ImGui::DragFloat3("Position", &camPos.x, 0.1f)) { camera->SetTranslate(camPos); }
 
                 Vector3 camRot = camera->GetRotate();
-                float rotXdeg = camRot.x * 180.0f / 3.14159265f;
-                float rotYdeg = camRot.y * 180.0f / 3.14159265f;
-                float rotZdeg = camRot.z * 180.0f / 3.14159265f;
+                float rotXDegrees = camRot.x * 180.0f / 3.14159265f;
+                float rotYDegrees = camRot.y * 180.0f / 3.14159265f;
+                float rotZDegrees = camRot.z * 180.0f / 3.14159265f;
                 bool changed = false;
-                changed |= ImGui::SliderAngle("Rotation X", &rotXdeg);
-                changed |= ImGui::SliderAngle("Rotation Y", &rotYdeg);
-                changed |= ImGui::SliderAngle("Rotation Z", &rotZdeg);
+                changed |= ImGui::SliderAngle("Rotation X", &rotXDegrees);
+                changed |= ImGui::SliderAngle("Rotation Y", &rotYDegrees);
+                changed |= ImGui::SliderAngle("Rotation Z", &rotZDegrees);
                 if (changed) {
-                    camRot.x = rotXdeg * 3.14159265f / 180.0f;
-                    camRot.y = rotYdeg * 3.14159265f / 180.0f;
-                    camRot.z = rotZdeg * 3.14159265f / 180.0f;
+                    camRot.x = rotXDegrees * 3.14159265f / 180.0f;
+                    camRot.y = rotYDegrees * 3.14159265f / 180.0f;
+                    camRot.z = rotZDegrees * 3.14159265f / 180.0f;
                     camera->SetRotate(camRot);
                 }
 
@@ -1164,7 +1153,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // planeモデルのみ描画（インデックス0）
+                // planeモデルのみ描画
                 if (objects3d.size() > 0 && objects3d[0]) {
                     objects3d[0]->Draw();
                 }
@@ -1188,7 +1177,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // bunnyモデルのみ描画（インデックス1）
+                // bunnyモデルのみ描画
                 if (objects3d.size() > 1 && objects3d[1]) {
                     objects3d[1]->Draw();
                 }
@@ -1200,7 +1189,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // fenceモデルのみ描画（インデックス3）
+                // fenceモデルのみ描画
                 if (objects3d.size() > 3 && objects3d[3]) {
                     objects3d[3]->Draw();
                 }
@@ -1212,7 +1201,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
                 
-                // teapotモデルのみ描画（インデックス2）
+                // teapotモデルのみ描画
                 if (objects3d.size() > 2 && objects3d[2]) {
                     objects3d[2]->Draw();
                 }
@@ -1224,7 +1213,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // 3D描画の共通設定
                 object3dCommon->SetCommonDrawSetting();
 
-                // sphereモデルのみ描画（インデックス4）
+                // sphereモデルのみ描画
                 if (objects3d.size() > 4 && objects3d[4]) {
                     objects3d[4]->Draw();
                 }
