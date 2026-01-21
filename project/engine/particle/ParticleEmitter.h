@@ -20,4 +20,7 @@ public:
 
     // 時間を進め、必要なら発生
     void Update(float deltaTime);
+
+    // Draw ImGui controls for this emitter (edit its properties)
+    void DrawImGui();
 };

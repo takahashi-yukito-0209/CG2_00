@@ -4,8 +4,6 @@
 #include <filesystem>
 // #include <format>
 #include "externals/imgui/imgui.h"
-#include "externals/imgui/imgui_impl_dx12.h"
-#include "externals/imgui/imgui_impl_win32.h"
 #include "mathUtility.h"
 #include <cmath>
 #include <cassert>
@@ -47,6 +45,7 @@
 #include "Camera.h"
 #include "ParticleManager.h"
 #include "ParticleEmitter.h"
+#include "ImGuiManager.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -332,8 +331,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     //テクスチャマネージャーの初期化
     SrvManager srvManager;
     srvManager.Initialize(DirectXCommon::GetInstance());
-    // ImGui の DX12 初期化を SrvManager へ委譲（SRVヒープを使用）
-    srvManager.InitImGui();
+    // ImGui の初期化 is delegated to ImGuiManager (will call SrvManager->InitImGui)
     TextureManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), &srvManager);
 
     std::unique_ptr<Object3dCommon> object3dCommon = std::make_unique<Object3dCommon>();
@@ -517,6 +515,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     bool isDebugCameraControl = true; // カメラ操作を有効にするか
     bool useBillboard = true; // パーティクルのビルボード有効/無効
 
+    // Create ImGui manager and initialize
+    MyEngine::ImGuiManager imguiManager;
+    imguiManager.Initialize(hwnd, &srvManager);
+
     MSG msg {};
     // ウィンドウのxボタンが押されるまでループ
     while (msg.message != WM_QUIT) {
@@ -524,11 +526,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         if (!winApp.ProcessMessage()) {
             break;
         } else {
-
             // ImGuiフレーム開始
-            ImGui_ImplDX12_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
+            imguiManager.NewFrame();
 
             //--------------------
             // ゲームの処理(UpDate)
@@ -566,81 +565,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 SoundPlayWave(xAudio2.Get(), soundData1);
             }
 
-            // Particle 専用ウィンドウ
-            ImGui::Begin("Particle");
-            ImGui::Text("Emitter (Manager)");
-            ImGui::Checkbox("Use Billboard", &useBillboard);
-            ImGui::Separator();
-            ImGui::Text("ParticleManager");
-            static int groupIdx = 0; const char* groups[] = {"Circle","Checker","Ball"};
-            if (ImGui::Combo("Group", &groupIdx, groups, IM_ARRAYSIZE(groups))) {
-                pmEmitter.groupName = groups[groupIdx];
-            }
-            ImGui::DragFloat3("PM Translate", &pmEmitter.transform.translate.x, 0.01f, -100.0f, 100.0f);
-            ImGui::DragInt("PM Spawn Count", reinterpret_cast<int*>(&pmEmitter.count), 1, 1, 100);
-            ImGui::DragFloat("PM Frequency", &pmEmitter.frequency, 0.01f, 0.0f, 10.0f);
-            if (ImGui::Button("PM Emit Now")) { pmEmitter.Emit(); }
-            ImGui::Separator();
-            ImGui::Text("Field (AABB)");
-            ImGui::Checkbox("Enable Field", &uiFieldEnabled);
-            ImGui::DragFloat3("Accel", &uiFieldAccel.x, 0.1f, -100.0f, 100.0f);
-            ImGui::DragFloat3("AABB Min", &uiFieldMin.x, 0.1f, -100.0f, 100.0f);
-            ImGui::DragFloat3("AABB Max", &uiFieldMax.x, 0.1f, -100.0f, 100.0f);
 
-            ImGui::Separator();
-            ImGui::Text("Lifetime");
-            ImGui::DragFloatRange2("Life Min/Max (sec)", &uiLifeMin, &uiLifeMax, 0.01f, 0.1f, 10.0f, "Min: %.2f", "Max: %.2f");
+            // Build UI via ImGuiManager
+            MyEngine::ImGuiManager::Context ctx;
+            ctx.particleEmitter = &pmEmitter;
+            ctx.object3dCommon = object3dCommon.get();
+            // build a temporary raw pointer list for objects3d
+            std::vector<MyEngine::Object3d*> objPtrs;
+            objPtrs.reserve(objects3d.size());
+            for (auto &u : objects3d) objPtrs.push_back(u.get());
+            ctx.objects3d = &objPtrs;
+            // build sprite pointer list
+            std::vector<MyEngine::Sprite*> spritePtrs;
+            spritePtrs.reserve(sprites.size());
+            for (auto &u : sprites) spritePtrs.push_back(u.get());
+            ctx.sprites = &spritePtrs;
+            ctx.spriteCommon = spriteCommon.get();
+            ctx.selectedDrawType = reinterpret_cast<int*>(&selectedDrawType);
+            ctx.useBillboard = &useBillboard;
+            ctx.particleManager = ParticleManager::GetInstance();
+            ctx.dt = 1.0f / 60.0f;
 
-            // 追加: Spawn ランダム範囲設定
-            static Vector3 uiPosMin { -0.3f, -0.3f, -0.3f };
-            static Vector3 uiPosMax {  0.3f,  0.3f,  0.3f };
-            static Vector3 uiVelMin { -0.2f,  0.4f, -0.2f };
-            static Vector3 uiVelMax {  0.2f,  0.8f,  0.2f };
-            static Vector3 uiSclMin {  0.5f,  0.5f,  0.5f };
-            static Vector3 uiSclMax {  1.5f,  1.5f,  1.5f };
-            static Vector4 uiColMin {  0.8f,  0.8f,  0.8f, 0.5f };
-            static Vector4 uiColMax {  1.0f,  1.0f,  1.0f, 1.0f };
+            imguiManager.BuildUI(ctx);
 
-            if (ImGui::CollapsingHeader("Spawn Random")) {
-                ImGui::DragFloat3("Pos Min", &uiPosMin.x, 0.01f, -10.0f, 10.0f);
-                ImGui::DragFloat3("Pos Max", &uiPosMax.x, 0.01f, -10.0f, 10.0f);
-                ImGui::DragFloat3("Vel Min", &uiVelMin.x, 0.01f, -50.0f, 50.0f);
-                ImGui::DragFloat3("Vel Max", &uiVelMax.x, 0.01f, -50.0f, 50.0f);
-                ImGui::DragFloat3("Scale Min", &uiSclMin.x, 0.01f, 0.01f, 10.0f);
-                ImGui::DragFloat3("Scale Max", &uiSclMax.x, 0.01f, 0.01f, 10.0f);
-                ImGui::ColorEdit4("Color Min", &uiColMin.x);
-                ImGui::ColorEdit4("Color Max", &uiColMax.x);
-            }
-
-            // 追加: 重力と減衰
-            static bool uiGravityEnabled = false;
-            static Vector3 uiGravity { 0.0f, -9.8f, 0.0f };
-            static float uiDamping = 0.0f;
-            if (ImGui::CollapsingHeader("Dynamics")) {
-                ImGui::Checkbox("Enable Gravity", &uiGravityEnabled);
-                ImGui::DragFloat3("Gravity", &uiGravity.x, 0.1f, -100.0f, 100.0f);
-                ImGui::DragFloat("Damping (1/s)", &uiDamping, 0.01f, 0.0f, 10.0f);
-            }
-            ImGui::End();
-
-            // Manager 設定反映と更新
+            // Manager 設定反映と更新 (particle manager is updated in main loop as before)
             {
                 const float dt = 1.0f / 60.0f;
                 pmEmitter.Update(dt);
                 auto* pm = ParticleManager::GetInstance();
-                pm->SetFieldEnabled(uiFieldEnabled);
-                pm->SetFieldAccel(uiFieldAccel);
-                pm->SetFieldAABB(uiFieldMin, uiFieldMax);
-                pm->SetLifetimeRange(uiLifeMin, uiLifeMax);
-                // ランダムパラメータを反映
-                pm->SetSpawnPosRange(uiPosMin, uiPosMax);
-                pm->SetVelocityRange(uiVelMin, uiVelMax);
-                pm->SetScaleRange(uiSclMin, uiSclMax);
-                pm->SetColorRange(uiColMin, uiColMax);
-                // ダイナミクス
-                pm->SetGravityEnabled(uiGravityEnabled);
-                pm->SetGravity(uiGravity);
-                pm->SetDamping(uiDamping);
+                // ParticleManager will be manipulated by ImGui via ctx.particleManager where available
                 pm->Update(dt);
             }
 
@@ -674,445 +627,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 if (sprites[i]) sprites[i]->Update();
             }
 
-            // ImGuiの項目内容
-            ImGui::Begin("Settings");
-
-            // ImGuiのUIで描画対象を選択
-            ImGui::Combo("Model", (int*)&selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
-
-            // Blend Mode (3D Object pipeline)
-            {
-                const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
-                int blendIdx = (int)object3dCommon->GetBlendMode();
-                if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-                    object3dCommon->SetBlendMode(static_cast<BlendMode>(blendIdx));
-                }
-            }
-
-            // 各描画対象の個別編集UI
-            if (selectedDrawType == DRAW_ALL) {
-                // 各Object3dの個別編集UI (すべて表示)
-                for (uint32_t i = 0; i < objects3d.size(); ++i) {
-                    Object3d* object = objects3d[i].get();
-                    if (!object) {
-                        continue;
-                    }
-                    char headerName[64];
-                    sprintf_s(headerName, "Object %d", i);
-                    ImGui::PushID(i);
-                    if (ImGui::CollapsingHeader(headerName)) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-                        // テクスチャ設定欄
-                        static char texPathBufAll[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufAll, sizeof(texPathBufAll));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufAll));
-                        }
-
-                        // ライティング設定を追加
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }  
-            
-            // planeオブジェクト
-            if (selectedDrawType == DRAW_MODEL) {
-                const int idx = 0; // plane index
-                if (objects3d.size() > static_cast<size_t>(idx) && objects3d[idx]) {
-                    Object3d* object = objects3d[idx].get();
-                    ImGui::PushID(2000 + idx);
-                    if (ImGui::CollapsingHeader("Plane")) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-
-                        static char texPathBufP[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufP, sizeof(texPathBufP));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufP));
-                        }
-
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }
-
-            // fenceオブジェクト
-            if (selectedDrawType == DRAW_FENCE) {
-                const int idx = 3; // fence index
-                if (objects3d.size() > idx && objects3d[idx]) {
-                    Object3d* object = objects3d[idx].get();
-                    ImGui::PushID(1000 + idx);
-                    if (ImGui::CollapsingHeader("Fence")) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-
-                        static char texPathBufF[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufF, sizeof(texPathBufF));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufF));
-                        }
-
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }
-
-            // bunnyオブジェクト
-            if (selectedDrawType == DRAW_BUNNY) {
-                const int idx = 1; // bunny index
-                if (objects3d.size() > idx && objects3d[idx]) {
-                    Object3d* object = objects3d[idx].get();
-                    ImGui::PushID(1000 + idx);
-                    if (ImGui::CollapsingHeader("Bunny")) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-
-                        static char texPathBufB[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufB, sizeof(texPathBufB));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufB));
-                        }
-
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }
-
-            // チェッカー/ティーポットオブジェクト
-            if (selectedDrawType == DRAW_CHECKER) {
-                const int idx = 2; // teapot/checker index
-                if (objects3d.size() > idx && objects3d[idx]) {
-                    Object3d* object = objects3d[idx].get();
-                    ImGui::PushID(1000 + idx);
-                    if (ImGui::CollapsingHeader("Checker/Teapot")) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-
-                        static char texPathBufC[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufC, sizeof(texPathBufC));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufC));
-                        }
-
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }
-
-            // Sphereオブジェクト 
-            if (selectedDrawType == DRAW_SPHERE) {
-                const int idx = 4; // sphere index 
-                if (objects3d.size() > idx && objects3d[idx]) {
-                    Object3d* object = objects3d[idx].get();
-                    ImGui::PushID(1000 + idx);
-                    if (ImGui::CollapsingHeader("Sphere")) {
-                        Vector3 scale = object->GetScale();
-                        Vector3 rotate = object->GetRotate();
-                        Vector3 translate = object->GetTranslate();
-
-                        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                            object->SetScale(scale);
-                        }
-                        if (ImGui::DragFloat3("Rotate", &rotate.x, 0.01f)) {
-                            object->SetRotate(rotate);
-                        }
-                        if (ImGui::DragFloat3("Translate", &translate.x, 0.1f)) {
-                            object->SetTranslate(translate);
-                        }
-
-                        static char texPathBufS[256] = "resources/uvChecker.png";
-                        ImGui::InputText("Texture Path", texPathBufS, sizeof(texPathBufS));
-                        if (ImGui::Button("Apply Texture")) {
-                            object->SetTexture(std::string(texPathBufS));
-                        }
-
-                        bool enableLighting = object->GetEnableLighting();
-                        if (ImGui::Checkbox("Enable Lighting", &enableLighting)) {
-                            object->SetEnableLighting(enableLighting);
-                        }
-
-                        int lm = object->GetLightingMode();
-                        const char* lmNames[] = { "None", "Lambert", "Half-Lambert" };
-                        if (ImGui::Combo("Lighting Mode", &lm, lmNames, IM_ARRAYSIZE(lmNames))) {
-                            object->SetLightingMode(lm);
-                        }
-                    }
-                    ImGui::PopID();
-                }
-            }
-
-            // スプライトオブジェクト(2D描画)
-            if (selectedDrawType == DRAW_SPRITE || selectedDrawType == DRAW_ALL) {
-
-                // ImGuiのスコープ内で名前を一意にするためのヘルパー
-                char nameBuffer[64];
-
-                for (uint32_t i = 0; i < kSpriteCount; i++) {
-                    // 現在操作するスプライトのインスタンス
-                    Sprite* currentSprite = sprites[i].get();
-
-                    // ヘッダー名にインデックスを付与し、一意にする 
-                    sprintf_s(nameBuffer, "Sprite %d", i);
-
-                    // ImGui::PushID(i) を使用して、ループ内のコントロールを個別化 
-                    ImGui::PushID(i);
-
-                    if (ImGui::CollapsingHeader(nameBuffer)) {
-
-                        // --- Size ---
-                        Vector2 currentSize = currentSprite->GetSize();
-                        // ImGui::DragFloat2 の名前からインデックスを削除
-                        if (ImGui::DragFloat2("Size", &(currentSize.x), 0.1f)) {
-                            currentSprite->SetSize(currentSize);
-                        }
-
-                        // --- Rotate ---
-                        float currentRotation = currentSprite->GetRotation();
-                        // ImGui::DragFloat の名前からインデックスを削除
-                        if (ImGui::DragFloat("Rotate.Z", &currentRotation, 0.01f, -6.28f, 6.28f, "%.2f rad")) {
-                            currentSprite->SetRotation(currentRotation);
-                        }
-
-                        // --- Translate ---
-                        Vector2 currentPos = currentSprite->GetPosition();
-                        // ImGui::DragFloat2 の名前からインデックスを削除
-                        if (ImGui::DragFloat2("Translate", &(currentPos.x), 0.1f)) {
-                            currentSprite->SetPosition(currentPos);
-                        }
-
-                        // --- Color ---
-                        Vector4 currentColor = currentSprite->GetColor();
-                        // ImGui::ColorEdit4 の名前からインデックスを削除
-                        if (ImGui::ColorEdit4("Color", &(currentColor.x))) {
-                            currentSprite->SetColor(currentColor);
-                        }
-
-                        // --- Anchor Point ---
-                        Vector2 currentAnchor = currentSprite->GetAnchorPoint();
-                        if (ImGui::DragFloat2("AnchorPoint", &(currentAnchor.x), 0.01f, 0.0f, 1.0f)) {
-                            currentSprite->SetAnchorPoint(currentAnchor);
-                        }
-
-                        // --- Flip X / Y ---
-                        bool flipX = currentSprite->GetIsFlipX();
-                        bool flipY = currentSprite->GetIsFlipY();
-                        if (ImGui::Checkbox("FlipX", &flipX)) {
-                            currentSprite->SetIsFlipX(flipX);
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Checkbox("FlipY", &flipY)) {
-                            currentSprite->SetIsFlipY(flipY);
-                        }
-
-                        // --- Texture LeftTop / Size ---
-                        Vector2 texLeftTop = currentSprite->GetTextureLeftTop();
-                        Vector2 texSize = currentSprite->GetTextureSize();
-                        if (ImGui::DragFloat2("TextureLeftTop", &(texLeftTop.x), 1.0f, 0.0f, 8192.0f)) {
-                            currentSprite->SetTextureLeftTop(texLeftTop);
-                        }
-                        if (ImGui::DragFloat2("TextureSize", &(texSize.x), 1.0f, 1.0f, 8192.0f)) {
-                            currentSprite->SetTextureSize(texSize);
-                        }
-                    }
-
-                    //  PushID と対になる PopID を呼び出す
-                    ImGui::PopID();
-                }
-            }
-
-            // 平行光源
-            if (ImGui::CollapsingHeader("Light")) {
-                ImGui::ColorEdit4("Color", &directionalLightData->color.x);
-                // 方向ベクトルの調整。変な値を入れないよう正規化
-                if (ImGui::SliderFloat3("Direction", &directionalLightData->direction.x, -1.0f, 1.0f)) {
-                    // コピーしてからじゃないと値が吹き飛ぶので箱を作る
-                    auto dir = directionalLightData->direction;
-                    // コピーしたものを正規化
-                    dir = math.Normalize(dir);
-                    // 正規化されたものを代入
-                    directionalLightData->direction = dir;
-                }
-                // 明るさ（制限付き）
-                ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f, 10.0f, "%.2f");
-
-                // ライティング方式はオブジェクト毎に設定してください (Object の項目で編集可)
-            }
-
-            // デバッグカメラ
-            if (ImGui::CollapsingHeader("DebugCamera")) {
-                // カメラ位置をドラッグで調整
-                Vector3 camPos = debugCamera.GetTranslation();
-                if (ImGui::DragFloat3("Position", &camPos.x, 0.1f)) {
-                    debugCamera.SetTranslation(camPos);
-                }
-
-                // カメラ回転を角度でスライダー操作
-                Vector3 camRot = debugCamera.GetRotation();
-                float rotX = camRot.x * 180.0f / 3.14159265f; // ラジアン→度変換
-                float rotY = camRot.y * 180.0f / 3.14159265f;
-                float rotZ = camRot.z * 180.0f / 3.14159265f;
-
-                bool changed = false;
-                changed |= ImGui::SliderAngle("Rotation X", &rotX);
-                changed |= ImGui::SliderAngle("Rotation Y", &rotY);
-                changed |= ImGui::SliderAngle("Rotation Z", &rotZ);
-
-                if (changed) {
-                    // 度→ラジアンに戻してセット
-                    camRot.x = rotX * 3.14159265f / 180.0f;
-                    camRot.y = rotY * 3.14159265f / 180.0f;
-                    camRot.z = rotZ * 3.14159265f / 180.0f;
-                    debugCamera.SetRotation(camRot);
-                }
-            }
-
-            // 新規: デフォルトカメラ制御ウィンドウ
-            ImGui::Begin("Camera");
-            if (camera) {
-                Vector3 camPos = camera->GetTranslate();
-                if (ImGui::DragFloat3("Position", &camPos.x, 0.1f)) { camera->SetTranslate(camPos); }
-
-                Vector3 camRot = camera->GetRotate();
-                float rotXDegrees = camRot.x * 180.0f / 3.14159265f;
-                float rotYDegrees = camRot.y * 180.0f / 3.14159265f;
-                float rotZDegrees = camRot.z * 180.0f / 3.14159265f;
-                bool changed = false;
-                changed |= ImGui::SliderAngle("Rotation X", &rotXDegrees);
-                changed |= ImGui::SliderAngle("Rotation Y", &rotYDegrees);
-                changed |= ImGui::SliderAngle("Rotation Z", &rotZDegrees);
-                if (changed) {
-                    camRot.x = rotXDegrees * 3.14159265f / 180.0f;
-                    camRot.y = rotYDegrees * 3.14159265f / 180.0f;
-                    camRot.z = rotZDegrees * 3.14159265f / 180.0f;
-                    camera->SetRotate(camRot);
-                }
-
-                static float fovY = 0.45f; // 表示用の初期値
-                static float aspect = 1280.0f / 720.0f;
-                static float nearClip = 0.1f;
-                static float farClip = 1000.0f;
-                if (ImGui::SliderAngle("FOV Y", &fovY, 10.0f, 120.0f)) { camera->SetFovY(fovY * 3.14159265f / 180.0f); }
-                if (ImGui::DragFloat("Aspect", &aspect, 0.001f, 0.1f, 10.0f)) { camera->SetAspectRatio(aspect); }
-                if (ImGui::DragFloat("Near", &nearClip, 0.001f, 0.001f, 10.0f)) { camera->SetNearClip(nearClip); }
-                if (ImGui::DragFloat("Far", &farClip, 1.0f, 10.0f, 10000.0f)) { camera->SetFarClip(farClip); }
-
-                // 値を反映
-                camera->Update();
-            }
-            ImGui::End();
-
-            // カメラ操作の有効/無効を切り替えるチェックボックス
-            ImGui::Checkbox("Debug Camera Control", &isDebugCameraControl);
-
-            ImGui::End();
+            // UI is built via ImGuiManager::BuildUI(ctx). Remove duplicate
+            // direct ImGui code to avoid duplication and keep UI centralized.
 
             //--------------------
             // 画面のクリア処理(Draw)
@@ -1125,8 +641,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // 描画準備は描画対象ごとに行う（PSO/RootSignatureを切り替えるため）
 
-            // ImGuiの内部コマンドを生成する
-            ImGui::Render();
+            // NOTE: ImGui must be rendered after scene (sprites/3D) so UI stays on top.
+            // We only set up descriptor heaps here; actual ImGui render call is moved to after scene draw.
 
             // 描画対象に応じた処理
             switch (selectedDrawType) {
@@ -1249,8 +765,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 break;
             }
 
-            // 実際のcommandListのImGuiの描画コマンドを積む
-            ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), DirectXCommon::GetInstance()->GetCommandList());
+            // Render ImGui last so it appears on top of scene
+            imguiManager.Render(DirectXCommon::GetInstance()->GetCommandList());
 
             // 描画後処理
             DirectXCommon::GetInstance()->PostDraw();
@@ -1266,6 +782,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // テクスチャ/モデル管理の解放
     TextureManager::GetInstance()->Finalize();
+    // Shutdown ImGui (will shutdown platform and context)
+    imguiManager.Shutdown();
     srvManager.Finalize();
     ModelManager::GetInstance()->Finalize();
 

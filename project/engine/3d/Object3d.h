@@ -150,8 +150,12 @@ public:
             Logger::Log(oss.str());
             return; // ignore invalid assignment
         }
+
         transform_.translate = translate;
     }
+
+    // Draw ImGui controls for this object (per-object edit UI)
+    void DrawImGui(int index);
 
     // Getter
     const Vector3 GetScale() const { return transform_.scale; }

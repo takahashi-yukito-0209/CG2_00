@@ -47,6 +47,8 @@ public:
 
     // パーティクルグループの生成
     void CreateParticleGroup(const std::string& name, const std::string& textureFilePath);
+    // Set texture for an existing group (filePath should be loaded or will be loaded)
+    void SetGroupTexture(const std::string& name, const std::string& textureFilePath);
 
     // Emit
     void Emit(const std::string& name, const Vector3& position, uint32_t count);
@@ -73,6 +75,9 @@ public:
     void SetVelocityRange(const Vector3& mn, const Vector3& mx);   // 初速の範囲
     void SetScaleRange(const Vector3& mn, const Vector3& mx);      // 初期スケール範囲
     void SetColorRange(const Vector4& mn, const Vector4& mx);      // 初期カラー範囲
+
+    // Draw ImGui controls for this manager
+    void DrawImGui();
 
 private:
     ParticleManager() = default;

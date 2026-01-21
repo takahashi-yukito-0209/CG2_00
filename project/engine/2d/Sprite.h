@@ -70,6 +70,8 @@ public: // メンバ関数
     void SetIsFlipY(bool isFlipY) { isFlipY_ = isFlipY; }
     void SetTextureLeftTop(const Vector2& textureLeftTop) { textureLeftTop_ = textureLeftTop; }
     void SetTextureSize(const Vector2& textureSize) { textureSize_ = textureSize; }
+    // Set texture by file path (loads via TextureManager if necessary)
+    void SetTexture(const std::string& filePath);
 
 private: // メンバ関数
     // テクスチャサイズをイメージに合わせる

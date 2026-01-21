@@ -37,6 +37,8 @@ public:
     uint32_t GetSrvIndex(const std::string& filePath);
     // 新getter: GPUハンドル取得（filePathキー）
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(const std::string& filePath);
+    // Return a list of loaded texture file paths
+    std::vector<std::string> GetLoadedTextureFilePaths() const;
 
     // SRV確保可能チェック（上限に達していなければ true）
     bool CanAllocateMore() const {

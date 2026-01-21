@@ -19,6 +19,7 @@ public: // メンバ関数
     bool IsReady() const;
 
     void SetBlendMode(MyEngine::BlendMode mode);
+    MyEngine::BlendMode GetBlendMode() const { return blendMode_; }
 
 private: // メンバ関数
     // ルートシグネチャの作成

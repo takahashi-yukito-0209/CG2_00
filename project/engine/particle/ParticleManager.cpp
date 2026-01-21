@@ -7,6 +7,7 @@
 #include "engine/3d/Camera.h"
 #include <algorithm>
 #include <vector>
+#include "externals/imgui/imgui.h"
 
 using namespace MyEngine;
 
@@ -19,6 +20,22 @@ void ParticleManager::Initialize(MyEngine::DirectXCommon* dx,
     object3dCommon_ = objCommon;
     srvManager_ = srv;
     texManager_ = texMgr;
+}
+
+void ParticleManager::SetGroupTexture(const std::string& name, const std::string& textureFilePath)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) return;
+    it->second.texturePath = textureFilePath;
+    if (texManager_) {
+        uint32_t idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
+        if (idx == UINT32_MAX) {
+            texManager_->LoadTexture(textureFilePath);
+            texManager_->ExecuteResourceUpload();
+            idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
+        }
+        it->second.srvIndex = (idx == UINT32_MAX) ? 0u : idx;
+    }
 }
 
 void ParticleManager::SetParticlePlane(MyEngine::Object3d* plane)
@@ -226,3 +243,45 @@ void ParticleManager::SetColorRange(const Vector4& mn, const Vector4& mx) { colM
 void ParticleManager::SetGravityEnabled(bool enabled) { gravityEnabled_ = enabled; }
 void ParticleManager::SetGravity(const Vector3& g) { gravity_ = g; }
 void ParticleManager::SetDamping(float d) { damping_ = d < 0.0f ? 0.0f : d; }
+
+void ParticleManager::DrawImGui()
+{
+    ImGui::Text("Groups: %zu", particleGroups_.size());
+    // Show some global settings
+    ImGui::Checkbox("Enable Field", &fieldEnabled_);
+    ImGui::DragFloat3("Field Accel", &fieldAccel_.x, 0.1f, -100.0f, 100.0f);
+    ImGui::DragFloat3("Field Min", &fieldMin_.x, 0.1f, -100.0f, 100.0f);
+    ImGui::DragFloat3("Field Max", &fieldMax_.x, 0.1f, -100.0f, 100.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Lifetime");
+    ImGui::DragFloatRange2("Life Min/Max", &lifeMin_, &lifeMax_, 0.01f, 0.1f, 100.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Dynamics");
+    ImGui::Checkbox("Enable Gravity", &gravityEnabled_);
+    ImGui::DragFloat3("Gravity", &gravity_.x, 0.1f, -100.0f, 100.0f);
+    ImGui::DragFloat("Damping (1/s)", &damping_, 0.01f, 0.0f, 10.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Spawn Ranges");
+    ImGui::DragFloat3("Pos Min", &spawnPosMin_.x, 0.01f, -10.0f, 10.0f);
+    ImGui::DragFloat3("Pos Max", &spawnPosMax_.x, 0.01f, -10.0f, 10.0f);
+    ImGui::DragFloat3("Vel Min", &velMin_.x, 0.01f, -50.0f, 50.0f);
+    ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
+    ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
+    ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
+    // Color ranges (min/max)
+    ImGui::ColorEdit4("Color Min", &colMin_.x);
+    ImGui::ColorEdit4("Color Max", &colMax_.x);
+
+    // List groups
+    ImGui::Separator();
+    ImGui::Text("Groups");
+    for (auto& kv : particleGroups_) {
+        if (ImGui::TreeNode(kv.first.c_str())) {
+            ImGui::Text("Count = %zu", kv.second.particles.size());
+            ImGui::TreePop();
+        }
+    }
+}

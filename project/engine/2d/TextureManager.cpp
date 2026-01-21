@@ -17,6 +17,7 @@ TextureManager* TextureManager::GetInstance()
     return instance_;
 }
 
+
 void TextureManager::Finalize()
 {
     if (instance_ != nullptr) {
@@ -242,4 +243,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(const std::string& f
     auto it = textureDatas.find(filePath);
     if (it == textureDatas.end()) { return nullHandle; }
     return it->second.srvHandleGPU;
+}
+
+std::vector<std::string> TextureManager::GetLoadedTextureFilePaths() const
+{
+    std::vector<std::string> paths;
+    paths.reserve(textureDatas.size());
+    for (const auto& kv : textureDatas) {
+        paths.push_back(kv.first);
+    }
+    return paths;
 }
