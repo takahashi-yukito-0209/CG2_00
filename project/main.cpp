@@ -340,8 +340,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // デフォルトカメラを生成して共通部に登録
     auto camera = std::make_unique<Camera>();
-    camera->SetRotate({0.0f, 0.0f, 0.0f});
-    camera->SetTranslate({0.0f, 0.0f, -10.0f});
+    camera->SetRotate({-0.1f, 0.0f, 0.0f});
+    camera->SetTranslate({0.0f, 1.0f, -20.0f});
     camera->Update();
     object3dCommon->SetDefaultCamera(camera.get());
 
@@ -378,7 +378,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
     // 3dオブジェクト複数初期化（通常描画用）
     std::vector<std::unique_ptr<Object3d>> objects3d;// Object3d クラスのポインタを格納するための動的配列
-    const uint32_t kObject3DCount = 5; // 描画対象とする 3D オブジェクトの総数
+    const uint32_t kObject3DCount = 6; // 描画対象とする 3D オブジェクトの総数
     // 複数モデルを割り当てるためのファイル名リスト
     std::vector<std::string> modelFileNames = {
         "plane.obj",
@@ -386,6 +386,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         "teapot.obj",
         "models/fence/fence.obj",
         "models/sphere/sphere.obj", 
+        "models/terrain/terrain.obj"
     };
 
     // 指定された数だけ 3D オブジェクトを生成・設定するループ
@@ -436,6 +437,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         Logger::Log("Warning: Failed to get shared directional light data from Object3dCommon\n");
     }
 
+    // Configure scene lighting to produce a dark environment with a bright circular spot
+    if (directionalLightData) {
+        // make ambient/directional dim so point light stands out
+        directionalLightData->intensity = 0.05f;
+        directionalLightData->color = {0.2f, 0.25f, 0.3f, 1.0f};
+        directionalLightData->direction = {0.0f, -1.0f, 0.0f};
+    }
+
+    // Create a single bright point light located near the sphere's position
+    if (object3dCommon) {
+        MyEngine::Object3d::PointLight pl = {};
+        pl.position = { 0.0f, 1.5f, 0.0f, 0.0f }; // above the object
+        pl.color = { 1.0f, 1.0f, 1.0f, 6.0f }; // rgb + intensity in w
+        pl.radius = 6.0f;
+        pl.decay = 2.0f;
+        pl.enabled = 1;
+        int idx = object3dCommon->AddPointLight(pl);
+        if (idx < 0) {
+            Logger::Log("Warning: failed to add initial point light\n");
+        }
+    }
+
     // 全てのロード完了後、まとめて転送を実行
     TextureManager::GetInstance()->ExecuteResourceUpload();
 
@@ -470,7 +493,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         DRAW_ALL
     };
 
-    DrawType selectedDrawType = DRAW_SPRITE; // 初期値
+    DrawType selectedDrawType = DRAW_SPHERE; // 初期値
 
     // パーティクルエミッタ
     ParticleEmitter pmEmitter;
@@ -732,6 +755,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 // sphereモデルのみ描画
                 if (objects3d.size() > 4 && objects3d[4]) {
                     objects3d[4]->Draw();
+                }
+
+                if (objects3d.size() > 5 && objects3d[5]) {
+                    objects3d[5]->Draw();
                 }
                 break;
 

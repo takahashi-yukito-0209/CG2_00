@@ -261,6 +261,80 @@ void ImGuiManager::BuildUI(Context& ctx)
         }
     }
 
+    // Point lights UI
+    if (ctx.object3dCommon) {
+        if (ImGui::CollapsingHeader("Point Lights")) {
+            // show existing lights and allow add/remove/update
+            uint32_t maxPL = ctx.object3dCommon->GetMaxPointLights();
+            for (uint32_t i = 0; i < maxPL; ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                // Access raw array
+                auto pls = ctx.object3dCommon->GetPointLightsData();
+                if (!pls) { ImGui::Text("Point lights not available"); ImGui::PopID(); break; }
+                auto& pl = pls[i];
+                bool enabled = pl.enabled != 0;
+                if (!enabled) {
+                    ImGui::TextDisabled("Slot %d: empty", (int)i);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Add")) {
+                        Object3d::PointLight newPl = pl; // default copy
+                        newPl.position = {0.0f, 1.0f, 0.0f, 10.0f};
+                        newPl.color = {1.0f,1.0f,1.0f,1.0f};
+                        newPl.enabled = 1;
+                        ctx.object3dCommon->AddPointLight(newPl);
+                    }
+                    ImGui::PopID();
+                    continue;
+                }
+
+                ImGui::Text("Point %d", (int)i);
+                // Position (xyz)
+                float pos3[3] = { pl.position.x, pl.position.y, pl.position.z };
+                if (ImGui::DragFloat3("Position", pos3, 0.1f)) {
+                    Object3d::PointLight upd = pl;
+                    upd.position.x = pos3[0]; upd.position.y = pos3[1]; upd.position.z = pos3[2];
+                    ctx.object3dCommon->UpdatePointLight(static_cast<int>(i), upd);
+                }
+
+                // Radius (range) and decay (falloff exponent)
+                float radius = pl.radius;
+                if (ImGui::DragFloat("Radius", &radius, 0.1f, 0.01f, 10000.0f)) {
+                    Object3d::PointLight upd = pl;
+                    upd.radius = radius;
+                    ctx.object3dCommon->UpdatePointLight(static_cast<int>(i), upd);
+                }
+                float decay = pl.decay;
+                if (ImGui::DragFloat("Decay", &decay, 0.1f, 0.0f, 10.0f)) {
+                    Object3d::PointLight upd = pl;
+                    upd.decay = decay;
+                    ctx.object3dCommon->UpdatePointLight(static_cast<int>(i), upd);
+                }
+
+                // Enabled toggle
+                bool enabledBool = pl.enabled != 0;
+                if (ImGui::Checkbox("Enabled", &enabledBool)) {
+                    Object3d::PointLight upd = pl;
+                    upd.enabled = enabledBool ? 1 : 0;
+                    ctx.object3dCommon->UpdatePointLight(static_cast<int>(i), upd);
+                }
+
+                // Color + intensity
+                float color[4] = { pl.color.x, pl.color.y, pl.color.z, pl.color.w };
+                if (ImGui::ColorEdit4("Color/Intensity", color)) {
+                    Object3d::PointLight upd = pl;
+                    upd.color.x = color[0]; upd.color.y = color[1]; upd.color.z = color[2]; upd.color.w = color[3];
+                    ctx.object3dCommon->UpdatePointLight(static_cast<int>(i), upd);
+                }
+
+                if (ImGui::Button("Remove")) {
+                    ctx.object3dCommon->RemovePointLight(static_cast<int>(i));
+                }
+                ImGui::Separator();
+                ImGui::PopID();
+            }
+        }
+    }
+
     // Blend Mode section
     if (ImGui::CollapsingHeader("Blend Mode")) {
         const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };

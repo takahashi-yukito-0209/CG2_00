@@ -67,6 +67,12 @@ void Model::Draw(Object3d* owner)
         return;
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+    // Point lights
+    D3D12_GPU_VIRTUAL_ADDRESS plAddr = common->GetPointLightsGPUAddress();
+    if (plAddr != 0) {
+        // root parameter index 7 was reserved for point lights
+        cmdList->SetGraphicsRootConstantBufferView(7, plAddr);
+    }
 
     // camera CBV
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
@@ -159,6 +165,9 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = common->GetCameraGPUAddress();
     if (camAddr != 0) { cmdList->SetGraphicsRootConstantBufferView(6, camAddr); }
+    // Point lights for instanced draw
+    D3D12_GPU_VIRTUAL_ADDRESS plAddrInst = common->GetPointLightsGPUAddress();
+    if (plAddrInst != 0) { cmdList->SetGraphicsRootConstantBufferView(7, plAddrInst); }
 
     // テクスチャ: オーナー指定があればそれを優先 > 無ければモデル側テクスチャ
     uint32_t texIndex = UINT32_MAX;

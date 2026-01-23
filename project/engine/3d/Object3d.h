@@ -56,6 +56,16 @@ public: // メンバ構造体
         float intensity; //!< 輝度
     };
 
+    // 点光源データ構造体 (CPU側レイアウト)
+    struct PointLight {
+        Vector4 position; // xyz = position, w = unused
+        Vector4 color;    // rgb = color, w = intensity
+        float radius;     // maximum effective range
+        float decay;      // falloff exponent
+        int32_t enabled;  // 0 = disabled, non-zero = enabled
+        float padding;    // pad to 16-byte alignment
+    };
+
     // マテリアルデータ構造体
     struct MaterialData {
         std::string textureFilePath;
@@ -153,6 +163,8 @@ public:
 
         transform_.translate = translate;
     }
+
+    // Material helpers (none added)
 
     // Draw ImGui controls for this object (per-object edit UI)
     void DrawImGui(int index);

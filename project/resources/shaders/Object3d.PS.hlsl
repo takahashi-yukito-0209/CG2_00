@@ -18,6 +18,8 @@ struct DirectionalLight
 // Note: gDirectionalLight is still declared for compatibility, but if particles skip lighting
 // it may be left unused. Keep declaration to avoid shader compile errors when PS expects a CBV at b1.
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
+// Point lights are declared in Object3d.hlsli as PointLightArray and bound at b4
+ConstantBuffer<PointLightArray> gPointLights : register(b4);
 
 struct PixelShaderOutput
 {
@@ -71,8 +73,39 @@ PixelShaderOutput main(VertexShaderOutput input)
         float specularPow = pow(saturate(NdotH), gMaterial.shininess);
         float3 specular = gDirectionalLight.color.rgb * specularPow * gDirectionalLight.intensity;
 
-        // Apply lighting only to RGB channels
-        finalRGB = finalRGB * gDirectionalLight.color.rgb * lighting * gDirectionalLight.intensity + specular;
+        // Apply directional light (as before)
+        float3 accum = finalRGB * gDirectionalLight.color.rgb * lighting * gDirectionalLight.intensity + specular;
+
+        // Accumulate single point light (if enabled). Reduced loop for single-light config.
+        PointLightEntry pl = gPointLights.lights[0];
+        if (pl.enabled != 0) {
+            float3 toLight = pl.position.xyz - input.worldPosition;
+            float dist = length(toLight);
+            float range = pl.radius; // use explicit radius
+            // proceed only if within range and distance is non-zero
+            if (dist <= range && dist > 0.0001f) {
+                float3 Lp = normalize(toLight);
+                float NdotLp = max(dot(N, Lp), 0.0f);
+
+                // distance attenuation: inverse-square bias combined with a smooth range fade
+                float d = dist / max(0.0001f, range);
+                float attenuation = pow(saturate(1.0f - d), pl.decay);
+                attenuation += 0.5f / (1.0f + 0.1f * dist + 0.5f * dist * dist);
+                attenuation = saturate(attenuation);
+
+                float3 diffuseContrib = finalRGB * pl.color.rgb * pl.color.w * NdotLp * attenuation;
+
+                float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
+                float3 halfVec = normalize(Lp + toEye);
+                float NdotH = max(dot(N, halfVec), 0.0f);
+                float specularPow = pow(saturate(NdotH), gMaterial.shininess);
+                float3 specularContrib = pl.color.rgb * specularPow * pl.color.w * attenuation;
+
+                accum += diffuseContrib + specularContrib;
+            }
+        }
+
+        finalRGB = accum;
     }
 
     output.color = float4(finalRGB, finalA);

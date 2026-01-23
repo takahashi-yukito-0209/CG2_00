@@ -23,3 +23,18 @@ struct Material
 // Camera (world position only for specular direction)
 // Bound at b3 in pixel shader to avoid clashing with particle billboard VS constants
 struct Camera { float3 worldPosition; };
+
+// Point light entry for shader-side layout
+struct PointLightEntry {
+    float4 position; // xyz = position, w = unused
+    float4 color;    // rgb = color, w = intensity
+    float radius;    // maximum effective range
+    float decay;     // falloff exponent
+    int enabled;
+    float pad;       // pad to 16-byte boundary
+};
+// Container for binding as a single CBV
+// Reduced to support a single point light to match CPU-side configuration
+struct PointLightArray {
+    PointLightEntry lights[1];
+};

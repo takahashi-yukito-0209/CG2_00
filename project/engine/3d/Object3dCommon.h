@@ -12,6 +12,10 @@ public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon);
 
+    // Maximum supported point lights
+    // Reduce to a single point light instance for simpler lighting configuration
+    static const uint32_t kMaxPointLights = 1;
+
     // 編集用にマップされた平行光源データへのポインタを取得
     Object3d::DirectionalLight* GetDirectionalLightData() { return directionalLightData_; }
 
@@ -80,6 +84,9 @@ private: // メンバ変数
     // すべての Object3d インスタンスで共有される平行光源リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
     Object3d::DirectionalLight* directionalLightData_ = nullptr;
+    // 複数の点光源を管理するためのリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightsResource_;
+    Object3d::PointLight* pointLightsData_ = nullptr;
     MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::None;
     // カメラ定数バッファ（ワールド位置）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
@@ -104,6 +111,22 @@ private: // メンバ変数
     // 3Dオブジェクトが参照するデフォルトカメラ
     class Camera* defaultCamera_ = nullptr;
 
+public:
+    // Point light accessors
+    Object3d::PointLight* GetPointLightsData() { return pointLightsData_; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightsGPUAddress() const { return pointLightsResource_ ? pointLightsResource_->GetGPUVirtualAddress() : 0; }
+
+    // Point light management API
+    // Add a point light, returns index or -1 if full/not available
+    int AddPointLight(const Object3d::PointLight& pl);
+    // Remove (disable) a point light at index
+    bool RemovePointLight(int index);
+    // Update a point light at index
+    bool UpdatePointLight(int index, const Object3d::PointLight& pl);
+    // Get maximum supported point lights
+    uint32_t GetMaxPointLights() const { return kMaxPointLights; }
+
+    // Point light manipulation helpers are provided via GetPointLightsData() access
 };
 
 } // namespace MyEngine

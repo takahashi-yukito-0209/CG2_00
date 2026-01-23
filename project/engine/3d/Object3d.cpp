@@ -47,6 +47,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
     camera_ = object3dCommon->GetDefaultCamera();
 }
 
+
 void Object3d::DrawImGui(int index)
 {
     // Transform editing
@@ -334,6 +335,12 @@ void Object3d::Draw()
         Logger::Log(buf);
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+
+    // Point lights CBV (if available)
+    D3D12_GPU_VIRTUAL_ADDRESS plAddr = object3dCommon_->GetPointLightsGPUAddress();
+    if (plAddr != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(7, plAddr);
+    }
 
     // Camera CBV (Pixel b3) at root parameter 6
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();

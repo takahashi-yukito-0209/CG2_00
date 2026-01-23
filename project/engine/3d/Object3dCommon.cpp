@@ -19,6 +19,24 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
     }
+    // 点光源用バッファを作成（最大数は Object3dCommon::kMaxPointLights）
+    const uint32_t kMaxPointLights = Object3dCommon::kMaxPointLights;
+    size_t pointLightsBufferSize = sizeof(Object3d::PointLight) * static_cast<size_t>(kMaxPointLights);
+    pointLightsResource_ = dxCommon_->CreateBufferResource(pointLightsBufferSize);
+    if (pointLightsResource_) {
+        pointLightsResource_->Map(0, nullptr, reinterpret_cast<void**>(&pointLightsData_));
+        // デフォルトで無効化しておく
+        for (uint32_t i = 0; i < kMaxPointLights; ++i) {
+            // position.xyz = world position, position.w unused on CPU-side (HLSL stores radius separately)
+            pointLightsData_[i].position = {0.0f, 0.0f, 0.0f, 0.0f};
+            pointLightsData_[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
+            // sensible defaults for radius/decay so shader attenuation behaves predictably
+            pointLightsData_[i].radius = 10.0f;
+            pointLightsData_[i].decay = 2.0f;
+            pointLightsData_[i].enabled = 0;
+            pointLightsData_[i].padding = 0.0f;
+        }
+    }
   
     // ビルボード用のカメラ定数バッファ（b2）を作成
     cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
@@ -184,7 +202,7 @@ void Object3dCommon::CreateRootSignature() {
   
     // 注意: 互換性のため既存のインデックスを維持する: 0=Material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // 既存コードのインデックスを変更せずに済むよう、インスタンシングSRVテーブルはインデックス4（頂点）に追加する。
-    D3D12_ROOT_PARAMETER rootParameters[7] = {};
+    D3D12_ROOT_PARAMETER rootParameters[8] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -214,6 +232,11 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[6].Descriptor.ShaderRegister = 3; // b3
+
+    // rootParameters[7] : Point lights CBV (Pixel shader, b4)
+    rootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[7].Descriptor.ShaderRegister = 4; // b4
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 
@@ -267,6 +290,36 @@ void Object3dCommon::CreateRootSignature() {
     // バイナリをもとに生成し、メンバ変数に保持する
     hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
     assert(SUCCEEDED(hr));
+}
+
+int Object3dCommon::AddPointLight(const Object3d::PointLight& pl)
+{
+    if (!pointLightsData_) return -1;
+    for (uint32_t i = 0; i < kMaxPointLights; ++i) {
+        if (pointLightsData_[i].enabled == 0) {
+            pointLightsData_[i] = pl;
+            pointLightsData_[i].enabled = 1;
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+bool Object3dCommon::RemovePointLight(int index)
+{
+    if (!pointLightsData_) return false;
+    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) return false;
+    pointLightsData_[index].enabled = 0;
+    return true;
+}
+
+bool Object3dCommon::UpdatePointLight(int index, const Object3d::PointLight& pl)
+{
+    if (!pointLightsData_) return false;
+    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) return false;
+    pointLightsData_[index] = pl;
+    pointLightsData_[index].enabled = pl.enabled ? 1 : 0;
+    return true;
 }
 
 void Object3dCommon::CreateGraphicsPipeline() {
