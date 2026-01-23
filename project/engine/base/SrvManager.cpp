@@ -21,8 +21,8 @@ void SrvManager::Initialize(MyEngine::DirectXCommon* dxCommon)
 
 void SrvManager::Finalize()
 {
-    // ImGui をこのマネージャで初期化している場合はクリーンアップ
-    ShutdownImGui();
+    // ここでImGuiをシャットダウンしないこと（ImGuiの完全な終了はImGuiManager側で行い、
+    // 二重シャットダウンを回避するため）。
     dxCommon_ = nullptr;
     descriptorHeap_.Reset();
     descriptorSize_ = 0;
@@ -92,8 +92,10 @@ void SrvManager::InitImGui()
 
 void SrvManager::ShutdownImGui()
 {
-    // 既存のDirectXCommon側で初期化している場合との二重破棄を避けるため、呼び出し側の責任で一度だけ呼ぶ前提
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
+    // ここではレンダラのデバイスリソースのみを解放する。
+    // ImGui のコンテキストおよびプラットフォームの完全なシャットダウンは
+    // ImGuiManager によって行われ、二重シャットダウンによるクラッシュを防ぐ。
+    // レンダラのデバイスオブジェクトを無効化してGPUリソースを解放するが、
+    // ImGuiコンテキストやプラットフォームバックエンド自体は破棄しない。
+    ImGui_ImplDX12_InvalidateDeviceObjects();
 }

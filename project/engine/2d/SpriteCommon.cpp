@@ -14,6 +14,13 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 
 }
 
+void SpriteCommon::SetBlendMode(MyEngine::BlendMode mode)
+{
+    blendMode_ = mode;
+    // Recreate PSO to apply new blend state
+    CreateGraphicsPipeline();
+}
+
 
 void SpriteCommon::SetCommonDrawSetting()
 {

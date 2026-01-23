@@ -56,6 +56,29 @@ public: // メンバ構造体
         float intensity; //!< 輝度
     };
 
+    // 点光源データ構造体 (CPU側レイアウト)
+    struct PointLight {
+        Vector4 position; // xyz = position, w = unused
+        Vector4 color;    // rgb = color, w = intensity
+        float radius;     // maximum effective range
+        float decay;      // falloff exponent
+        int32_t enabled;  // 0 = disabled, non-zero = enabled
+        float padding;    // pad to 16-byte alignment
+    };
+
+    // スポットライトデータ構造体 (CPU側レイアウト)
+    struct SpotLight {
+        Vector4 position;      // xyz = position, w = unused
+        Vector4 color;         // rgb = color, w = intensity
+        Vector3 direction;     // spot direction (normalized)
+        float  distance;       // maximum effective range
+        float  decay;          // falloff exponent
+        float  cosAngle;       // cosine of inner cone angle (center)
+        float  cosFalloffStart;// cosine of falloff start angle
+        int32_t enabled;       // 0 = disabled, non-zero = enabled
+        float  padding;        // pad to 16-byte alignment
+    };
+
     // マテリアルデータ構造体
     struct MaterialData {
         std::string textureFilePath;
@@ -150,8 +173,14 @@ public:
             Logger::Log(oss.str());
             return; // ignore invalid assignment
         }
+
         transform_.translate = translate;
     }
+
+    // Material helpers (none added)
+
+    // Draw ImGui controls for this object (per-object edit UI)
+    void DrawImGui(int index);
 
     // Getter
     const Vector3 GetScale() const { return transform_.scale; }

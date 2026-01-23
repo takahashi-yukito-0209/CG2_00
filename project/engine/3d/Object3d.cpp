@@ -1,6 +1,7 @@
 #include "Object3d.h"
 #include "Object3dCommon.h" 
 #include "DirectXCommon.h"
+#include "externals/imgui/imgui.h"
 #include <fstream>
 #include "Logger.h"
 #include "StringUtility.h"
@@ -44,6 +45,22 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
 
     // 既定のカメラを参照
     camera_ = object3dCommon->GetDefaultCamera();
+}
+
+
+void Object3d::DrawImGui(int index)
+{
+    // Transform editing
+    ImGui::Text("Object %d", index);
+    ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f, 0.001f, 1000.0f);
+    ImGui::DragFloat3("Rotate", &transform_.rotate.x, 0.01f);
+    ImGui::DragFloat3("Translate", &transform_.translate.x, 0.01f);
+
+    // Material controls (if material data exists)
+    if (materialData_) {
+        ImGui::Checkbox("Use Alpha Cutout Sampler", &useAlphaCutoutSampler_);
+        materialData_->useAlphaCutoutSampler = useAlphaCutoutSampler_ ? 1 : 0;
+    }
 }
 
 // ファイル名を指定してテクスチャを設定する
@@ -318,6 +335,12 @@ void Object3d::Draw()
         Logger::Log(buf);
     }
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
+
+    // Point lights CBV (if available)
+    D3D12_GPU_VIRTUAL_ADDRESS plAddr = object3dCommon_->GetPointLightsGPUAddress();
+    if (plAddr != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(7, plAddr);
+    }
 
     // Camera CBV (Pixel b3) at root parameter 6
     D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();

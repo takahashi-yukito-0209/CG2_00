@@ -287,3 +287,20 @@ void Sprite::AdjustTextureSize()
     //画像サイズをテクスチャサイズに合わせつ
     size_ = textureSize_;
 }
+
+void Sprite::SetTexture(const std::string& filePath)
+{
+    auto texMgr = TextureManager::GetInstance();
+    uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
+    if (idx == UINT32_MAX) {
+        texMgr->LoadTexture(filePath);
+        texMgr->ExecuteResourceUpload();
+        idx = texMgr->GetTextureIndexByFilePath(filePath);
+    }
+    if (idx != UINT32_MAX) {
+        textureIndex_ = idx;
+        AdjustTextureSize();
+    } else {
+        Logger::Log(std::string("Sprite::SetTexture: failed to load ") + filePath);
+    }
+}

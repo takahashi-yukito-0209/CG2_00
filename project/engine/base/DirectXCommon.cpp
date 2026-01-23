@@ -694,10 +694,12 @@ void DirectXCommon::CreateDxcCompiler()
 
 void DirectXCommon::InitImGui()
 {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui_ImplWin32_Init(winApp_->GetHwnd());
+    // ここでImGuiを初期化しない（意図的）
+    // ImGuiのコンテキストとプラットフォームバックエンド(Win32)はImGuiManager側で
+    // 一元的に初期化される。これにより二重初期化によるアサート
+    // (例: "Already initialized a platform backend!") を回避する。
+    // レンダラバックエンド(DX12)は、ImGuiManagerがコンテキストとプラットフォーム
+    // バックエンドをセットアップした後に SrvManager::InitImGui() から初期化される。
 }
 
 void DirectXCommon::InitializeFixFPS()

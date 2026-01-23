@@ -12,6 +12,10 @@ public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon);
 
+    // サポートする最大の点光源数
+    // ライティング設定を簡素化するために単一の点光源のみをサポートする
+    static const uint32_t kMaxPointLights = 1;
+
     // 編集用にマップされた平行光源データへのポインタを取得
     Object3d::DirectionalLight* GetDirectionalLightData() { return directionalLightData_; }
 
@@ -80,6 +84,12 @@ private: // メンバ変数
     // すべての Object3d インスタンスで共有される平行光源リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
     Object3d::DirectionalLight* directionalLightData_ = nullptr;
+    // 複数の点光源を管理するためのリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightsResource_;
+    Object3d::PointLight* pointLightsData_ = nullptr;
+    // スポットライト用リソース (単一スポットライトを想定)
+    Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
+    Object3d::SpotLight* spotLightData_ = nullptr;
     MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::None;
     // カメラ定数バッファ（ワールド位置）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
@@ -104,6 +114,26 @@ private: // メンバ変数
     // 3Dオブジェクトが参照するデフォルトカメラ
     class Camera* defaultCamera_ = nullptr;
 
+public:
+    // 点光源用アクセサ
+    Object3d::PointLight* GetPointLightsData() { return pointLightsData_; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightsGPUAddress() const { return pointLightsResource_ ? pointLightsResource_->GetGPUVirtualAddress() : 0; }
+
+    // スポットライト用アクセサ
+    Object3d::SpotLight* GetSpotLightData() { return spotLightData_; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
+
+    // 点光源管理用API
+    // 点光源を追加する。追加成功時にインデックスを返し、満杯/不可のときは -1 を返す
+    int AddPointLight(const Object3d::PointLight& pl);
+    // 指定インデックスの点光源を削除（無効化）する
+    bool RemovePointLight(int index);
+    // 指定インデックスの点光源を更新する
+    bool UpdatePointLight(int index, const Object3d::PointLight& pl);
+    // サポートする最大点光源数を取得
+    uint32_t GetMaxPointLights() const { return kMaxPointLights; }
+
+    // Point light manipulation helpers are provided via GetPointLightsData() access
 };
 
 } // namespace MyEngine
