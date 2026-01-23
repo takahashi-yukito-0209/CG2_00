@@ -21,7 +21,8 @@ void SrvManager::Initialize(MyEngine::DirectXCommon* dxCommon)
 
 void SrvManager::Finalize()
 {
-    // Do not shutdown ImGui here; ImGuiManager handles full shutdown to avoid double-shutdown.
+    // ここでImGuiをシャットダウンしないこと（ImGuiの完全な終了はImGuiManager側で行い、
+    // 二重シャットダウンを回避するため）。
     dxCommon_ = nullptr;
     descriptorHeap_.Reset();
     descriptorSize_ = 0;
@@ -91,9 +92,10 @@ void SrvManager::InitImGui()
 
 void SrvManager::ShutdownImGui()
 {
-    // Only release renderer device objects here. Full ImGui context and platform
-    // shutdown is handled by ImGuiManager to avoid double-shutdown crashes.
-    // Invalidate device objects so the renderer releases GPU resources but
-    // does not destroy the ImGui context or platform backend.
+    // ここではレンダラのデバイスリソースのみを解放する。
+    // ImGui のコンテキストおよびプラットフォームの完全なシャットダウンは
+    // ImGuiManager によって行われ、二重シャットダウンによるクラッシュを防ぐ。
+    // レンダラのデバイスオブジェクトを無効化してGPUリソースを解放するが、
+    // ImGuiコンテキストやプラットフォームバックエンド自体は破棄しない。
     ImGui_ImplDX12_InvalidateDeviceObjects();
 }

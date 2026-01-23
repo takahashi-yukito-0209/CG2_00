@@ -38,3 +38,21 @@ struct PointLightEntry {
 struct PointLightArray {
     PointLightEntry lights[1];
 };
+
+// Spot light entry for shader-side layout
+struct SpotLightEntry {
+    float4 position;      // xyz = position, w = unused
+    float4 color;         // rgb = color, w = intensity
+    float3 direction;     // spot direction (normalized)
+    float  distance;      // maximum effective range
+    float  decay;         // falloff exponent
+    float  cosAngle;      // cosine of inner cone angle (center)
+    float  cosFalloffStart;// cosine of falloff start angle
+    int    enabled;       // 0 = disabled, non-zero = enabled
+    float  pad0;          // pad to 16 bytes
+};
+
+// Single spot light container
+struct SpotLightArray {
+    SpotLightEntry light;
+};

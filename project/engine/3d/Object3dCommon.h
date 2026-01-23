@@ -12,8 +12,8 @@ public: // メンバ関数
     // 初期化
     void Initialize(DirectXCommon* dxCommon);
 
-    // Maximum supported point lights
-    // Reduce to a single point light instance for simpler lighting configuration
+    // サポートする最大の点光源数
+    // ライティング設定を簡素化するために単一の点光源のみをサポートする
     static const uint32_t kMaxPointLights = 1;
 
     // 編集用にマップされた平行光源データへのポインタを取得
@@ -87,6 +87,9 @@ private: // メンバ変数
     // 複数の点光源を管理するためのリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> pointLightsResource_;
     Object3d::PointLight* pointLightsData_ = nullptr;
+    // スポットライト用リソース (単一スポットライトを想定)
+    Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
+    Object3d::SpotLight* spotLightData_ = nullptr;
     MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::None;
     // カメラ定数バッファ（ワールド位置）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
@@ -112,18 +115,22 @@ private: // メンバ変数
     class Camera* defaultCamera_ = nullptr;
 
 public:
-    // Point light accessors
+    // 点光源用アクセサ
     Object3d::PointLight* GetPointLightsData() { return pointLightsData_; }
     D3D12_GPU_VIRTUAL_ADDRESS GetPointLightsGPUAddress() const { return pointLightsResource_ ? pointLightsResource_->GetGPUVirtualAddress() : 0; }
 
-    // Point light management API
-    // Add a point light, returns index or -1 if full/not available
+    // スポットライト用アクセサ
+    Object3d::SpotLight* GetSpotLightData() { return spotLightData_; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
+
+    // 点光源管理用API
+    // 点光源を追加する。追加成功時にインデックスを返し、満杯/不可のときは -1 を返す
     int AddPointLight(const Object3d::PointLight& pl);
-    // Remove (disable) a point light at index
+    // 指定インデックスの点光源を削除（無効化）する
     bool RemovePointLight(int index);
-    // Update a point light at index
+    // 指定インデックスの点光源を更新する
     bool UpdatePointLight(int index, const Object3d::PointLight& pl);
-    // Get maximum supported point lights
+    // サポートする最大点光源数を取得
     uint32_t GetMaxPointLights() const { return kMaxPointLights; }
 
     // Point light manipulation helpers are provided via GetPointLightsData() access

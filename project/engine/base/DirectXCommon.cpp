@@ -694,12 +694,12 @@ void DirectXCommon::CreateDxcCompiler()
 
 void DirectXCommon::InitImGui()
 {
-    // Intentionally do not initialize ImGui here.
-    // ImGui context and platform backend (Win32) are initialized by ImGuiManager
-    // to ensure a single, centralized initialization and avoid double-init
-    // assertions (e.g. "Already initialized a platform backend!").
-    // The renderer backend (DX12) is initialized via SrvManager::InitImGui()
-    // after ImGuiManager has set up the context and platform backend.
+    // ここでImGuiを初期化しない（意図的）
+    // ImGuiのコンテキストとプラットフォームバックエンド(Win32)はImGuiManager側で
+    // 一元的に初期化される。これにより二重初期化によるアサート
+    // (例: "Already initialized a platform backend!") を回避する。
+    // レンダラバックエンド(DX12)は、ImGuiManagerがコンテキストとプラットフォーム
+    // バックエンドをセットアップした後に SrvManager::InitImGui() から初期化される。
 }
 
 void DirectXCommon::InitializeFixFPS()

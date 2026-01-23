@@ -47,10 +47,10 @@ public:
 
     // パーティクルグループの生成
     void CreateParticleGroup(const std::string& name, const std::string& textureFilePath);
-    // Set texture for an existing group (filePath should be loaded or will be loaded)
+    // 既存グループにテクスチャを設定する（filePathが未ロードの場合はロードされる）
     void SetGroupTexture(const std::string& name, const std::string& textureFilePath);
 
-    // Emit
+    // 発生（エミット）
     void Emit(const std::string& name, const Vector3& position, uint32_t count);
 
     // 更新（寿命と移動のみの最小ロジック）
@@ -76,7 +76,7 @@ public:
     void SetScaleRange(const Vector3& mn, const Vector3& mx);      // 初期スケール範囲
     void SetColorRange(const Vector4& mn, const Vector4& mx);      // 初期カラー範囲
 
-    // Draw ImGui controls for this manager
+    // このマネージャ用の ImGui コントロールを描画
     void DrawImGui();
 
 private:

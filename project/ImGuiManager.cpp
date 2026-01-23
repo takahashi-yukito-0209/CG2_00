@@ -172,7 +172,7 @@ void ImGuiManager::BuildUI(Context& ctx)
                                 ImGui::PopID();
                             }
                         }
-                    }
+                        }
                 }
             }
         }
@@ -232,7 +232,7 @@ void ImGuiManager::BuildUI(Context& ctx)
         }
     }
 
-    // Light editing (shared global light owned by Object3dCommon)
+    // ライト編集（Object3dCommonが所有する共有の平行光源）
     if (ctx.object3dCommon) {
         auto light = ctx.object3dCommon->GetDirectionalLightData();
         if (light) {
@@ -245,7 +245,7 @@ void ImGuiManager::BuildUI(Context& ctx)
                     light->color.w = color[3];
                 }
 
-                // Direction: normalize after editing
+                // 方向ベクトル: 編集後に正規化して反映する
                 float dir[3] = { light->direction.x, light->direction.y, light->direction.z };
                 if (ImGui::SliderFloat3("Direction", dir, -1.0f, 1.0f)) {
                     float len = sqrtf(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
@@ -256,6 +256,7 @@ void ImGuiManager::BuildUI(Context& ctx)
                     }
                 }
 
+                // 強度（輝度）をスライダーで制御
                 ImGui::SliderFloat("Intensity", &light->intensity, 0.0f, 10.0f, "%.2f");
             }
         }
@@ -331,6 +332,66 @@ void ImGuiManager::BuildUI(Context& ctx)
                 }
                 ImGui::Separator();
                 ImGui::PopID();
+            }
+        }
+    }
+
+    // Spot Light UI (top-level) - always available like Point Lights
+    if (ctx.object3dCommon) {
+        if (ImGui::CollapsingHeader("Spot Light")) {
+            auto spot = ctx.object3dCommon->GetSpotLightData();
+            if (!spot) {
+                ImGui::TextDisabled("Spot light not available");
+            } else {
+                bool enabled = spot->enabled != 0;
+                if (ImGui::Checkbox("Enabled##Spot", &enabled)) {
+                    spot->enabled = enabled ? 1 : 0;
+                }
+
+                float spos[3] = { spot->position.x, spot->position.y, spot->position.z };
+                if (ImGui::DragFloat3("Position##Spot", spos, 0.1f)) {
+                    spot->position.x = spos[0]; spot->position.y = spos[1]; spot->position.z = spos[2];
+                }
+
+                float sdir[3] = { spot->direction.x, spot->direction.y, spot->direction.z };
+                if (ImGui::DragFloat3("Direction##Spot", sdir, 0.01f, -1.0f, 1.0f)) {
+                    float len = sqrtf(sdir[0]*sdir[0] + sdir[1]*sdir[1] + sdir[2]*sdir[2]);
+                    if (len > 1e-6f) {
+                        spot->direction.x = sdir[0] / len;
+                        spot->direction.y = sdir[1] / len;
+                        spot->direction.z = sdir[2] / len;
+                    }
+                }
+
+                float distance = spot->distance;
+                if (ImGui::DragFloat("Distance##Spot", &distance, 0.1f, 0.01f, 100000.0f)) {
+                    spot->distance = distance;
+                }
+                float decay = spot->decay;
+                if (ImGui::DragFloat("Decay##Spot", &decay, 0.01f, 0.0f, 10.0f)) {
+                    spot->decay = decay;
+                }
+
+                const float toDeg = 180.0f / 3.14159265f;
+                const float toRad = 3.14159265f / 180.0f;
+                float cosInner = spot->cosAngle; if (cosInner > 1.0f) cosInner = 1.0f; if (cosInner < -1.0f) cosInner = -1.0f;
+                float cosOuter = spot->cosFalloffStart; if (cosOuter > 1.0f) cosOuter = 1.0f; if (cosOuter < -1.0f) cosOuter = -1.0f;
+                float innerDeg = acosf(cosInner) * toDeg;
+                float outerDeg = acosf(cosOuter) * toDeg;
+                if (ImGui::SliderFloat("Inner Angle (deg)##Spot", &innerDeg, 0.0f, 90.0f)) {
+                    if (innerDeg > outerDeg) outerDeg = innerDeg;
+                    spot->cosAngle = cosf(innerDeg * toRad);
+                    spot->cosFalloffStart = cosf(outerDeg * toRad);
+                }
+                if (ImGui::SliderFloat("Outer Angle (deg)##Spot", &outerDeg, innerDeg, 90.0f)) {
+                    spot->cosFalloffStart = cosf(outerDeg * toRad);
+                    if (innerDeg > outerDeg) spot->cosAngle = spot->cosFalloffStart;
+                }
+
+                float scol[4] = { spot->color.x, spot->color.y, spot->color.z, spot->color.w };
+                if (ImGui::ColorEdit4("Color/Intensity##Spot", scol)) {
+                    spot->color.x = scol[0]; spot->color.y = scol[1]; spot->color.z = scol[2]; spot->color.w = scol[3];
+                }
             }
         }
     }

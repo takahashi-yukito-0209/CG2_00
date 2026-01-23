@@ -66,6 +66,19 @@ public: // メンバ構造体
         float padding;    // pad to 16-byte alignment
     };
 
+    // スポットライトデータ構造体 (CPU側レイアウト)
+    struct SpotLight {
+        Vector4 position;      // xyz = position, w = unused
+        Vector4 color;         // rgb = color, w = intensity
+        Vector3 direction;     // spot direction (normalized)
+        float  distance;       // maximum effective range
+        float  decay;          // falloff exponent
+        float  cosAngle;       // cosine of inner cone angle (center)
+        float  cosFalloffStart;// cosine of falloff start angle
+        int32_t enabled;       // 0 = disabled, non-zero = enabled
+        float  padding;        // pad to 16-byte alignment
+    };
+
     // マテリアルデータ構造体
     struct MaterialData {
         std::string textureFilePath;

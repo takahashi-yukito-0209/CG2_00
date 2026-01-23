@@ -20,6 +20,8 @@ struct DirectionalLight
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 // Point lights are declared in Object3d.hlsli as PointLightArray and bound at b4
 ConstantBuffer<PointLightArray> gPointLights : register(b4);
+// Spot light bound at b5
+ConstantBuffer<SpotLightArray> gSpotLight : register(b5);
 
 struct PixelShaderOutput
 {
@@ -102,6 +104,33 @@ PixelShaderOutput main(VertexShaderOutput input)
                 float3 specularContrib = pl.color.rgb * specularPow * pl.color.w * attenuation;
 
                 accum += diffuseContrib + specularContrib;
+            }
+        }
+
+        // Spot light contribution (single spot)
+        SpotLightEntry sl = gSpotLight.light;
+        if (sl.enabled != 0) {
+            float3 toSpot = sl.position.xyz - input.worldPosition;
+            float distS = length(toSpot);
+            if (distS <= sl.distance && distS > 0.0001f) {
+                float3 Ls = normalize(toSpot);
+                float angleCos = dot(Ls, normalize(sl.direction));
+                // compute falloff between cosAngle (full) and cosFalloffStart (start fading)
+                float falloff = saturate((angleCos - sl.cosFalloffStart) / max(1e-6, sl.cosAngle - sl.cosFalloffStart));
+                // distance attenuation (same style as point light)
+                float dS = distS / max(0.0001f, sl.distance);
+                float attenuationS = pow(saturate(1.0f - dS), sl.decay);
+                attenuationS *= falloff;
+
+                float NdotLs = max(dot(N, Ls), 0.0f);
+                float3 diffuseS = finalRGB * sl.color.rgb * sl.color.w * NdotLs * attenuationS;
+
+                float3 halfVecS = normalize(Ls + toEye);
+                float NdotHS = max(dot(N, halfVecS), 0.0f);
+                float specPowS = pow(saturate(NdotHS), gMaterial.shininess);
+                float3 specS = sl.color.rgb * specPowS * sl.color.w * attenuationS;
+
+                accum += diffuseS + specS;
             }
         }
 

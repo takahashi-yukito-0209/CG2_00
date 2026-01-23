@@ -437,25 +437,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
         Logger::Log("Warning: Failed to get shared directional light data from Object3dCommon\n");
     }
 
-    // Configure scene lighting to produce a dark environment with a bright circular spot
+    // シーン照明の設定: 暗めの環境に明るいスポットを作る
     if (directionalLightData) {
-        // make ambient/directional dim so point light stands out
+        // 環境/平行光を暗めにして点光源を目立たせる
         directionalLightData->intensity = 0.05f;
         directionalLightData->color = {0.2f, 0.25f, 0.3f, 1.0f};
         directionalLightData->direction = {0.0f, -1.0f, 0.0f};
     }
 
-    // Create a single bright point light located near the sphere's position
+    // 単一の明るい点光源を球体近傍に配置する
     if (object3dCommon) {
         MyEngine::Object3d::PointLight pl = {};
-        pl.position = { 0.0f, 1.5f, 0.0f, 0.0f }; // above the object
-        pl.color = { 1.0f, 1.0f, 1.0f, 6.0f }; // rgb + intensity in w
+        pl.position = { 0.0f, 1.5f, 0.0f, 0.0f }; // オブジェクトの上方
+        pl.color = { 1.0f, 1.0f, 1.0f, 6.0f }; // rgb + 強度を w 成分に格納
         pl.radius = 6.0f;
         pl.decay = 2.0f;
         pl.enabled = 1;
         int idx = object3dCommon->AddPointLight(pl);
         if (idx < 0) {
             Logger::Log("Warning: failed to add initial point light\n");
+        }
+    }
+
+    // 単一スポットライトを設定して集中的な明るい領域を作る
+    if (object3dCommon) {
+        // Object3dCommon が所有するマップ済みのスポットライトデータへアクセス
+        auto sl = object3dCommon->GetSpotLightData();
+        if (sl) {
+            // スポットライトの位置をわずかに横と上にずらす
+            sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
+            // RGB 色。w 成分は強度として使う
+            sl->color = { 1.0f, 1.0f, 1.0f, 4.0f };
+            // スポットライトの有効範囲
+            sl->distance = 7.0f;
+            // ターゲット（原点/オブジェクト）に向ける
+            sl->direction = math.Normalize({ -1.0f, -1.0f, 0.0f });
+            // 距離減衰の指数
+            sl->decay = 2.0f;
+            // 内側コーン角のコサイン（中心）、ここでは60度を使用
+            sl->cosAngle = cosf(3.14159265358979323846f / 3.0f);
+            // フォールオフ開始角のコサイン、90度を使用して90->60度でフェードする
+            sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f);
+            // スポットライトを有効化
+            sl->enabled = 1;
         }
     }
 
