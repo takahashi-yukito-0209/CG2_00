@@ -46,6 +46,7 @@
 #include "ParticleManager.h"
 #include "ParticleEmitter.h"
 #include "ImGuiManager.h"
+#include "engine/sound/Sound.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -56,34 +57,6 @@
 #pragma comment(lib, "dinput8.lib")
 
 using namespace MyEngine;
-
-// チャンクヘッダ
-struct ChunkHeader {
-    char id[4]; // チャンク毎のID
-    int32_t size; // チャンクサイズ
-};
-
-// RIFFヘッダチャンク
-struct RiffHeader {
-    ChunkHeader chunk; //"RIFF"
-    char type[4]; //"WAVE"
-};
-
-// FMTチャンク
-struct FormatChunk {
-    ChunkHeader chunk; //"fmt"
-    WAVEFORMATEX fmt; // 波型フォーマット
-};
-
-// 音声データ
-struct SoundData {
-    // 波型フォーマット
-    WAVEFORMATEX wfex;
-    // バッファの先頭アドレス
-    BYTE* pBuffer;
-    // バッファのサイズ
-    unsigned int bufferSize;
-};
 
 static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 {
@@ -113,129 +86,6 @@ static LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 
     // 他に関連付けられているSEH例外ハンドラがあれば実行。通常はプロセスを終了する
     return EXCEPTION_EXECUTE_HANDLER;
-}
-
-SoundData SoundLoadWave(const char* filename)
-{
-    // 1.ファイルオープン
-
-    // ファイル入力ストリームのインスタンス
-    std::ifstream file;
-    //.wavファイルをバイナリモードで開く
-    file.open(filename, std::ios_base::binary);
-    // ファイルオープン失敗を検知する
-    if (!file.is_open()) {
-        char buf[256];
-        sprintf_s(buf, "Error: Failed to open WAV file: %s\n", filename);
-        Logger::Log(buf);
-        return SoundData{};
-    }
-
-    // 2..wavデータ読み込み
-
-    // RIFFヘッダーの読み込み
-    RiffHeader riff;
-    file.read((char*)&riff, sizeof(riff));
-    // ファイルがRIFFかチェック
-    if (strncmp(riff.chunk.id, "RIFF", 4) != 0) {
-        Logger::Log("Error: Not a RIFF file.\n");
-        file.close();
-        return SoundData{};
-    }
-    // タイプがWAVEかチェック
-    if (strncmp(riff.type, "WAVE", 4) != 0) {
-        Logger::Log("Error: Not a WAVE file.\n");
-        file.close();
-        return SoundData{};
-    }
-
-    // Formatチャンクの読み込み
-    FormatChunk format = {};
-    // チャンクヘッダーの確認
-    file.read((char*)&format, sizeof(ChunkHeader));
-    if (strncmp(format.chunk.id, "fmt ", 4) != 0) {
-        Logger::Log("Error: fmt chunk not found.\n");
-        file.close();
-        return SoundData{};
-    }
-
-    // チャンク本体の読み込み
-    if (format.chunk.size > sizeof(format.fmt)) {
-        Logger::Log("Error: fmt chunk size too large.\n");
-        file.close();
-        return SoundData{};
-    }
-    file.read((char*)&format.fmt, format.chunk.size);
-
-    // Dataチャンクの読み込み
-    ChunkHeader data;
-    file.read((char*)&data, sizeof(data));
-    // JUNKチャンクを検出した場合
-    if (strncmp(data.id, "JUNK", 4) == 0) {
-        // 読み取り位置をJUNKチャンクの終わりまで進める
-        file.seekg(data.size, std::ios_base::cur);
-        // 再読み込み
-        file.read((char*)&data, sizeof(data));
-    }
-
-    if (strncmp(data.id, "data", 4) != 0) {
-        Logger::Log("Error: data chunk not found.\n");
-        file.close();
-        return SoundData{};
-    }
-
-    // Dataチャンクのデータ部(波型データ)の読み込み
-    // バッファを BYTE 配列として確保して読み込む
-    BYTE* pBuffer = new BYTE[data.size];
-    file.read(reinterpret_cast<char*>(pBuffer), data.size);
-
-    // 3.ファイルクローズ
-
-    // waveファイルを閉じる
-    file.close();
-
-    // 4.読み込んだ音声データをreturn
-
-    // returnするための音声データ
-    SoundData soundData = {};
-
-    soundData.wfex = format.fmt;
-    soundData.pBuffer = pBuffer;
-    soundData.bufferSize = data.size;
-
-    return soundData;
-}
-
-// 音声データ解放
-void SoundUnload(SoundData* soundData)
-{
-    // バッファのメモリを解放
-    delete[] soundData->pBuffer;
-
-    soundData->pBuffer = 0;
-    soundData->bufferSize = 0;
-    soundData->wfex = {};
-}
-
-// 音声再生
-void SoundPlayWave(IXAudio2* xAudio2, const SoundData& soundData)
-{
-    HRESULT result;
-
-    // 波型フォーマットを元にSourceVoiceの生成
-    IXAudio2SourceVoice* pSourceVoice = nullptr;
-    result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
-    assert(SUCCEEDED(result));
-
-    // 再生する波型データの設定
-    XAUDIO2_BUFFER buf {};
-    buf.pAudioData = soundData.pBuffer;
-    buf.AudioBytes = soundData.bufferSize;
-    buf.Flags = XAUDIO2_END_OF_STREAM;
-
-    // 波型データの再生
-    result = pSourceVoice->SubmitSourceBuffer(&buf);
-    result = pSourceVoice->Start();
 }
 
 // Transform変数を作る
@@ -291,22 +141,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     // リークチェッカーの生成
     D3DResourceLeakChecker leakCheck;
 
-    // XAudio2
-    Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
-    IXAudio2MasteringVoice* masterVoice;
-
-    // COMライブラリの初期化は先頭で行っているためここではHRESULT変数のみ用意する
-    HRESULT result = S_OK;
-    // XAudioエンジンのインスタンスを生成
-    result = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-    // マスターボイスを生成
-    result = xAudio2->CreateMasteringVoice(&masterVoice);
-
-    // 音声読み込み
-    SoundData soundData1 = SoundLoadWave("resources/mokugyo.wav");
+    // サウンドシステムの初期化
+    //SoundSystem は Media Foundation と XAudio2 を初期化し、圧縮フォーマットにも対応
+    MyEngine::SoundSystem soundSystem;
+    auto soundData1 = soundSystem.LoadFromFile("resources/mokugyo.wav");
 
     // DirectInputの初期化 (ComPtrで管理)
     Microsoft::WRL::ComPtr<IDirectInput8> directInput;
+    // DirectInput 作成結果を受け取るための HRESULT 変数
+    HRESULT result = S_OK;
     result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(directInput.GetAddressOf()), nullptr);
     if (FAILED(result)) {
         Logger::Log("Error: DirectInput8Create failed.\n");
@@ -609,7 +452,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
             // 音声再生
             if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !InputManager::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
-                SoundPlayWave(xAudio2.Get(), soundData1);
+                // SoundSystem を使って再生する
+                soundSystem.Play(soundData1);
             }
 
 
@@ -644,6 +488,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 pm->Update(dt);
             }
 
+            // サウンドシステムのポーリング（再生終了ボイスのクリーンナップ）
+            soundSystem.Poll();
+
             // WorldMatrix作成(model)
             Matrix4x4 worldMatrix = math.MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             // まずデフォルトカメラを更新
@@ -674,9 +521,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
                 if (sprites[i]) sprites[i]->Update();
             }
 
-            // UI is built via ImGuiManager::BuildUI(ctx). Remove duplicate
-            // direct ImGui code to avoid duplication and keep UI centralized.
-
             //--------------------
             // 画面のクリア処理(Draw)
             //--------------------
@@ -687,9 +531,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
             srvManager.PreDraw();
 
             // 描画準備は描画対象ごとに行う（PSO/RootSignatureを切り替えるため）
-
-            // NOTE: ImGui must be rendered after scene (sprites/3D) so UI stays on top.
-            // We only set up descriptor heaps here; actual ImGui render call is moved to after scene draw.
 
             // 描画対象に応じた処理
             switch (selectedDrawType) {
@@ -846,13 +687,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     DirectXCommon::GetInstance()->Finalize(); 
 
     // 音・入力など DirectX 依存していないもの
-    // マスターボイスが存在する場合は破棄しておく
-    if (masterVoice) {
-        masterVoice->DestroyVoice();
-        masterVoice = nullptr;
-    }
-    xAudio2.Reset();
-    SoundUnload(&soundData1);
+    // SoundSystem のデストラクタで XAudio2 と Media Foundation を解放
+    soundData1.reset();
 
     InputManager::GetInstance()->Finalize();
     directInput.Reset();
