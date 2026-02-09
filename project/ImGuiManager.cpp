@@ -176,6 +176,9 @@ void ImGuiManager::BuildUI(Context& ctx)
                 }
             }
         }
+    
+    // End the Settings window started with ImGui::Begin
+    ImGui::End();
     }
 
     // Sprites section
