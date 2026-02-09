@@ -12,8 +12,8 @@
 
 using Microsoft::WRL::ComPtr;
 
-// 前方宣言
-class WinApp;
+// 前方宣言: MyEngine 名前空間内の WinApp を宣言
+namespace MyEngine { class WinApp; }
 
 namespace MyEngine {
 /// <summary>
