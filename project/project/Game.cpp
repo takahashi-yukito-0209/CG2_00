@@ -66,12 +66,6 @@ Game::Game()
     : impl_(nullptr)
 {
 }
-// Game クラスのデストラクタでは、動的に確保した Impl を解放する
-Game::~Game()
-{
-    if (impl_)
-        delete impl_;
-}
 
 // 描画する内容の種類を選択するための列挙型
 enum DrawType {
@@ -122,7 +116,18 @@ struct Game::Impl {
     bool useBillboard = true; // ビルボードの使用フラグ
 
     ImGuiManager imguiManager; // ImGui管理
+    std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
 };
+
+// Game クラスのデストラクタでは、動的に確保した Impl を解放する
+Game::~Game()
+{
+    if (impl_)
+    {
+        delete impl_;
+        impl_ = nullptr;
+    }
+}
 
 /// <summary>
 /// ゲームの初期化処理
@@ -187,8 +192,8 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 
 #endif
 
-    // D3Dリソースリークチェッカーのインスタンスを作成（スコープ終了時にリークチェックが行われる）
-    D3DResourceLeakChecker leakCheck;
+    // D3Dリソースリークチェッカーのインスタンスを作成（Impl のメンバとして保持）
+    impl_->leakChecker = std::make_unique<D3DResourceLeakChecker>();
 
     // サウンドシステムからサウンドデータを読み込む
     impl_->soundData1 = impl_->soundSystem.LoadFromFile("resources/mokugyo.wav");
@@ -394,9 +399,6 @@ void Game::Update()
         return;
     }
 
-    // ImGui フレーム開始
-    impl_->imguiManager.NewFrame(); // ImGui の新しいフレームを開始する
-
     // 入力の更新
     InputManager::GetInstance()->Update();
 
@@ -421,42 +423,7 @@ void Game::Update()
         impl_->soundSystem.Play(impl_->soundData1); // サウンドシステムを使用してサウンドデータを再生する
     }
 
-    // ImGui の UI を構築するためのコンテキストを作成し、必要なデータをセットしてから UI を構築する
-    ImGuiManager::Context ctx;
-    ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをコンテキストにセット
-
-    // 3Dオブジェクトのポインタのリストを作成してコンテキストにセット
-    ctx.object3dCommon = impl_->object3dCommon.get();
-    std::vector<Object3d*> objPtrs;
-    objPtrs.reserve(impl_->objects3d.size());
-    // 3Dオブジェクトのリストをループして、各オブジェクトのポインタをリストに追加する
-    for (auto& u : impl_->objects3d) {
-        objPtrs.push_back(u.get());
-    }
-    ctx.objects3d = &objPtrs;
-
-    // スプライトのポインタのリストを作成してコンテキストにセット
-    std::vector<Sprite*> spritePtrs;
-    spritePtrs.reserve(impl_->sprites.size());
-    // スプライトのリストをループして、各スプライトのポインタをリストに追加する
-    for (auto& u : impl_->sprites) {
-        spritePtrs.push_back(u.get());
-    }
-    ctx.sprites = &spritePtrs;
-
-    // スプライト共通のポインタをコンテキストにセット
-    ctx.spriteCommon = impl_->spriteCommon.get();
-
-    // 描画タイプの選択肢を ImGui で操作できるように、selectedDrawType のポインタをコンテキストにセット
-    ctx.selectedDrawType = reinterpret_cast<int*>(&impl_->selectedDrawType);
-    // ビルボードの使用フラグを ImGui で操作できるように、useBillboard のポインタをコンテキストにセット
-    ctx.useBillboard = &impl_->useBillboard;
-    // パーティクルマネージャのポインタをコンテキストにセット
-    ctx.particleManager = ParticleManager::GetInstance();
-    // デルタタイムをコンテキストにセット（ここでは固定値を使用）
-    ctx.dt = 1.0f / 60.0f;
-    // ImGuiManager にコンテキストを渡して UI を構築する
-    impl_->imguiManager.BuildUI(ctx);
+    // ImGui UI is built once per frame in Draw() to avoid calling NewFrame() multiple times during fixed-step updates.
 
     // 固定タイムステップで更新（ここでは 1/60 秒固定）
     const float dt = 1.0f / 60.0f;
@@ -512,6 +479,35 @@ void Game::Draw()
     if (!impl_ || !impl_->initialized) {
         return;
     }
+
+    // ImGui の新しいフレームを開始する。これにより、ImGui の内部状態がリセットされ、UIの構築が可能になる
+    impl_->imguiManager.NewFrame();
+    
+    ImGuiManager::Context ctx;
+    // 描画に必要な情報を ImGuiManager::Context にセットして、UIの構築に使用できるようにする
+    ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをセット
+    // Object3dCommon のポインタをセットして、UIで共通の描画設定やライトの情報などにアクセスできるようにする
+    ctx.object3dCommon = impl_->object3dCommon.get();
+    std::vector<Object3d*> objPtrs;
+    objPtrs.reserve(impl_->objects3d.size());
+    for (auto& u : impl_->objects3d) objPtrs.push_back(u.get());
+    ctx.objects3d = &objPtrs;
+    // SpriteCommon のポインタをセットして、UIでスプライトの共通設定や情報にアクセスできるようにする
+    std::vector<Sprite*> spritePtrs;
+    spritePtrs.reserve(impl_->sprites.size());
+    for (auto& u : impl_->sprites) spritePtrs.push_back(u.get());
+    ctx.sprites = &spritePtrs;
+    ctx.spriteCommon = impl_->spriteCommon.get();
+    // 描画する内容の種類を選択するための変数へのポインタをセットして、UIで描画内容の切り替えができるようにする
+    ctx.selectedDrawType = reinterpret_cast<int*>(&impl_->selectedDrawType);
+    // ビルボードの使用フラグへのポインタをセットして、UIでビルボードのオンオフができるようにする
+    ctx.useBillboard = &impl_->useBillboard;
+    // ParticleManager のポインタをセットして、UIでパーティクルの情報や設定にアクセスできるようにする
+    ctx.particleManager = ParticleManager::GetInstance();
+    // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
+    ctx.dt = 1.0f / 60.0f;
+    // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
+    impl_->imguiManager.BuildUI(ctx);
 
     // 描画前の共通処理を呼び出す（バックバッファのクリアやコマンドリストの開始など）
     DirectXCommon::GetInstance()->PreDraw();
@@ -708,6 +704,11 @@ void Game::Finalize()
     impl_->winApp.Finalize();
 
     // COM のクリーンアップ
+    // リークチェッカーは COM が有効なうちに破棄する
+    if (impl_->leakChecker) {
+        impl_->leakChecker.reset();
+    }
+
     CoUninitialize();
 
     // 基底クラスの終了処理を呼び出す
