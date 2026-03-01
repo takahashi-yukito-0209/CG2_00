@@ -236,7 +236,6 @@ void ImGuiManager::BuildUI(Context& ctx)
             }
         }
 
-        ImGui::End();
     }
 
     // スプライトセクション
