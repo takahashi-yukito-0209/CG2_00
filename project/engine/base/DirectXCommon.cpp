@@ -1,7 +1,7 @@
-#include "WinApp.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
 #include "StringUtility.h"
+#include "WinApp.h"
 
 #include <cassert>
 #include <comdef.h> // _com_error 用
@@ -30,7 +30,7 @@ const uint32_t DirectXCommon::kMaxSRVCount = 512;
 // Static メンバ関数の実装
 // ----------------------------------------------------------------------
 
-// ... GetCPUDescriptorHandleの実装 ...
+// ディスクリプタハンドルの取得用の静的関数の実装
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetCPUDescriptorHandle(
     const ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
     uint32_t descriptorSize,
@@ -41,7 +41,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetCPUDescriptorHandle(
     return handle;
 }
 
-// ... GetGPUDescriptorHandleの実装 ...
+// ディスクリプタハンドルの取得用の静的関数の実装
 D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetGPUDescriptorHandle(
     const ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
     uint32_t descriptorSize,
@@ -52,8 +52,13 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetGPUDescriptorHandle(
     return handle;
 }
 
+/// <summary>
+/// シングルトンインスタンスの取得
+/// - 戻り値: DirectXCommon のシングルトンインスタンスへのポインタ
+/// </summary>
 DirectXCommon* DirectXCommon::GetInstance()
 {
+
     if (instance_ == nullptr) {
         // インスタンスがなければ新しく生成
         instance_ = new DirectXCommon();
@@ -61,8 +66,12 @@ DirectXCommon* DirectXCommon::GetInstance()
     return instance_;
 }
 
+/// <summary>
+/// 終了処理: フェンスイベントのクローズとシングルトン解放
+/// </summary>
 void DirectXCommon::Finalize()
 {
+
     // フェンスイベントのクローズ
     if (fenceEvent_) {
         CloseHandle(fenceEvent_);
@@ -75,18 +84,23 @@ void DirectXCommon::Finalize()
     }
 }
 
-// コマンドリストを実行し、フェンスにシグナルを送る
+/// <summary>
+/// コマンドリストを GPU に送信して実行する
+/// </summary>
 void DirectXCommon::ExecuteCommandList()
 {
+
     // GPUコマンドの実行
     ID3D12CommandList* commandLists[] = { commandList_.Get() };
     commandQueue_->ExecuteCommandLists(1, commandLists);
-
 }
 
-// GPUコマンドの完了を待機する
+/// <summary>
+/// GPU のコマンド完了を待機する（フェンス同期）
+/// </summary>
 void DirectXCommon::WaitForCommandExecution()
 {
+
     // Fenceの値を更新し、シグナルを送る
     fenceValue_++;
     HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
@@ -102,9 +116,12 @@ void DirectXCommon::WaitForCommandExecution()
     }
 }
 
-// コマンドアロケータとコマンドリストをリセットする
+/// <summary>
+/// コマンドアロケータとコマンドリストをリセットする
+/// </summary>
 void DirectXCommon::ResetCommandList()
 {
+
     // コマンドアロケータをリセット
     HRESULT hr = commandAllocator_->Reset();
     assert(SUCCEEDED(hr));
@@ -125,15 +142,19 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVCPUDescriptorHandle(uint32_t in
     return GetCPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
+// SRV特化型Getterの実装
 D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVGPUDescriptorHandle(uint32_t index) const
 {
     return GetGPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
-// Initialize関数 (すべての初期化ステップを呼び出す)
+/// <summary>
+/// 全体の初期化フローを実行する
+/// </summary>
 void DirectXCommon::Initialize(WinApp* winApp)
 {
     assert(winApp);
+    // 引数のWinAppポインタをメンバ変数に保存
     this->winApp_ = winApp;
 
     // FPS固定初期化
@@ -165,7 +186,9 @@ void DirectXCommon::Initialize(WinApp* winApp)
     InitImGui();
 }
 
-// PreDraw関数 (描画前処理)
+/// <summary>
+/// 描画前処理を行う（リソースバリア、クリア、RTV/DSV設定等）
+/// </summary>
 void DirectXCommon::PreDraw()
 {
 
@@ -204,9 +227,12 @@ void DirectXCommon::PreDraw()
     commandList_->RSSetScissorRects(1, &scissorRect_);
 }
 
-// PostDraw関数 (描画後処理)
+/// <summary>
+/// 描画後処理を行う（リソース遷移、Present、GPU同期、リセット等）
+/// </summary>
 void DirectXCommon::PostDraw()
 {
+
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
     // リソースバリア (Render Target -> Present)
@@ -235,6 +261,9 @@ void DirectXCommon::PostDraw()
     UpdateFixFPS();
 }
 
+/// <summary>
+/// バッファリソース（頂点、定数など）を生成するための関数
+/// </summary>
 ComPtr<ID3D12Resource> DirectXCommon::CreateBufferResource(size_t sizeInBytes)
 {
     HRESULT hr;
@@ -259,6 +288,9 @@ ComPtr<ID3D12Resource> DirectXCommon::CreateBufferResource(size_t sizeInBytes)
     return resource;
 }
 
+/// <summary>
+/// テクスチャリソースを生成するための関数
+/// </summary>
 ComPtr<ID3D12Resource> DirectXCommon::CreateTextureResource(const DirectX::TexMetadata& metadata)
 {
     HRESULT hr;
@@ -288,6 +320,9 @@ ComPtr<ID3D12Resource> DirectXCommon::CreateTextureResource(const DirectX::TexMe
     return resource;
 }
 
+/// <summary>
+/// テクスチャデータをGPUにアップロードするための関数
+/// </summary>
 ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages)
 {
     HRESULT hr;
@@ -303,11 +338,12 @@ ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& 
     // アップロード用バッファリソース (UPLOADヒープ) を生成
     ComPtr<ID3D12Resource> uploadBuffer = CreateBufferResource(uploadBufferSize);
 
-    // --- アップロード専用コマンドアロケータ／コマンドリストを作成して記録・実行・同期する ---
+    // アップロード専用コマンドアロケータを作成して記録・実行・同期する
     ComPtr<ID3D12CommandAllocator> uploadAllocator;
     hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&uploadAllocator));
     assert(SUCCEEDED(hr));
 
+    // アップロード専用コマンドリストを作成して記録・実行・同期する
     ComPtr<ID3D12GraphicsCommandList> uploadCmdList;
     hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator.Get(), nullptr, IID_PPV_ARGS(&uploadCmdList));
     assert(SUCCEEDED(hr));
@@ -344,6 +380,9 @@ ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& 
     return uploadBuffer;
 }
 
+/// <summary>
+/// シェーダーをコンパイルするための関数
+/// </summary>
 ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile)
 {
     HRESULT hr;
@@ -411,6 +450,10 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
 // ----------------------------------------------------------------------
 // Private 初期化関数の実装
 // ----------------------------------------------------------------------
+
+/// <summary>
+/// デバイスの生成
+/// </summary>
 void DirectXCommon::CreateDevice()
 {
     HRESULT hr;
@@ -500,6 +543,9 @@ void DirectXCommon::CreateDevice()
     descriptorSizeDSV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 }
 
+/// <summary>
+/// コマンドキュー、コマンドアロケータ、コマンドリストの生成
+/// </summary>
 void DirectXCommon::InitCommandRelated()
 {
     HRESULT hr;
@@ -520,6 +566,9 @@ void DirectXCommon::InitCommandRelated()
     assert(SUCCEEDED(hr));
 }
 
+/// <summary>
+/// スワップチェーンの生成とバックバッファの取得
+/// </summary>
 void DirectXCommon::CreateSwapChain()
 {
     HRESULT hr;
@@ -561,6 +610,9 @@ void DirectXCommon::CreateSwapChain()
     OutputDebugString(L"SwapChain created successfully.\n");
 }
 
+/// <summary>
+/// 深度バッファの生成
+/// </summary>
 void DirectXCommon::CreateDepthBuffer()
 {
     // 深度ステンシル用Resourceを作成
@@ -591,6 +643,9 @@ void DirectXCommon::CreateDepthBuffer()
     assert(SUCCEEDED(hr));
 }
 
+/// <summary>
+/// ディスクリプタヒープの生成
+/// </summary>
 void DirectXCommon::CreateDescriptorHeaps()
 {
     // RTV
@@ -624,6 +679,9 @@ void DirectXCommon::CreateDescriptorHeaps()
     }
 }
 
+/// <summary>
+/// レンダーターゲットビューの初期化
+/// </summary>
 void DirectXCommon::InitRenderTargetView()
 {
     // RTV のフォーマット
@@ -637,6 +695,9 @@ void DirectXCommon::InitRenderTargetView()
     }
 }
 
+/// <summary>
+/// 深度ステンシルビューの初期化
+/// </summary>
 void DirectXCommon::InitDepthStencilView()
 {
     // DSV (深度ステンシルビュー) の設定
@@ -649,6 +710,9 @@ void DirectXCommon::InitDepthStencilView()
     device_->CreateDepthStencilView(depthStencilResource_.Get(), &dsvDesc, dsvHandle);
 }
 
+/// <summary>
+/// フェンスの生成とGPU同期のためのイベントオブジェクトの作成
+/// </summary>
 void DirectXCommon::CreateFence()
 {
     // Fenceオブジェクトを生成し、GPU/CPUの同期に使用
@@ -659,6 +723,9 @@ void DirectXCommon::CreateFence()
     assert(fenceEvent_ != nullptr);
 }
 
+/// <summary>
+/// ビューポートの初期化
+/// </summary>
 void DirectXCommon::InitViewport()
 {
     // ビューポートの設定 (ウィンドウサイズ全体)
@@ -670,6 +737,9 @@ void DirectXCommon::InitViewport()
     viewport_.MaxDepth = 1.0f;
 }
 
+/// <summary>
+/// シザー矩形の初期化
+/// </summary>
 void DirectXCommon::InitScissorRect()
 {
     // シザー矩形の設定 (ウィンドウサイズ全体)
@@ -679,6 +749,9 @@ void DirectXCommon::InitScissorRect()
     scissorRect_.bottom = WinApp::kWindowHeight;
 }
 
+/// <summary>
+/// DXCコンパイラの生成
+/// </summary>
 void DirectXCommon::CreateDxcCompiler()
 {
     // DXCユーティリティとコンパイラインスタンスを生成
@@ -692,6 +765,9 @@ void DirectXCommon::CreateDxcCompiler()
     assert(SUCCEEDED(hr));
 }
 
+/// <summary>
+/// ImGuiの初期化
+/// </summary>
 void DirectXCommon::InitImGui()
 {
     // ここでImGuiを初期化しない（意図的）
@@ -702,12 +778,18 @@ void DirectXCommon::InitImGui()
     // バックエンドをセットアップした後に SrvManager::InitImGui() から初期化される。
 }
 
+/// <summary>
+/// FPS固定の初期化
+/// </summary>
 void DirectXCommon::InitializeFixFPS()
 {
     // 現在時間を記録する
     reference_ = std::chrono::steady_clock::now();
 }
 
+/// <summary>
+/// FPS固定の更新処理
+/// </summary>
 void DirectXCommon::UpdateFixFPS()
 {
     // 目標フレーム時間 (1/60秒)

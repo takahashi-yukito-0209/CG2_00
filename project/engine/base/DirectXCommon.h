@@ -115,31 +115,36 @@ public: // 公開メンバ関数
 
 
 private: // Private メンバ変数
-    // WinAppのポインタ
+    // WinApp のポインタ（外部で管理される）
     WinApp* winApp_ = nullptr;
 
-    // シングルトンインスタンスを保持するための静的メンバ変数の宣言
+    // シングルトンインスタンス（静的）
     static DirectXCommon* instance_;
 
     // デバイス関連
+    // ID3D12Device: GPU デバイスオブジェクト
     ComPtr<ID3D12Device> device_;
+    // DXGI ファクトリ: アダプタ列挙等に使用
     ComPtr<IDXGIFactory7> dxgiFactory_;
 
     // コマンド関連
+    // コマンドアロケータ/コマンドリスト/コマンドキュー
     ComPtr<ID3D12CommandAllocator> commandAllocator_;
     ComPtr<ID3D12GraphicsCommandList> commandList_;
     ComPtr<ID3D12CommandQueue> commandQueue_;
 
     // スワップチェーン
-    static const uint32_t kBackBufferCount = 2; // バックバッファの数は固定
+    static const uint32_t kBackBufferCount = 2; // バックバッファ数
     ComPtr<IDXGISwapChain4> swapChain_;
-    std::array<ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_; // バックバッファリソース
-    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, kBackBufferCount> rtvHandles_; // RTVハンドル
+    // バックバッファリソース配列
+    std::array<ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_;
+    // 各バックバッファ用の RTV ハンドル配列
+    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, kBackBufferCount> rtvHandles_;
 
-    // スワップチェーンで使われたフォーマットを保持（RTVやImGui初期化で使用）
+    // スワップチェーンで使用しているピクセルフォーマット
     DXGI_FORMAT swapChainFormat_ = DXGI_FORMAT_UNKNOWN;
 
-    // ディスクリプタヒープとサイズ
+    // ディスクリプタヒープと各種ディスクリプタサイズ
     ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
     ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_;
     ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
@@ -147,10 +152,10 @@ private: // Private メンバ変数
     UINT descriptorSizeRTV_ = 0;
     UINT descriptorSizeDSV_ = 0;
 
-    // 深度バッファ
+    // 深度ステンシルバッファ
     ComPtr<ID3D12Resource> depthStencilResource_;
 
-    // フェンス
+    // フェンスと同期イベント
     ComPtr<ID3D12Fence> fence_;
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
@@ -159,25 +164,25 @@ private: // Private メンバ変数
     D3D12_VIEWPORT viewport_ {};
     D3D12_RECT scissorRect_ {};
 
-    // DXC関連
+    // DXC（DirectX Shader Compiler）関連
     ComPtr<IDxcUtils> dxcUtils_;
     ComPtr<IDxcCompiler3> dxcCompiler_;
     ComPtr<IDxcIncludeHandler> includeHandler_;
 
 private: // メンバ関数
     // 初期化関数一覧
-    void CreateDevice();
-    void InitCommandRelated();
-    void CreateSwapChain();
-    void CreateDepthBuffer();
-    void CreateDescriptorHeaps();
-    void InitRenderTargetView();
-    void InitDepthStencilView();
-    void CreateFence();
-    void InitViewport();
-    void InitScissorRect();
-    void CreateDxcCompiler();
-    void InitImGui();
+    void CreateDevice(); // デバイスの生成と初期化
+    void InitCommandRelated(); // コマンドアロケータ、コマンドリスト、コマンドキューの生成と初期化
+    void CreateSwapChain(); // スワップチェーンの生成と初期化
+    void CreateDepthBuffer(); // 深度ステンシルバッファの生成と初期化
+    void CreateDescriptorHeaps(); // ディスクリプタヒープの生成と初期化
+    void InitRenderTargetView(); // RTVの生成と初期化
+    void InitDepthStencilView(); // DSVの生成と初期化
+    void CreateFence(); // フェンスと同期イベントの生成と初期化
+    void InitViewport(); // ビューポートの初期化
+    void InitScissorRect(); // シザー矩形の初期化
+    void CreateDxcCompiler(); // DXCコンパイラの生成と初期化
+    void InitImGui(); // ImGuiの初期化
 
     // FPS固定初期化
     void InitializeFixFPS();

@@ -1,26 +1,40 @@
 #pragma once
 
-#include <string>
 #include "engine/utility/mathUtility.h"
+#include <string>
 
-namespace MyEngine { class ParticleManager; }
+// 前方宣言: MyEngine 名前空間内のクラスを宣言
+namespace MyEngine {
+class ParticleManager;
+}
 
-// パーティクル発生器
+/// <summary>
+/// パーティクルエミッタクラス
+/// </summary>
 class ParticleEmitter {
-public:
-    // エミッタ設定
-    std::string groupName; // どのパーティクルグループに発生させるか
-    Transform transform { {1.0f,1.0f,1.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f} };
-    uint32_t count = 1;      // 1回あたりの発生数
-    float frequency = 0.0f;  // 発生間隔（秒）。0で毎フレーム
-    float elapsed = 0.0f;    // 前回発生からの経過
-
-    // すぐ発生
+public: // メンバ関数
+    /// <summary>
+    /// 発生させるパーティクルグループの名前を指定してエミッタを作成
+    /// </summary>
     void Emit();
 
-    // 時間を進め、必要なら発生
+    /// <summary>
+    /// 経過時間を加算し、発生間隔を超えたら発生させる
+    /// </summary>
     void Update(float deltaTime);
 
-    // Draw ImGui controls for this emitter (edit its properties)
+    /// <summary>
+    /// ImGuiコントロールを描画（プロパティ編集）
+    /// </summary>
     void DrawImGui();
+
+    // エミッタ設定
+    std::string groupName; // どのパーティクルグループに発生させるか
+    Transform transform { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
+    uint32_t count = 1; // 1回あたりの発生数
+    float frequency = 0.0f; // 発生間隔（秒）。0で毎フレーム
+    float elapsed = 0.0f; // 前回発生からの経過
+
+private: // メンバ関数
+    
 };

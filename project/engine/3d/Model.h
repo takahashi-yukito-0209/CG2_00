@@ -11,24 +11,36 @@ namespace MyEngine {
 class ModelCommon;
 class Object3d;
 
+/// <summary>
+/// モデルクラス
+/// </summary>
 class Model {
 public: // メンバ関数
-    Model() = default;
-    ~Model() = default;
+    Model() = default; // デフォルトコンストラクタ
+    ~Model() = default; // デストラクタ
 
-    // モデルデータをファイルから読み込む
+    /// <summary>
+    /// モデルファイルを読みこむ（頂点データとマテリアル情報を格納した独自フォーマットのファイルを想定）
+    /// </summary>
     bool LoadFromFile(const std::string& directoryPath, const std::string& filename);
 
-
-    // 初期化
+    /// <summary>
+    /// モデルの初期化
+    /// </summary>
     void Initialize(ModelCommon* modelCommon);
 
-    // 描画
+    /// <summary>
+    /// 描画
+    /// </summary>
     void Draw(Object3d* owner);
-    // 描画（インスタンス数指定）
+
+    /// <summary>
+    /// インスタンシング描画
+    /// </summary>
     void DrawInstanced(Object3d* owner, uint32_t instanceCount);
 
 private: // メンバ変数
+
     // モデル共通情報へのポインタ
     ModelCommon* modelCommon_ = nullptr;
 

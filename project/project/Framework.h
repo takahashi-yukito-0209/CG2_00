@@ -1,40 +1,64 @@
 #pragma once
 #include <Windows.h>
 
-// フレームワークの抽象基底クラス
-// - ライフサイクル(初期化・ゲームループ・終了)を一括管理する
-// - ゲーム固有の処理は派生クラスでオーバーライドする
+/// <summary>
+/// アプリケーションの基本的なライフサイクルを管理するフレームワーククラス
+/// </summary>
 class Framework {
-public:
+public: // メンバ関数
+
+    /// <summary>
+    /// コンストラクタ: メンバ変数を初期化
+    /// </summary>
     Framework() = default;
-    // 仮想デストラクタ: ポリモーフィズムで安全に破棄するために必ず宣言する
+
+    /// <summary>
+    /// デストラクタ: 派生クラスのFinalize()が呼ばれるように仮想デストラクタとする
+    /// </summary>
     virtual ~Framework() = default;
 
-    // 初期化 (必要なら派生でオーバーライド)
+
+    /// <summary>
+    /// 初期化処理 (必要なら派生でオーバーライド)
+    /// </summary>
     virtual bool Initialize(HINSTANCE hInstance, int nCmdShow) { (void)hInstance; (void)nCmdShow; return true; }
-    // 終了処理 (必要なら派生でオーバーライド)
+    
+    /// <summary>
+    /// 終了処理 (必要なら派生でオーバーライド)
+    /// </summary>
     virtual void Finalize() { }
-    // 毎フレーム更新 (必要なら派生でオーバーライド)
+    
+    /// <summary>
+    /// 更新処理 (必要なら派生でオーバーライド)
+    /// </summary>
     virtual void Update() { }
-    // ウィンドウメッセージ等のポーリング処理を行うフック
-    // 戻り値: 続行可能なら true, 終了要求/エラーがあれば false
-    // 基底実装は Windows メッセージをポーリングし、WM_QUIT を検出すると
-    // フラグを立てて false を返す
+    
+    /// <summary>
+    /// イベントポーリング (必要なら派生でオーバーライド)
+    /// </summary>
     virtual bool PollEvents();
-    // 描画は派生で必須実装とするため純粋仮想にする
+    
+    /// <summary>
+    /// 描画処理 (必須オーバーライド: 派生クラスで実装を要求)
+    /// </summary>
     virtual void Draw() = 0;
-    // 終了要求の問い合わせ (派生クラスの状態を返す実装を期待)
-    // 基底は内部フラグを返す
+    
+    /// <summary>
+    /// 終了要求の参照 (必要なら派生でオーバーライド)
+    /// </summary>
     virtual bool IsEndRequest() const { return endRequested_; }
 
-    // Run: 共通のライフサイクル実装
-    // - Initialize -> ゲームループ(Update/Draw) -> Finalize
+    /// <summary>
+    /// アプリケーションの実行: 初期化、メインループ、終了処理をまとめて行う
+    /// </summary>
     int Run(HINSTANCE hInstance, int nCmdShow);
 
-    // フレームレート目標設定 (デフォルト 60fps)
+    /// <summary>
+    /// 目標FPSの設定 (必要なら派生でオーバーライド)
+    /// </summary>
     void SetTargetFPS(double fps) { if (fps > 0.0) targetFPS_ = fps; }
 
-protected:
+protected: // メンバ変数
     double targetFPS_ = 60.0; // 目標FPS
     // 基底による終了要求フラグ。
     // 外部で終了要求する場合は派生からこのフラグを操作しても良い

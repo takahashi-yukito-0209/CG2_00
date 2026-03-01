@@ -4,39 +4,65 @@
 
 namespace MyEngine {
 
+/// <summary>
+/// スプライト描画に共通する処理をまとめたクラス
+/// </summary>
 class SpriteCommon {
 public: // メンバ関数
-    // 初期化
+
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
     void Initialize(DirectXCommon* dxCommon);
 
-    // getter
+    /// <summary>
+    /// DirectXCommonへの参照を取得
+    /// </summary>
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
 
-    //共通描画設定
+    /// <summary>
+    /// スプライト描画の共通設定をコマンドリストに設定
+    /// </summary>
     void SetCommonDrawSetting();
 
-    // ルートシグネチャとPSOが描画可能状態であれば true を返す
+    /// <summary>
+    /// 描画用のルートシグネチャ/PSO が準備完了しているかを返す
+    /// </summary>
     bool IsReady() const;
 
-    void SetBlendMode(MyEngine::BlendMode mode);
-    MyEngine::BlendMode GetBlendMode() const { return blendMode_; }
+    /// <summary>
+    /// ブレンドモードを設定
+    /// </summary>
+    void SetBlendMode(BlendMode mode);
+
+    /// <summary>
+    /// 現在のブレンドモードを取得
+    /// </summary>
+    BlendMode GetBlendMode() const { return blendMode_; }
 
 private: // メンバ関数
-    // ルートシグネチャの作成
+
+    /// <summary>
+    /// ルートシグネチャを作成（内部処理）
+    /// </summary>
     void CreateRootSignature();
 
-    // グラフィクスパイプラインの生成
+    /// <summary>
+    /// グラフィクスパイプライン（PSO）を生成（内部処理）
+    /// </summary>
     void CreateGraphicsPipeline();
 
 private: // メンバ変数
-    
+
+    // DirectX 共通ハンドル（外部で管理される参照）
     DirectXCommon* dxCommon_;
 
     // ルートシグネチャを保持
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     // パイプラインステートを保持
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
-    MyEngine::BlendMode blendMode_ = MyEngine::BlendMode::Alpha;
+    // ブレンドモード（デフォルトはアルファブレンド）
+    BlendMode blendMode_ = BlendMode::Alpha;
 };
 
 } // namespace MyEngine

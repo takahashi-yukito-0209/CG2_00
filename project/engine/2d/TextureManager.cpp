@@ -1,43 +1,62 @@
 #include "TextureManager.h"
 #include "DirectXCommon.h"
-#include "engine/base/SrvManager.h"
 #include "Logger.h"
 #include "StringUtility.h"
+#include "engine/base/SrvManager.h"
 
 using namespace MyEngine;
 
-TextureManager* TextureManager::instance_ = nullptr;
-uint32_t TextureManager::kSRVIndexTop_ = 1;
+//--- Static メンバ変数の定義 ---
+TextureManager* TextureManager::instance_ = nullptr; // シングルトンインスタンスのポインタ
+uint32_t TextureManager::kSRVIndexTop_ = 1; // SRVインデックスの開始位置（テクスチャ用のSRVはこのインデックスから割り当てる）
 
+/// <summary>
+/// シングルトンインスタンスの取得
+/// </summary>
 TextureManager* TextureManager::GetInstance()
 {
+    // インスタンスがまだ存在しない場合は生成する
     if (instance_ == nullptr) {
         instance_ = new TextureManager();
     }
+
+    // 生成された（または既に存在する）インスタンスを返す
     return instance_;
 }
 
-
+/// <summary>
+/// 終了処理
+/// </summary>
 void TextureManager::Finalize()
 {
+    // インスタンスが存在する場合は削除する
     if (instance_ != nullptr) {
         delete instance_;
         instance_ = nullptr;
     }
 }
 
+/// <summary>
+/// 初期化処理
+/// </summary>
 void TextureManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 {
+    // 引数のDirectXCommonとSrvManagerの参照をメンバ変数に保存
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
 }
 
+/// <summary>
+/// テクスチャのロードとSRVヒープへの登録
+/// </summary>
 void TextureManager::LoadTexture(const std::string& filePath)
 {
     // 既読チェック（unordered_map の contains）
     std::string key = filePath;
+    // すでにロードされているテクスチャか確認
     if (textureDatas.contains(key)) {
         const auto& td = textureDatas[key];
+        // すでにロードされている場合はSRVインデックスをログに出力して終了
         char buf[256];
         sprintf_s(buf, "DEBUG LoadTexture: Already loaded texture: %s (SRV Index: %u)\n", filePath.c_str(), td.srvIndex);
         Logger::Log(buf);
@@ -152,7 +171,9 @@ void TextureManager::LoadTexture(const std::string& filePath)
     }
 }
 
-// すべてのテクスチャリソースの転送を実行し、中間リソースを解放
+/// <summary>
+/// 転送コマンドを実行して、GPUにテクスチャデータを転送する
+/// </summary>
 void TextureManager::ExecuteResourceUpload()
 {
     // すべての中間リソースを解放する
@@ -161,12 +182,17 @@ void TextureManager::ExecuteResourceUpload()
     }
 }
 
+/// <summary>
+/// 指定されたファイルパスのテクスチャがすでにロードされているか確認し、ロードされていればSRVインデックスを返す。ロードされていなければ UINT32_MAX を返す。
+/// </summary>
 uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 {
     // filePathキーに対応するSRVインデックス（絶対インデックス）を返す
     std::string key = filePath;
     auto it = textureDatas.find(key);
-    if (it != textureDatas.end()) { return it->second.srvIndex; }
+    if (it != textureDatas.end()) {
+        return it->second.srvIndex;
+    }
 
     // デバッグ用: 現在の登録一覧を出力
     {
@@ -181,76 +207,135 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
         }
     }
 
+    // 見つからない場合は UINT32_MAX を返す
     char buf[256];
     sprintf_s(buf, "ERROR GetTextureIndexByFilePath: Texture not found: %s\n", filePath.c_str());
     Logger::Log(buf);
     return UINT32_MAX;
 }
 
+/// <summary>
+/// SRVヒープの絶対インデックスを指定してGPUハンドルを取得する。見つからない場合は null ハンドルを返す。
+/// </summary>
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureIndex)
 {
     // 引数はSRVヒープの絶対インデックスとして扱う
-    D3D12_GPU_DESCRIPTOR_HANDLE nullHandle{};
+    D3D12_GPU_DESCRIPTOR_HANDLE nullHandle {};
     nullHandle.ptr = 0;
-    if (textureDatas.empty()) { return nullHandle; }
+    // textureDatas を走査して、srvIndex が textureIndex と一致するものを探す
+    if (textureDatas.empty()) {
+        return nullHandle;
+    }
+    // もし該当する srvIndex を持つテクスチャが見つかったら、その GPU ハンドルを返す
     for (auto& kv : textureDatas) {
         const TextureData& td = kv.second;
+        // srvIndex が一致するか確認
         if (td.srvIndex == textureIndex) {
             if (td.srvHandleGPU.ptr == 0) {
-                char buf[128]; sprintf_s(buf, "Warning: SRV GPU handle is null for srvIndex %u\n", textureIndex); Logger::Log(buf);
+                char buf[128];
+                sprintf_s(buf, "Warning: SRV GPU handle is null for srvIndex %u\n", textureIndex);
+                Logger::Log(buf);
             }
             return td.srvHandleGPU;
         }
     }
-    char buf[128]; sprintf_s(buf, "Warning: SRV index %u not found in textureDatas\n", textureIndex); Logger::Log(buf);
+    // 見つからない場合は null ハンドルを返す
+    char buf[128];
+    sprintf_s(buf, "Warning: SRV index %u not found in textureDatas\n", textureIndex);
+    Logger::Log(buf);
     return nullHandle;
 }
 
+/// <summary>
+/// テクスチャインデックス（SRV絶対インデックス）からメタデータを取得する。見つからない場合はデフォルトのメタデータを返す。
+/// </summary>
 const DirectX::TexMetadata& TextureManager::GetMetadata(uint32_t textureIndex)
 {
     // 引数はSRV絶対インデックス。該当が無ければデフォルトを返す
-    static DirectX::TexMetadata defaultMeta = [](){ DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
-    if (textureDatas.empty()) { return defaultMeta; }
+    static DirectX::TexMetadata defaultMeta = []() { DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
+    // textureDatas を走査して、srvIndex が textureIndex と一致するものを探す
+    if (textureDatas.empty()) {
+        return defaultMeta;
+    }
+    // もし該当する srvIndex を持つテクスチャが見つかったら、そのメタデータを返す
     for (auto& kv : textureDatas) {
         const TextureData& td = kv.second;
-        if (td.srvIndex == textureIndex) { return td.metadata; }
+        // srvIndex が一致するか確認
+        if (td.srvIndex == textureIndex) {
+            return td.metadata;
+        }
     }
-    char buf[128]; sprintf_s(buf, "Warning: GetMetadata srvIndex %u not found, returning default\n", textureIndex); Logger::Log(buf);
+    // 見つからない場合はデフォルトのメタデータを返す
+    char buf[128];
+    sprintf_s(buf, "Warning: GetMetadata srvIndex %u not found, returning default\n", textureIndex);
+    Logger::Log(buf);
     return defaultMeta;
 }
 
-// 新API: filePath でメタデータ取得
+/// <summary>
+/// filePathキーでメタデータを取得する。見つからない場合はデフォルトのメタデータを返す。
+/// </summary>
 const DirectX::TexMetadata& TextureManager::GetMetaData(const std::string& filePath)
 {
-    static DirectX::TexMetadata defaultMeta = [](){ DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
+    // filePathキーに対応するメタデータを返す。見つからない場合はデフォルトのメタデータを返す
+    static DirectX::TexMetadata defaultMeta = []() { DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
+    // もし filePath キーが見つかればそのメタデータを返す
     auto it = textureDatas.find(filePath);
-    if (it == textureDatas.end()) { return defaultMeta; }
+    // 見つからない場合はデフォルトのメタデータを返す
+    if (it == textureDatas.end()) {
+        return defaultMeta;
+    }
+    // 見つかった場合はそのメタデータを返す
     return it->second.metadata;
 }
 
-// 新API: filePath で SRV インデックス取得
+/// <summary>
+/// filePathキーでSRVインデックスを取得する。見つからない場合は UINT32_MAX を返す。
+/// </summary>
 uint32_t TextureManager::GetSrvIndex(const std::string& filePath)
 {
+    // filePathキーに対応するSRVインデックスを返す
     auto it = textureDatas.find(filePath);
-    if (it == textureDatas.end()) { return UINT32_MAX; }
+    // 見つからない場合は UINT32_MAX を返す
+    if (it == textureDatas.end()) {
+        return UINT32_MAX;
+    }
+    // 見つかった場合はそのSRVインデックスを返す
     return it->second.srvIndex;
 }
 
-// 新API: filePath で GPU ハンドル取得
+/// <summary>
+/// filePathキーでSRVハンドル（GPU）を取得する。見つからない場合は null ハンドルを返す。
+/// </summary>
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(const std::string& filePath)
 {
-    D3D12_GPU_DESCRIPTOR_HANDLE nullHandle{}; nullHandle.ptr = 0;
+    // filePathキーに対応するSRVハンドル（GPU）を返す
+    D3D12_GPU_DESCRIPTOR_HANDLE nullHandle {};
+    nullHandle.ptr = 0;
+    // 見つからない場合は null ハンドルを返す
     auto it = textureDatas.find(filePath);
-    if (it == textureDatas.end()) { return nullHandle; }
+    // もし見つからない場合は null ハンドルを返す
+    if (it == textureDatas.end()) {
+        return nullHandle;
+    }
+    // 見つかった場合はそのSRVハンドルを返す
     return it->second.srvHandleGPU;
 }
 
+/// <summary>
+/// ロード済みテクスチャのファイルパス一覧を取得
+/// </summary>
 std::vector<std::string> TextureManager::GetLoadedTextureFilePaths() const
 {
+    // textureDatas のキー（ファイルパス）をすべて取得してベクターにして返す
     std::vector<std::string> paths;
+    // 事前にサイズを予約しておくと効率的
     paths.reserve(textureDatas.size());
+    // textureDatas を走査してキーを取得
     for (const auto& kv : textureDatas) {
+        // キー（ファイルパス）をベクターに追加
         paths.push_back(kv.first);
     }
+
     return paths;
 }

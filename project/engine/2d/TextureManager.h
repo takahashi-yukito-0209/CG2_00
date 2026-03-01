@@ -6,64 +6,103 @@
 #include <wrl/client.h>
 #include "engine/base/DirectXCommon.h"
 
+// 前方宣言: MyEngine 名前空間内の DirectXCommon と SrvManager を宣言
 namespace MyEngine { class SrvManager; }
 #include <unordered_map>
 
 namespace MyEngine {
 
+/// <summary>
+/// テクスチャマネージャクラス
+/// </summary>
 class TextureManager {
-public:
-    // シングルトンインスタンス取得
+public: // メンバ関数
+
+    /// <summary>
+    /// シングルトンインスタンスの取得
+    /// </summary>
     static TextureManager* GetInstance();
 
-    // 終了
+    /// <summary>
+    /// 終了処理
+    /// </summary>
     void Finalize();
 
-    // 初期化
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
     void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager);
 
-    // テクスチャファイルの読み込み
+    /// <summary>
+    /// テクスチャのロードとSRVヒープへの登録
+    /// </summary>
     void LoadTexture(const std::string& filePath);
 
-    // ロード済みのすべてのテクスチャリソースの転送をまとめて実行し、中間リソースを解放する
+    /// <summary>
+    /// ロードしたテクスチャデータをGPUに転送
+    /// </summary>
     void ExecuteResourceUpload();
 
-    //SRVインデックスの開始番号
+    /// <summary>
+    /// 指定されたファイルパスのテクスチャがすでにロードされているか確認し、ロードされていればSRVインデックスを返す。ロードされていなければ UINT32_MAX を返す。
+    /// </summary>
     uint32_t GetTextureIndexByFilePath(const std::string& filePath);
 
-    // 新getter: メタデータ取得（filePathキー）
+    /// <summary>
+    /// メタデータの取得
+    /// </summary>
     const DirectX::TexMetadata& GetMetaData(const std::string& filePath);
-    // 新getter: SRVインデックス取得（filePathキー）
+
+    /// <summary>
+    /// SRVインデックスの取得（filePathキー）
+    /// </summary>
     uint32_t GetSrvIndex(const std::string& filePath);
-    // 新getter: GPUハンドル取得（filePathキー）
+
+    /// <summary>
+    /// SRVハンドルの取得（filePathキー）
+    /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(const std::string& filePath);
-    // Return a list of loaded texture file paths
+
+    /// <summary>
+    /// ロード済みテクスチャのファイルパス一覧を取得
+    /// </summary>
     std::vector<std::string> GetLoadedTextureFilePaths() const;
 
-    // SRV確保可能チェック（上限に達していなければ true）
+    /// <summary>
+    /// // SRVヒープにさらにSRVを割り当て可能か（上限に達していないか）を確認
+    /// </summary>
     bool CanAllocateMore() const {
         return (static_cast<uint32_t>(textureDatas.size()) + kSRVIndexTop_) < DirectXCommon::kMaxSRVCount;
     }
 
-    //テクスチャ番号からGPUハンドルを取得
+    /// <summary>
+    /// SRVインデックスの取得（テクスチャインデックスキー）
+    /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(uint32_t textureIndex);
 
-    // 現在ロード済みのテクスチャ数を返す
+    /// <summary>
+    /// ロード済みテクスチャの数を取得
+    /// </summary>
     uint32_t GetLoadedTextureCount() const { return static_cast<uint32_t>(textureDatas.size()); }
 
-    //メタデータを取得
+    /// <summary>
+    /// テクスチャインデックスからメタデータを取得
+    /// </summary>
     const DirectX::TexMetadata& GetMetadata(uint32_t textureIndex);
 
-private:
-    static TextureManager* instance_;
-    static uint32_t kSRVIndexTop_;
+private: // メンバ変数
 
-    TextureManager() = default;
-    ~TextureManager() = default;
-    TextureManager(TextureManager&) = delete;
-    TextureManager& operator=(TextureManager&) = delete;
+    static TextureManager* instance_; // シングルトンインスタンスのポインタ
+    static uint32_t kSRVIndexTop_; // SRVインデックスの開始位置（テクスチャ用のSRVはこのインデックスから割り当てる）
 
-private:
+    // シングルトンパターンのため、コンストラクタとコピー/ムーブ関連の関数は削除
+    TextureManager() = default; // デフォルトコンストラクタ
+    ~TextureManager() = default; // デストラクタ
+    TextureManager(TextureManager&) = delete; // コピーコンストラクタ
+    TextureManager& operator=(TextureManager&) = delete; // コピー代入演算子
+
+private: // 内部構造体: テクスチャデータ
+    
     // テクスチャ1枚分のデータ
     struct TextureData {
         uint32_t srvIndex = 0; // SRVインデックス
@@ -75,8 +114,8 @@ private:
     };
 
     // 参照先
-    DirectXCommon* dxCommon_ = nullptr;
-    SrvManager* srvManager_ = nullptr;
+    DirectXCommon* dxCommon_ = nullptr; // DirectXCommonへの参照（リソース生成やコマンドリストへのアクセスに使用）
+    SrvManager* srvManager_ = nullptr; // SrvManagerへの参照（SRVヒープへのSRV登録に使用）
 
     // テクスチャデータ（filePath をキーとして保持）
     std::unordered_map<std::string, TextureData> textureDatas;

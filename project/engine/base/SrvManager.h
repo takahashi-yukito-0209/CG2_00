@@ -1,22 +1,43 @@
 #pragma once
 
+#include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
-#include <cstdint>
 
-namespace MyEngine { class DirectXCommon; }
+// 前方宣言: MyEngine 名前空間内の DirectXCommon を宣言
+namespace MyEngine {
+class DirectXCommon;
+}
 
 namespace MyEngine {
+/// <summary>
+/// SRV（Shader Resource View）管理クラス
+/// </summary>
 class SrvManager {
-public:
+public: // メンバ関数
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
     void Initialize(MyEngine::DirectXCommon* dxCommon);
+
+    /// <summary>
+    /// 終了処理
+    /// </summary>
     void Finalize();
 
-    // ヒープをセット（1フレーム1回）
+    /// <summary>
+    /// 描画前処理（SRVヒープの設定など）
+    /// </summary>
     void PreDraw();
 
-    // ImGui の初期化と終了（SRVヒープ0番を使用）
+    /// <summary>
+    /// ImGui初期化処理
+    /// </summary>
     void InitImGui();
+
+    /// <summary>
+    /// ImGuiシャットダウン処理
+    /// </summary>
     void ShutdownImGui();
 
     // SRV確保（次インデックスを返す）
@@ -28,13 +49,21 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(uint32_t index) const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(uint32_t index) const;
 
-    // ルートパラメータにテーブルをセットする
+    /// <summary>
+    /// グラフィクスルートシグネチャの指定スロットにSRVヒープのGPUディスクリプタテーブルを設定する。
+    /// </summary>
     void SetGraphicsRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex);
 
-private:
+private: // メンバ変数
+    // DirectXCommonへの参照（SRVヒープの取得などに使用）
     DirectXCommon* dxCommon_ = nullptr;
+
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap_;
+
+    // SRV用ディスクリプタヒープ
     UINT descriptorSize_ = 0;
-    uint32_t useIndex_ = 0; // 次に使用するSRVインデックス
+
+    // 次に使用するSRVインデックス
+    uint32_t useIndex_ = 0;
 };
 } // namespace MyEngine

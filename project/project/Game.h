@@ -2,32 +2,48 @@
 #include <Windows.h>
 #include "Framework.h"
 
-// ゲーム全体を管理するクラス（DirectX12 前提）
-// Framework を継承し、ゲーム固有処理を実装する
+/// <summary>
+/// ゲームクラス: Framework を継承してゲーム固有の処理を実装するクラス
+/// </summary>
 class Game : public Framework {
-public:
-    Game();
-    ~Game();
+public: // メンバ関数
 
-    // 初期化（Win 起動パラメータを受け取る）
-    // 基底の初期化を先に呼び出し、派生側の初期化を行う
+    // コンストラクタとデストラクタ
+    Game(); // デフォルトコンストラクタを使用
+    ~Game(); // デストラクタは基底の仮想デストラクタが呼ばれるようにする
+
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
     bool Initialize(HINSTANCE hInstance, int nCmdShow) override;
-    // 毎フレーム更新
-    // 基底の更新処理を呼び出した上でゲーム固有の更新を行う
+
+    /// <summary>
+    /// 更新処理
+    /// </summary>
     void Update() override;
-    // 毎フレーム描画
-    // 描画は必須実装 (Framework 側では純粋仮想)
+
+    /// <summary>
+    /// 描画処理
+    /// </summary>
     void Draw() override;
-    // 終了処理
-    // 終了処理は派生側の解放処理を行った後で基底の Finalize を呼ぶ
+
+    /// <summary>
+    /// 終了処理
+    /// </summary>
     void Finalize() override;
 
-    // ゲーム終了要求を外部から参照する
+    /// <summary>
+    /// 終了要求の参照
+    /// </summary>
     bool IsEndRequest() const override;
-    // イベントポーリングを Framework に接続する
+
+    /// <summary>
+    /// イベントポーリング
+    /// </summary>
     bool PollEvents() override;
 
-private:
+private: // メンバ変数
+
     struct Impl;
     Impl* impl_ = nullptr; // 実装の隠蔽
 };

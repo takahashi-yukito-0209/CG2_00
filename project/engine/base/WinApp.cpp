@@ -6,6 +6,7 @@
 
 #pragma comment(lib, "winmm.lib")
 
+// ImGui のウィンドウプロシージャハンドラの宣言
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 using namespace MyEngine;
@@ -60,13 +61,13 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
 void WinApp::RegisterWindowClass()
 {
     WNDCLASSEX w = {};
-    w.cbSize = sizeof(WNDCLASSEX);
-    w.lpfnWndProc = WinApp::WindowProc;
-    w.lpszClassName = kWindowClassName;
-    w.hInstance = hInstance_;
-    w.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    w.cbSize = sizeof(WNDCLASSEX); // 構造体のサイズを指定
+    w.lpfnWndProc = WinApp::WindowProc; // ウィンドウプロシージャを指定
+    w.lpszClassName = kWindowClassName; // ウィンドウクラス名を指定
+    w.hInstance = hInstance_; // インスタンスハンドルを指定
+    w.hCursor = LoadCursor(nullptr, IDC_ARROW); // カーソルを指定
 
-    RegisterClassEx(&w);
+    RegisterClassEx(&w); // ウィンドウクラスをシステムに登録
 }
 
 /// <summary>
@@ -75,14 +76,17 @@ void WinApp::RegisterWindowClass()
 bool WinApp::ProcessMessage()
 {
     MSG msg = {};
+    // メッセージキューにメッセージがある限りループして処理
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
             return false;
         }
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+
+        TranslateMessage(&msg); // キーボードメッセージの処理
+        DispatchMessage(&msg); // ウィンドウプロシージャにメッセージを送る
     }
-    return true;
+
+    return true; // WM_QUITを受け取ったら false を返す
 }
 
 /// <summary>
@@ -90,10 +94,12 @@ bool WinApp::ProcessMessage()
 /// </summary>
 void WinApp::Finalize()
 {
+    // システムタイマーの分解能を元に戻す
     if (hwnd_) {
         DestroyWindow(hwnd_);
         hwnd_ = nullptr;
     }
+    // ウィンドウクラスの登録を解除
     if (!windowTitle_.empty()) {
         UnregisterClass(kWindowClassName, hInstance_);
     }
@@ -106,6 +112,7 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 {
     // アプリ側のメッセージ処理を先に行う
     switch (msg) {
+        // ウィンドウが破棄されたときの処理
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -116,5 +123,5 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         return 1;
     }
 
-    return DefWindowProc(hwnd, msg, wparam, lparam);
+    return DefWindowProc(hwnd, msg, wparam, lparam); // デフォルトのウィンドウプロシージャにメッセージを送る
 }

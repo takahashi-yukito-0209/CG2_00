@@ -15,22 +15,32 @@ enum class Level {
     Error,
 };
 
-// 現在の最小出力レベルを設定する
+/// <summary>
+/// 現在の最小出力レベルを設定する
+/// </summary>
 void SetLevel(Level level);
 
-// ログファイルを設定する（空文字でファイル出力を無効化）
+/// <summary>
+/// ログファイルを設定する（空文字でファイル出力を無効化）
+/// </summary>
 bool SetLogFile(const std::string& filePath);
 
-// 異常系（Warn/Error）専用のログファイルを設定する（空文字で無効化）
+/// <summary>
+/// 異常系（Warn/Error）専用のログファイルを設定する（空文字で無効化）
+/// </summary>
 bool SetErrorLogFile(const std::string& filePath);
 
-// レベル付きログ出力
+/// <summary>
+/// レベル付きログ出力
+/// </summary>
 void Log(Level level, const std::string& message);
 
-// 互換性のための既存API
+/// <summary>
+/// 互換性のための既存API
+/// </summary>
 void Log(const std::string& message);
 
-// レベル別の簡易ログ出力関数
+// --- レベル別の簡易API ---
 inline void Debug(const std::string& msg) { Log(Level::Debug, msg); }
 inline void Info(const std::string& msg) { Log(Level::Info, msg); }
 inline void Warn(const std::string& msg) { Log(Level::Warn, msg); }

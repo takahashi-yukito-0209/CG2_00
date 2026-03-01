@@ -1,13 +1,13 @@
 #pragma once
+#include "Logger.h"
 #include <MathTypes.h>
+#include <cmath>
 #include <d3d12.h>
+#include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <wrl.h>
-#include <memory>
-#include <cmath>
-#include <sstream>
-#include "Logger.h"
 
 using namespace Math;
 
@@ -15,11 +15,15 @@ namespace MyEngine {
 
 // 前方宣言
 class Object3dCommon;
-class Model; 
-class ModelCommon; 
+class Model;
+class ModelCommon;
 
+/// <summary>
+/// 3Dオブジェクトクラス
+/// </summary>
 class Object3d {
 public: // メンバ構造体
+
     // 頂点データ構造体
     struct VertexData {
         Vector4 position;
@@ -46,7 +50,6 @@ public: // メンバ構造体
         Matrix4x4 World;
         Vector4 color; // インスタンス毎のカラー（w = アルファ）
         Matrix4x4 WorldInverseTranspose;
-
     };
 
     // 平行光源データ構造体
@@ -58,25 +61,25 @@ public: // メンバ構造体
 
     // 点光源データ構造体 (CPU側レイアウト)
     struct PointLight {
-        Vector4 position; // xyz = position, w = unused
-        Vector4 color;    // rgb = color, w = intensity
-        float radius;     // maximum effective range
-        float decay;      // falloff exponent
-        int32_t enabled;  // 0 = disabled, non-zero = enabled
-        float padding;    // pad to 16-byte alignment
+        Vector4 position;
+        Vector4 color;
+        float radius;
+        float decay;
+        int32_t enabled;
+        float padding;
     };
 
     // スポットライトデータ構造体 (CPU側レイアウト)
     struct SpotLight {
-        Vector4 position;      // xyz = position, w = unused
-        Vector4 color;         // rgb = color, w = intensity
-        Vector3 direction;     // spot direction (normalized)
-        float  distance;       // maximum effective range
-        float  decay;          // falloff exponent
-        float  cosAngle;       // cosine of inner cone angle (center)
-        float  cosFalloffStart;// cosine of falloff start angle
-        int32_t enabled;       // 0 = disabled, non-zero = enabled
-        float  padding;        // pad to 16-byte alignment
+        Vector4 position;
+        Vector4 color;
+        Vector3 direction;
+        float distance;
+        float decay;
+        float cosAngle;
+        float cosFalloffStart;
+        int32_t enabled;
+        float padding;
     };
 
     // マテリアルデータ構造体
@@ -89,51 +92,107 @@ public: // メンバ構造体
     struct ModelData {
         std::vector<VertexData> vertices;
         MaterialData material;
+        // ルートノード情報（Assimp のノードツリーを格納）
+        struct Node {
+            Matrix4x4 localMatrix;
+            std::string name;
+            std::vector<Node> children;
+        } rootNode;
     };
 
 public: // メンバ関数
-    // 初期化
+
+    /// <summary>
+    /// 初期化
+    /// </summary>
     void Initialize(Object3dCommon* object3dCommon);
-    // 終了
+
+    /// <summary>
+    /// 終了処理
+    /// </summary>
     ~Object3d();
-    // 更新
+
+    /// <summary>
+    /// 更新
+    /// </summary>
     void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
-    // 描画
+
+    /// <summary>
+    /// 描画
+    /// </summary>
     void Draw();
 
-    //.mtlファイルを読み取り
+    /// <summary>
+    /// マテリアルテンプレートファイルを読みこむ（マテリアルの基本情報を格納した独自フォーマットのファイルを想定）
+    /// </summary>
     static MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
 
-    //.objファイルを読みこむ
-    static ModelData LoadObjFile(const std::string& directoryPath, const std::string& filename);
+    /// <summary>
+    /// モデルファイルを読みこむ（頂点データとマテリアル情報を格納した独自フォーマットのファイルを想定）
+    /// </summary>
+    static ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename);
 
-    // モデル用ポインタのセット・ゲット
+    /// <summary>
+    /// モデルのセット
+    /// </summary>
     void SetModel(Model* model) { model_ = model; }
-    // ファイル名を指定してモデルを設定する（resourcesフォルダを想定）
+
+    /// <summary>
+    /// モデルファイルを指定してモデルをセットする。内部で LoadModelFile を呼び出してモデルデータを読みこみ、モデルを作成してセットする。
+    /// </summary>
     void SetModel(const std::string& filePath);
-    // テクスチャファイルを指定してオブジェクトに割り当てる
+
+    /// <summary>
+    /// テクスチャのセット
+    /// </summary>
     void SetTexture(const std::string& filePath);
+
+    /// <summary>
+    /// モデルのゲット
+    /// </summary>
     Model* GetModel() const { return model_; }
 
-    // モデル共通情報用ポインタのセット・ゲット
+    /// <summary>
+    /// 頂点バッファビューの取得
+    /// </summary>
     D3D12_VERTEX_BUFFER_VIEW const& GetVertexBufferView() const { return vertexBufferView_; }
+
+    /// <summary>
+    /// マテリアル用リソースの取得
+    /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const { return materialResource_; }
+
+    /// <summary>
+    /// 座標変換行列用リソースの取得
+    /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
+    
+    /// <summary>
+    /// モデルデータの取得
+    /// </summary>
     const ModelData& GetModelData() const { return modelData_; }
 
-    // 所有する `Object3dCommon` へのアクセス
+    /// <summary>
+    /// オブジェクト共通情報用ポインタの取得
+    /// </summary>
     Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
 
 private: // メンバ変数
-    Object3dCommon* object3dCommon_ = nullptr;
+
+    Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
+
     // Objファイルのデータ
     ModelData modelData_;
+
     // マテリアル用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    // マテリアル用定数バッファリソース
     Material* materialData_ = nullptr;
     // 座標変換行列用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
+    // 行列データ用定数バッファリソース
     TransformationMatrix* transformationMatrixData_ = nullptr;
+
     // 平行光源用リソース
     // 注: 平行光源は現在 `Object3dCommon` が所有する共有リソースとなっている
     // 頂点バッファリソース
@@ -143,8 +202,8 @@ private: // メンバ変数
     // バッファリソースの使い道を補足するバッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
-    Transform transform_;
-    Transform cameraTransform_;
+    Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
+    Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
     // `Model` へのポインタ
     Model* model_ = nullptr;
@@ -157,63 +216,116 @@ private: // メンバ変数
     // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
     bool useAlphaCutoutSampler_ = false;
 
-public:
-    // setters
+public: // メンバ関数
+
+    /// <summary>
+    ///  大きさ設定
+    /// </summary>
     void SetScale(const Vector3& scale) { transform_.scale = scale; }
+
+    /// <summary>
+    /// 回転設定
+    /// </summary>
     void SetRotate(const Vector3& rotate) { transform_.rotate = rotate; }
-    void SetTranslate(const Vector3& translate) {
+
+    /// <summary>
+    /// 平行移動設定
+    /// </summary>
+    void SetTranslate(const Vector3& translate)
+    {
         // 入力値の妥当性チェック
         auto invalid = [](float v) {
             return !std::isfinite(v) || std::fabs(v) > 1e6f;
         };
-        
+
+        // いずれかの成分が無限大、非数、または極端に大きい値の場合は警告を出して無視する
         if (invalid(translate.x) || invalid(translate.y) || invalid(translate.z)) {
             std::ostringstream oss;
             oss << "Warning: Rejecting invalid translate set = " << translate.x << " " << translate.y << " " << translate.z << "\n";
             Logger::Log(oss.str());
-            return; // ignore invalid assignment
+            return; // すべての成分が有効な値でない場合は transform_.translate を更新せずに終了
         }
 
+        // すべての成分が有効な値の場合のみ transform_.translate に代入する
         transform_.translate = translate;
     }
 
-    // Material helpers (none added)
-
-    // Draw ImGui controls for this object (per-object edit UI)
+    /// <summary>
+    /// ImGuiでオブジェクトの状態を表示・編集するための関数。引数のindexは、複数オブジェクトを区別するための識別子として使用
+    /// </summary>
     void DrawImGui(int index);
 
-    // Getter
+    /// <summary>
+    /// スケール取得
+    /// </summary>
     const Vector3 GetScale() const { return transform_.scale; }
+    
+    /// <summary>
+    /// 回転取得
+    /// </summary>
     const Vector3 GetRotate() const { return transform_.rotate; }
+    
+    /// <summary>
+    /// 平行移動取得
+    /// </summary>
     const Vector3 GetTranslate() const { return transform_.translate; }
 
-    // material controls
+    /// <summary>
+    /// ライティングの有効/無効を取得する
+    /// </summary>
     bool GetEnableLighting() const;
+
+    /// <summary>
+    /// ライティングの有効/無効を設定する
+    /// </summary>
     void SetEnableLighting(bool enable);
+
+    /// <summary>
+    /// ライティングモードの取得
+    /// </summary>
     int GetLightingMode() const;
+
+    /// <summary>
+    /// ライティングモードの設定
+    /// </summary>
     void SetLightingMode(int mode);
 
-    // サンプラー制御: 一部のオブジェクト（フェンスなど）はアルファカットアウトのため point+clamp サンプラーが必要
-    void SetUseAlphaCutoutSampler(bool use) { useAlphaCutoutSampler_ = use; if (materialData_) materialData_->useAlphaCutoutSampler = use ? 1 : 0; }
+    /// <summary>
+    /// アルファカットアウト用サンプラーの使用設定
+    /// </summary>
+    void SetUseAlphaCutoutSampler(bool use)
+    {
+        // 内部フラグを更新
+        useAlphaCutoutSampler_ = use;
+        // マテリアルデータの該当フィールドも更新
+        if (materialData_) {
+            materialData_->useAlphaCutoutSampler = use ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// アルファカットアウト用サンプラーの使用設定の取得
+    /// </summary>
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
-private:
+private: // 内部関数
+
     // 初期化補助
-    void CreateMaterialResource();
-    void CreateTransformationMatrixResource();
-    void AssignTexture();
+    void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
+    void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
+    void AssignTexture(); // モデルデータ割り当て
 };
 
 } // namespace MyEngine
 
 // 後方互換の型エイリアス（レガシーコードで使用されている名前を保持）
 namespace MyEngine {
-    using VertexData = Object3d::VertexData;
-    using Material = Object3d::Material;
-    using TransformationMatrix = Object3d::TransformationMatrix;
-    using DirectionalLight = Object3d::DirectionalLight;
-    using MaterialData = Object3d::MaterialData;
-    using ModelData = Object3d::ModelData;
+using VertexData = Object3d::VertexData;
+using Material = Object3d::Material;
+using TransformationMatrix = Object3d::TransformationMatrix;
+using DirectionalLight = Object3d::DirectionalLight;
+using MaterialData = Object3d::MaterialData;
+using ModelData = Object3d::ModelData;
 }
 
 // グローバルスコープにこれらの名前があることを前提とするレガシーコード向けに非修飾エイリアスも提供

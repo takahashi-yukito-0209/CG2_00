@@ -1,46 +1,64 @@
 #pragma once
 
-// Forward declare global D3D12 command list type to avoid including d3d12.h here
+// 前方宣言: ID3D12GraphicsCommandList インターフェースを宣言（Render 関数の引数でポインタ参照するため）
 struct ID3D12GraphicsCommandList;
 
-// Forward declarations for runtime types used by UI context
+// 前方宣言: ParticleEmitter クラスを宣言（ImGuiManager でポインタ参照するため）
 class ParticleEmitter;
+
+// 前方宣言: Sprite クラスと SpriteCommon クラスを宣言（ImGuiManager でポインタ参照するため）
 namespace MyEngine { class Object3dCommon; class Object3d; class ParticleManager; }
 
 #include <vector>
 
 namespace MyEngine {
 
+// 前方宣言: SrvManager クラスを宣言（ImGuiManager でポインタ参照するため）
 class SrvManager;
 
+/// <summary>
+/// ImGui管理クラス
+/// </summary>
 class ImGuiManager {
-public:
-    // Initialize ImGui context and backends. Takes hwnd for Win32 init and a SrvManager for DX12 init.
+public: // メンバ関数
+
+    /// <summary>
+    /// ImGuiとバックエンドの初期化
+    /// </summary>
     void Initialize(void* hwnd, class SrvManager* srvManager);
 
-    // Shutdown ImGui and backends. This will call SrvManager::ShutdownImGui()
+    /// <summary>
+    /// ImGuiとバックエンドのシャットダウン
+    /// </summary>
     void Shutdown();
 
-    // Start a new ImGui frame (calls platform/renderer new-frame helpers and ImGui::NewFrame)
+    /// <summary>
+    /// 新しいフレームの開始（ImGui::NewFrame とバックエンドの NewFrame を呼び出す）
+    /// </summary>
     void NewFrame();
 
-    // Context passed from application to allow UI to edit runtime objects
+    // ImGui コントロールの構築に必要なコンテキストをまとめた構造体
     struct Context {
-        ::ParticleEmitter* particleEmitter = nullptr; // global-scope ParticleEmitter
-        MyEngine::Object3dCommon* object3dCommon = nullptr;
-        std::vector<MyEngine::Object3d*>* objects3d = nullptr; // pointers to objects for per-object UI
-        std::vector<class Sprite*>* sprites = nullptr; // pointers to sprites for sprite UI
-        class SpriteCommon* spriteCommon = nullptr; // sprite common for blend mode
-        int* selectedDrawType = nullptr; // pointer to main's selectedDrawType
-        bool* useBillboard = nullptr; // pointer to main's useBillboard flag
-        class ParticleManager* particleManager = nullptr; // pointer to particle manager for applying settings
-        float dt = 0.0f; // delta time for updates
+        // ここに ImGui コントロールの構築に必要なオブジェクトや状態を追加
+        ParticleEmitter* particleEmitter = nullptr; // パーティクルエミッタへのポインタ
+        Object3dCommon* object3dCommon = nullptr; // Object3dCommon へのポインタ
+        std::vector<Object3d*>* objects3d = nullptr; // 3Dオブジェクトのリストへのポインタ
+        std::vector<class Sprite*>* sprites = nullptr; // スプライトのリストへのポインタ
+        class SpriteCommon* spriteCommon = nullptr; // SpriteCommon へのポインタ
+        int* selectedDrawType = nullptr; // 描画タイプ選択用の整数へのポインタ（例: 0=通常、1=ワイヤーフレーム、2=ビルボードなど）
+        bool* useBillboard = nullptr; // ビルボード描画の有効フラグへのポインタ
+        class ParticleManager* particleManager = nullptr; // ParticleManager へのポインタ
+        float dt = 0.0f; // フレームのデルタタイム
     };
 
-    // Build UI elements (all ImGui:: calls moved here). This updates bound objects directly.
+    /// <summary>
+    /// ImGui コントロールの構築（Context 構造体を引数にして、必要な情報を渡す）
+    /// </summary>
     void BuildUI(Context& ctx);
 
-    // Render ImGui draw data using the provided D3D12 command list
+    /// <summary>
+    /// 描画コマンドの発行（ImGui::Render とバックエンドの Render を呼び出す）
+    /// </summary>
     void Render(ID3D12GraphicsCommandList* commandList);
 };
 } // namespace MyEngine
