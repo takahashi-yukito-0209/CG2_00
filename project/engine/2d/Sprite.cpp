@@ -8,6 +8,9 @@
 
 using namespace MyEngine;
 
+/// <summary>
+/// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成を行う
+/// </summary>
 void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 {
     // 引数で受け取ってメンバ変数に記録する
@@ -137,6 +140,9 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
     AdjustTextureSize();
 }
 
+/// <summary>
+/// スプライトの状態を反映して、頂点データや変換行列を更新
+/// </summary>
 void Sprite::Update()
 {
     MathUtility math;
@@ -192,7 +198,7 @@ void Sprite::Update()
 
     // View/Projection行列の作成 (2Dスプライト用)
     Matrix4x4 viewMatrix = math.MakeIdentity4x4();
-    Matrix4x4 projectionMatrix = math.MakeOrthograhicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
+    Matrix4x4 projectionMatrix = math.MakeOrthographicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
 
     // WVP行列の計算と定数バッファへの書き込み
     Matrix4x4 wvpMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
@@ -202,6 +208,7 @@ void Sprite::Update()
         transformationMatrixData_->WVP = wvpMatrix;
         transformationMatrixData_->World = worldMatrix; // World行列も忘れずに更新
     } else {
+        // 変換行列データが利用できない場合は警告を出す（描画は続行するが、スプライトは正しく表示されない可能性がある）
         Logger::Log("Warning: Sprite::Update transformationMatrixData_ is null, skipping matrix update\n");
     }
 
@@ -214,16 +221,23 @@ void Sprite::Update()
     if (materialData_) {
         materialData_->uvTransform = uvTransformMatrix;
     } else {
+        // UV変換行列データが利用できない場合は警告を出す（描画は続行するが、UV変換が反映されない可能性がある）
         Logger::Log("Warning: Sprite::Update materialData_ is null, skipping uvTransform update\n");
     }
 }
 
+
+/// <summary>
+/// 頂点バッファビュー、インデックスバッファビュー、マテリアル定数バッファ、変換行列定数バッファ、SRVをコマンドリストにセットして描画
+/// </summary>
 void Sprite::Draw()
 {
+    // DirectXCommonとコマンドリストの存在確認
     if (!spriteCommon_) {
         Logger::Log("Warning: Sprite::Draw skipped: spriteCommon_ is null\n");
         return;
     }
+
     DirectXCommon* dxCommon = spriteCommon_->GetDxCommon();
     if (!dxCommon || !dxCommon->GetCommandList()) {
         Logger::Log("Warning: Sprite::Draw skipped: DirectXCommon or command list is null\n");
@@ -232,18 +246,22 @@ void Sprite::Draw()
 
     // 必要なバッファ/リソースの存在確認
     if (!vertexData_) {
+        // 頂点データが利用できない場合は警告を出して描画をスキップする（頂点データがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: vertexData_ is null\n");
         return;
     }
     if (!indexData_) {
+        // インデックスデータが利用できない場合は警告を出して描画をスキップする（インデックスデータがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: indexData_ is null\n");
         return;
     }
     if (!materialResource_) {
+        // マテリアルリソースが利用できない場合は警告を出して描画をスキップする（マテリアル定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: materialResource_ is null\n");
         return;
     }
     if (!transformationMatrixResource_) {
+        // 変換行列リソースが利用できない場合は警告を出して描画をスキップする（変換行列定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
@@ -263,6 +281,7 @@ void Sprite::Draw()
     // SRVのDescriptorTableの先頭を指定（有効なtextureIndex_のときのみ）
     if (textureIndex_ != UINT32_MAX) {
         D3D12_GPU_DESCRIPTOR_HANDLE srv = TextureManager::GetInstance()->GetSrvHandleGPU(textureIndex_);
+        // SRVハンドルが有効なときのみバインドする。無効なときは警告を出すが描画は続行する（SRVがないと描画できないわけではないため）
         if (srv.ptr != 0) {
             dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, srv);
         } else {
@@ -276,6 +295,10 @@ void Sprite::Draw()
     dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
 }
 
+
+/// <summary>
+/// テクスチャサイズをイメージに合わせる
+/// </summary>
 void Sprite::AdjustTextureSize()
 {
     // テクスチャメタデータを取得
@@ -288,15 +311,24 @@ void Sprite::AdjustTextureSize()
     size_ = textureSize_;
 }
 
+
+/// <summary>
+/// テクスチャを設定する。指定されたファイルパスのテクスチャがTextureManagerに存在しない場合はロードしてからSRVインデックスを取得
+/// </summary>
 void Sprite::SetTexture(const std::string& filePath)
 {
-    auto texMgr = TextureManager::GetInstance();
+
+    auto texMgr = TextureManager::GetInstance(); // テクスチャマネージャーのインスタンスを取得
+    // 指定されたファイルパスのテクスチャがすでにロードされているか確認し、SRVインデックスを取得
     uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
+    // テクスチャがロードされていない場合はロードしてからSRVインデックスを取得
     if (idx == UINT32_MAX) {
         texMgr->LoadTexture(filePath);
         texMgr->ExecuteResourceUpload();
         idx = texMgr->GetTextureIndexByFilePath(filePath);
     }
+
+    // テクスチャがロードされている場合はSRVインデックスを設定してテクスチャサイズを調整。ロードに失敗している場合は警告を出す。
     if (idx != UINT32_MAX) {
         textureIndex_ = idx;
         AdjustTextureSize();

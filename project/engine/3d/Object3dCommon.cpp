@@ -5,6 +5,9 @@
 
 using namespace MyEngine;
 
+/// <summary>
+/// 初期化
+/// </summary>
 void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 {
     // 引数で受け取ってメンバ変数に記録する
@@ -12,6 +15,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     // 共有の平行光源用定数バッファを作成
     // これにより main/ImGui からすべての Object3d インスタンスで使用する単一のライトを編集できる
     directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
+    
+    // バッファが作成できた場合はマッピングして初期値を設定する
     if (directionalLightResource_) {
         directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
         // 既定値の設定
@@ -19,18 +24,21 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
     }
+
     // 点光源用バッファを作成（最大数は Object3dCommon::kMaxPointLights）
     const uint32_t kMaxPointLights = Object3dCommon::kMaxPointLights;
+    // CPU側の構造体レイアウトに合わせて、GPU側のバッファも同じレイアウトで作成する必要がある
     size_t pointLightsBufferSize = sizeof(Object3d::PointLight) * static_cast<size_t>(kMaxPointLights);
     pointLightsResource_ = dxCommon_->CreateBufferResource(pointLightsBufferSize);
+
+    // バッファが作成できた場合はマッピングして初期値を設定する
     if (pointLightsResource_) {
         pointLightsResource_->Map(0, nullptr, reinterpret_cast<void**>(&pointLightsData_));
         // デフォルトで無効化しておく
         for (uint32_t i = 0; i < kMaxPointLights; ++i) {
-            // position.xyz = world position, position.w unused on CPU-side (HLSL stores radius separately)
+            // 無効化のため、位置を原点、色を白、半径と減衰を適当な値に設定し、enabled を 0 にする
             pointLightsData_[i].position = {0.0f, 0.0f, 0.0f, 0.0f};
             pointLightsData_[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
-            // sensible defaults for radius/decay so shader attenuation behaves predictably
             pointLightsData_[i].radius = 10.0f;
             pointLightsData_[i].decay = 2.0f;
             pointLightsData_[i].enabled = 0;
@@ -40,24 +48,28 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 
     // スポットライト用バッファを作成 (単一スポットライトを想定)
     size_t spotLightBufferSize = sizeof(Object3d::SpotLight);
+    // CPU側の構造体レイアウトに合わせて、GPU側のバッファも同じレイアウトで作成する必要がある
     spotLightResource_ = dxCommon_->CreateBufferResource(spotLightBufferSize);
+    // バッファが作成できた場合はマッピングして初期値を設定する
     if (spotLightResource_) {
         spotLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&spotLightData_));
-        // デフォルト値: 無効化
+        // デフォルトで無効化しておく
         spotLightData_->position = {0.0f, 0.0f, 0.0f, 0.0f};
         spotLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
         spotLightData_->direction = {0.0f, -1.0f, 0.0f};
         spotLightData_->distance = 10.0f;
         spotLightData_->decay = 2.0f;
-        spotLightData_->cosAngle = 1.0f; // 0 deg
-        spotLightData_->cosFalloffStart = 1.0f; // same as angle = disabled
+        spotLightData_->cosAngle = 1.0f; 
+        spotLightData_->cosFalloffStart = 1.0f; 
         spotLightData_->enabled = 0;
         spotLightData_->padding = 0.0f;
     }
   
     // ビルボード用のカメラ定数バッファ（b2）を作成
     cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
+    // バッファが作成できた場合はマッピングして初期値を設定する
     if (cameraCBResource_) {
+        // カメラ定数バッファをマップして、初期値を設定する
         cameraCBResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraCBData_));
         cameraCBData_->right = {1.0f, 0.0f, 0.0f};
         cameraCBData_->up    = {0.0f, 1.0f, 0.0f};
@@ -66,6 +78,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         cameraCBData_->pad0 = 0.0f; // パディングを書き込むことを保証
         cameraCBData_->enable = 0.0f;
     }
+
     // カメラ用定数バッファ
     cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
     if (cameraResource_) {
@@ -73,6 +86,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         cameraData_->worldPosition = { 0.0f, 0.0f, 0.0f };
         cameraData_->pad = 0.0f;
     }
+
     // グラフィックスパイプラインの生成
     CreateGraphicsPipeline();
 
@@ -83,12 +97,12 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     // TransformationMatrix[kNumInstance] を格納する構造化バッファ向けのGPU可視SRVを作成
     D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
     instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // 構造化バッファ
-    instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-    instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    instancingSrvDesc.Buffer.FirstElement = 0;
-    instancingSrvDesc.Buffer.NumElements = kNumInstance;
-    instancingSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
-    instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER; // バッファビュー
+    instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // バッファの先頭から使用
+    instancingSrvDesc.Buffer.FirstElement = 0; // バッファの先頭から
+    instancingSrvDesc.Buffer.NumElements = kNumInstance; // kNumInstance分の構造体を格納
+    instancingSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix); // 1インスタンス分のサイズ
+    instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE; // フラグは特に必要ないため NONE
 
     // インスタンスデータを格納するため、UPLOADヒープに既定サイズのバッファリソースを作成
     size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kNumInstance;
@@ -121,7 +135,10 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     }
 }
 
-void Object3dCommon::SetBlendMode(MyEngine::BlendMode mode)
+/// <summary>
+/// ブレンドモードの設定
+/// </summary>
+void Object3dCommon::SetBlendMode(BlendMode mode)
 {
     // 選択されたブレンドモードを保存し、PSOを再生成する
     blendMode_ = mode;
@@ -129,17 +146,26 @@ void Object3dCommon::SetBlendMode(MyEngine::BlendMode mode)
     CreateGraphicsPipeline();
 }
 
+/// <summary>
+/// インスタンシング／パーティクル用の描画設定をコマンドリストに設定
+/// </summary>
 void Object3dCommon::SetInstancingDrawSetting()
 {
+    // 実行時のヌル参照を回避するための防御チェック
     auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
+    
+    // ここでcmdListがnullの場合は、GPUクラッシュを回避するために早期リターンする
     if (!cmdList) {
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: command list is null\n");
         return;
     }
+
+    // ルートシグネチャがない場合もGPUクラッシュを回避するために早期リターンする
     if (!rootSignature_) {
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: rootSignature_ is null\n");
         return;
     }
+
     // フォールバック: インスタンシング用PSOが未準備なら標準のグラフィックスPSOを使用してGPUクラッシュを回避
     if (!instancingPipelineState_) {
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null, falling back to graphicsPipelineState_\n");
@@ -147,12 +173,14 @@ void Object3dCommon::SetInstancingDrawSetting()
             Logger::Log("Object3dCommon::SetInstancingDrawSetting: graphicsPipelineState_ also null\n");
             return;
         }
-        cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-        cmdList->SetPipelineState(graphicsPipelineState_.Get());
+        cmdList->SetGraphicsRootSignature(rootSignature_.Get()); // ルートシグネチャは共通
+        cmdList->SetPipelineState(graphicsPipelineState_.Get()); // フォールバックして通常のグラフィックスPSOを使用
     } else {
-        cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-        cmdList->SetPipelineState(instancingPipelineState_.Get());
+        cmdList->SetGraphicsRootSignature(rootSignature_.Get()); // ルートシグネチャは共通
+        cmdList->SetPipelineState(instancingPipelineState_.Get()); // インスタンシング用PSOを使用
     }
+
+    // プリミティブトポロジーをセットするコマンド
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     // 使用可能ならビルボード用カメラCB（VSのb2 -> ルートインデックス5）をバインド
     if (cameraCBResource_) {
@@ -166,18 +194,27 @@ void Object3dCommon::SetInstancingDrawSetting()
     }
 }
 
+/// <summary>
+/// 共通描画設定をコマンドリストに設定
+/// </summary>
 void Object3dCommon::SetCommonDrawSetting()
 {
     // 実行時のヌル参照を回避するための防御チェック
     auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
+
+    // ここでcmdListがnullの場合は、GPUクラッシュを回避するために早期リターンする
     if (!cmdList) {
         Logger::Log("Object3dCommon::SetCommonDrawSetting: command list is null\n");
         return;
     }
+    
+    // ルートシグネチャやPSOがない場合もGPUクラッシュを回避するために早期リターンする
     if (!rootSignature_) {
         Logger::Log("Object3dCommon::SetCommonDrawSetting: rootSignature_ is null\n");
         return;
     }
+    
+    // ここでグラフィックスパイプラインステートがnullの場合もGPUクラッシュを回避するために早期リターンする
     if (!graphicsPipelineState_) {
         Logger::Log("Object3dCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
         return;
@@ -196,8 +233,13 @@ void Object3dCommon::SetCommonDrawSetting()
     }
 }
 
+/// <summary>
+/// ルートシグネチャの作成
+/// </summary>
 void Object3dCommon::CreateRootSignature() {
-    HRESULT hr;
+    
+    HRESULT hr; // HRESULTはDirectXの関数の成功/失敗を表す戻り値の型
+
     // ディスクリプタレンジ作成 (pixel texture SRV)
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
     descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
@@ -244,28 +286,28 @@ void Object3dCommon::CreateRootSignature() {
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
 
-    // rootParameters[4] : DescriptorTable for instancing StructuredBuffer (Vertex shader, t1)
+    // インスタンシング用SRVテーブル (VertexShader, レジスタ1: インスタンシングSRV)
     rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[4].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing);
 
-    // rootParameters[5] : Camera vectors CBV (Vertex shader, b2)
+    // カメラベクトルCBV (Vertex shader, b2) - ビルボード用
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     rootParameters[5].Descriptor.ShaderRegister = 2; // b2
 
-    // rootParameters[6] : Camera CBV (Pixel shader, b3)
+    // カメラCBV (Pixel shader, b3) - スペキュラ計算用
     rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[6].Descriptor.ShaderRegister = 3; // b3
 
-    // rootParameters[7] : Point lights CBV (Pixel shader, b4)
+    // ポイントライトCBV (Pixel shader, b4)
     rootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[7].Descriptor.ShaderRegister = 4; // b4
 
-    // rootParameters[8] : Spot light CBV (Pixel shader, b5)
+    // スポットライトCBV (Pixel shader, b5)
     rootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[8].Descriptor.ShaderRegister = 5; // b5
@@ -283,35 +325,38 @@ void Object3dCommon::CreateRootSignature() {
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
 
     // s0: 線形 + ラップ
-    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplers[0].MipLODBias = 0.0f;
-    staticSamplers[0].MinLOD = 0.0f;
-    staticSamplers[0].ShaderRegister = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 線形フィルタ
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // U方向はラップ
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // V方向はラップ
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // W方向はラップ
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わないのでNEVER
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ミップレベルの最大値は無限大（利用可能な最大ミップレベルまで使用）
+    staticSamplers[0].MipLODBias = 0.0f; // ミップレベルのバイアスはなし
+    staticSamplers[0].MinLOD = 0.0f; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
+    staticSamplers[0].ShaderRegister = 0; // シェーダーで s0 にバインドされる
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用
 
     // s1: ポイントフィルタ + クランプ（アルファカットアウトテクスチャのブリーディングを防ぐために有用）
-    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplers[1].MipLODBias = 0.0f;
-    staticSamplers[1].MinLOD = 0.0f;
-    staticSamplers[1].ShaderRegister = 1;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; // ポイントフィルタ
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // U方向はクランプ
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // V方向はクランプ
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // W方向はクランプ
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わないのでNEVER
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX; // ミップレベルの最大値は無限大（利用可能な最大ミップレベルまで使用）
+    staticSamplers[1].MipLODBias = 0.0f; // ミップレベルのバイアスはなし
+    staticSamplers[1].MinLOD = 0.0f; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
+    staticSamplers[1].ShaderRegister = 1; // シェーダーで s1 にバインドされる
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用
 
+    // ルートシグネチャの説明にスタティックサンプラーをセット
     descriptionRootSignature.pStaticSamplers = staticSamplers;
+    // スタティックサンプラーの数
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
     // シリアライズしてバイナリにする
-    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
-    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr; 
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr; 
+    // ルートシグネチャの説明をシリアライズして、GPUに渡すためのバイナリを生成する
     hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
         // エラー処理
@@ -324,9 +369,18 @@ void Object3dCommon::CreateRootSignature() {
     assert(SUCCEEDED(hr));
 }
 
+/// <summary>
+/// 点光源の追加
+/// </summary>
 int Object3dCommon::AddPointLight(const Object3d::PointLight& pl)
 {
-    if (!pointLightsData_) return -1;
+
+    // 点光源用の定数バッファがない場合は追加できないため、-1を返して失敗を示す
+    if (!pointLightsData_) {
+        return -1;
+    }
+
+    // 点光源の配列を走査して、enabled == 0 の最初のスロットに新しい点光源を追加する
     for (uint32_t i = 0; i < kMaxPointLights; ++i) {
         if (pointLightsData_[i].enabled == 0) {
             pointLightsData_[i] = pl;
@@ -334,28 +388,61 @@ int Object3dCommon::AddPointLight(const Object3d::PointLight& pl)
             return static_cast<int>(i);
         }
     }
+
+    // 空きスロットがない場合は追加できないため、-1を返して失敗を示す
     return -1;
 }
 
+/// <summary>
+/// 点光源の削除
+/// </summary>
 bool Object3dCommon::RemovePointLight(int index)
 {
-    if (!pointLightsData_) return false;
-    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) return false;
+    // 点光源用の定数バッファがない場合は削除できないため、falseを返して失敗を示す
+    if (!pointLightsData_) {
+        return false;
+    }
+
+    // 指定されたインデックスが有効な範囲内にない場合も削除できないため、falseを返して失敗を示す
+    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) {
+        return false;
+    }
+
+    // 指定されたインデックスの点光源を無効化するため、enabled を 0 に設定する
     pointLightsData_[index].enabled = 0;
-    return true;
+
+    
+    return true; // これで点光源は削除された（無効化された）とみなされる
 }
 
+/// <summary>
+/// 点光源の更新
+/// </summary>
 bool Object3dCommon::UpdatePointLight(int index, const Object3d::PointLight& pl)
 {
-    if (!pointLightsData_) return false;
-    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) return false;
-    pointLightsData_[index] = pl;
-    pointLightsData_[index].enabled = pl.enabled ? 1 : 0;
-    return true;
+    // 点光源用の定数バッファがない場合は更新できないため、falseを返して失敗を示す
+    if (!pointLightsData_) {
+        return false;
+    }
+
+    // 指定されたインデックスが有効な範囲内にない場合も更新できないため、falseを返して失敗を示す
+    if (index < 0 || static_cast<uint32_t>(index) >= kMaxPointLights) {
+        return false;
+    }
+
+    // 指定されたインデックスの点光源を更新する。enabled フラグは引数の pl の値に従う。
+    pointLightsData_[index] = pl; // pl の内容で上書きする
+    pointLightsData_[index].enabled = pl.enabled ? 1 : 0; // enabled フラグは pl の値に従う（0以外は有効とみなす）
+    
+    return true; // これで点光源は更新された
 }
 
+/// <summary>
+/// グラフィックスパイプラインの作成
+/// </summary>
 void Object3dCommon::CreateGraphicsPipeline() {
-    HRESULT hr;
+
+    HRESULT hr; // HRESULTはDirectXの関数の成功/失敗を表す戻り値の型
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -374,64 +461,85 @@ void Object3dCommon::CreateGraphicsPipeline() {
     inputElementDescs[2].SemanticIndex = 0;
     inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
     inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    // InputLayoutの説明
     D3D12_INPUT_LAYOUT_DESC inputLayoutDesc {};
-    inputLayoutDesc.pInputElementDescs = inputElementDescs;
-    inputLayoutDesc.NumElements = _countof(inputElementDescs);
+    inputLayoutDesc.pInputElementDescs = inputElementDescs; // 入力要素の配列へのポインタ
+    inputLayoutDesc.NumElements = _countof(inputElementDescs); // 入力要素の数
 
     // BlendState の設定を blendMode_ に応じて切り替える
     D3D12_BLEND_DESC blendDesc {};
-    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0];
-    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    rtBlend.LogicOpEnable = FALSE;
-    rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0]; // 1つ目のレンダーターゲットのブレンド設定を取得
+    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL; // RGBA全てのチャンネルに書き込む
+    rtBlend.LogicOpEnable = FALSE; // ロジックオペレーションは使わない
+    rtBlend.BlendOp = D3D12_BLEND_OP_ADD; // ブレンドオペレーションは加算（src + dest）を基本とする
+    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD; // アルファブレンドオペレーションも加算を基本とする
 
+    // ブレンドモードに応じて、ソースブレンドとデスティネーションブレンドを設定する
     switch (blendMode_) {
-    case BlendMode::None:
+    case BlendMode::None: // ブレンドなし（上書き）
+        
+        // ブレンドを無効にして、ソースがそのまま出力されるようにする
         rtBlend.BlendEnable = FALSE;
         rtBlend.SrcBlend = D3D12_BLEND_ONE;
         rtBlend.DestBlend = D3D12_BLEND_ZERO;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
-    case BlendMode::Alpha:
+
+    case BlendMode::Alpha: // アルファブレンド（通常の半透明表現）
+        
+        // ブレンドを有効にして、ソースのアルファ値に基づいてブレンドする
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
         rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
-    case BlendMode::Add:
+
+    case BlendMode::Add: // 加算ブレンド（発光表現などに有用）
+        
+        // ブレンドを有効にして、ソースの色をそのまま加算する
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
         rtBlend.DestBlend = D3D12_BLEND_ONE;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
         break;
-    case BlendMode::Multiply:
+
+    case BlendMode::Multiply: // 乗算ブレンド（影や暗い部分の表現に有用）
+        
+        // ブレンドを有効にして、ソースの色とデスティネーションの色を乗算する
         rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; // src * dest
+        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; 
         rtBlend.DestBlend = D3D12_BLEND_ZERO;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
-    case BlendMode::Screen:
+
+    case BlendMode::Screen: // スクリーンブレンド（明るい部分の表現に有用）
+        
+        // ブレンドを有効にして、ソースの色を反転してデスティネーションの色と乗算し、さらに反転する
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_ONE;
         rtBlend.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
+
     default:
+        
+        // デフォルトはアルファブレンド
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
         rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
+
     }
 
-    // RasiterzerStateの設定
+    // RasterizerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
     // 裏面（時計回り）を表示しない
     rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
@@ -440,19 +548,19 @@ void Object3dCommon::CreateGraphicsPipeline() {
     // デフォルトのワインディング（時計回りを前面）を使用し、多くのOBJエクスポートと整合させる
     // もしモデルの一部が裏返しに見える場合は、ここでこのフラグを切り替えるよりも
     // カリングを無効にするか OBJ ローダー側でワインディングを修正することを検討してください。
-    rasterizerDesc.FrontCounterClockwise = FALSE;
-    rasterizerDesc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-    rasterizerDesc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-    rasterizerDesc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-    rasterizerDesc.DepthClipEnable = TRUE;
-    rasterizerDesc.MultisampleEnable = FALSE;
+    rasterizerDesc.FrontCounterClockwise = FALSE; // デフォルトのワインディングは時計回りが前面
+    rasterizerDesc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS; // 深度バイアスはデフォルト値を使用
+    rasterizerDesc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP; // 深度バイアスクランプはデフォルト値を使用
+    rasterizerDesc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS; // スロープスケーリング深度バイアスはデフォルト値を使用
+    rasterizerDesc.DepthClipEnable = TRUE; // 深度クリッピングを有効にする
+    rasterizerDesc.MultisampleEnable = FALSE; // マルチサンプルは使用しない
 
     // シェーダーをコンパイルする
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3D.VS.hlsl", L"vs_6_0");
-    assert(vertexShaderBlob != nullptr);
+    assert(vertexShaderBlob != nullptr); // PSOの生成に失敗する可能性があるため、シェーダーのコンパイルに失敗した場合はアサートで止める
 
     Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3D.PS.hlsl", L"ps_6_0");
-    assert(pixelShaderBlob != nullptr);
+    assert(pixelShaderBlob != nullptr); // PSOの生成に失敗する可能性があるため、シェーダーのコンパイルに失敗した場合はアサートで止める
 
     // PSOを生成する
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc {};
@@ -496,27 +604,31 @@ void Object3dCommon::CreateGraphicsPipeline() {
     // Particleシェーダーを用いて、インスタンシング／パーティクル描画用の別PSOを作成
     Microsoft::WRL::ComPtr<IDxcBlob> instVS = dxCommon_->CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");
     Microsoft::WRL::ComPtr<IDxcBlob> instPS = dxCommon_->CompileShader(L"resources/shaders/Particle.PS.hlsl", L"ps_6_0");
+    // インスタンシング用のシェーダーが両方ともコンパイルできた場合にのみ、インスタンシング用PSOを生成する
     if (instVS && instPS) {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC instDesc = {};
-        instDesc.pRootSignature = rootSignature_.Get();
-        instDesc.InputLayout = inputLayoutDesc;
-        instDesc.VS = { instVS->GetBufferPointer(), instVS->GetBufferSize() };
-        instDesc.PS = { instPS->GetBufferPointer(), instPS->GetBufferSize() };
-        instDesc.BlendState = blendDesc;
-        instDesc.RasterizerState = rasterizerDesc;
-        instDesc.NumRenderTargets = 1;
-        instDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        instDesc.SampleDesc.Count = 1;
-        instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-        instDesc.DepthStencilState = depthStencilDesc;
-        instDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        instDesc.pRootSignature = rootSignature_.Get(); // ルートシグネチャは共通
+        instDesc.InputLayout = inputLayoutDesc; // InputLayoutも共通
+        instDesc.VS = { instVS->GetBufferPointer(), instVS->GetBufferSize() }; // インスタンシング用VS
+        instDesc.PS = { instPS->GetBufferPointer(), instPS->GetBufferSize() }; // インスタンシング用PS
+        instDesc.BlendState = blendDesc; // ブレンドステートは共通
+        instDesc.RasterizerState = rasterizerDesc; // ラスタライザーステートも共通
+        instDesc.NumRenderTargets = 1; // 書き込むRTVの情報
+        instDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // 書き込むRTVの情報
+        instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; // 利用するトポロジ（形状）のタイプ。三角形
+        instDesc.SampleDesc.Count = 1; // どのように画面に色を打ち込むかの設定（気にしなくて良い）
+        instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK; // ここまでは共通の設定
+        instDesc.DepthStencilState = depthStencilDesc; // DepthStencilの設定も共通
+        instDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; // DepthStencilのフォーマットも共通
+        // インスタンシング用PSOを生成し、メンバ変数に保持する
         HRESULT r = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&instDesc, IID_PPV_ARGS(&instancingPipelineState_));
+        // インスタンシング用PSOの生成に失敗した場合は、エラーログを出力して、インスタンシング用PSOをリセットする
         if (FAILED(r)) {
             char buf[256]; sprintf_s(buf, "Object3dCommon::CreateGraphicsPipeline: failed to create instancing PSO hr=0x%08X\n", static_cast<unsigned int>(r)); Logger::Log(buf);
             instancingPipelineState_.Reset();
         }
     } else {
+        // インスタンシング用のシェーダーが見つからなかった場合は、エラーログを出力して、インスタンシング用PSOをリセットする
         Logger::Log("Object3dCommon::CreateGraphicsPipeline: Particleシェーダーが見つからなかったため、インスタンシング用PSOは作成されませんでした\n");
     }
 }

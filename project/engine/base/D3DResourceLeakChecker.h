@@ -1,6 +1,9 @@
 #pragma once
+/// <summary>
+/// D3Dリソースリークチェッカークラス
+/// </summary>
 class D3DResourceLeakChecker {
-public:
+public: // メンバ関数
     /// <summary>
     /// デストラクタ
     /// </summary>

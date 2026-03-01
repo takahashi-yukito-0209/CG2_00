@@ -6,14 +6,26 @@
 
 using namespace MyEngine;
 
+// 静的インスタンスの定義
 ModelManager* ModelManager::instance_ = nullptr;
 
+/// <summary>
+/// シングルトンインスタンスの取得
+/// </summary>
 ModelManager* ModelManager::GetInstance()
 {
-    if (!instance_) instance_ = new ModelManager();
+    // インスタンスがまだ存在しない場合は生成する
+    if (!instance_) {
+        instance_ = new ModelManager();
+    }
+
+    // インスタンスを返す
     return instance_;
 }
 
+/// <summary>
+/// 終了処理
+/// </summary>
 void ModelManager::Finalize()
 {
     // すべてのモデルを解放
@@ -23,6 +35,9 @@ void ModelManager::Finalize()
     instance_ = nullptr;
 }
 
+/// <summary>
+/// モデルの読み込みと取得
+/// </summary>
 Model* ModelManager::LoadModel(const std::string& directory, const std::string& filename, ModelCommon* modelCommon)
 {
     // ファイルパスをキーとして結合
@@ -34,7 +49,9 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     if (!std::filesystem::exists(filePath)) {
         // よく使われる代替ディレクトリを試す
         std::vector<std::string> tryDirs = { requestedDir, requestedDir + "s", "resources", "resource", requestedDir + "/models", "models" };
+        // 代替ディレクトリで見つかったかどうかのフラグ
         bool found = false;
+        // 代替ディレクトリを順番に試す
         for (const auto& d : tryDirs) {
             std::string tryPath = d + "/" + requestedFilename;
             if (std::filesystem::exists(tryPath)) {
@@ -49,9 +66,17 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
         if (!found) {
             const int maxSearchResults = 4;
             int foundCount = 0;
+            // 最初に見つかったものを採用するため、見つかるたびに更新していく
             for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path())) {
-                if (!entry.is_regular_file()) continue;
+                
+                // ファイルのみ対象とする
+                if (!entry.is_regular_file()) {
+                    continue;
+                }
+
+                // ファイル名が一致するかをチェック
                 if (entry.path().filename() == requestedFilename) {
+                    // 見つかった場合は requestedDir と filePath を更新してループを抜ける
                     requestedDir = entry.path().parent_path().string();
                     requestedFilename = entry.path().filename().string();
                     filePath = entry.path().string();
@@ -59,10 +84,15 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
                     ++foundCount;
                     break; // 最初に見つかったものを採用
                 }
-                if (foundCount >= maxSearchResults) break;
+
+                // 見つかった数が上限に達したら探索を打ち切る
+                if (foundCount >= maxSearchResults) {
+                    break;
+                }
             }
         }
 
+        // それでも見つからない場合は警告ログを出す
         if (!found) {
             char buf[256];
             sprintf_s(buf, "Warning: ModelManager::LoadModel could not find model file: %s/%s\n", directory.c_str(), filename.c_str());
@@ -100,12 +130,17 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     return nullptr;
 }
 
+/// <summary>
+/// ファイルパスに対応するモデルを検索して返す（見つからない場合は nullptr を返す）
+/// </summary>
 Model* ModelManager::FindModel(const std::string& filePath)
 {
-    // コンテナ内を検索し、存在すれば生ポインタを返す
-    auto it = models_.find(filePath);
+    auto it = models_.find(filePath); // ファイルパスをキーにしてモデルを検索
+    // 見つかった場合は生ポインタを返す
     if (it != models_.end()) {
         return it->second.get();
     }
+
+    // 見つからない場合は nullptr を返す
     return nullptr;
 }

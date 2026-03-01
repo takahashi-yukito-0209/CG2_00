@@ -1,15 +1,20 @@
 #include "mathUtility.h"
+#include <algorithm>
 #include <assert.h>
 #include <cmath>
-#include <algorithm>
 
+/// <summary>
+/// ベクトルを正規化する関数
+/// </summary>
 Vector3 MathUtility::Normalize(const Vector3& v)
 {
     Vector3 result = {};
 
+    // ベクトルの長さを計算
     float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 
-    if (length > 0.000001) {  
+    // 長さが十分に大きい場合のみ正規化を行う
+    if (length > 0.000001) {
         result.x = v.x / length;
         result.y = v.y / length;
         result.z = v.z / length;
@@ -18,81 +23,138 @@ Vector3 MathUtility::Normalize(const Vector3& v)
         result.y = -1.0f;
         result.z = 0.0f;
     }
+
+    // 結果を返す
     return result;
 }
 
-// 転置行列
+/// <summary>
+/// 行列の転置を返す関数
+/// </summary>
 Matrix4x4 MathUtility::Transpose(const Matrix4x4& m)
 {
     Matrix4x4 r = {};
+
+    // 転置行列の計算
     for (int i = 0; i < 4; ++i) {
         for (int j = 0; j < 4; ++j) {
             r.m[i][j] = m.m[j][i];
         }
     }
+
+    // 結果を返す
     return r;
 }
 
-// 1.平行移動行列
+/// <summary>
+/// 単位行列を返す関数
+/// </summary>
 Matrix4x4 MathUtility::MakeTranslateMatrix(const Vector3& translate)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	result = {
-	    1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, translate.x, translate.y, translate.z, 1.0f,
-	};
+    // 平行移動行列の作成
+    result = {
+        1.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        1.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        1.0f,
+        0.0f,
+        translate.x,
+        translate.y,
+        translate.z,
+        1.0f,
+    };
 
-	return result;
+    // 結果を返す
+    return result;
 };
 
-// 2.拡大縮小行列
+/// <summary>
+/// 拡大縮小行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeScaleMatrix(const Vector3& scale)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	result = {
-	    scale.x, 0.0f, 0.0f, 0.0f, 0.0f, scale.y, 0.0f, 0.0f, 0.0f, 0.0f, scale.z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-	};
+    // 拡大縮小行列の作成
+    result = {
+        scale.x,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        scale.y,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        scale.z,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        1.0f,
+    };
 
-	return result;
+    // 結果を返す
+    return result;
 };
 
-// 3.座標変換
+/// <summary>
+/// ベクトルを行列で変換する関数
+/// </summary>
 Vector3 MathUtility::Transform(const Vector3& vector, const Matrix4x4& matrix)
 {
-	Vector3 result;
-	result.x = vector.x * matrix.m[0][0] + vector.y * matrix.m[1][0] + vector.z * matrix.m[2][0] + matrix.m[3][0];
-	result.y = vector.x * matrix.m[0][1] + vector.y * matrix.m[1][1] + vector.z * matrix.m[2][1] + matrix.m[3][1];
-	result.z = vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] + vector.z * matrix.m[2][2] + matrix.m[3][2];
-	float w = vector.x * matrix.m[0][3] + vector.y * matrix.m[1][3] + vector.z * matrix.m[2][3] + matrix.m[3][3];
-	assert(w != 0.0f);
-	result.x /= w;
-	result.y /= w;
-	result.z /= w;
+    Vector3 result;
+    // ベクトルを行列で変換する
+    // 4x4行列と3Dベクトルの変換を行うため、同次座標を使用して計算
+    result.x = vector.x * matrix.m[0][0] + vector.y * matrix.m[1][0] + vector.z * matrix.m[2][0] + matrix.m[3][0];
+    result.y = vector.x * matrix.m[0][1] + vector.y * matrix.m[1][1] + vector.z * matrix.m[2][1] + matrix.m[3][1];
+    result.z = vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] + vector.z * matrix.m[2][2] + matrix.m[3][2];
 
-	return result;
+    // 注意: 透視変換を考慮して、w成分も計算する必要がある
+    float w = vector.x * matrix.m[0][3] + vector.y * matrix.m[1][3] + vector.z * matrix.m[2][3] + matrix.m[3][3];
+    // 同次座標のw成分を計算
+    assert(w != 0.0f);
+    result.x /= w;
+    result.y /= w;
+    result.z /= w;
+
+    return result;
 };
 
-// 3.行列の積
+/// <summary>
+/// 行列の積を計算する関数
+/// </summary>
 Matrix4x4 MathUtility::Multiply(const Matrix4x4& m1, const Matrix4x4& m2)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	for (int row = 0; row < 4; row++) {
-		for (int column = 0; column < 4; column++) {
+    for (int row = 0; row < 4; row++) {
+        for (int column = 0; column < 4; column++) {
 
-			result.m[row][column] = 0;
+            result.m[row][column] = 0;
 
-			for (int k = 0; k < 4; k++) {
-				result.m[row][column] += m1.m[row][k] * m2.m[k][column];
-			}
-		}
-	}
+            for (int k = 0; k < 4; k++) {
+                result.m[row][column] += m1.m[row][k] * m2.m[k][column];
+            }
+        }
+    }
 
-	return result;
+    return result;
 }
 
-// 4.逆行列
+/// <summary>
+/// 行列の逆行列を計算する関数
+/// </summary>
 Matrix4x4 MathUtility::Inverse(const Matrix4x4& m)
 {
     Matrix4x4 result = {};
@@ -140,7 +202,9 @@ Matrix4x4 MathUtility::Inverse(const Matrix4x4& m)
     return result;
 }
 
-// 単位行列の作成
+/// <summary>
+/// 単位行列を返す関数
+/// </summary>
 Matrix4x4 MathUtility::MakeIdentity4x4()
 {
     Matrix4x4 result = {};
@@ -158,50 +222,60 @@ Matrix4x4 MathUtility::MakeIdentity4x4()
     return result;
 }
 
-// 1.X軸回転行列
+/// <summary>
+/// X軸回転行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeRotateXMatrix(float radian)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	result = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, std::cos(radian), std::sin(radian), 0.0f, 0.0f, std::sin(-radian), std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    result = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, std::cos(radian), std::sin(radian), 0.0f, 0.0f, std::sin(-radian), std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 
-	return result;
+    return result;
 };
 
-// 2.Y軸回転行列
+/// <summary>
+/// Y軸回転行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeRotateYMatrix(float radian)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	result = {std::cos(radian), 0.0f, std::sin(-radian), 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, std::sin(radian), 0.0f, std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    result = { std::cos(radian), 0.0f, std::sin(-radian), 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, std::sin(radian), 0.0f, std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 
-	return result;
+    return result;
 };
 
-// 3.Z軸回転行列
+/// <summary>
+/// Z軸回転行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeRotateZMatrix(float radian)
 {
-	Matrix4x4 result = {};
+    Matrix4x4 result = {};
 
-	result = {std::cos(radian), std::sin(radian), 0.0f, 0.0f, std::sin(-radian), std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    result = { std::cos(radian), std::sin(radian), 0.0f, 0.0f, std::sin(-radian), std::cos(radian), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 
-	return result;
+    return result;
 };
 
-// 3次元アフィン変換行列
+/// <summary>
+/// 拡大・回転・平行移動を一度に行うアフィン変換行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate)
 {
 
-	// 回転軸をひとつにまとめる（合成）
-	Matrix4x4 rotateXYZMatrix = Multiply(MakeRotateXMatrix(rotate.x), Multiply(MakeRotateYMatrix(rotate.y), MakeRotateZMatrix(rotate.z)));
+    // 回転軸をひとつにまとめる（合成）
+    Matrix4x4 rotateXYZMatrix = Multiply(MakeRotateXMatrix(rotate.x), Multiply(MakeRotateYMatrix(rotate.y), MakeRotateZMatrix(rotate.z)));
 
-	// 回転と拡縮、移動をすべて合成
-	Matrix4x4 result = Multiply(Multiply(MakeScaleMatrix(scale), rotateXYZMatrix), MakeTranslateMatrix(translate));
+    // 回転と拡縮、移動をすべて合成
+    Matrix4x4 result = Multiply(Multiply(MakeScaleMatrix(scale), rotateXYZMatrix), MakeTranslateMatrix(translate));
 
-	return result;
+    return result;
 }
 
-// 透視投影行列
+/// <summary>
+/// 透視投影行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip)
 {
     Matrix4x4 result = {};
@@ -226,8 +300,10 @@ Matrix4x4 MathUtility::MakePerspectiveFovMatrix(float fovY, float aspectRatio, f
     return result;
 }
 
-// 正射影行列
-Matrix4x4 MathUtility::MakeOrthograhicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip)
+/// <summary>
+/// 直交投影行列の作成
+/// </summary>
+Matrix4x4 MathUtility::MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip)
 {
     Matrix4x4 result = {};
 
@@ -251,7 +327,9 @@ Matrix4x4 MathUtility::MakeOrthograhicMatrix(float left, float top, float right,
     return result;
 }
 
-// ビューポート変換行列
+/// <summary>
+/// ビューポート変換行列の作成
+/// </summary>
 Matrix4x4 MathUtility::MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth)
 {
     Matrix4x4 result = {};

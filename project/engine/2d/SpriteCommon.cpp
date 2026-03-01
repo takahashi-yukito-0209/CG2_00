@@ -4,6 +4,9 @@
 
 using namespace MyEngine;
 
+/// <summary>
+/// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成
+/// </summary>
 void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 {
 	//引数で受け取ってメンバ変数に記録する
@@ -11,52 +14,76 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 
 	//グラフィクスパイプラインの生成
     CreateGraphicsPipeline();
-
 }
 
-void SpriteCommon::SetBlendMode(MyEngine::BlendMode mode)
+/// <summary>
+/// ブレンドモードを設定
+/// </summary>
+void SpriteCommon::SetBlendMode(BlendMode mode)
 {
+    // ブレンドモードを更新
     blendMode_ = mode;
-    // Recreate PSO to apply new blend state
+    // ブレンドモードの変更に伴い、グラフィクスパイプラインを再生成する
     CreateGraphicsPipeline();
 }
 
 
+/// <summary>
+/// スプライト描画の共通設定をコマンドリストに設定
+/// </summary>
 void SpriteCommon::SetCommonDrawSetting()
 {
     // 実行時のヌル参照を回避するための防御チェック
+    // もしDirectXCommonへの参照がない場合は、ログに警告を出して処理を抜ける
     if (!dxCommon_) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: dxCommon_ is null\n");
         return;
     }
+    // コマンドリストを取得
     auto cmdList = dxCommon_->GetCommandList();
+
+    // コマンドリストがない場合警告を出して処理を抜ける
     if (!cmdList) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: command list is null\n");
         return;
     }
+
+    // ルートシグネチャがない場合警告を出して処理を抜ける
     if (!rootSignature_) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: rootSignature_ is null\n");
         return;
     }
+
+    // PSOがない場合警告を出して処理を抜ける
     if (!graphicsPipelineState_) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
         return;
     }
 
+    // ルートシグネチャとPSOをコマンドリストに設定
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
     cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 }
 
+/// <summary>
+/// 描画用のルートシグネチャ/PSO が準備完了しているかを返す
+/// </summary>
 bool SpriteCommon::IsReady() const
 {
+    // ルートシグネチャとPSOが両方とも存在していれば描画可能とみなす
     return dxCommon_ && rootSignature_ && graphicsPipelineState_;
 }
 
+/// <summary>
+/// ルートシグネチャを作成（内部処理）
+/// </summary>
 void SpriteCommon::CreateRootSignature()
 {
-    HRESULT hr;
 
+    HRESULT hr; // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
+
+    // DescriptorRangeを作成。今回はPixelShaderでテクスチャSRVを1つ使う想定なので、1つだけ設定する。
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
     descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
     descriptorRange[0].NumDescriptors = 1; // 数は1つ
@@ -65,20 +92,21 @@ void SpriteCommon::CreateRootSignature()
 
     // RootSignature作成
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature {};
+    // 今回はInputLayoutを使う予定なので、IAステージでの使用を許可するフラグを指定する
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     // RootParameter作成。複数設定できるので配列。
     D3D12_ROOT_PARAMETER rootParameters[3] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
+    rootParameters[0].Descriptor.ShaderRegister = 0; // レジスタ0にバインドする
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (VertexShader, レジスタ0: WVP行列CBV)
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-    rootParameters[1].Descriptor.ShaderRegister = 0;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // バーテックスシェーダーで使用することを明示
+    rootParameters[1].Descriptor.ShaderRegister = 0; // レジスタ0にバインドする
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う (PixelShader, レジスタ0: テクスチャSRV)
-    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
-    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange; // ルートパラメーターのDescriptorTableに、先ほど作成したDescriptorRangeへのポインタを設定
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange); // ルートパラメーターのDescriptorTableに、DescriptorRange配列の長さを設定
     // スプライトにはライト用CBVは不要
 
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
@@ -90,35 +118,36 @@ void SpriteCommon::CreateRootSignature()
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
 
     // s0: 線形フィルタ + ラップ
-    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplers[0].MipLODBias = 0.0f;
-    staticSamplers[0].MinLOD = 0.0f;
-    staticSamplers[0].ShaderRegister = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 線形フィルタ
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // U座標はラップ
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // V座標はラップ
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // W座標はラップ
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わない
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ミップマップは最大レベルまで使う
+    staticSamplers[0].MipLODBias = 0.0f; // ミップマップレベルのバイアスはなし
+    staticSamplers[0].MinLOD = 0.0f; // ミップマップレベルの最小値は0
+    staticSamplers[0].ShaderRegister = 0; // シェーダーのレジスタ0にバインドする
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;// ピクセルシェーダーで使用することを明示
 
     // s1: ポイントフィルタ + クランプ
-    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplers[1].MipLODBias = 0.0f;
-    staticSamplers[1].MinLOD = 0.0f;
-    staticSamplers[1].ShaderRegister = 1;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; // ポイントフィルタ
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // U座標はクランプ
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // V座標はクランプ
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // W座標はクランプ
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わない
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX; // ミップマップは最大レベルまで使う
+    staticSamplers[1].MipLODBias = 0.0f; // ミップマップレベルのバイアスはなし
+    staticSamplers[1].MinLOD = 0.0f; // ミップマップレベルの最小値は0
+    staticSamplers[1].ShaderRegister = 1; // シェーダーのレジスタ1にバインドする
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
 
-    descriptionRootSignature.pStaticSamplers = staticSamplers;
-    descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
+    descriptionRootSignature.pStaticSamplers = staticSamplers;// スタティックサンプラー配列へのポインタ
+    descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers); // スタティックサンプラーの数
 
     // シリアライズしてバイナリにする
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
+    // ルートシグネチャの説明をもとに、D3D12SerializeRootSignature関数でシリアライズしてバイナリを生成する
     hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
         // エラー処理
@@ -131,9 +160,12 @@ void SpriteCommon::CreateRootSignature()
     assert(SUCCEEDED(hr));
 }
 
+/// <summary>
+/// グラフィクスパイプライン（PSO）を生成（内部処理）
+/// </summary>
 void SpriteCommon::CreateGraphicsPipeline()
 {
-    HRESULT hr;
+    HRESULT hr; // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -153,63 +185,76 @@ void SpriteCommon::CreateGraphicsPipeline()
     inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
     inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
     D3D12_INPUT_LAYOUT_DESC inputLayoutDesc {};
-    inputLayoutDesc.pInputElementDescs = inputElementDescs;
-    inputLayoutDesc.NumElements = _countof(inputElementDescs);
+    inputLayoutDesc.pInputElementDescs = inputElementDescs; // InputElementDesc配列へのポインタ
+    inputLayoutDesc.NumElements = _countof(inputElementDescs); // InputElementDesc配列の長さ
 
     // BlendState の設定を blendMode_ に応じて切り替える
     D3D12_BLEND_DESC blendDesc {};
-    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0];
-    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    rtBlend.LogicOpEnable = FALSE;
-    rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0]; // 0番目のRenderTargetのブレンド設定を取得して、これを変更する
+    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL; // RGBA全てのチャンネルに書き込む
+    rtBlend.LogicOpEnable = FALSE; // ロジックオペレーションは使わない
+    rtBlend.BlendOp = D3D12_BLEND_OP_ADD; // ブレンドの演算は加算
+    rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD; // アルファチャンネルのブレンドの演算も加算
 
+    // ブレンドモードに応じて、BlendEnableやSrcBlend/DestBlendなどの設定を切り替える
     switch (blendMode_) {
-    case BlendMode::None:
-        rtBlend.BlendEnable = FALSE;
-        rtBlend.SrcBlend = D3D12_BLEND_ONE;
-        rtBlend.DestBlend = D3D12_BLEND_ZERO;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+    case BlendMode::None: // ブレンドなし
+
+        rtBlend.BlendEnable = FALSE; // ブレンドを無効にする
+        rtBlend.SrcBlend = D3D12_BLEND_ONE; // srcの色をそのまま使う
+        rtBlend.DestBlend = D3D12_BLEND_ZERO; // destの色は使わない
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
-    case BlendMode::Alpha:
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+
+    case BlendMode::Alpha: // アルファブレンド
+
+        rtBlend.BlendEnable = TRUE; // ブレンドを有効にする
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA; // srcのアルファ値に応じて、srcの色を使う割合が変わる
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA; // srcのアルファ値に応じて、destの色を使う割合が変わる
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
-    case BlendMode::Add:
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        rtBlend.DestBlend = D3D12_BLEND_ONE;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+
+    case BlendMode::Add: // 加算
+
+        rtBlend.BlendEnable = TRUE; // ブレンドを有効にする
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA; // srcのアルファ値に応じて、srcの色を使う割合が変わる
+        rtBlend.DestBlend = D3D12_BLEND_ONE; // destの色を全て使う
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE; // destのアルファを全て使う
         break;
-    case BlendMode::Multiply:
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; // src * dest
-        rtBlend.DestBlend = D3D12_BLEND_ZERO;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+
+    case BlendMode::Multiply: // 乗算
+
+        rtBlend.BlendEnable = TRUE; // ブレンドを有効にする
+        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; // srcの色を、destの色に乗算したものを使う
+        rtBlend.DestBlend = D3D12_BLEND_ZERO; // destの色は使わない
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
-    case BlendMode::Screen:
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_ONE;
-        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+
+    case BlendMode::Screen: // スクリーン
+
+        rtBlend.BlendEnable = TRUE; // ブレンドを有効にする
+        rtBlend.SrcBlend = D3D12_BLEND_ONE; // srcの色を全て使う
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_COLOR; // srcの色を反転したものをdestの色に乗算して使う
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
-    default:
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+
+    default: // その他のブレンドモードはアルファブレンドと同じにする
+
+        rtBlend.BlendEnable = TRUE; // ブレンドを有効にする
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA; // srcのアルファ値に応じて、srcの色を使う割合が変わる
+        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA; // srcのアルファ値に応じて、destの色を使う割合が変わる
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
+
     }
 
-    // RasiterzerStateの設定
+    // RasterizerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
     // カリングしない（裏面も表示させる）
     rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
@@ -268,6 +313,7 @@ void SpriteCommon::CreateGraphicsPipeline()
 
     // 実際に生成し、メンバ変数に保持する
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
+    // PSO生成後のデバッグ情報
     if (FAILED(hr) || !graphicsPipelineState_) {
         char buf[512];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
@@ -277,7 +323,9 @@ void SpriteCommon::CreateGraphicsPipeline()
         if (removedHr != S_OK) {
             char buf2[256]; sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr)); Logger::Log(buf2);
         }
+        // PSOの生成に失敗した場合は、ルートシグネチャとPSOを両方とも破棄して、描画できない状態にする
         graphicsPipelineState_.Reset();
+        rootSignature_.Reset();
         return;
     }
 }

@@ -2,12 +2,12 @@
 #include "mathUtility.h"
 
 /// <summary>
-/// デバッグカメラ（フリー移動＋回転＋ズーム）
+/// デバッグカメラクラス
 /// </summary>
 class DebugCamera {
-public:
-    DebugCamera();
-    ~DebugCamera();
+public: // メンバ関数
+    DebugCamera(); // デフォルトコンストラクタ
+    ~DebugCamera(); // デストラクタ
 
     /// <summary>
     /// 初期化（画面サイズなどを指定）
@@ -64,8 +64,7 @@ public:
     /// </summary>
     void SetRotation(const Vector3& rot) { rotation_ = rot; }
 
-
-private:
+private: // メンバ関数（内部用）
     /// <summary>
     /// ビュー行列を更新（内部用）
     /// </summary>
@@ -75,6 +74,8 @@ private:
     /// 射影行列を更新（内部用）
     /// </summary>
     void UpdateProjectionMatrix();
+
+private: // メンバ変数
 
     // カメラ位置
     Vector3 translation_ = { 0.0f, 0.0f, -50.0f };
@@ -91,6 +92,7 @@ private:
     float moveSpeed_ = 0.1f;
     float rotateSpeed_ = 0.01f;
 
+    // 画面サイズ
     float screenWidth_ = 1280.0f;
     float screenHeight_ = 720.0f;
 

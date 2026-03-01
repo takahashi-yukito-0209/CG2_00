@@ -1,51 +1,85 @@
 #pragma once
-#include"MathTypes.h"
+#include "MathTypes.h"
 
 using namespace Math;
 
+/// <summary>
+/// 数学関連のユーティリティクラス
+/// </summary>
 class MathUtility {
-public:
-    // 正規化
+public: // メンバ関数
+    /// <summary>
+    /// 正規化されたベクトルを返す
+    /// </summary>
     Vector3 Normalize(const Vector3& v);
 
-    // 1.平行移動行列
+    /// <summary>
+    /// 平行移動行列の作成
+    /// </summary>
     Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
 
-    // 2.拡大縮小行列
+    /// <summary>
+    /// 拡大縮小行列の作成
+    /// </summary>
     Matrix4x4 MakeScaleMatrix(const Vector3& scale);
 
-    // 3.座標変換
+    /// <summary>
+    /// ベクトルを行列で変換する
+    /// </summary>
     Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix);
 
-    // 3.行列の積
+    /// <summary>
+    /// 行列の掛け算
+    /// </summary>
     Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2);
 
-    // 4.逆行列
+    /// <summary>
+    /// 行列の逆行列を返す
+    /// </summary>
     Matrix4x4 Inverse(const Matrix4x4& m);
-    // 転置行列
+
+    /// <summary>
+    /// 行列の転置を返す
+    /// </summary>
     Matrix4x4 Transpose(const Matrix4x4& m);
 
-    // 単位行列の作成
+    /// <summary>
+    /// 単位行列を返す
+    /// </summary>
     Matrix4x4 MakeIdentity4x4();
 
-    // 1.X軸回転行列
+    /// <summary>
+    /// X軸回転行列の作成
+    /// </summary>
     Matrix4x4 MakeRotateXMatrix(float radian);
 
-    // 2.Y軸回転行列
+    /// <summary>
+    /// Y軸回転行列の作成
+    /// </summary>
     Matrix4x4 MakeRotateYMatrix(float radian);
 
-    // 3.Z軸回転行列
+    /// <summary>
+    /// Z軸回転行列の作成
+    /// </summary>
     Matrix4x4 MakeRotateZMatrix(float radian);
 
-    // 3次元アフィン変換行列
+    /// <summary>
+    /// 拡大・回転・平行移動を一度に行うアフィン変換行列の作成
+    /// </summary>
     Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 
-    // 透視投影行列（透視変換行列）
+    /// <summary>
+    /// // 透視投影行列の作成
+    /// </summary>
     Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
 
-    // 正射影行列
-    Matrix4x4 MakeOrthograhicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
+    /// <summary>
+    /// 直交投影行列の作成
+    /// </summary>
+    Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
 
-    // ビューポート変換行列
+    /// <summary>
+    /// ビューポート変換行列の作成
+    /// </summary>
     Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 };

@@ -6,92 +6,113 @@
 #include <atomic>
 
 
-// 共通のラン処理を実装する
-// - Initialize -> ゲームループ(Update/Draw) -> Finalize
+/// <summary>
+/// アプリケーションの実行: 初期化、メインループ、終了処理をまとめて行う
+/// </summary>
 int Framework::Run(HINSTANCE hInstance, int nCmdShow)
 {
-    // 共通初期化: COM をマルチスレッドモデルで初期化しておく
+    // COMの初期化: マルチスレッド環境での利用を想定して COINIT_MULTITHREADED を指定
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool comInitialized = SUCCEEDED(hr);
 
     // 派生クラスの初期化を呼び出す
     if (!Initialize(hInstance, nCmdShow)) {
-        if (comInitialized) CoUninitialize();
-        return 1;
+        // 初期化失敗: 終了処理を行ってからアプリケーションを終了する
+        if (comInitialized) {
+            CoUninitialize();
+        }
+        return 1; // 終了コード 1 を返して異常終了を示す
     }
 
-    // メインループ: 固定タイムステップに近い動作でフレームレートを安定させる
-    const double targetSec = 1.0 / targetFPS_;
-    using clock = std::chrono::high_resolution_clock;
-    auto prev = clock::now();
-    double accumulator = 0.0;
+    // 目標FPSに基づいてフレーム時間を計算
+    const double targetSec = 1.0 / targetFPS_; // フレーム時間の計算に高精度なクロックを使用
+    using clock = std::chrono::high_resolution_clock; // 高精度なクロックを使用してフレーム時間を計測
+    auto prev = clock::now(); // 前回フレームの開始時間
+    double accumulator = 0.0; // フレーム時間の累積
 
+    // メインループ: 終了要求が出るまで続ける
     while (!IsEndRequest()) {
         // イベントのポーリングでウィンドウ終了等を検出できるようにする
         if (!PollEvents()) {
             break;
         }
 
+        // フレーム時間の計測と累積
         auto now = clock::now();
         std::chrono::duration<double> frameTime = now - prev;
         prev = now;
         accumulator += frameTime.count();
 
-        // Update/Draw を固定間隔で実行（ループ内で複数回 Update することは稀だが許容）
+        // フレーム時間が目標を超えている場合、Update を呼び出してゲームロジックを更新する
         bool updatedThisFrame = false;
+        // 累積時間が目標フレーム時間を超えている限り Update を呼び出す（複数回呼ぶ可能性もある）
         while (accumulator >= targetSec && !IsEndRequest()) {
             Update();
             updatedThisFrame = true;
             accumulator -= targetSec;
         }
 
-        // 安全措置: Update が一度も呼ばれなかった場合、アプリ固有で毎フレーム行う処理
-        // (例: ImGui::NewFrame を含む処理)。Update を必ず 1 回呼ぶことで
-        // Draw 側で ImGui::Render が呼ばれても NewFrame が未実行でクラッシュする
-        // リスクを回避する。
+        // Update が呼ばれなかった場合でも、終了要求が出ていないなら Update を呼び出して状態を更新する
         if (!updatedThisFrame && !IsEndRequest()) {
             Update();
         }
 
-        if (IsEndRequest()) break;
-
+        // 描画処理を呼び出す前に終了要求が出ていないか確認する
+        if (IsEndRequest()) {
+            break;
+        }
+        
+        // 描画処理を呼び出す
         Draw();
 
-        // 残り時間があればスリープで待機し、微小時間はスピンで調整する（精度向上）
+        // フレーム時間が目標を下回っている場合、スリープやスピンで待機してフレームレートを制御する
         auto frameEnd = clock::now();
         std::chrono::duration<double> elapsed = frameEnd - prev;
         double sleepSec = targetSec - elapsed.count() - accumulator;
+        // スリープで待機する時間が十分にある場合はスリープする（ただし、スリープの精度を考慮して少し余裕を持たせる）
         if (sleepSec > 0.002) { // 少なくとも 2ms を超えるならスリープ
             auto sleepMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(sleepSec));
             std::this_thread::sleep_for(sleepMs);
         }
-        // スピンで残りを待つ
+
+        // スリープ後もフレーム時間が目標を下回っている場合は、スピンで待機して精度を高める
         while ((clock::now() - prev).count() / static_cast<double>(clock::period::den) < targetSec - accumulator) {
-            // busy wait short
+            // スピンで待機: CPUを占有して正確なフレーム時間を維持する
             std::this_thread::yield();
-            if (IsEndRequest()) break;
+            if (IsEndRequest()) {
+                break;
+            }
         }
     }
 
-    // 終了処理
-    Finalize();
-    if (comInitialized) CoUninitialize();
+    Finalize(); // 派生クラスの終了処理を呼び出す
+
+    // COMの終了処理
+    if (comInitialized) {
+        CoUninitialize();
+    }
+
     return 0;
 }
 
 
-// 基底でのメッセージループ実装
+/// <summary>
+/// Windows メッセージをポーリングし、WM_QUIT を検出すると終了要求フラグを立てて false を返す
+/// </summary>
 bool Framework::PollEvents()
 {
     MSG msg;
-    // ノンブロッキングでメッセージを取得する
+    // メッセージキューからメッセージを取得して処理する
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        // WM_QUIT メッセージが来たら終了要求とみなしてフラグを立て、false を返す
         if (msg.message == WM_QUIT) {
             endRequested_ = true;
             return false;
         }
+        // それ以外のメッセージは通常通り処理する
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    return true;
+
+    return true; // メッセージキューに WM_QUIT がなければ true を返して続行可能とする
 }

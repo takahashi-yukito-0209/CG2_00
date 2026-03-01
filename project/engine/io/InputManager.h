@@ -11,7 +11,8 @@ namespace MyEngine {
 /// キーボード & マウス入力管理クラス（シングルトン）
 /// </summary>
 class InputManager {
-public:
+public: // メンバ関数
+
     // インスタンス取得（シングルトン）
     static InputManager* GetInstance();
 
@@ -40,20 +41,22 @@ public:
     long GetMouseDeltaY() const; // 前フレームからのY移動量
     long GetMouseDeltaZ() const; // ホイールの回転量
 
-private:
-    // シングルトン構成
-    InputManager() = default;
-    ~InputManager() = default;
-    InputManager(const InputManager&) = delete;
-    InputManager& operator=(const InputManager&) = delete;
+private: // メンバ関数（内部用）
 
-private:
+    // シングルトン構成
+    InputManager() = default; // デフォルトコンストラクタは private にして外部からのインスタンス化を防止
+    ~InputManager() = default; // デストラクタも private にして外部からの破棄を防止
+    InputManager(const InputManager&) = delete; // コピーコンストラクタを削除してコピーを禁止
+    InputManager& operator=(const InputManager&) = delete; // コピー代入演算子を削除してコピーを禁止
+
+private: // メンバ変数
+
     static constexpr int KEY_COUNT = 256; // キー数（256固定）
 
     // キーボード入力
     BYTE keys_[KEY_COUNT] {}; // 現在のキー状態
     BYTE preKeys_[KEY_COUNT] {}; // 前フレームのキー状態
-    ComPtr<IDirectInputDevice8> keyboard_;
+    ComPtr<IDirectInputDevice8> keyboard_; // キーボードデバイス
 
     // マウス入力
     ComPtr<IDirectInputDevice8> mouse_; // マウスデバイス
