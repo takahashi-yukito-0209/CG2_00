@@ -1,20 +1,19 @@
 #include "Game.h"
-#include <Windows.h>
-#include <chrono>
-#include <cstdint>
-#include <filesystem>
-// #include <format>
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
 #include "externals/imgui/imgui.h"
 #include "mathUtility.h"
+#include <Windows.h>
 #include <cassert>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <d3d12.h>
 #include <dbghelp.h>
 #include <dxcapi.h>
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <list>
@@ -45,8 +44,10 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include "engine/base/SceneManager.h"
 #include "engine/base/SrvManager.h"
 #include "engine/sound/Sound.h"
+#include "project/scenes/SceneFactory.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
@@ -102,12 +103,13 @@ struct Game::Impl {
     std::unique_ptr<Object3dCommon> object3dCommon; // 3Dオブジェクト共通管理
 
     std::unique_ptr<Camera> camera; // カメラ
-
     std::vector<std::unique_ptr<Sprite>> sprites; // スプライトのリスト
     std::vector<std::unique_ptr<Object3d>> objects3d; // 3Dオブジェクトのリスト
     std::unique_ptr<Object3d> particlePlane; // パーティクル描画用の平面オブジェクト
 
-    ParticleEmitter pmEmitter; // パーティクルエミッタ
+    std::unique_ptr<SceneManager> sceneManager; // シーンマネージャ
+
+    ParticleEmitter pmEmitter; // パーティクルエミッタ (UIの操作用など軽量なまま保持)
 
     DrawType selectedDrawType = DRAW_SPHERE; // 描画する内容の種類を選択するための変数
 
@@ -117,13 +119,14 @@ struct Game::Impl {
 
     ImGuiManager imguiManager; // ImGui管理
     std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
+    // 保留中のシーン切替要求を格納する（ImGui コールバックから直接 ChangeScene を呼ばないため）
+    std::string pendingSceneName;
 };
 
 // Game クラスのデストラクタでは、動的に確保した Impl を解放する
 Game::~Game()
 {
-    if (impl_)
-    {
+    if (impl_) {
         delete impl_;
         impl_ = nullptr;
     }
@@ -210,22 +213,26 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 
     // InputManagerの初期化
     InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd);
-    // DirectXCommonの初期化
-    DirectXCommon::GetInstance()->Initialize(&impl_->winApp);
 
-    // SpriteCommonのインスタンスを作成して初期化
-    impl_->spriteCommon = std::make_unique<SpriteCommon>();
-    impl_->spriteCommon->Initialize(DirectXCommon::GetInstance());
+    // スプライト共通管理の一時的なユニークポインタ
+    std::unique_ptr<SpriteCommon> spriteCommonTmp;
+    // 3Dオブジェクト共通管理の一時的なユニークポインタ
+    std::unique_ptr<Object3dCommon> object3dCommonTmp;
 
-    // SrvManagerの初期化
-    impl_->srvManager.Initialize(DirectXCommon::GetInstance());
+    // エンジンの初期化処理を呼び出す。失敗した場合はエラーログを出力して初期化を終了する
+    if (!Framework::InitializeEngine(hInstance, &impl_->winApp, impl_->hwnd,
+            spriteCommonTmp, impl_->srvManager, object3dCommonTmp)) {
+        Logger::Log("Error: Framework::InitializeEngine failed\n");
+        impl_->winApp.Finalize();
+        CoUninitialize();
+        return false;
+    }
 
-    // TextureManagerの初期化
-    TextureManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), &impl_->srvManager);
-
-    // Object3dCommonのインスタンスを作成して初期化
-    impl_->object3dCommon = std::make_unique<Object3dCommon>();
-    impl_->object3dCommon->Initialize(DirectXCommon::GetInstance());
+    // 共通管理オブジェクトを Impl に移動
+    // スプライト共通管理を Impl に移動
+    impl_->spriteCommon = std::move(spriteCommonTmp);
+    // 3Dオブジェクト共通管理を Impl に移動
+    impl_->object3dCommon = std::move(object3dCommonTmp);
 
     // カメラの生成と初期設定
     impl_->camera = std::make_unique<Camera>();
@@ -234,72 +241,6 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     impl_->camera->Update();
     // Object3dCommon にデフォルトカメラをセット
     impl_->object3dCommon->SetDefaultCamera(impl_->camera.get());
-
-    // シーンで使用するテクスチャをロード
-    TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
-    TextureManager::GetInstance()->LoadTexture("resources/monsterBall.png");
-    TextureManager::GetInstance()->LoadTexture("resources/circle.png");
-
-    // シーン用スプライトの生成
-    const uint32_t kSpriteCount = 5; // 生成するスプライトの数
-    // スプライトに使用するテクスチャのファイルパスを配列で定義
-    std::array<std::string, 2> spriteNames = {
-        "resources/uvChecker",
-        "resources/monsterBall",
-    };
-
-    // 既存のスプライトがあればクリアする
-    impl_->sprites.clear();
-
-    // kSpriteCount の数だけスプライトを生成し、交互にテクスチャを設定してリストに追加する
-    for (uint32_t i = 0; i < kSpriteCount; ++i) {
-        auto sprite = std::make_unique<Sprite>();
-        sprite->Initialize(impl_->spriteCommon.get(), spriteNames[(i / 2) == 0 ? 0 : 1] + ".png");
-        impl_->sprites.push_back(std::move(sprite));
-    }
-
-    // シーン用 3D オブジェクトの生成
-    const uint32_t kObject3DCount = 6; // 生成する3Dオブジェクトの数
-    // 3Dオブジェクトに使用するモデルファイルの名前を配列で定義
-    std::vector<std::string> modelFileNames = {
-        "plane.gltf",
-        "bunny.obj",
-        "teapot.obj",
-        "models/fence/fence.obj",
-        "models/sphere/sphere.gltf",
-        "models/terrain/terrain.obj"
-    };
-
-    // 既存の3Dオブジェクトがあればクリアする
-    impl_->objects3d.clear();
-
-    // kObject3DCount の数だけ3Dオブジェクトを生成し、モデルファイルを交互に設定してリストに追加する
-    for (uint32_t i = 0; i < kObject3DCount; ++i) {
-        auto obj = std::make_unique<Object3d>();
-        obj->Initialize(impl_->object3dCommon.get());
-        std::string modelFile = modelFileNames.empty() ? std::string("plane.obj") : modelFileNames[i % modelFileNames.size()];
-        obj->SetModel(modelFile);
-        // モデルファイル名に "fence" が含まれている場合は、アルファカットアウト用のサンプラーを使用するフラグを設定する
-        if (modelFile.find("fence") != std::string::npos) {
-            obj->SetUseAlphaCutoutSampler(true);
-        }
-        impl_->objects3d.push_back(std::move(obj));
-    }
-
-    // パーティクル描画用のプレーンを生成してテクスチャを設定
-    impl_->particlePlane = std::make_unique<Object3d>();
-    impl_->particlePlane->Initialize(impl_->object3dCommon.get());
-    impl_->particlePlane->SetModel("plane.obj");
-    impl_->particlePlane->SetTexture("resources/circle.png");
-
-    ParticleManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), impl_->object3dCommon.get(), &impl_->srvManager, TextureManager::GetInstance());
-    ParticleManager::GetInstance()->SetParticlePlane(impl_->particlePlane.get());
-    // パーティクルグループの作成とテクスチャの割り当て
-    ParticleManager::GetInstance()->CreateParticleGroup("Circle", "resources/circle.png");
-    ParticleManager::GetInstance()->CreateParticleGroup("Checker", "resources/uvChecker.png");
-    ParticleManager::GetInstance()->CreateParticleGroup("Ball", "resources/monsterBall.png");
-
-    MathUtility math; // MathUtility のインスタンスを作成して使用する
 
     // ライトの設定
     DirectionalLight* directionalLightData = impl_->object3dCommon->GetDirectionalLightData();
@@ -328,42 +269,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
             sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
             sl->color = { 1.0f, 1.0f, 1.0f, 4.0f };
             sl->distance = 7.0f;
+            MathUtility math;
             sl->direction = math.Normalize({ -1.0f, -1.0f, 0.0f });
             sl->decay = 2.0f;
             sl->cosAngle = cosf(3.14159265358979323846f / 3.0f);
             sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f);
             sl->enabled = 1;
         }
-    }
-
-    TextureManager::GetInstance()->ExecuteResourceUpload(); // テクスチャのGPUへの転送を実行
-
-    // デバッグログ出力: 読み込まれたテクスチャ情報をログに出す
-    {
-        uint32_t count = TextureManager::GetInstance()->GetLoadedTextureCount();
-        char buf[256];
-        sprintf_s(buf, "Debug: Loaded texture count = %u\n", count);
-        Logger::Log(buf);
-        for (uint32_t ti = 0; ti < count; ++ti) {
-            auto meta = TextureManager::GetInstance()->GetMetadata(ti);
-            auto handle = TextureManager::GetInstance()->GetSrvHandleGPU(ti);
-            std::ostringstream oss;
-            oss << "Debug: Texture[" << ti << "] size=" << meta.width << " x " << meta.height
-                << " format=" << static_cast<int>(meta.format)
-                << " srv.ptr=0x" << std::hex << std::uppercase << std::setw(16) << std::setfill('0') << handle.ptr;
-            Logger::Log(oss.str());
-        }
-    }
-
-    // パーティクルエミッタの初期設定
-    impl_->pmEmitter.groupName = "Circle"; // 使用するパーティクルグループの名前を設定
-    impl_->pmEmitter.transform.translate = { 0.0f, 0.0f, 0.0f }; // エミッタの位置を設定
-    impl_->pmEmitter.count = 3; // 1回あたりの発生数を設定
-    impl_->pmEmitter.frequency = 0.5f; // 発生間隔を設定（0.5秒ごとに発生）
-
-    // 初期状態でいくつかパーティクルを発生させておく
-    for (int i = 0; i < 20; ++i) {
-        impl_->pmEmitter.Emit();
     }
 
     // デバッグカメラの初期化（ウィンドウ解像度を指定）
@@ -375,6 +287,25 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     // 初期化完了フラグを立てる
     impl_->initialized = true;
     impl_->endRequested = false;
+
+    // シーンマネージャ初期化と初期シーン設定
+    impl_->sceneManager = std::make_unique<SceneManager>();
+    impl_->sceneManager->Initialize();
+    // SceneContext を構築して SceneManager に渡す
+    SceneContext sctx;
+    sctx.object3dCommon = impl_->object3dCommon.get();
+    sctx.spriteCommon = impl_->spriteCommon.get();
+    sctx.camera = impl_->camera.get();
+    sctx.particleManager = ParticleManager::GetInstance();
+    sctx.textureManager = TextureManager::GetInstance();
+    sctx.srvManager = &impl_->srvManager;
+    sctx.directXCommon = DirectXCommon::GetInstance();
+    impl_->sceneManager->SetContext(sctx);
+
+    auto initial = GameApp::SceneFactory::Create("Title");
+    if (initial) {
+        impl_->sceneManager->ChangeScene(std::move(initial));
+    }
 
     // 初期化が成功したので true を返す
     return true;
@@ -423,12 +354,9 @@ void Game::Update()
         impl_->soundSystem.Play(impl_->soundData1); // サウンドシステムを使用してサウンドデータを再生する
     }
 
-    // ImGui UI is built once per frame in Draw() to avoid calling NewFrame() multiple times during fixed-step updates.
-
     // 固定タイムステップで更新（ここでは 1/60 秒固定）
     const float dt = 1.0f / 60.0f;
-    // パーティクルエミッタの Update を呼び出して、パーティクルの発生や状態の更新を行う
-    impl_->pmEmitter.Update(dt);
+    // パーティクルのインスタンス生成
     auto* pm = ParticleManager::GetInstance();
     // ParticleManager の Update を呼び出して、すべてのパーティクルの状態の更新や寿命の管理を行う
     pm->Update(dt);
@@ -467,6 +395,11 @@ void Game::Update()
             impl_->sprites[i]->Update();
         }
     }
+
+    // シーンの更新
+    if (impl_->sceneManager) {
+        impl_->sceneManager->Update(dt);
+    }
 }
 
 /// <summary>
@@ -482,20 +415,17 @@ void Game::Draw()
 
     // ImGui の新しいフレームを開始する。これにより、ImGui の内部状態がリセットされ、UIの構築が可能になる
     impl_->imguiManager.NewFrame();
-    
+
     ImGuiManager::Context ctx;
     // 描画に必要な情報を ImGuiManager::Context にセットして、UIの構築に使用できるようにする
     ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをセット
     // Object3dCommon のポインタをセットして、UIで共通の描画設定やライトの情報などにアクセスできるようにする
     ctx.object3dCommon = impl_->object3dCommon.get();
+    // Object3dCommon のポインタをセットして、UIで3Dオブジェクトの共通設定や情報にアクセスできるようにする
     std::vector<Object3d*> objPtrs;
-    objPtrs.reserve(impl_->objects3d.size());
-    for (auto& u : impl_->objects3d) objPtrs.push_back(u.get());
     ctx.objects3d = &objPtrs;
     // SpriteCommon のポインタをセットして、UIでスプライトの共通設定や情報にアクセスできるようにする
     std::vector<Sprite*> spritePtrs;
-    spritePtrs.reserve(impl_->sprites.size());
-    for (auto& u : impl_->sprites) spritePtrs.push_back(u.get());
     ctx.sprites = &spritePtrs;
     ctx.spriteCommon = impl_->spriteCommon.get();
     // 描画する内容の種類を選択するための変数へのポインタをセットして、UIで描画内容の切り替えができるようにする
@@ -506,16 +436,48 @@ void Game::Draw()
     ctx.particleManager = ParticleManager::GetInstance();
     // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
     ctx.dt = 1.0f / 60.0f;
+    // シーン名を ImGui に渡す
+    if (impl_->sceneManager) {
+        static std::string sname;
+        sname = impl_->sceneManager->GetCurrentSceneName();
+        ctx.currentSceneName = sname.c_str();
+        // シーン切替要求のコールバックを渡す
+        ctx.requestSceneChange = [this](const char* name) {
+            if (!impl_ || !impl_->sceneManager)
+                return;
+            impl_->pendingSceneName = std::string(name);
+        };
+    }
     // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
     impl_->imguiManager.BuildUI(ctx);
+
+    // BuildUI 内でシーン切替要求があった場合は、ctx.requestSceneChange を通じて impl_->pendingSceneName にシーン名がセットされる
+    if (impl_->pendingSceneName.size() > 0) {
+
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
+            impl_->pendingSceneName.clear();
+        } else {
+            auto newScene = GameApp::SceneFactory::Create(impl_->pendingSceneName);
+            if (newScene && impl_->sceneManager) {
+                impl_->sceneManager->ChangeScene(std::move(newScene));
+            }
+            impl_->pendingSceneName.clear();
+        }
+    }
 
     // 描画前の共通処理を呼び出す（バックバッファのクリアやコマンドリストの開始など）
     DirectXCommon::GetInstance()->PreDraw();
     // SrvManager の PreDraw を呼び出して、描画に必要なシェーダーリソースビューのセットアップを行う
     impl_->srvManager.PreDraw();
 
+    // シーン描画（シーンが描画を担当する場合はここで描画される）
+    if (impl_->sceneManager) {
+        impl_->sceneManager->Draw();
+    }
+
     MathUtility math; // MathUtility のインスタンスを作成して使用する
 
+    // Game 側の既存描画を常に行う（シーンの描画とは併行して実行されます）
     // 描画する内容の種類に応じて、適切な描画処理を行うための switch 文
     switch (impl_->selectedDrawType) {
 
@@ -707,6 +669,12 @@ void Game::Finalize()
     // リークチェッカーは COM が有効なうちに破棄する
     if (impl_->leakChecker) {
         impl_->leakChecker.reset();
+    }
+
+    // シーンマネージャーの終了処理を呼び出す
+    if (impl_->sceneManager) {
+        impl_->sceneManager->Finalize();
+        impl_->sceneManager.reset();
     }
 
     CoUninitialize();

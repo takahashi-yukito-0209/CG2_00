@@ -7,8 +7,13 @@ struct ID3D12GraphicsCommandList;
 class ParticleEmitter;
 
 // 前方宣言: Sprite クラスと SpriteCommon クラスを宣言（ImGuiManager でポインタ参照するため）
-namespace MyEngine { class Object3dCommon; class Object3d; class ParticleManager; }
+namespace MyEngine {
+class Object3dCommon;
+class Object3d;
+class ParticleManager;
+}
 
+#include <functional>
 #include <vector>
 
 namespace MyEngine {
@@ -21,7 +26,6 @@ class SrvManager;
 /// </summary>
 class ImGuiManager {
 public: // メンバ関数
-
     /// <summary>
     /// ImGuiとバックエンドの初期化
     /// </summary>
@@ -40,15 +44,29 @@ public: // メンバ関数
     // ImGui コントロールの構築に必要なコンテキストをまとめた構造体
     struct Context {
         // ここに ImGui コントロールの構築に必要なオブジェクトや状態を追加
-        ParticleEmitter* particleEmitter = nullptr; // パーティクルエミッタへのポインタ
-        Object3dCommon* object3dCommon = nullptr; // Object3dCommon へのポインタ
-        std::vector<Object3d*>* objects3d = nullptr; // 3Dオブジェクトのリストへのポインタ
-        std::vector<class Sprite*>* sprites = nullptr; // スプライトのリストへのポインタ
-        class SpriteCommon* spriteCommon = nullptr; // SpriteCommon へのポインタ
-        int* selectedDrawType = nullptr; // 描画タイプ選択用の整数へのポインタ（例: 0=通常、1=ワイヤーフレーム、2=ビルボードなど）
-        bool* useBillboard = nullptr; // ビルボード描画の有効フラグへのポインタ
-        class ParticleManager* particleManager = nullptr; // ParticleManager へのポインタ
-        float dt = 0.0f; // フレームのデルタタイム
+
+        // パーティクルエミッタへのポインタ
+        ParticleEmitter* particleEmitter = nullptr;
+        // Object3dCommon へのポインタ
+        Object3dCommon* object3dCommon = nullptr;
+        // 3Dオブジェクトのリストへのポインタ
+        std::vector<Object3d*>* objects3d = nullptr;
+        // スプライトのリストへのポインタ
+        std::vector<class Sprite*>* sprites = nullptr;
+        // SpriteCommon へのポインタ
+        class SpriteCommon* spriteCommon = nullptr;
+        // 描画タイプ選択用の整数へのポインタ（例: 0=通常、1=ワイヤーフレーム、2=ビルボードなど）
+        int* selectedDrawType = nullptr;
+        // ビルボード描画の有効フラグへのポインタ
+        bool* useBillboard = nullptr;
+        // ParticleManager へのポインタ
+        class ParticleManager* particleManager = nullptr;
+        // フレームのデルタタイム
+        float dt = 0.0f;
+        // 現在のシーン名へのポインタ
+        const char* currentSceneName = nullptr;
+        // シーン変更要求のコールバック関数（引数は新しいシーン名）
+        std::function<void(const char*)> requestSceneChange;
     };
 
     /// <summary>

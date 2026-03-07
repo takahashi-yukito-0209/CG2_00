@@ -8,6 +8,7 @@
 
 // 前方宣言: MyEngine 名前空間内の DirectXCommon と SrvManager を宣言
 namespace MyEngine { class SrvManager; }
+
 #include <unordered_map>
 
 namespace MyEngine {
