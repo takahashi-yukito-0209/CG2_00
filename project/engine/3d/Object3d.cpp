@@ -21,7 +21,7 @@ using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
 
 /// <summary>
-/// // Assimp のノードを再帰的に読み込んで Object3d::ModelData::Node に変換する関数
+/// Assimp のノードを再帰的に読み込んで Object3d::ModelData::Node に変換する関数
 /// </summary>
 static Object3d::ModelData::Node ReadNode(const aiNode* node)
 {

@@ -39,6 +39,7 @@ void SpriteCommon::SetCommonDrawSetting()
         Logger::Log("SpriteCommon::SetCommonDrawSetting: dxCommon_ is null\n");
         return;
     }
+
     // コマンドリストを取得
     auto cmdList = dxCommon_->GetCommandList();
 
@@ -107,7 +108,6 @@ void SpriteCommon::CreateRootSignature()
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
     rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange; // ルートパラメーターのDescriptorTableに、先ほど作成したDescriptorRangeへのポインタを設定
     rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange); // ルートパラメーターのDescriptorTableに、DescriptorRange配列の長さを設定
-    // スプライトにはライト用CBVは不要
 
     descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
     descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
@@ -149,6 +149,7 @@ void SpriteCommon::CreateRootSignature()
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
     // ルートシグネチャの説明をもとに、D3D12SerializeRootSignature関数でシリアライズしてバイナリを生成する
     hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    // シリアライズに失敗していないか確認する。失敗していたらエラー内容をログに出す
     if (FAILED(hr)) {
         // エラー処理
         Logger::Log(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
@@ -165,7 +166,8 @@ void SpriteCommon::CreateRootSignature()
 /// </summary>
 void SpriteCommon::CreateGraphicsPipeline()
 {
-    HRESULT hr; // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
+    // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
+    HRESULT hr; 
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -318,11 +320,13 @@ void SpriteCommon::CreateGraphicsPipeline()
         char buf[512];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
         Logger::Log(buf);
+        
         // デバイスが削除理由を返す場合はそれもログ出力
         HRESULT removedHr = dxCommon_->GetDevice()->GetDeviceRemovedReason();
         if (removedHr != S_OK) {
             char buf2[256]; sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr)); Logger::Log(buf2);
         }
+
         // PSOの生成に失敗した場合は、ルートシグネチャとPSOを両方とも破棄して、描画できない状態にする
         graphicsPipelineState_.Reset();
         rootSignature_.Reset();

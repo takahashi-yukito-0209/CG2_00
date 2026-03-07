@@ -18,23 +18,29 @@ using namespace MyEngine;
 void Model::Draw(Object3d* owner)
 {
     // 前提条件のチェック
-    // モデル共通情報とオーナーオブジェクトが有効でなければ描画できない
-    if (!modelCommon_ || !owner) {
-        return;
+    // オーナーオブジェクトが有効でなければ描画できない
+    if (!owner) return;
+
+    // DirectXCommon の参照はオーナーの Object3dCommon から取得するのが安全
+    DirectXCommon* dxCommon = nullptr;
+    if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
+        dxCommon = owner->GetObject3dCommon()->GetDxCommon();
+    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
+        // フォールバック: モデル初期化時に渡された ModelCommon を使う
+        dxCommon = modelCommon_->GetDxCommon();
     }
 
-    // モデル共通情報からDirectXCommonを取得できない場合は描画できない
-    if (!modelCommon_->GetDxCommon()) {
-        Logger::Log("Model::Draw skipped: modelCommon_->GetDxCommon() is null\n");
+    // DirectXCommon が取得できない場合は描画できない
+    if (!dxCommon) {
+        Logger::Log("Model::Draw skipped: DirectXCommon unavailable\n");
         return;
     }
 
     // コマンドリストの取得
-    auto cmdList = modelCommon_->GetDxCommon()->GetCommandList();
-
-    // コマンドリストが有効でない場合は描画できない
+    auto cmdList = dxCommon->GetCommandList();
+    // コマンドリストが取得できない場合は描画できない
     if (!cmdList) {
-        Logger::Log("Model::Draw skipped: command list is null from modelCommon_->GetDxCommon()\n");
+        Logger::Log("Model::Draw skipped: command list is null\n");
         return;
     }
 
@@ -203,13 +209,28 @@ void Model::Draw(Object3d* owner)
 void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
 {
     // 前提条件のチェック
-    if (!modelCommon_ || !owner) {
+    if (!owner) {
+        return;
+    }
+    
+    DirectXCommon* dxCommon = nullptr;
+    // DirectXCommon の参照はオーナーの Object3dCommon から取得するのが安全
+    if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
+        // オーナーの Object3dCommon から DirectXCommon を取得
+        dxCommon = owner->GetObject3dCommon()->GetDxCommon();
+    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
+        // フォールバック: モデル初期化時に渡された ModelCommon から DirectXCommon を取得
+        dxCommon = modelCommon_->GetDxCommon();
+    }
+
+    // DirectXCommon が取得できない場合は描画できない
+    if (!dxCommon) {
         return;
     }
 
-    auto cmdList = modelCommon_->GetDxCommon()->GetCommandList();
-
-    // コマンドリストが有効でない場合は描画できない
+    // コマンドリストの取得
+    auto cmdList = dxCommon->GetCommandList();
+    // コマンドリストが取得できない場合は描画できない
     if (!cmdList) {
         return;
     }

@@ -1,6 +1,13 @@
 #pragma once
 #include <Windows.h>
+#include "engine/base/WinApp.h"
+#include "engine/base/SrvManager.h"
+#include "engine/2d/SpriteCommon.h"
+#include "engine/3d/Object3dCommon.h"
+#include "ImGuiManager.h"
+#include "engine/2d/TextureManager.h"
 
+using namespace MyEngine;
 /// <summary>
 /// アプリケーションの基本的なライフサイクルを管理するフレームワーククラス
 /// </summary>
@@ -52,6 +59,19 @@ public: // メンバ関数
     /// アプリケーションの実行: 初期化、メインループ、終了処理をまとめて行う
     /// </summary>
     int Run(HINSTANCE hInstance, int nCmdShow);
+
+    /// <summary>
+    /// エンジンの初期化処理をまとめて行うユーティリティ関数
+    /// </summary>
+    bool InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
+                          std::unique_ptr<SpriteCommon>& spriteCommonOut,
+                          SrvManager& srvManagerOut,
+                          std::unique_ptr<Object3dCommon>& object3dCommonOut);
+
+    /// <summary>
+    /// エンジンの終了処理をまとめて行うユーティリティ関数
+    /// </summary>
+    void FinalizeEngine();
 
     /// <summary>
     /// 目標FPSの設定 (必要なら派生でオーバーライド)

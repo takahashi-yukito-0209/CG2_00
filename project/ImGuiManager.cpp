@@ -70,6 +70,46 @@ void ImGuiManager::BuildUI(Context& ctx)
     // メインウィンドウの開始
     ImGui::Begin("Settings");
 
+    // 現在のシーン名を表示（あれば）
+    if (ctx.currentSceneName) {
+        ImGui::Text("Current Scene: %s", ctx.currentSceneName);
+    }
+
+    // シーン切替UI（デバッグ用）
+    if (ImGui::BeginCombo("Change Scene", "Select")) {
+        if (ImGui::Selectable("Title")) {
+            if (ctx.requestSceneChange) ctx.requestSceneChange("Title");
+        }
+        if (ImGui::Selectable("Play")) {
+            if (ctx.requestSceneChange) ctx.requestSceneChange("Play");
+        }
+        ImGui::EndCombo();
+    }
+
+    // タイトルシーン用の簡易フルスクリーンUI（デバッグ／見た目確認用）
+    if (ctx.currentSceneName && strcmp(ctx.currentSceneName, "Title") == 0) {
+        // 中央に大きなウィンドウを表示して Start ボタンを置く
+        ImGuiIO& io = ImGui::GetIO();
+        ImVec2 center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(400, 200));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+        ImGui::Begin("TitleScreen", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::Dummy(ImVec2(0, 10));
+        // 中央揃えでタイトルを描画
+        float textW = ImGui::CalcTextSize("GAME TITLE").x;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - textW) * 0.5f);
+        ImGui::Text("GAME TITLE");
+        ImGui::Dummy(ImVec2(0, 20));
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - 80.0f) * 0.5f);
+        if (ImGui::Button("Start", ImVec2(80, 40))) {
+            if (ctx.requestSceneChange) ctx.requestSceneChange("Play");
+        }
+
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
+
     // 描画タイプ選択UI（例: Model, Particle, Sprite など)
     if (ctx.selectedDrawType) {
         const char* drawOptions[] = { "Model", "Particle", "Sprite", "Bunny", "Fence", "Checker", "Sphere", "All" };

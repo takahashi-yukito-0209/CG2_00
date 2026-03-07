@@ -124,18 +124,25 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
     if (idx == UINT32_MAX) {
         // 指定が未ロード/不明なら既定のチェッカーテクスチャへフォールバックし、SRV絶対インデックスを使用
         uint32_t srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
+        
+        // まだチェッカーテクスチャがロードされていない場合はロードしてSRVを確保
         if (srvIdx == UINT32_MAX) {
             TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
             TextureManager::GetInstance()->ExecuteResourceUpload();
             srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
         }
+
+        // フォールバックのSRVインデックスを使用
         textureIndex_ = srvIdx;
         char buf[256];
         sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to uvChecker srvIndex=%u\n", textureFilePath.c_str(), srvIdx);
         Logger::Log(buf);
+
     } else {
+        // 指定されたテクスチャがロードされている場合はそのSRVインデックスを使用
         textureIndex_ = idx;
     }
+
     // テクスチャサイズに合わせてスプライトのサイズを調整
     AdjustTextureSize();
 }
@@ -145,7 +152,8 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 /// </summary>
 void Sprite::Update()
 {
-    MathUtility math;
+    // 数学ユーティリティクラスのインスタンスを作成
+    MathUtility math; 
 
     // スケール（サイズ）を反映
     this->transform_.scale = { size_.x, size_.y, 1.0f };
@@ -182,9 +190,16 @@ void Sprite::Update()
     float tbottom = tex_bottom;
 
     // フリップ時はUVを入れ替える
-    if (isFlipX_) std::swap(tleft, tright);
-    if (isFlipY_) std::swap(ttop, tbottom);
+    if (isFlipX_) {
+        std::swap(tleft, tright);
+    }
 
+    // フリップ時はUVを入れ替える
+    if (isFlipY_) {
+        std::swap(ttop, tbottom);
+    }
+
+    // UV座標を反映 (vertexData_ が有効なら)
     if (vertexData_) {
         vertexData_[0].texcoord = { tleft, tbottom }; // 左下
         vertexData_[1].texcoord = { tleft, ttop }; // 左上
@@ -250,16 +265,19 @@ void Sprite::Draw()
         Logger::Log("Warning: Sprite::Draw skipped: vertexData_ is null\n");
         return;
     }
+
     if (!indexData_) {
         // インデックスデータが利用できない場合は警告を出して描画をスキップする（インデックスデータがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: indexData_ is null\n");
         return;
     }
+
     if (!materialResource_) {
         // マテリアルリソースが利用できない場合は警告を出して描画をスキップする（マテリアル定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: materialResource_ is null\n");
         return;
     }
+
     if (!transformationMatrixResource_) {
         // 変換行列リソースが利用できない場合は警告を出して描画をスキップする（変換行列定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: transformationMatrixResource_ is null\n");
@@ -287,6 +305,7 @@ void Sprite::Draw()
         } else {
             Logger::Log("Warning: Sprite::Draw texture SRV handle is null, skipping SRV bind\n");
         }
+
     } else {
         Logger::Log("Warning: Sprite::Draw has invalid textureIndex_, skipping SRV bind\n");
     }

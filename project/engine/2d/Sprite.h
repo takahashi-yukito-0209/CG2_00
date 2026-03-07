@@ -62,7 +62,6 @@ public: // メンバ関数
     /// </summary>
     void Draw();
 
-
     /// <summary>
     /// 座標取得
     /// </summary>

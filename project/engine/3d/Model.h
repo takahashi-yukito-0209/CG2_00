@@ -59,7 +59,7 @@ private: // メンバ変数
     // マテリアルデータへの CPU 側ポインタ
     Object3d::Material* materialData_ = nullptr;
     // 使用するテクスチャのインデックス番号
-    uint32_t textureIndex_ = 0;
+    uint32_t textureIndex_ = UINT32_MAX;
 };
 
 } // namespace MyEngine
