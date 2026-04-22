@@ -21,8 +21,6 @@
 using namespace Microsoft::WRL;
 using namespace MyEngine;
 
-// 静的インスタンスを定義
-DirectXCommon* DirectXCommon::instance_ = nullptr;
 // 最大SRV数を定義
 const uint32_t DirectXCommon::kMaxSRVCount = 512;
 
@@ -58,12 +56,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetGPUDescriptorHandle(
 /// </summary>
 DirectXCommon* DirectXCommon::GetInstance()
 {
-
-    if (instance_ == nullptr) {
-        // インスタンスがなければ新しく生成
-        instance_ = new DirectXCommon();
-    }
-    return instance_;
+    // ローカル静的変数としてシングルトンインスタンスを定義
+    static DirectXCommon instance;
+    return &instance;
 }
 
 /// <summary>
@@ -72,16 +67,55 @@ DirectXCommon* DirectXCommon::GetInstance()
 void DirectXCommon::Finalize()
 {
 
-    // フェンスイベントのクローズ
+    // GPU上のコマンドが完了するのを待ってからリソースを破棄する
+    // これによりドライバ側のバックグラウンドスレッドが終了するまで待機し
+    // DXGIのReportLiveObjectsで未解放オブジェクトが残る問題を軽減する
+    if (commandQueue_ && fence_ && fenceEvent_) {
+        // シグナル値をインクリメントしてGPUにシグナル
+        fenceValue_++;
+        HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
+        if (SUCCEEDED(hr)) {
+            if (fence_->GetCompletedValue() < fenceValue_) {
+                hr = fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+                if (SUCCEEDED(hr)) {
+                    WaitForSingleObject(fenceEvent_, INFINITE);
+                }
+            }
+        }
+    }
+
+    // 明示的にComPtrをリセットして参照カウントを減らす
+    // コマンド周り
+    if (commandList_) commandList_.Reset();
+    if (commandAllocator_) commandAllocator_.Reset();
+    if (commandQueue_) commandQueue_.Reset();
+
+    // スワップチェーン関連
+    if (swapChain_) swapChain_.Reset();
+    for (auto& res : swapChainResources_) {
+        if (res) res.Reset();
+    }
+
+    // リソース/ヒープ類
+    if (rtvDescriptorHeap_) rtvDescriptorHeap_.Reset();
+    if (srvDescriptorHeap_) srvDescriptorHeap_.Reset();
+    if (dsvDescriptorHeap_) dsvDescriptorHeap_.Reset();
+    if (depthStencilResource_) depthStencilResource_.Reset();
+
+    // フェンス/イベント
+    if (fence_) fence_.Reset();
     if (fenceEvent_) {
         CloseHandle(fenceEvent_);
         fenceEvent_ = nullptr;
     }
-    // シングルトンインスタンスの解放
-    if (instance_ != nullptr) {
-        delete instance_;
-        instance_ = nullptr;
-    }
+
+    // コンパイラ/ファクトリ/デバイス
+    if (dxcCompiler_) dxcCompiler_.Reset();
+    if (dxcUtils_) dxcUtils_.Reset();
+    if (includeHandler_) includeHandler_.Reset();
+    if (device_) device_.Reset();
+    if (dxgiFactory_) dxgiFactory_.Reset();
+
 }
 
 /// <summary>
@@ -89,7 +123,6 @@ void DirectXCommon::Finalize()
 /// </summary>
 void DirectXCommon::ExecuteCommandList()
 {
-
     // GPUコマンドの実行
     ID3D12CommandList* commandLists[] = { commandList_.Get() };
     commandQueue_->ExecuteCommandLists(1, commandLists);
@@ -104,13 +137,33 @@ void DirectXCommon::WaitForCommandExecution()
     // Fenceの値を更新し、シグナルを送る
     fenceValue_++;
     HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr)) {
+        char buf[256];
+        sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: Signal failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(std::string(buf));
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+        return;
+    }
 
     // コマンド完了待ち (GPU同期)
     if (fence_->GetCompletedValue() < fenceValue_) {
         // GPUの処理完了時にイベントを通知するように設定
-        HRESULT hr = fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
-        assert(SUCCEEDED(hr));
+        HRESULT hr2 = fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+        if (FAILED(hr2)) {
+            char buf[256];
+            sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: SetEventOnCompletion failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr2));
+            Logger::Log(std::string(buf));
+            if (device_) {
+                HRESULT reason = device_->GetDeviceRemovedReason();
+                sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+                Logger::Log(std::string(buf));
+            }
+            return;
+        }
         // イベントが発生するまで待機
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
@@ -124,12 +177,32 @@ void DirectXCommon::ResetCommandList()
 
     // コマンドアロケータをリセット
     HRESULT hr = commandAllocator_->Reset();
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr)) {
+        char buf[256];
+        sprintf_s(buf, "DirectXCommon::ResetCommandList: commandAllocator_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(std::string(buf));
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+        return;
+    }
 
     // コマンドリストをリセット（アロケータを再設定）
     // 第二引数（PipelineStateObject）はnullでOK
     hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr)) {
+        char buf[256];
+        sprintf_s(buf, "DirectXCommon::ResetCommandList: commandList_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(std::string(buf));
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+        return;
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -192,6 +265,12 @@ void DirectXCommon::Initialize(WinApp* winApp)
 void DirectXCommon::PreDraw()
 {
 
+    // スワップチェーンが未作成の場合は前処理をスキップ
+    if (!swapChain_) {
+        Logger::Log("DirectXCommon::PreDraw: swapChain_ is null\n");
+        return;
+    }
+
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
     // リソースバリア (Present -> Render Target)
@@ -208,7 +287,7 @@ void DirectXCommon::PreDraw()
     commandList_->OMSetRenderTargets(1, &rtvHandles_[bbIndex], false, &dsvHandle);
 
     // 画面全体のクリア
-    float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f }; // (仮の色)
+    float clearColor[] = { 0.30f, 0.48f, 0.68f, 1.0f }; // (仮の色)
     commandList_->ClearRenderTargetView(rtvHandles_[bbIndex], clearColor, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
@@ -233,6 +312,12 @@ void DirectXCommon::PreDraw()
 void DirectXCommon::PostDraw()
 {
 
+    // スワップチェーンが未作成の場合は後処理をスキップ
+    if (!swapChain_) {
+        Logger::Log("DirectXCommon::PostDraw: swapChain_ is null\n");
+        return;
+    }
+
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
     // リソースバリア (Render Target -> Present)
@@ -251,7 +336,18 @@ void DirectXCommon::PostDraw()
     // コマンドをGPUへ送信しフェンスをシグナル
     ExecuteCommandList();
     // Present（描画結果を画面に送る）
-    swapChain_->Present(1, 0);
+    HRESULT hrPresent = swapChain_->Present(1, 0);
+    if (FAILED(hrPresent)) {
+        char buf[256];
+        sprintf_s(buf, "DirectXCommon::PostDraw: swapChain_->Present failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hrPresent));
+        Logger::Log(std::string(buf));
+        // ローカル的にデバイス削除理由もログ出力しておく
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            sprintf_s(buf, "DirectXCommon::PostDraw: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+    }
     // GPUコマンドの完了を待機
     WaitForCommandExecution();
     // allocator と commandList をリセット
@@ -406,21 +502,34 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     buffer.Encoding = DXC_CP_UTF8;
 
     // 3. コンパイル引数の設定
-    LPCWSTR arguments[] = {
-        filePath.c_str(), // コンパイル対象のhlslファイル名
-        L"-E", L"main", // エントリーポイントの指定。基本的にmain以外にはしない。
-        L"-T", profile, // ShaderProfileの設定
-        L"-Zi", L"-Qembed_debug", // デバッグ用の情報を埋め込む
-        L"-Od", // 最適化を外しておく
-        L"-Zpr", // メモリレイアウトは行優先
-    };
-    UINT32 argCount = _countof(arguments);
+    std::vector<std::wstring> argStrings;
+    argStrings.push_back(filePath);
+    argStrings.push_back(L"-E"); argStrings.push_back(L"main");
+    argStrings.push_back(L"-T"); argStrings.push_back(profile);
+    argStrings.push_back(L"-Zi"); argStrings.push_back(L"-Qembed_debug");
+    argStrings.push_back(L"-Od"); // 最適化を外しておく
+    argStrings.push_back(L"-Zpr"); // メモリレイアウトは行優先
+
+    // スワップチェーンのフォーマットに応じてSRGB定義を追加
+    bool swapchainIsSrgb = (swapChainFormat_ == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    if (swapchainIsSrgb) {
+        argStrings.push_back(L"-DSWAPCHAIN_SRGB=1");
+    } else {
+        argStrings.push_back(L"-DSWAPCHAIN_SRGB=0");
+    }
+
+    // DxcCompiler3::Compile は LPCWSTR* 型の引数配列を要求するため、
+    // std::vector<std::wstring> から LPCWSTR* への変換が必要
+    std::vector<LPCWSTR> arguments;
+    arguments.reserve(argStrings.size());
+    for (auto& s : argStrings) arguments.push_back(s.c_str());
+    UINT32 argCount = static_cast<UINT32>(arguments.size());
 
     // 4. シェーダーのコンパイル実行 (6引数シグネチャに適合)
     ComPtr<IDxcResult> result = nullptr;
     hr = dxcCompiler_->Compile(
         &buffer, // 1. pSource (DxcBuffer 構造体へのポインタ)
-        arguments, // 2. pArguments (コンパイル引数配列)
+        arguments.data(), // 2. pArguments (コンパイル引数配列)
         argCount, // 3. argCount
         includeHandler_.Get(), // 4. pIncludeHandler (インクルード処理用)
         IID_PPV_ARGS(&result) // 5. riid & 6. ppResult (IID_PPV_ARGSで2つ分の引数を処理)
@@ -487,6 +596,8 @@ void DirectXCommon::CreateDevice()
             Logger::Log(std::string("Use Adapter: ") + desc + "\n");
             hr = D3D12CreateDevice(useAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
             if (SUCCEEDED(hr)) {
+                // 選択されたアダプタのベンダーIDを記録しておく
+                adapterVendorId_ = static_cast<uint32_t>(adapterDesc.VendorId);
                 break; // デバイス生成に成功したらループを抜ける
             }
         }
@@ -502,6 +613,8 @@ void DirectXCommon::CreateDevice()
 
         hr = D3D12CreateDevice(warpAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
         assert(SUCCEEDED(hr));
+        // WARP を使った場合はベンダーIDを0にしておく
+        adapterVendorId_ = 0;
     }
 
 #ifdef _DEBUG
@@ -577,6 +690,7 @@ void DirectXCommon::CreateSwapChain()
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc {};
     swapChainDesc.Width = WinApp::kWindowWidth;
     swapChainDesc.Height = WinApp::kWindowHeight;
+    // フォーマットは後でSRGBとUNORMの両方を試すため、ここでは仮の値を設定しておく
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -584,16 +698,79 @@ void DirectXCommon::CreateSwapChain()
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 
-    hr = dxgiFactory_->CreateSwapChainForHwnd(
-        commandQueue_.Get(),
-        winApp_->GetHwnd(),
-        &swapChainDesc,
-        nullptr,
-        nullptr,
-        reinterpret_cast<IDXGISwapChain1**>(swapChain_.GetAddressOf()));
+    // IDXGISwapChain1 を作成してから、成功したフォーマットで 
+    // IDXGISwapChain4 にクエリする方式でスワップチェーンを生成
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
 
-    // スワップチェーンのフォーマットを記録
-    swapChainFormat_ = swapChainDesc.Format;
+    // フォーマットの候補を用意
+    DXGI_FORMAT formatsToTryDefault[] = { DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM };
+    DXGI_FORMAT formatsToTryIntelOnly[] = { DXGI_FORMAT_R8G8B8A8_UNORM };
+    DXGI_FORMAT* formatsToTry = formatsToTryDefault;
+    size_t formatsCount = _countof(formatsToTryDefault);
+    
+    if (adapterVendorId_ == 0x8086) {
+        formatsToTry = formatsToTryIntelOnly;
+        formatsCount = _countof(formatsToTryIntelOnly);
+        Logger::Log("DirectXCommon::CreateSwapChain: Intel adapter detected — skipping SRGB swapchain attempt.\n");
+    }
+
+    // フォーマットの候補を順に試すループ
+    bool swapChainCreated = false;
+    for (size_t fi = 0; fi < formatsCount; ++fi) {
+        DXGI_FORMAT fmt = formatsToTry[fi];
+        swapChainDesc.Format = fmt;
+        hr = dxgiFactory_->CreateSwapChainForHwnd(
+            commandQueue_.Get(),
+            winApp_->GetHwnd(),
+            &swapChainDesc,
+            nullptr,
+            nullptr,
+            &swapChain1);
+
+        if (SUCCEEDED(hr) && swapChain1) {
+            // IDXGISwapChain4 にクエリして保存
+            hr = swapChain1.As(&swapChain_);
+            if (SUCCEEDED(hr) && swapChain_) {
+                swapChainFormat_ = fmt; // 成功したフォーマットを記録
+                swapChainCreated = true;
+
+                // ログ出力
+                if (fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+                    Logger::Log("SwapChain created with SRGB format.\n");
+                } else {
+                    Logger::Log("SwapChain created with UNORM format (fallback).\n");
+                }
+                break;
+            }
+        }
+
+        // 失敗した場合はリソースをクリーンアップして次のフォーマットを試す
+        swapChain1.Reset();
+        swapChain_.Reset();
+        char buf[256];
+        sprintf_s(buf, "CreateSwapChainForHwnd for format %u failed. hr=0x%08X\n", static_cast<unsigned int>(fmt), static_cast<unsigned int>(hr));
+        OutputDebugStringA(buf);
+        Logger::Log(std::string(buf));
+        // デバイスが削除された場合やその他のデバイス関連のエラーが発生した場合、理由をログに出力
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            sprintf_s(buf, "CreateSwapChainForHwnd: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+    }
+
+    // 最終的にスワップチェーンが作成できなかった場合はエラーをログに出力してアサート
+    if (!swapChainCreated) {
+        Logger::Log("Failed to create swap chain with both SRGB and UNORM formats.\n");
+        if (device_) {
+            HRESULT reason = device_->GetDeviceRemovedReason();
+            char buf[256];
+            sprintf_s(buf, "CreateSwapChain: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
+            Logger::Log(std::string(buf));
+        }
+        assert(false);
+        return;
+    }
 
     // バックバッファ取得
     for (int i = 0; i < kBackBufferCount; ++i) {
@@ -666,6 +843,17 @@ void DirectXCommon::CreateDescriptorHeaps()
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         HRESULT hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvDescriptorHeap_));
         assert(SUCCEEDED(hr));
+        // デバッグログ
+        if (srvDescriptorHeap_) {
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuStart = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuStart = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+            char buf[256];
+            sprintf_s(buf, "DEBUG CreateDescriptorHeaps: SRV heap created. num=%u descSize=%u CPU=0x%016llX GPU=0x%016llX\n",
+                kMaxSRVCount, descriptorSizeSRV_, static_cast<unsigned long long>(cpuStart.ptr), static_cast<unsigned long long>(gpuStart.ptr));
+            Logger::Log(buf);
+        } else {
+            Logger::Log("DEBUG CreateDescriptorHeaps: srvDescriptorHeap_ is null after CreateDescriptorHeap\n");
+        }
     }
 
     // DSV
@@ -684,14 +872,18 @@ void DirectXCommon::CreateDescriptorHeaps()
 /// </summary>
 void DirectXCommon::InitRenderTargetView()
 {
-    // RTV のフォーマット
-    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc {};
-    rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
+    // 各バックバッファの実際のフォーマットに合わせてRTVを作成する
     for (int i = 0; i < kBackBufferCount; ++i) {
+        // バッファのフォーマットを取得
+        auto res = swapChainResources_[i].Get();
+        D3D12_RESOURCE_DESC resDesc = res->GetDesc();
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc {};
+        rtvDesc.Format = resDesc.Format; // 取得したリソースのフォーマットを使用
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
         rtvHandles_[i] = GetCPUDescriptorHandle(rtvDescriptorHeap_, descriptorSizeRTV_, i);
-        device_->CreateRenderTargetView(swapChainResources_[i].Get(), &rtvDesc, rtvHandles_[i]);
+        device_->CreateRenderTargetView(res, &rtvDesc, rtvHandles_[i]);
     }
 }
 

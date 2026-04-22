@@ -7,20 +7,34 @@
 #include "engine/3d/Camera.h"
 #include <algorithm>
 #include <vector>
-#include "externals/imgui/imgui.h"
+#include "ImGuiManager.h"
 
+using namespace Math;
 using namespace MyEngine;
 
 /// <summary>
 /// 初期化
 /// </summary>
-void ParticleManager::Initialize(DirectXCommon* dx,Object3dCommon* objCommon,SrvManager* srv,TextureManager* texMgr)
+void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, SrvManager* srv, TextureManager* texMgr, ImGuiManager* imguiManager)
 {
     // 参照の保存
     dxCommon_ = dx;
     object3dCommon_ = objCommon;
     srvManager_ = srv;
     texManager_ = texMgr;
+#ifdef USE_IMGUI
+    if (imguiManager) {
+        imguiManager_ = imguiManager;
+    }
+#else
+    (void)imguiManager;
+#endif
+}
+
+void ParticleManager::Finalize()
+{
+    // ImGuiコールバックの登録解除
+    particleGroups_.clear();
 }
 
 /// <summary>
@@ -225,8 +239,6 @@ void ParticleManager::Draw()
     const uint32_t instSlots = object3dCommon_->GetInstancingSlotCount();
     if (!instData || instSlots == 0) { return; }
 
-    MathUtility math;
-
     // すべてのグループのパーティクルを描画
     for (auto& kv : particleGroups_) {
         auto& grp = kv.second;
@@ -259,13 +271,13 @@ void ParticleManager::Draw()
             // ZオフセットでZ Fighting軽減
             tr.translate.z += static_cast<float>(i) * 1e-3f;
             // ワールド行列の作成
-            Matrix4x4 world = math.MakeAffineMatrix(tr.scale, tr.rotate, tr.translate);
+            Matrix4x4 world = MathUtil::MakeAffineMatrix(tr.scale, tr.rotate, tr.translate);
             // WVP行列の作成
-            Matrix4x4 wvp = math.Multiply(world, math.Multiply(view, proj));
+            Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, proj));
             // ワールドの逆行列の転置を作成（法線変換用）
-            Matrix4x4 inv = math.Inverse(world);
+            Matrix4x4 inv = MathUtil::Inverse(world);
             // 逆行列の転置を計算
-            Matrix4x4 invT = math.Transpose(inv);
+            Matrix4x4 invT = MathUtil::Transpose(inv);
 
             // インスタンスデータに転送
             instData[i].World = world;
@@ -343,6 +355,7 @@ void ParticleManager::SetDamping(float d) { damping_ = d < 0.0f ? 0.0f : d; }
 /// </summary>
 void ParticleManager::DrawImGui()
 {
+#ifdef USE_IMGUI
     // グループ数を表示
     ImGui::Text("Groups: %zu", particleGroups_.size());
     // フィールド設定
@@ -372,7 +385,7 @@ void ParticleManager::DrawImGui()
     ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
     ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
     ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
-    
+
     // カラー範囲設定
     ImGui::ColorEdit4("Color Min", &colMin_.x);
     ImGui::ColorEdit4("Color Max", &colMax_.x);
@@ -389,4 +402,24 @@ void ParticleManager::DrawImGui()
             ImGui::TreePop();
         }
     }
+#else
+    (void)particleGroups_;
+    (void)fieldEnabled_;
+    (void)fieldAccel_;
+    (void)fieldMin_;
+    (void)fieldMax_;
+    (void)lifeMin_;
+    (void)lifeMax_;
+    (void)gravityEnabled_;
+    (void)gravity_;
+    (void)damping_;
+    (void)spawnPosMin_;
+    (void)spawnPosMax_;
+    (void)velMin_;
+    (void)velMax_;
+    (void)scaleMin_;
+    (void)scaleMax_;
+    (void)colMin_;
+    (void)colMax_;
+#endif
 }

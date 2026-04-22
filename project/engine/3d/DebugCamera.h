@@ -32,37 +32,37 @@ public: // メンバ関数
     /// <summary>
     /// ビュー行列取得
     /// </summary>
-    const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
+    const Math::Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
 
     /// <summary>
     /// 射影行列取得（正射影）
     /// </summary>
-    const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
+    const Math::Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
 
     /// <summary>
     /// ビュー×プロジェクション行列取得
     /// </summary>
-    const Matrix4x4& GetViewProjectionMatrix() const { return viewProjectionMatrix_; }
+    const Math::Matrix4x4& GetViewProjectionMatrix() const { return viewProjectionMatrix_; }
 
     /// <summary>
     /// カメラの現在位置取得
     /// </summary>
-    const Vector3& GetTranslation() const { return translation_; }
+    const Math::Vector3& GetTranslation() const { return translation_; }
 
     /// <summary>
     /// カメラの回転角取得
     /// </summary>
-    const Vector3& GetRotation() const { return rotation_; }
+    const Math::Vector3& GetRotation() const { return rotation_; }
 
     /// <summary>
     /// カメラの位置を直接設定
     /// </summary>
-    void SetTranslation(const Vector3& pos) { translation_ = pos; }
+    void SetTranslation(const Math::Vector3& pos) { translation_ = pos; }
 
     /// <summary>
     /// カメラの回転を直接設定
     /// </summary>
-    void SetRotation(const Vector3& rot) { rotation_ = rot; }
+    void SetRotation(const Math::Vector3& rot) { rotation_ = rot; }
 
 private: // メンバ関数（内部用）
     /// <summary>
@@ -78,15 +78,15 @@ private: // メンバ関数（内部用）
 private: // メンバ変数
 
     // カメラ位置
-    Vector3 translation_ = { 0.0f, 0.0f, -50.0f };
+    Math::Vector3 translation_ = { 0.0f, 0.0f, -50.0f };
 
     // 回転
-    Vector3 rotation_ = { 0.0f, 0.0f, 0.0f };
+    Math::Vector3 rotation_ = { 0.0f, 0.0f, 0.0f };
 
     // 各種行列
-    Matrix4x4 viewMatrix_ = {};
-    Matrix4x4 projectionMatrix_ = {};
-    Matrix4x4 viewProjectionMatrix_ = {};
+    Math::Matrix4x4 viewMatrix_ = {};
+    Math::Matrix4x4 projectionMatrix_ = {};
+    Math::Matrix4x4 viewProjectionMatrix_ = {};
 
     // 操作パラメータ
     float moveSpeed_ = 0.1f;
@@ -96,5 +96,4 @@ private: // メンバ変数
     float screenWidth_ = 1280.0f;
     float screenHeight_ = 720.0f;
 
-    MathUtility math_;
 };

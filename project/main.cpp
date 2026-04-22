@@ -11,7 +11,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
     int result = game->Run(hInstance, nCmdShow);
 
     // Game クラスのインスタンスを削除してリソースを解放する
-    delete game; 
+    delete game;
 
     // アプリケーションの終了コードを返す
     return result;

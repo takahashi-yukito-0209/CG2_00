@@ -11,6 +11,7 @@
 #include <cstring>
 
 using namespace MyEngine;
+using namespace Math;
 
 /// <summary>
 /// 描画

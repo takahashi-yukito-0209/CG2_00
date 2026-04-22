@@ -67,6 +67,17 @@ void SceneManager::Draw() {
 }
 
 /// <summary>
+/// 描画モードをシーンコンテキストに設定する
+/// </summary>
+void SceneManager::SetSelectedDrawType(int t) {
+    ctx_.selectedDrawType = t;
+    // 現在のシーンがあれば、描画タイプの更新を通知するためのフックを呼び出す
+    if (current_) {
+        current_->SetSelectedDrawType(t);
+    }
+}
+
+/// <summary>
 /// シーンの切り替え。現在のシーンがあればFinalizeを呼び出してクリーンアップし、新しいシーンをセットしてInitializeを呼び出す。
 /// </summary>
 void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene) {

@@ -10,8 +10,6 @@
 
 #include "externals/DirectXTex/DirectXTex.h"
 
-using Microsoft::WRL::ComPtr;
-
 // 前方宣言: MyEngine 名前空間内の WinApp を宣言
 namespace MyEngine { class WinApp; }
 
@@ -20,6 +18,8 @@ namespace MyEngine {
 /// DirectX関連の共通処理をまとめたクラス
 /// </summary>
 class DirectXCommon {
+public:
+    DirectXCommon() = default;
 
 public: // 公開メンバ関数
     /// <summary>
@@ -40,24 +40,24 @@ public: // 公開メンバ関数
     /// <summary>
     /// バッファリソース（頂点、定数など）の生成
     /// </summary>
-    ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
 
     /// <summary>
     /// テクスチャリソースの生成
     /// </summary>
-    ComPtr<ID3D12Resource> CreateTextureResource(const DirectX::TexMetadata& metadata);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(const DirectX::TexMetadata& metadata);
 
     /// <summary>
     /// テクスチャデータのアップロード
     /// </summary>
-    ComPtr<ID3D12Resource> UploadTextureData(
-        ComPtr<ID3D12Resource>& texture,
+    Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(
+        Microsoft::WRL::ComPtr<ID3D12Resource>& texture,
         const DirectX::ScratchImage& mipImages);
 
     /// <summary>
     /// シェーダーのコンパイル
     /// </summary>
-    ComPtr<IDxcBlob> CompileShader(
+    Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
         const std::wstring& filePath,
         const wchar_t* profile);
 
@@ -72,6 +72,11 @@ public: // 公開メンバ関数
     /// コマンドリストの取得
     /// </summary>
     ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
+
+    /// <summary>
+    /// コマンドキューの取得
+    /// </summary>
+    ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); }
 
     /// <summary>
     /// SRV用CPUディスクリプタハンドルの取得
@@ -101,6 +106,12 @@ public: // 公開メンバ関数
     // シングルトンインスタンスを取得するための静的メソッドの宣言
     static DirectXCommon* GetInstance();
 
+    // コピー/ムーブは禁止
+    DirectXCommon(const DirectXCommon&) = delete;
+    DirectXCommon& operator=(const DirectXCommon&) = delete;
+    DirectXCommon(DirectXCommon&&) = delete;
+    DirectXCommon& operator=(DirectXCommon&&) = delete;
+
     //終了
     void Finalize();
 
@@ -118,26 +129,25 @@ private: // Private メンバ変数
     // WinApp のポインタ（外部で管理される）
     WinApp* winApp_ = nullptr;
 
-    // シングルトンインスタンス（静的）
-    static DirectXCommon* instance_;
-
     // デバイス関連
     // ID3D12Device: GPU デバイスオブジェクト
-    ComPtr<ID3D12Device> device_;
+    Microsoft::WRL::ComPtr<ID3D12Device> device_;
     // DXGI ファクトリ: アダプタ列挙等に使用
-    ComPtr<IDXGIFactory7> dxgiFactory_;
+    Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory_;
+    // 選択されたアダプタのベンダーID (0x8086 = Intel, 0x10DE = NVIDIA, 0x1002 = AMD)
+    uint32_t adapterVendorId_ = 0;
 
     // コマンド関連
     // コマンドアロケータ/コマンドリスト/コマンドキュー
-    ComPtr<ID3D12CommandAllocator> commandAllocator_;
-    ComPtr<ID3D12GraphicsCommandList> commandList_;
-    ComPtr<ID3D12CommandQueue> commandQueue_;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
 
     // スワップチェーン
     static const uint32_t kBackBufferCount = 2; // バックバッファ数
-    ComPtr<IDXGISwapChain4> swapChain_;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     // バックバッファリソース配列
-    std::array<ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_;
     // 各バックバッファ用の RTV ハンドル配列
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, kBackBufferCount> rtvHandles_;
 
@@ -145,18 +155,18 @@ private: // Private メンバ変数
     DXGI_FORMAT swapChainFormat_ = DXGI_FORMAT_UNKNOWN;
 
     // ディスクリプタヒープと各種ディスクリプタサイズ
-    ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
-    ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_;
-    ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
     UINT descriptorSizeSRV_ = 0;
     UINT descriptorSizeRTV_ = 0;
     UINT descriptorSizeDSV_ = 0;
 
     // 深度ステンシルバッファ
-    ComPtr<ID3D12Resource> depthStencilResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
 
     // フェンスと同期イベント
-    ComPtr<ID3D12Fence> fence_;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
 
@@ -165,9 +175,9 @@ private: // Private メンバ変数
     D3D12_RECT scissorRect_ {};
 
     // DXC（DirectX Shader Compiler）関連
-    ComPtr<IDxcUtils> dxcUtils_;
-    ComPtr<IDxcCompiler3> dxcCompiler_;
-    ComPtr<IDxcIncludeHandler> includeHandler_;
+    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
+    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
 
 private: // メンバ関数
     // 初期化関数一覧
@@ -198,7 +208,7 @@ private: // Private Static メンバ関数（ディスクリプタヘルパー�
     /// 指定番号のCPUディスクリプタハンドルを取得 (内部処理用)
     /// </summary>
     static D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(
-        const ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
+        const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
         uint32_t descriptorSize,
         uint32_t index);
 
@@ -206,8 +216,9 @@ private: // Private Static メンバ関数（ディスクリプタヘルパー�
     /// 指定番号のGPUディスクリプタハンドルを取得 (内部処理用)
     /// </summary>
     static D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(
-        const ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
+        const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap,
         uint32_t descriptorSize,
         uint32_t index);
 };
+
 } // namespace MyEngine

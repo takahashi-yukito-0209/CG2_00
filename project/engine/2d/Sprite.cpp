@@ -1,5 +1,8 @@
 #include "Sprite.h"
 #include "SpriteCommon.h"
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 #include "WinApp.h"
 #include "mathUtility.h"
 #include "TextureManager.h"
@@ -11,14 +14,14 @@ using namespace MyEngine;
 /// <summary>
 /// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成を行う
 /// </summary>
-void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
+void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath, ImGuiManager* imguiManager)
 {
     // 引数で受け取ってメンバ変数に記録する
     this->spriteCommon_ = spriteCommon;
 
     DirectXCommon* dxCommon = spriteCommon->GetDxCommon();
+
     HRESULT hr;
-    MathUtility math;
 
     // トランスフォームの初期化
     this->transform_.scale = { 1.0f, 1.0f, 1.0f };
@@ -99,7 +102,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
         // マテリアルデータの内容を書き込む
         materialData_->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
         materialData_->enableLighting = false; // SpriteはLightingしない
-        materialData_->uvTransform = math.MakeIdentity4x4();
+        materialData_->uvTransform = MathUtil::MakeIdentity4x4();
         materialData_->lightingMode = 0;
         materialData_->useAlphaCutoutSampler = 0;
         materialData_->shininess = 1.0f;
@@ -115,8 +118,8 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
         transformationMatrixData_ = nullptr;
     } else {
         // 変換行列データの内容を書き込む（初期値）
-        transformationMatrixData_->WVP = math.MakeIdentity4x4();
-        transformationMatrixData_->World = math.MakeIdentity4x4();
+        transformationMatrixData_->WVP = MathUtil::MakeIdentity4x4();
+        transformationMatrixData_->World = MathUtil::MakeIdentity4x4();
     }
 
     // 単位行列を書き込んでおく
@@ -145,6 +148,79 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 
     // テクスチャサイズに合わせてスプライトのサイズを調整
     AdjustTextureSize();
+    // ImGui parameter is accepted for compatibility but UI is handled centrally
+    (void)imguiManager;
+}
+
+Sprite::~Sprite()
+{
+    // no ImGui unregister needed; registration is centralized
+}
+
+/// <summary>
+/// スプライトのプロパティを編集する関数
+/// </summary>
+void Sprite::DrawImGui()
+{
+#ifdef USE_IMGUI
+    ImGui::Text("Sprite");
+    Vector2 pos = GetPosition();
+    if (ImGui::DragFloat2("Position", &pos.x, 0.1f)) {
+        SetPosition(pos);
+    }
+
+    float rot = GetRotation();
+    if (ImGui::DragFloat("Rotation", &rot, 0.01f)) {
+        SetRotation(rot);
+    }
+
+    Vector4 col = GetColor();
+    if (ImGui::ColorEdit4("Color", &col.x)) {
+        SetColor(col);
+    }
+
+    Vector2 size = GetSize();
+    if (ImGui::DragFloat2("Size", &size.x, 0.1f)) {
+        SetSize(size);
+    }
+
+    Vector2 anchor = GetAnchorPoint();
+    if (ImGui::DragFloat2("Anchor", &anchor.x, 0.01f, 0.0f, 1.0f)) {
+        SetAnchorPoint(anchor);
+    }
+
+    bool fx = GetIsFlipX();
+    bool fy = GetIsFlipY();
+
+    if (ImGui::Checkbox("FlipX", &fx)) {
+        SetIsFlipX(fx);
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Checkbox("FlipY", &fy)) {
+        SetIsFlipY(fy);
+    }
+
+    Vector2 texLT = GetTextureLeftTop();
+    Vector2 texSize = GetTextureSize();
+
+    if (ImGui::DragFloat2("Tex LeftTop", &texLT.x, 1.0f)) {
+        SetTextureLeftTop(texLT);
+    }
+
+    if (ImGui::DragFloat2("Tex Size", &texSize.x, 1.0f, 1.0f, 8192.0f)) {
+        SetTextureSize(texSize);
+    }
+
+    static char texBuf[256] = "";
+    ImGui::InputText("Texture Path", texBuf, sizeof(texBuf));
+    if (ImGui::Button("Apply Texture")) {
+        SetTexture(std::string(texBuf));
+    }
+
+#else
+    (void)0;
+#endif
 }
 
 /// <summary>
@@ -152,9 +228,6 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath)
 /// </summary>
 void Sprite::Update()
 {
-    // 数学ユーティリティクラスのインスタンスを作成
-    MathUtility math; 
-
     // スケール（サイズ）を反映
     this->transform_.scale = { size_.x, size_.y, 1.0f };
     // 回転を反映
@@ -209,14 +282,14 @@ void Sprite::Update()
 
     // World行列の作成
     // ここで this->transform_ の値が外部から更新されている必要がある
-    Matrix4x4 worldMatrix = math.MakeAffineMatrix(this->transform_.scale, this->transform_.rotate, this->transform_.translate);
+    Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(this->transform_.scale, this->transform_.rotate, this->transform_.translate);
 
     // View/Projection行列の作成 (2Dスプライト用)
-    Matrix4x4 viewMatrix = math.MakeIdentity4x4();
-    Matrix4x4 projectionMatrix = math.MakeOrthographicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
+    Matrix4x4 viewMatrix = MathUtil::MakeIdentity4x4();
+    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
 
     // WVP行列の計算と定数バッファへの書き込み
-    Matrix4x4 wvpMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
+    Matrix4x4 wvpMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
 
     // メンバ変数ポインタに書き込み
     if (transformationMatrixData_) {
@@ -228,9 +301,9 @@ void Sprite::Update()
     }
 
     //  UV変換行列の計算と定数バッファへの書き込み
-    Matrix4x4 uvTransformMatrix = math.MakeScaleMatrix(this->uvTransform_.scale);
-    uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeRotateZMatrix(this->uvTransform_.rotate.z));
-    uvTransformMatrix = math.Multiply(uvTransformMatrix, math.MakeTranslateMatrix(this->uvTransform_.translate));
+    Matrix4x4 uvTransformMatrix = MathUtil::MakeScaleMatrix(this->uvTransform_.scale);
+    uvTransformMatrix = MathUtil::Multiply(uvTransformMatrix, MathUtil::MakeRotateZMatrix(this->uvTransform_.rotate.z));
+    uvTransformMatrix = MathUtil::Multiply(uvTransformMatrix, MathUtil::MakeTranslateMatrix(this->uvTransform_.translate));
 
     // メンバ変数ポインタに書き込み
     if (materialData_) {

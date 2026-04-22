@@ -40,6 +40,11 @@ public: // メンバ関数
     /// </summary>
     BlendMode GetBlendMode() const { return blendMode_; }
 
+    /// <summary>
+    /// SpriteCommon に関する設定を編集する関数
+    /// </summary>
+    void DrawImGui();
+
 private: // メンバ関数
 
     /// <summary>

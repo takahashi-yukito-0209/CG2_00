@@ -140,17 +140,27 @@ void TextureManager::LoadTexture(const std::string& filePath)
         // その他のテクスチャ（必要に応じて処理を追加）
     }
 
-    // 設定をもとにSRVの生成
-    DirectXCommon::GetInstance()->GetDevice()->CreateShaderResourceView(
-        textureData.Resource.Get(),
-        &srvDesc,
-        textureData.srvHandleCPU);
-
     // 中間リソースを生成し、転送コマンドを積む
     textureData.IntermediateResource = DirectXCommon::GetInstance()->UploadTextureData(
         textureData.Resource, // コピー先リソース（テクスチャリソース）
         mipImages // アップロードするデータ
     );
+
+    // SRV をアップロード完了後に作成する（リソースの状態が確定してから描画で安全に使えるようにする）
+    DirectXCommon::GetInstance()->GetDevice()->CreateShaderResourceView(
+        textureData.Resource.Get(),
+        &srvDesc,
+        textureData.srvHandleCPU);
+
+    // デバッグ用: SRVハンドルの情報をログに出力
+    {
+        char buf[256];
+        sprintf_s(buf, "DEBUG LoadTexture: Created SRV CPU.ptr=0x%016llX GPU.ptr=0x%016llX index=%u\n",
+            static_cast<unsigned long long>(textureData.srvHandleCPU.ptr),
+            static_cast<unsigned long long>(textureData.srvHandleGPU.ptr),
+            textureData.srvIndex);
+        Logger::Log(buf);
+    }
 
     // SRVハンドルの生成確認
     if (textureData.srvHandleGPU.ptr == 0) {
@@ -158,10 +168,6 @@ void TextureManager::LoadTexture(const std::string& filePath)
         sprintf_s(buf, "ERROR LoadTexture: SRV GPU handle is null for %s\n", filePath.c_str());
         Logger::Log(buf);
     }
-
-    // SRV を CPU ヒープに作成した後、必要に応じてシェーダー可視ヒープへコピーして可視にすることを検討。
-    // このアプリでは `DirectXCommon` で単一のシェーダー可視ヒープを使用しているため、ImGui 等からも利用可能。
-    // ここではシェーダー可視ヒープの CPU ハンドルに直接 SRV を作成しているため追加処理は不要。
 
     // ロード成功のログ出力
     {

@@ -50,7 +50,8 @@ public: // メンバ関数
     /// <summary>
     /// 初期化
     /// </summary>
-    void Initialize(SpriteCommon* spriteCommon, std::string textureFilePath);
+    // Single Initialize: optional ImGuiManager parameter (default nullptr)
+    void Initialize(SpriteCommon* spriteCommon, std::string textureFilePath, class ImGuiManager* imguiManager = nullptr);
 
     /// <summary>
     /// 更新処理
@@ -156,6 +157,14 @@ public: // メンバ関数
     /// テクスチャ設定（ファイルパス指定）。テクスチャマネージャを通じてテクスチャをロードし、SRVインデックスを取得して設定
     /// </summary>
     void SetTexture(const std::string& filePath);
+
+    /// <summary>
+    /// ImGui を使ってこのスプライトのプロパティを編集する関数
+    /// </summary>
+    void DrawImGui();
+
+    // ImGui registration moved to central manager; no per-sprite registration fields
+    ~Sprite();
 
 private: // メンバ関数
 

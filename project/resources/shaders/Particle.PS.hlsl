@@ -70,6 +70,10 @@ PixelShaderOutput main(VertexShaderOutput input)
     }
 
     output.color = float4(finalRGB, finalA);
+#if !SWAPCHAIN_SRGB
+    // Encode to sRGB if swapchain doesn't do it for us
+    output.color.rgb = pow(output.color.rgb, 1.0/2.2);
+#endif
     if (texA <= 0.001f) { discard; }
     return output;
 }

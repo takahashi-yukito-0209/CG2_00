@@ -9,8 +9,6 @@
 #include <vector>
 #include <wrl.h>
 
-using namespace Math;
-
 namespace MyEngine {
 
 // 前方宣言
@@ -26,17 +24,17 @@ public: // メンバ構造体
 
     // 頂点データ構造体
     struct VertexData {
-        Vector4 position;
-        Vector2 texcoord;
-        Vector3 normal;
+        Math::Vector4 position;
+        Math::Vector2 texcoord;
+        Math::Vector3 normal;
     };
 
     // マテリアル構造体
     struct Material {
-        Vector4 color;
+        Math::Vector4 color;
         int32_t enableLighting;
         float padding[3];
-        Matrix4x4 uvTransform;
+        Math::Matrix4x4 uvTransform;
         int lightingMode;
         int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
         float padding2[2];
@@ -46,23 +44,23 @@ public: // メンバ構造体
 
     // 座標変換行列データ
     struct TransformationMatrix {
-        Matrix4x4 WVP;
-        Matrix4x4 World;
-        Vector4 color; // インスタンス毎のカラー（w = アルファ）
-        Matrix4x4 WorldInverseTranspose;
+        Math::Matrix4x4 WVP;
+        Math::Matrix4x4 World;
+        Math::Vector4 color; // インスタンス毎のカラー（w = アルファ）
+        Math::Matrix4x4 WorldInverseTranspose;
     };
 
     // 平行光源データ構造体
     struct DirectionalLight {
-        Vector4 color; //!< ライトの色
-        Vector3 direction; //!< ライトの向き
+        Math::Vector4 color; //!< ライトの色
+        Math::Vector3 direction; //!< ライトの向き
         float intensity; //!< 輝度
     };
 
     // 点光源データ構造体 (CPU側レイアウト)
     struct PointLight {
-        Vector4 position;
-        Vector4 color;
+        Math::Vector4 position;
+        Math::Vector4 color;
         float radius;
         float decay;
         int32_t enabled;
@@ -71,9 +69,9 @@ public: // メンバ構造体
 
     // スポットライトデータ構造体 (CPU側レイアウト)
     struct SpotLight {
-        Vector4 position;
-        Vector4 color;
-        Vector3 direction;
+        Math::Vector4 position;
+        Math::Vector4 color;
+        Math::Vector3 direction;
         float distance;
         float decay;
         float cosAngle;
@@ -94,7 +92,7 @@ public: // メンバ構造体
         MaterialData material;
         // ルートノード情報（Assimp のノードツリーを格納）
         struct Node {
-            Matrix4x4 localMatrix;
+            Math::Matrix4x4 localMatrix;
             std::string name;
             std::vector<Node> children;
         } rootNode;
@@ -105,7 +103,7 @@ public: // メンバ関数
     /// <summary>
     /// 初期化
     /// </summary>
-    void Initialize(Object3dCommon* object3dCommon);
+    void Initialize(Object3dCommon* object3dCommon, class ImGuiManager* imguiManager = nullptr);
 
     /// <summary>
     /// 終了処理
@@ -115,7 +113,7 @@ public: // メンバ関数
     /// <summary>
     /// 更新
     /// </summary>
-    void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+    void Update(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
     /// 描画
@@ -202,8 +200,8 @@ private: // メンバ変数
     // バッファリソースの使い道を補足するバッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
-    Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
-    Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
+    Math::Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
+    Math::Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
     // `Model` へのポインタ
     Model* model_ = nullptr;
@@ -221,17 +219,17 @@ public: // メンバ関数
     /// <summary>
     ///  大きさ設定
     /// </summary>
-    void SetScale(const Vector3& scale) { transform_.scale = scale; }
+    void SetScale(const Math::Vector3& scale) { transform_.scale = scale; }
 
     /// <summary>
     /// 回転設定
     /// </summary>
-    void SetRotate(const Vector3& rotate) { transform_.rotate = rotate; }
+    void SetRotate(const Math::Vector3& rotate) { transform_.rotate = rotate; }
 
     /// <summary>
     /// 平行移動設定
     /// </summary>
-    void SetTranslate(const Vector3& translate)
+    void SetTranslate(const Math::Vector3& translate)
     {
         // 入力値の妥当性チェック
         auto invalid = [](float v) {
@@ -251,24 +249,30 @@ public: // メンバ関数
     }
 
     /// <summary>
-    /// ImGuiでオブジェクトの状態を表示・編集するための関数。引数のindexは、複数オブジェクトを区別するための識別子として使用
+    /// ImGuiでオブジェクトの状態を表示・編集するための関数
     /// </summary>
     void DrawImGui(int index);
+
+
+    // ImGui fields removed (centralized in ImGuiManager)
+
+public:
+
 
     /// <summary>
     /// スケール取得
     /// </summary>
-    const Vector3 GetScale() const { return transform_.scale; }
+    const Math::Vector3 GetScale() const { return transform_.scale; }
     
     /// <summary>
     /// 回転取得
     /// </summary>
-    const Vector3 GetRotate() const { return transform_.rotate; }
+    const Math::Vector3 GetRotate() const { return transform_.rotate; }
     
     /// <summary>
     /// 平行移動取得
     /// </summary>
-    const Vector3 GetTranslate() const { return transform_.translate; }
+    const Math::Vector3 GetTranslate() const { return transform_.translate; }
 
     /// <summary>
     /// ライティングの有効/無効を取得する
@@ -317,21 +321,3 @@ private: // 内部関数
 };
 
 } // namespace MyEngine
-
-// 後方互換の型エイリアス（レガシーコードで使用されている名前を保持）
-namespace MyEngine {
-using VertexData = Object3d::VertexData;
-using Material = Object3d::Material;
-using TransformationMatrix = Object3d::TransformationMatrix;
-using DirectionalLight = Object3d::DirectionalLight;
-using MaterialData = Object3d::MaterialData;
-using ModelData = Object3d::ModelData;
-}
-
-// グローバルスコープにこれらの名前があることを前提とするレガシーコード向けに非修飾エイリアスも提供
-using VertexData = MyEngine::Object3d::VertexData;
-using Material = MyEngine::Object3d::Material;
-using TransformationMatrix = MyEngine::Object3d::TransformationMatrix;
-using DirectionalLight = MyEngine::Object3d::DirectionalLight;
-using MaterialData = MyEngine::Object3d::MaterialData;
-using ModelData = MyEngine::Object3d::ModelData;

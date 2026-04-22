@@ -67,6 +67,21 @@ public: // メンバ関数
     void OnExit() override;
 
     /// <summary>
+    /// 描画モードの更新を受け取る
+    /// </summary>
+    void SetSelectedDrawType(int t) override;
+
+    /// <summary>
+    /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
+    /// </summary>
+    void FillObject3dPointers(std::vector<Object3d*>* out) override;
+
+    /// <summary>
+    /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
+    /// </summary>
+    void FillSpritePointers(std::vector<Sprite*>* out) override;
+
+    /// <summary>
     /// シーンの名前を取得
     /// </summary>
     std::string GetName() const override { return "Play"; }
@@ -77,5 +92,5 @@ private://メンバ変数
     std::vector<std::unique_ptr<Sprite>> sprites_;
     std::vector<std::unique_ptr<Object3d>> objects3d_;
     std::unique_ptr<Object3d> particlePlane_;
-    ::ParticleEmitter pmEmitter_;
+    ParticleEmitter pmEmitter_;
 };

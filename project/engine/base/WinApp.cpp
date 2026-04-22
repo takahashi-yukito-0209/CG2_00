@@ -1,13 +1,14 @@
 #include "WinApp.h"
-#include "externals/imgui/imgui.h"
-#include "externals/imgui/imgui_impl_dx12.h"
-#include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
 
 #pragma comment(lib, "winmm.lib")
 
-// ImGui のウィンドウプロシージャハンドラの宣言
+#include "ImGuiManager.h"
+
+// ImGui のウィンドウプロシージャハンドラの宣言 (存在する場合のみ)
+#ifdef USE_IMGUI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+#endif
 
 using namespace MyEngine;
 
@@ -33,19 +34,21 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
 
     // ウィンドウ生成
     hwnd_ = CreateWindowEx(
-        0,
-        kWindowClassName,
-        windowTitle_.c_str(),
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        wrc.right - wrc.left,
-        wrc.bottom - wrc.top,
-        nullptr,
-        nullptr,
-        hInstance_,
-        nullptr);
+        0, // 拡張スタイルなし
+        kWindowClassName, // ウィンドウクラス名
+        windowTitle_.c_str(), // ウィンドウタイトル
+        WS_OVERLAPPEDWINDOW, // ウィンドウスタイル
+        CW_USEDEFAULT, // X座標（デフォルト）
+        CW_USEDEFAULT, // Y座標（デフォルト）
+        wrc.right - wrc.left, // ウィンドウの幅
+        wrc.bottom - wrc.top, // ウィンドウの高さ
+        nullptr, // 親ウィンドウなし
+        nullptr, // メニューハンドルなし
+        hInstance_, // インスタンスハンドル
+        nullptr // 追加パラメータなし
+    ); 
 
+    // ウィンドウ生成に失敗した場合はエラー
     assert(hwnd_ != nullptr);
 
     // ウィンドウを表示
@@ -118,10 +121,12 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         return 0;
     }
 
-    // ImGui のハンドラは最後にする
+    // ImGui のハンドラは最後にする（ImGui 有効時のみ）
+#ifdef USE_IMGUI
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
         return 1;
     }
+#endif
 
     return DefWindowProc(hwnd, msg, wparam, lparam); // デフォルトのウィンドウプロシージャにメッセージを送る
 }

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
+#include <vector>
+#include <unordered_set>
 
 // 前方宣言: MyEngine 名前空間内の DirectXCommon を宣言
 namespace MyEngine {
@@ -42,6 +44,8 @@ public: // メンバ関数
 
     // SRV確保（次インデックスを返す）
     uint32_t Allocate();
+    // SRV解放（インデックスを指定して解放、再利用可能にする）
+    void Free(uint32_t index);
     // 上限未満ならtrue
     bool CanAllocate() const;
 
@@ -65,5 +69,10 @@ private: // メンバ変数
 
     // 次に使用するSRVインデックス
     uint32_t useIndex_ = 0;
+
+    // 解放済みインデックスの再利用用フリーリスト
+    std::vector<uint32_t> freeList_;
+    // 現在割り当て中のインデックス集合（重複解放検出用）
+    std::unordered_set<uint32_t> allocatedSet_;
 };
 } // namespace MyEngine

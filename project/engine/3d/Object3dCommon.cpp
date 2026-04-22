@@ -2,7 +2,13 @@
 #include "Logger.h"
 #include "StringUtility.h"
 #include "mathUtility.h"
+#include "Camera.h"
+#include <algorithm>
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 
+using namespace Math;
 using namespace MyEngine;
 
 /// <summary>
@@ -15,7 +21,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     // 共有の平行光源用定数バッファを作成
     // これにより main/ImGui からすべての Object3d インスタンスで使用する単一のライトを編集できる
     directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
-    
+
     // バッファが作成できた場合はマッピングして初期値を設定する
     if (directionalLightResource_) {
         directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
@@ -23,9 +29,18 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
         directionalLightData_->intensity = 1.0f;
+        // デバッグログ
+        {
+            char buf[256];
+            sprintf_s(buf, "DEBUG DirectionalLight default: color=(%f,%f,%f) dir=(%f,%f,%f) intensity=%f\n",
+                directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
+                directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z,
+                directionalLightData_->intensity);
+            Logger::Log(buf);
+        }
     }
 
-    // 点光源用バッファを作成（最大数は Object3dCommon::kMaxPointLights）
+    // 点光源用バッファを作成 (最大点光源数分の配列を想定)
     const uint32_t kMaxPointLights = Object3dCommon::kMaxPointLights;
     // CPU側の構造体レイアウトに合わせて、GPU側のバッファも同じレイアウトで作成する必要がある
     size_t pointLightsBufferSize = sizeof(Object3d::PointLight) * static_cast<size_t>(kMaxPointLights);
@@ -37,8 +52,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         // デフォルトで無効化しておく
         for (uint32_t i = 0; i < kMaxPointLights; ++i) {
             // 無効化のため、位置を原点、色を白、半径と減衰を適当な値に設定し、enabled を 0 にする
-            pointLightsData_[i].position = {0.0f, 0.0f, 0.0f, 0.0f};
-            pointLightsData_[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
+            pointLightsData_[i].position = { 0.0f, 0.0f, 0.0f, 0.0f };
+            pointLightsData_[i].color = { 1.0f, 1.0f, 1.0f, 1.0f };
             pointLightsData_[i].radius = 10.0f;
             pointLightsData_[i].decay = 2.0f;
             pointLightsData_[i].enabled = 0;
@@ -54,25 +69,25 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     if (spotLightResource_) {
         spotLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&spotLightData_));
         // デフォルトで無効化しておく
-        spotLightData_->position = {0.0f, 0.0f, 0.0f, 0.0f};
-        spotLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-        spotLightData_->direction = {0.0f, -1.0f, 0.0f};
+        spotLightData_->position = { 0.0f, 0.0f, 0.0f, 0.0f };
+        spotLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        spotLightData_->direction = { 0.0f, -1.0f, 0.0f };
         spotLightData_->distance = 10.0f;
         spotLightData_->decay = 2.0f;
-        spotLightData_->cosAngle = 1.0f; 
-        spotLightData_->cosFalloffStart = 1.0f; 
+        spotLightData_->cosAngle = 1.0f;
+        spotLightData_->cosFalloffStart = 1.0f;
         spotLightData_->enabled = 0;
         spotLightData_->padding = 0.0f;
     }
-  
+
     // ビルボード用のカメラ定数バッファ（b2）を作成
     cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
     // バッファが作成できた場合はマッピングして初期値を設定する
     if (cameraCBResource_) {
         // カメラ定数バッファをマップして、初期値を設定する
         cameraCBResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraCBData_));
-        cameraCBData_->right = {1.0f, 0.0f, 0.0f};
-        cameraCBData_->up    = {0.0f, 1.0f, 0.0f};
+        cameraCBData_->right = { 1.0f, 0.0f, 0.0f };
+        cameraCBData_->up = { 0.0f, 1.0f, 0.0f };
         cameraCBData_->enable = 0.0f;
         // 初期のViewProjは単位行列
         cameraCBData_->pad0 = 0.0f; // パディングを書き込むことを保証
@@ -84,7 +99,9 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     if (cameraResource_) {
         cameraResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraData_));
         cameraData_->worldPosition = { 0.0f, 0.0f, 0.0f };
-        cameraData_->pad = 0.0f;
+        cameraData_->exposure = 1.0f; // デフォルトの露出値
+        cameraData_->toneMapOn = 1; // デフォルトでトーンマッピング有効
+        cameraData_->pad0 = 0.0f;
     }
 
     // グラフィックスパイプラインの生成
@@ -95,7 +112,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     kNumInstance_ = kNumInstance;
 
     // TransformationMatrix[kNumInstance] を格納する構造化バッファ向けのGPU可視SRVを作成
-    D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
+    D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc {};
     instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // 構造化バッファ
     instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER; // バッファビュー
     instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // バッファの先頭から使用
@@ -111,11 +128,10 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     if (instancingResource_) {
         instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
         // 単位行列で初期化
-        MathUtility math;
         for (uint32_t i = 0; i < kNumInstance; ++i) {
-            instancingData_[i].WVP = math.MakeIdentity4x4();
-            instancingData_[i].World = math.MakeIdentity4x4();
-            instancingData_[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
+            instancingData_[i].WVP = MathUtil::MakeIdentity4x4();
+            instancingData_[i].World = MathUtil::MakeIdentity4x4();
+            instancingData_[i].color = { 1.0f, 1.0f, 1.0f, 1.0f };
         }
     }
 
@@ -135,6 +151,67 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     }
 }
 
+
+
+#ifdef USE_IMGUI
+    /// <summary>
+    /// Object3dCommon に関連する共通設定を編集する関数
+    /// </summary>
+    void Object3dCommon::DrawImGui()
+    {
+        // 平行光源の編集UI
+        if (directionalLightData_) {
+            if (ImGui::CollapsingHeader("Light")) {
+                float color[3] = { directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z };
+                if (ImGui::ColorEdit3("Color", color)) {
+                    directionalLightData_->color.x = color[0];
+                    directionalLightData_->color.y = color[1];
+                    directionalLightData_->color.z = color[2];
+                }
+                float intensity = directionalLightData_->intensity;
+                if (ImGui::SliderFloat("Intensity", &intensity, 0.0f, 10.0f)) {
+                    directionalLightData_->intensity = intensity;
+                }
+            }
+        }
+
+        // ブレンドモードの編集UI
+        if (ImGui::CollapsingHeader("Blend Mode")) {
+            const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
+            int blendIdx = static_cast<int>(GetBlendMode());
+            if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
+                SetBlendMode(static_cast<BlendMode>(blendIdx));
+            }
+        }
+    }
+
+    /// <summary>
+    /// カメラ関連の設定を編集する関数
+    /// </summary>
+    void Object3dCommon::DrawCameraImGui()
+    {
+        // カメラのワールド位置、露出、トーンマッピングのオンオフを編集するUI
+        auto camData = GetCameraData();
+        if (camData) {
+            ImGui::DragFloat3("Camera World Position", &camData->worldPosition.x, 0.1f);
+            
+            float exposure = camData->exposure;
+            if (ImGui::DragFloat("Exposure", &exposure, 0.01f, 0.01f, 10.0f)) {
+                camData->exposure = exposure;
+            }
+            
+            bool toneOn = camData->toneMapOn != 0;
+            if (ImGui::Checkbox("Tone Map (Reinhard)", &toneOn)) {
+                camData->toneMapOn = toneOn ? 1 : 0;
+            }
+        }
+    }
+#else
+    void Object3dCommon::DrawImGui() { (void)0; }
+    void Object3dCommon::DrawCameraImGui() { (void)0; }
+#endif
+
+
 /// <summary>
 /// ブレンドモードの設定
 /// </summary>
@@ -153,7 +230,7 @@ void Object3dCommon::SetInstancingDrawSetting()
 {
     // 実行時のヌル参照を回避するための防御チェック
     auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
-    
+
     // ここでcmdListがnullの場合は、GPUクラッシュを回避するために早期リターンする
     if (!cmdList) {
         Logger::Log("Object3dCommon::SetInstancingDrawSetting: command list is null\n");
@@ -186,12 +263,48 @@ void Object3dCommon::SetInstancingDrawSetting()
     if (cameraCBResource_) {
         cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResource_->GetGPUVirtualAddress());
     }
+
     // スポットライトCBVをルートにバインド (ルートインデックス8 -> PS b5)
-    // シェーダー側では b5 にスポットライトが期待されるが、以前はここでバインドされていなかったため
-    // スポットライトUIで編集しても描画に反映されていなかった。
     if (spotLightResource_) {
         cmdList->SetGraphicsRootConstantBufferView(8, spotLightResource_->GetGPUVirtualAddress());
     }
+
+    // 平行光源（ディレクショナルライト）CBVをルートにバインド (ルートインデックス3 -> PS b1)
+    if (directionalLightResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+    }
+
+    // カメラCBVをピクセルシェーダー側にもバインドしておく (ルートインデックス6 -> PS b3)
+    if (cameraResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
+    }
+
+#ifdef _DEBUG
+    // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
+    {
+        char buf[512];
+        D3D12_GPU_VIRTUAL_ADDRESS dirAddr = directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0;
+        D3D12_GPU_VIRTUAL_ADDRESS camAddr = cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0;
+        sprintf_s(buf, "DEBUG SetInstancingDrawSetting: bound CBVs dirGPU=0x%016llX camGPU=0x%016llX\n",
+            static_cast<unsigned long long>(dirAddr), static_cast<unsigned long long>(camAddr));
+        Logger::Log(buf);
+
+        if (directionalLightData_) {
+            char buf2[256];
+            sprintf_s(buf2, "DEBUG DirectionalLight currently: color=(%f,%f,%f) intensity=%f dir=(%f,%f,%f)\n",
+                directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
+                directionalLightData_->intensity,
+                directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z);
+            Logger::Log(buf2);
+        }
+
+        if (cameraData_) {
+            char buf3[128];
+            sprintf_s(buf3, "DEBUG Camera worldPosition=(%f,%f,%f)\n", cameraData_->worldPosition.x, cameraData_->worldPosition.y, cameraData_->worldPosition.z);
+            Logger::Log(buf3);
+        }
+    }
+#endif
 }
 
 /// <summary>
@@ -207,13 +320,13 @@ void Object3dCommon::SetCommonDrawSetting()
         Logger::Log("Object3dCommon::SetCommonDrawSetting: command list is null\n");
         return;
     }
-    
+
     // ルートシグネチャやPSOがない場合もGPUクラッシュを回避するために早期リターンする
     if (!rootSignature_) {
         Logger::Log("Object3dCommon::SetCommonDrawSetting: rootSignature_ is null\n");
         return;
     }
-    
+
     // ここでグラフィックスパイプラインステートがnullの場合もGPUクラッシュを回避するために早期リターンする
     if (!graphicsPipelineState_) {
         Logger::Log("Object3dCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
@@ -223,7 +336,7 @@ void Object3dCommon::SetCommonDrawSetting()
     // ルートシグネチャをセットするコマンド
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
     // パイプラインステートをセットするコマンド
-    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定                                                                          
+    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
     // プリミティブトポロジーをセットするコマンド
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 
@@ -231,14 +344,52 @@ void Object3dCommon::SetCommonDrawSetting()
     if (spotLightResource_) {
         cmdList->SetGraphicsRootConstantBufferView(8, spotLightResource_->GetGPUVirtualAddress());
     }
+
+    // 平行光源（ディレクショナルライト）CBVをルートにバインド (ルートインデックス3 -> PS b1)
+    if (directionalLightResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+    }
+
+    // カメラCBVをピクセルシェーダー側にもバインドしておく (ルートインデックス6 -> PS b3)
+    if (cameraResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
+    }
+
+#ifdef _DEBUG
+    // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
+    {
+        char buf[512];
+        D3D12_GPU_VIRTUAL_ADDRESS dirAddr = directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0;
+        D3D12_GPU_VIRTUAL_ADDRESS camAddr = cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0;
+        sprintf_s(buf, "DEBUG SetCommonDrawSetting: bound CBVs dirGPU=0x%016llX camGPU=0x%016llX\n",
+            static_cast<unsigned long long>(dirAddr), static_cast<unsigned long long>(camAddr));
+        Logger::Log(buf);
+
+        if (directionalLightData_) {
+            char buf2[256];
+            sprintf_s(buf2, "DEBUG DirectionalLight currently: color=(%f,%f,%f) intensity=%f dir=(%f,%f,%f)\n",
+                directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
+                directionalLightData_->intensity,
+                directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z);
+            Logger::Log(buf2);
+        }
+
+        if (cameraData_) {
+            char buf3[128];
+            sprintf_s(buf3, "DEBUG Camera worldPosition=(%f,%f,%f)\n", cameraData_->worldPosition.x, cameraData_->worldPosition.y, cameraData_->worldPosition.z);
+            Logger::Log(buf3);
+        }
+    }
+#endif
 }
 
 /// <summary>
 /// ルートシグネチャの作成
 /// </summary>
-void Object3dCommon::CreateRootSignature() {
-    
-    HRESULT hr; // HRESULTはDirectXの関数の成功/失敗を表す戻り値の型
+void Object3dCommon::CreateRootSignature()
+{
+
+    HRESULT hr; 
 
     // ディスクリプタレンジ作成 (pixel texture SRV)
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
@@ -268,7 +419,7 @@ void Object3dCommon::CreateRootSignature() {
     // 4 = インスタンシングSRVテーブル（頂点, t1）
     // 5 = カメラベクトルCBV（頂点, b2）  ← ビルボード用
     // 6 = カメラCBV（ピクセル, b3）     ← スペキュラ用
-  
+
     // 注意: 互換性のため既存のインデックスを維持する: 0=Material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // 既存コードのインデックスを変更せずに済むよう、インスタンシングSRVテーブルはインデックス4（頂点）に追加する。
     D3D12_ROOT_PARAMETER rootParameters[9] = {};
@@ -354,8 +505,8 @@ void Object3dCommon::CreateRootSignature() {
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
     // シリアライズしてバイナリにする
-    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr; 
-    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr; 
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
     // ルートシグネチャの説明をシリアライズして、GPUに渡すためのバイナリを生成する
     hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
@@ -411,7 +562,6 @@ bool Object3dCommon::RemovePointLight(int index)
     // 指定されたインデックスの点光源を無効化するため、enabled を 0 に設定する
     pointLightsData_[index].enabled = 0;
 
-    
     return true; // これで点光源は削除された（無効化された）とみなされる
 }
 
@@ -433,16 +583,17 @@ bool Object3dCommon::UpdatePointLight(int index, const Object3d::PointLight& pl)
     // 指定されたインデックスの点光源を更新する。enabled フラグは引数の pl の値に従う。
     pointLightsData_[index] = pl; // pl の内容で上書きする
     pointLightsData_[index].enabled = pl.enabled ? 1 : 0; // enabled フラグは pl の値に従う（0以外は有効とみなす）
-    
+
     return true; // これで点光源は更新された
 }
 
 /// <summary>
 /// グラフィックスパイプラインの作成
 /// </summary>
-void Object3dCommon::CreateGraphicsPipeline() {
+void Object3dCommon::CreateGraphicsPipeline()
+{
 
-    HRESULT hr; // HRESULTはDirectXの関数の成功/失敗を表す戻り値の型
+    HRESULT hr; 
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -478,7 +629,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     // ブレンドモードに応じて、ソースブレンドとデスティネーションブレンドを設定する
     switch (blendMode_) {
     case BlendMode::None: // ブレンドなし（上書き）
-        
+
         // ブレンドを無効にして、ソースがそのまま出力されるようにする
         rtBlend.BlendEnable = FALSE;
         rtBlend.SrcBlend = D3D12_BLEND_ONE;
@@ -488,7 +639,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
         break;
 
     case BlendMode::Alpha: // アルファブレンド（通常の半透明表現）
-        
+
         // ブレンドを有効にして、ソースのアルファ値に基づいてブレンドする
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -498,7 +649,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
         break;
 
     case BlendMode::Add: // 加算ブレンド（発光表現などに有用）
-        
+
         // ブレンドを有効にして、ソースの色をそのまま加算する
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -508,17 +659,17 @@ void Object3dCommon::CreateGraphicsPipeline() {
         break;
 
     case BlendMode::Multiply: // 乗算ブレンド（影や暗い部分の表現に有用）
-        
+
         // ブレンドを有効にして、ソースの色とデスティネーションの色を乗算する
         rtBlend.BlendEnable = TRUE;
-        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR; 
+        rtBlend.SrcBlend = D3D12_BLEND_DEST_COLOR;
         rtBlend.DestBlend = D3D12_BLEND_ZERO;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
 
     case BlendMode::Screen: // スクリーンブレンド（明るい部分の表現に有用）
-        
+
         // ブレンドを有効にして、ソースの色を反転してデスティネーションの色と乗算し、さらに反転する
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_ONE;
@@ -528,7 +679,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
         break;
 
     default:
-        
+
         // デフォルトはアルファブレンド
         rtBlend.BlendEnable = TRUE;
         rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -536,7 +687,6 @@ void Object3dCommon::CreateGraphicsPipeline() {
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
-
     }
 
     // RasterizerStateの設定
@@ -572,7 +722,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
     graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
     // 書き込むRTVの情報
     graphicsPipelineStateDesc.NumRenderTargets = 1;
-    graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     // 利用するトポロジ（形状）のタイプ。三角形
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）
@@ -614,7 +764,7 @@ void Object3dCommon::CreateGraphicsPipeline() {
         instDesc.BlendState = blendDesc; // ブレンドステートは共通
         instDesc.RasterizerState = rasterizerDesc; // ラスタライザーステートも共通
         instDesc.NumRenderTargets = 1; // 書き込むRTVの情報
-        instDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // 書き込むRTVの情報
+        instDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat(); // 書き込むRTVの情報
         instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; // 利用するトポロジ（形状）のタイプ。三角形
         instDesc.SampleDesc.Count = 1; // どのように画面に色を打ち込むかの設定（気にしなくて良い）
         instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK; // ここまでは共通の設定
@@ -624,7 +774,9 @@ void Object3dCommon::CreateGraphicsPipeline() {
         HRESULT r = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&instDesc, IID_PPV_ARGS(&instancingPipelineState_));
         // インスタンシング用PSOの生成に失敗した場合は、エラーログを出力して、インスタンシング用PSOをリセットする
         if (FAILED(r)) {
-            char buf[256]; sprintf_s(buf, "Object3dCommon::CreateGraphicsPipeline: failed to create instancing PSO hr=0x%08X\n", static_cast<unsigned int>(r)); Logger::Log(buf);
+            char buf[256];
+            sprintf_s(buf, "Object3dCommon::CreateGraphicsPipeline: failed to create instancing PSO hr=0x%08X\n", static_cast<unsigned int>(r));
+            Logger::Log(buf);
             instancingPipelineState_.Reset();
         }
     } else {

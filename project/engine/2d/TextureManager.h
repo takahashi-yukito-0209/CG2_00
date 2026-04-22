@@ -1,13 +1,16 @@
 #pragma once
+#include "engine/base/DirectXCommon.h"
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
 #include <d3d12.h>
 #include <string>
 #include <wrl/client.h>
-#include "engine/base/DirectXCommon.h"
+#include "externals/imgui/imgui.h"
 
 // 前方宣言: MyEngine 名前空間内の DirectXCommon と SrvManager を宣言
-namespace MyEngine { class SrvManager; }
+namespace MyEngine {
+class SrvManager;
+}
 
 #include <unordered_map>
 
@@ -18,7 +21,6 @@ namespace MyEngine {
 /// </summary>
 class TextureManager {
 public: // メンバ関数
-
     /// <summary>
     /// シングルトンインスタンスの取得
     /// </summary>
@@ -65,14 +67,27 @@ public: // メンバ関数
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(const std::string& filePath);
 
     /// <summary>
+    /// ImGui 用の ImTextureRef を取得する（SRV 絶対インデックスを指定）。
+    /// 戻り値は SRV が見つからなければ ImTextureRef(ImTextureID_Invalid) を返す。
+    /// </summary>
+    ImTextureRef GetImTextureRef(uint32_t textureIndex);
+
+    /// <summary>
+    /// ImGui 用の ImTextureRef を取得する（ファイルパスを指定）。
+    /// 見つからなければ ImTextureRef(ImTextureID_Invalid) を返す。
+    /// </summary>
+    ImTextureRef GetImTextureRef(const std::string& filePath);
+
+    /// <summary>
     /// ロード済みテクスチャのファイルパス一覧を取得
     /// </summary>
     std::vector<std::string> GetLoadedTextureFilePaths() const;
 
     /// <summary>
-    /// // SRVヒープにさらにSRVを割り当て可能か（上限に達していないか）を確認
+    /// SRVヒープにさらにSRVを割り当て可能か（上限に達していないか）を確認
     /// </summary>
-    bool CanAllocateMore() const {
+    bool CanAllocateMore() const
+    {
         return (static_cast<uint32_t>(textureDatas.size()) + kSRVIndexTop_) < DirectXCommon::kMaxSRVCount;
     }
 
@@ -92,7 +107,6 @@ public: // メンバ関数
     const DirectX::TexMetadata& GetMetadata(uint32_t textureIndex);
 
 private: // メンバ変数
-
     static TextureManager* instance_; // シングルトンインスタンスのポインタ
     static uint32_t kSRVIndexTop_; // SRVインデックスの開始位置（テクスチャ用のSRVはこのインデックスから割り当てる）
 
@@ -103,7 +117,6 @@ private: // メンバ変数
     TextureManager& operator=(TextureManager&) = delete; // コピー代入演算子
 
 private: // 内部構造体: テクスチャデータ
-    
     // テクスチャ1枚分のデータ
     struct TextureData {
         uint32_t srvIndex = 0; // SRVインデックス

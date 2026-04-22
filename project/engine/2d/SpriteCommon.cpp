@@ -1,6 +1,9 @@
 #include "SpriteCommon.h"
 #include "Logger.h"
 #include "StringUtility.h"
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 
 using namespace MyEngine;
 
@@ -15,6 +18,20 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 	//グラフィクスパイプラインの生成
     CreateGraphicsPipeline();
 }
+
+#ifdef USE_IMGUI
+void SpriteCommon::DrawImGui()
+{
+    // ブレンドモード設定
+    const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
+    int spriteBlendIdx = static_cast<int>(GetBlendMode());
+    if (ImGui::Combo("Sprite Blend", &spriteBlendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
+        SetBlendMode(static_cast<BlendMode>(spriteBlendIdx));
+    }
+}
+#else
+void SpriteCommon::DrawImGui() { (void)0; }
+#endif
 
 /// <summary>
 /// ブレンドモードを設定
@@ -280,7 +297,7 @@ void SpriteCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
     // 書き込むRTVの情報
     graphicsPipelineStateDesc.NumRenderTargets = 1;
-    graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     // 利用するトロポジ（形状）のタイプ。三角形
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）

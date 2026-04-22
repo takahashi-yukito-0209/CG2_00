@@ -20,9 +20,14 @@ struct Material
     float3 _pad2; // pad to 16-byte
 };
 
-// Camera (world position only for specular direction)
+// Camera (world position + exposure/tone mapping control)
 // Bound at b3 in pixel shader to avoid clashing with particle billboard VS constants
-struct Camera { float3 worldPosition; };
+struct Camera {
+    float3 worldPosition;
+    float exposure;    // exposure multiplier applied before tone mapping
+    int toneMapOn;     // 0 = off, non-zero = apply tone mapping
+    float pad0;        // pad to 16-byte boundary
+};
 
 // Point light entry for shader-side layout
 struct PointLightEntry {

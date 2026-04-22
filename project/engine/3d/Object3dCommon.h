@@ -1,9 +1,9 @@
 #pragma once
+#include "../RenderState.h"
 #include "DirectXCommon.h"
+#include "Object3d.h"
 #include <d3d12.h>
 #include <wrl.h>
-#include "Object3d.h"
-#include "../RenderState.h"
 
 namespace MyEngine {
 
@@ -43,13 +43,14 @@ public: // メンバ関数
     /// <summary>
     /// ビルボード描画用のカメラベクトルを設定
     /// </summary>
-    void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable) {
-        
+    void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable)
+    {
+
         // カメラ定数バッファが存在しない場合は設定をスキップ
         if (!cameraCBData_) {
             return;
         }
-        
+
         // カメラベクトルと有効フラグを定数バッファに書き込む
         cameraCBData_->right = right;
         cameraCBData_->up = up;
@@ -59,7 +60,8 @@ public: // メンバ関数
     /// <summary>
     /// ビルボード描画用のカメラベクトルとビュー射影行列を設定
     /// </summary>
-    void SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Matrix4x4& viewProj, bool enable) {
+    void SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Math::Matrix4x4& viewProj, bool enable)
+    {
         // カメラ定数バッファが存在しない場合は設定をスキップ
         if (!cameraCBData_) {
             return;
@@ -76,9 +78,13 @@ public: // メンバ関数
     /// </summary>
     DirectXCommon* GetDxCommon() { return dxCommon_; }
 
-
     // カメラのワールド位置を GPU 定数バッファに書き込むための構造体
-    struct CameraForGPU { Math::Vector3 worldPosition; float pad; };
+    struct CameraForGPU {
+        Math::Vector3 worldPosition;
+        float exposure;
+        int toneMapOn;
+        float pad0;
+    };
 
     /// <summary>
     /// カメラのワールド位置を格納する構造体へのポインタを取得
@@ -106,6 +112,16 @@ public: // メンバ関数
     void SetBlendMode(BlendMode mode);
 
     /// <summary>
+    /// Object3dCommon に関連する共通設定を編集する関数
+    /// </summary>
+    void DrawImGui();
+
+    /// <summary>
+    /// カメラ関連の UI を描画する関数
+    /// </summary>
+    void DrawCameraImGui();
+
+    /// <summary>
     /// ブレンドモードの取得
     /// </summary>
     BlendMode GetBlendMode() const { return blendMode_; }
@@ -116,11 +132,11 @@ public: // メンバ関数
     void RecreatePipelines() { CreateGraphicsPipeline(); }
 
     // インスタンシング用ヘルパー
-    
+
     /// <summary>
     /// インスタンシング用構造化バッファのマップ済みCPUポインタを取得
     /// </summary>
-    TransformationMatrix* GetInstancingData() const { return instancingData_; }
+    Object3d::TransformationMatrix* GetInstancingData() const { return instancingData_; }
 
     /// <summary>
     /// インスタンシング用SRVのCPUディスクリプタハンドルを取得
@@ -133,7 +149,6 @@ public: // メンバ関数
     uint32_t GetInstancingSlotCount() const { return kNumInstance_; }
 
 private: // メンバ関数
-
     /// <summary>
     /// ルートシグネチャの作成
     /// </summary>
@@ -144,35 +159,32 @@ private: // メンバ関数
     /// </summary>
     void CreateGraphicsPipeline();
 
-    // インスタンシング／パーティクル用パイプラインの描画設定を作成・適用
-    // （実装は .cpp 側）
-
 private: // メンバ変数
-    
+
     DirectXCommon* dxCommon_; // DirectXCommon へのポインタ（外部で管理される）
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 3Dオブジェクトの描画に使用するルートシグネチャ
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_; // 3Dオブジェクトの描画に使用するグラフィックスパイプラインステート
-    
+
     // インスタンシング／パーティクル描画に使用するPSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancingPipelineState_;
-    
+
     // すべての Object3d インスタンスで共有される平行光源リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
     Object3d::DirectionalLight* directionalLightData_ = nullptr;
-    
+
     // 複数の点光源を管理するためのリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> pointLightsResource_;
     Object3d::PointLight* pointLightsData_ = nullptr;
-    
+
     // スポットライト用リソース (単一スポットライトを想定)
     Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
     Object3d::SpotLight* spotLightData_ = nullptr;
     BlendMode blendMode_ = BlendMode::None;
-    
+
     // カメラ定数バッファ（ワールド位置）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
     CameraForGPU* cameraData_ = nullptr;
-    
+
     // インスタンシング用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_ = nullptr; // 変換を格納するアップロードバッファ
     Object3d::TransformationMatrix* instancingData_ = nullptr; // マップ済みCPUポインタ
@@ -182,10 +194,13 @@ private: // メンバ変数
 
     // ビルボード用カメラベクトル（b2）
     struct CameraCB {
-        Math::Vector3 right; float pad0;
-        Math::Vector3 up;    float enable;
-        Matrix4x4 viewProj;
+        Math::Vector3 right;
+        float pad0;
+        Math::Vector3 up;
+        float enable;
+        Math::Matrix4x4 viewProj;
     };
+
     // カメラ定数バッファ（ビルボード用）
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraCBResource_ = nullptr;
     CameraCB* cameraCBData_ = nullptr;
@@ -194,7 +209,6 @@ private: // メンバ変数
     class Camera* defaultCamera_ = nullptr;
 
 public: // メンバ変数へのアクセサ
-
     /// <summary>
     /// ポイントライトのデータ構造体のポインタを取得
     /// </summary>
@@ -214,7 +228,7 @@ public: // メンバ変数へのアクセサ
     /// スポットライトのデータ構造体のGPU仮想アドレスを取得
     /// </summary>
     D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
-    
+
     /// <summary>
     /// 点光源を追加する。成功すれば追加した点光源のインデックスを返す。上限に達していれば -1 を返す。
     /// </summary>

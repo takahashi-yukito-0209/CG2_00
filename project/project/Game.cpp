@@ -1,7 +1,8 @@
 #include "Game.h"
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
-#include "externals/imgui/imgui.h"
+#if 0 // imgui includes centralized in ImGuiManager.h
+#endif
 #include "mathUtility.h"
 #include <Windows.h>
 #include <cassert>
@@ -116,6 +117,7 @@ struct Game::Impl {
     DebugCamera debugCamera; // デバッグカメラ
     bool isDebugCameraControl = true; // デバッグカメラ操作フラグ
     bool useBillboard = true; // ビルボードの使用フラグ
+    bool useDebugCameraForRender = false; // レンダリングにデバッグカメラを使うか
 
     ImGuiManager imguiManager; // ImGui管理
     std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
@@ -190,13 +192,17 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     // D3D12GetDebugInterface を呼び出して ID3D12Debug1 インターフェースを取得し、成功したらデバッグレイヤーとGPUベースのバリデーションを有効にする
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer(); // デバッグレイヤーを有効にする
-        debugController->SetEnableGPUBasedValidation(TRUE); // GPUベースのバリデーションを有効にする
+        // GPUベースのバリデーションはドライバに強い負荷を与えることがあるため無効化する
+        debugController->SetEnableGPUBasedValidation(FALSE);
     }
 
 #endif
 
-    // D3Dリソースリークチェッカーのインスタンスを作成（Impl のメンバとして保持）
+    // D3Dリソースリークチェッカはドライバの相互作用で不安定になる環境があるため
+    // 一時的に注入を無効化する（必要なら手動で有効化してください）
+#if 0
     impl_->leakChecker = std::make_unique<D3DResourceLeakChecker>();
+#endif
 
     // サウンドシステムからサウンドデータを読み込む
     impl_->soundData1 = impl_->soundSystem.LoadFromFile("resources/mokugyo.wav");
@@ -229,6 +235,7 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     }
 
     // 共通管理オブジェクトを Impl に移動
+    
     // スプライト共通管理を Impl に移動
     impl_->spriteCommon = std::move(spriteCommonTmp);
     // 3Dオブジェクト共通管理を Impl に移動
@@ -243,11 +250,12 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     impl_->object3dCommon->SetDefaultCamera(impl_->camera.get());
 
     // ライトの設定
-    DirectionalLight* directionalLightData = impl_->object3dCommon->GetDirectionalLightData();
+    Object3d::DirectionalLight* directionalLightData = impl_->object3dCommon->GetDirectionalLightData();
     // directionalLightData が存在する場合は、ライトの強度、色、方向を設定する
     if (directionalLightData) {
-        directionalLightData->intensity = 0.05f;
-        directionalLightData->color = { 0.2f, 0.25f, 0.3f, 1.0f };
+        // ライトの強度を 1.0f に設定
+        directionalLightData->intensity = 1.0f;
+        directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
     }
 
@@ -269,8 +277,7 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
             sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
             sl->color = { 1.0f, 1.0f, 1.0f, 4.0f };
             sl->distance = 7.0f;
-            MathUtility math;
-            sl->direction = math.Normalize({ -1.0f, -1.0f, 0.0f });
+            sl->direction = MathUtil::Normalize({ -1.0f, -1.0f, 0.0f });
             sl->decay = 2.0f;
             sl->cosAngle = cosf(3.14159265358979323846f / 3.0f);
             sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f);
@@ -296,10 +303,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     sctx.object3dCommon = impl_->object3dCommon.get();
     sctx.spriteCommon = impl_->spriteCommon.get();
     sctx.camera = impl_->camera.get();
+    sctx.selectedDrawType = static_cast<int>(impl_->selectedDrawType);
     sctx.particleManager = ParticleManager::GetInstance();
     sctx.textureManager = TextureManager::GetInstance();
     sctx.srvManager = &impl_->srvManager;
     sctx.directXCommon = DirectXCommon::GetInstance();
+    // Provide ImGuiManager to scenes so they can register UI callbacks for objects
+    sctx.imguiManager = &impl_->imguiManager;
     impl_->sceneManager->SetContext(sctx);
 
     auto initial = GameApp::SceneFactory::Create("Title");
@@ -339,19 +349,80 @@ void Game::Update()
         long deltaY = InputManager::GetInstance()->GetMouseDeltaY(); // 前フレームからのマウスのY移動量を取得
         long wheelDelta = InputManager::GetInstance()->GetMouseDeltaZ(); // 前フレームからのマウスホイールの移動量を取得
 
-        // ImGui のウィンドウやアイテムがアクティブでない場合にのみ、マウスドラッグとホイールの入力をデバッグカメラの操作に使用する
-        if (!ImGui::IsAnyItemActive() && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-            impl_->debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
-            impl_->debugCamera.OnMouseWheel(float(wheelDelta));
+        // ImGui がマウスをキャプチャしていると通常はカメラ操作を受け付けないが、
+        // 右ボタンでドラッグしたときは UI 上でもカメラ操作できるようにする。
+        bool allowCameraControl = false;
+        // ImGui 上の入力やウィンドウがアクティブでない場合は許可
+#ifdef USE_IMGUI
+        if (!impl_->imguiManager.IsCapturingInput()) {
+            allowCameraControl = true;
+        }
+#else
+        // ImGui を使わない場合は常にカメラ操作を許可
+        allowCameraControl = true;
+#endif
+
+        // いずれかのマウスボタンを押している場合はカメラ操作を許可
+        if (InputManager::GetInstance()->IsMouseButtonPressed(0) ||
+            InputManager::GetInstance()->IsMouseButtonPressed(1) ||
+            InputManager::GetInstance()->IsMouseButtonPressed(2)) {
+            allowCameraControl = true;
         }
 
-        // デバッグカメラの更新を行う
-        impl_->debugCamera.Update();
+        // ホイールが動いた場合はカメラのズームとして処理を許可（UI スクロールと競合する可能性あり）
+        if (wheelDelta != 0) {
+            allowCameraControl = true;
+        }
+
+        if (allowCameraControl) {
+            if (impl_->useDebugCameraForRender) {
+                // デバッグカメラを操作
+                impl_->debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
+                impl_->debugCamera.OnMouseWheel(float(wheelDelta));
+                impl_->debugCamera.Update();
+            } else {
+                // デフォルトカメラを操作（UIで編集しているカメラ）
+                if (impl_->camera) {
+                    // 回転はラジアン単位で適用
+                    const float rotateSpeed = 0.01f;
+                    Vector3 crot = impl_->camera->GetRotate();
+                    crot.y += float(deltaX) * rotateSpeed;
+                    crot.x += float(deltaY) * rotateSpeed;
+                    impl_->camera->SetRotate(crot);
+
+                    // ホイールで前後移動（ズーム）
+                    const float zoomSpeed = 0.1f;
+                    Vector3 cpos = impl_->camera->GetTranslate();
+                    cpos.z += float(wheelDelta) * zoomSpeed;
+                    impl_->camera->SetTranslate(cpos);
+
+                    // カメラの行列を更新
+                    impl_->camera->Update();
+                }
+            }
+        } else {
+            // allowCameraControl が false でもデバッグカメラの Update は必要
+            impl_->debugCamera.Update();
+        }
     }
 
     // スペースキーが押された瞬間にサウンドを再生する。スペースキーが離された瞬間は再生しないようにする
     if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !InputManager::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
         impl_->soundSystem.Play(impl_->soundData1); // サウンドシステムを使用してサウンドデータを再生する
+
+        // タイトル画面にいるときはスペースでプレイシーンへ切り替える
+        if (impl_->sceneManager) {
+            try {
+                const std::string cur = impl_->sceneManager->GetCurrentSceneName();
+                if (cur == "Title") {
+                    // pending にセットして後続の処理で安全に切り替える
+                    impl_->pendingSceneName = "Play";
+                }
+            }
+            catch (...) {
+                // 念のため例外は握り潰す（GetCurrentSceneName が例外を投げる想定は低いが安全措置）
+            }
+        }
     }
 
     // 固定タイムステップで更新（ここでは 1/60 秒固定）
@@ -364,14 +435,36 @@ void Game::Update()
     impl_->soundSystem.Poll();
 
     // 3Dオブジェクトのワールド行列、ビュー行列、プロジェクション行列を計算して、各オブジェクトの Update を呼び出す
-    MathUtility math;
-    Matrix4x4 worldMatrix = math.MakeAffineMatrix(impl_->transform.scale, impl_->transform.rotate, impl_->transform.translate);
-    if (impl_->camera) {
-        impl_->camera->Update();
+    Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(impl_->transform.scale, impl_->transform.rotate, impl_->transform.translate);
+    Matrix4x4 viewMatrix;
+    Matrix4x4 projectionMatrix;
+
+    // F1 でレンダリングにデバッグカメラを切り替えられるようにする
+    if (InputManager::GetInstance()->IsKeyJustPressed(DIK_F1)) {
+        impl_->useDebugCameraForRender = !impl_->useDebugCameraForRender;
+        char buf[128];
+        sprintf_s(buf, "Debug camera for render: %s\n", impl_->useDebugCameraForRender ? "ON" : "OFF");
+        Logger::Log(buf);
     }
-    Matrix4x4 viewMatrix = impl_->camera ? impl_->camera->GetViewMatrix() : impl_->debugCamera.GetViewMatrix();
-    Matrix4x4 projectionMatrix = impl_->camera ? impl_->camera->GetProjectionMatrix() : impl_->debugCamera.GetProjectionMatrix();
-    Matrix4x4 worldViewProjectionMatrix = math.Multiply(worldMatrix, math.Multiply(viewMatrix, projectionMatrix));
+
+    if (impl_->useDebugCameraForRender) {
+        // デバッグカメラを使ってビュー/射影を取得
+        impl_->debugCamera.Update();
+        viewMatrix = impl_->debugCamera.GetViewMatrix();
+        projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
+    } else {
+        if (impl_->camera) {
+            impl_->camera->Update();
+            viewMatrix = impl_->camera->GetViewMatrix();
+            projectionMatrix = impl_->camera->GetProjectionMatrix();
+        } else {
+            // フォールバックとしてデバッグカメラを使う
+            impl_->debugCamera.Update();
+            viewMatrix = impl_->debugCamera.GetViewMatrix();
+            projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
+        }
+    }
+    Matrix4x4 worldViewProjectionMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
 
     // Object3dCommon にカメラのワールド位置をセット
     if (impl_->object3dCommon) {
@@ -423,9 +516,27 @@ void Game::Draw()
     ctx.object3dCommon = impl_->object3dCommon.get();
     // Object3dCommon のポインタをセットして、UIで3Dオブジェクトの共通設定や情報にアクセスできるようにする
     std::vector<Object3d*> objPtrs;
+    // シーンマネージャが存在し、現在のシーンがある場合は、シーンから3Dオブジェクトのポインタを取得してセットする。
+    // そうでない場合は、Impl の objects3d からポインタをセットする
+    if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+        impl_->sceneManager->GetCurrent()->FillObject3dPointers(&objPtrs);
+    } else {
+        objPtrs.reserve(impl_->objects3d.size());
+        for (auto& o : impl_->objects3d) {
+            objPtrs.push_back(o.get());
+        }
+    }
     ctx.objects3d = &objPtrs;
     // SpriteCommon のポインタをセットして、UIでスプライトの共通設定や情報にアクセスできるようにする
     std::vector<Sprite*> spritePtrs;
+    if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+        impl_->sceneManager->GetCurrent()->FillSpritePointers(&spritePtrs);
+    } else {
+        spritePtrs.reserve(impl_->sprites.size());
+        for (auto& s : impl_->sprites) {
+            spritePtrs.push_back(s.get());
+        }
+    }
     ctx.sprites = &spritePtrs;
     ctx.spriteCommon = impl_->spriteCommon.get();
     // 描画する内容の種類を選択するための変数へのポインタをセットして、UIで描画内容の切り替えができるようにする
@@ -436,6 +547,7 @@ void Game::Draw()
     ctx.particleManager = ParticleManager::GetInstance();
     // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
     ctx.dt = 1.0f / 60.0f;
+    ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
     // シーン名を ImGui に渡す
     if (impl_->sceneManager) {
         static std::string sname;
@@ -470,12 +582,13 @@ void Game::Draw()
     // SrvManager の PreDraw を呼び出して、描画に必要なシェーダーリソースビューのセットアップを行う
     impl_->srvManager.PreDraw();
 
-    // シーン描画（シーンが描画を担当する場合はここで描画される）
+    // シーン側にも現在の描画モードを伝えて、シーン自身が必要な要素だけ描画できるようにする
     if (impl_->sceneManager) {
+        impl_->sceneManager->SetSelectedDrawType(static_cast<int>(impl_->selectedDrawType));
         impl_->sceneManager->Draw();
     }
 
-    MathUtility math; // MathUtility のインスタンスを作成して使用する
+    // Use MathUtil free functions
 
     // Game 側の既存描画を常に行う（シーンの描画とは併行して実行されます）
     // 描画する内容の種類に応じて、適切な描画処理を行うための switch 文
@@ -488,7 +601,7 @@ void Game::Draw()
             // デバッグカメラのビュー行列とプロジェクション行列を取得して、ビルボード描画に必要な情報を計算する
             Matrix4x4 view = impl_->debugCamera.GetViewMatrix();
             Matrix4x4 proj = impl_->debugCamera.GetProjectionMatrix();
-            Matrix4x4 vp = math.Multiply(view, proj);
+            Matrix4x4 vp = MathUtil::Multiply(view, proj);
 
             // ビルボードの描画に必要なカメラの右ベクトルと上ベクトルをビュー行列から抽出してセット
             Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
@@ -588,7 +701,7 @@ void Game::Draw()
         // パーティクル描画の前に、Object3dCommon にビルボード用のカメラ情報をセット
         Matrix4x4 view = impl_->debugCamera.GetViewMatrix();
         Matrix4x4 proj = impl_->debugCamera.GetProjectionMatrix();
-        Matrix4x4 vp = math.Multiply(view, proj);
+        Matrix4x4 vp = MathUtil::Multiply(view, proj);
 
         // ビルボードの描画に必要なカメラの右ベクトルと上ベクトルをビュー行列から抽出してセット
         Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
@@ -652,6 +765,11 @@ void Game::Finalize()
 
     // DirectXCommon の終了処理を呼び出す
     DirectXCommon::GetInstance()->Finalize();
+
+    // リークチェッカーは DirectX のリソース解放後、かつ COM がまだ有効なうちに破棄する
+    if (impl_->leakChecker) {
+        impl_->leakChecker.reset();
+    }
 
     // サウンドデータのリセット
     impl_->soundData1.reset();
