@@ -73,6 +73,7 @@ std::string ConvertString(const std::wstring& wstr)
         nullptr,
         nullptr);
 
-    return str; // ← 不要な resize は絶対にしない
+    return str; // 不要な resize は絶対にしない
 }
+
 } // namespace StringUtility
