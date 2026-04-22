@@ -1,6 +1,7 @@
 #include "DebugCamera.h"
 #include "InputManager.h"
 
+using namespace Math;
 using namespace MyEngine;
 
 /// <summary>
@@ -75,8 +76,8 @@ void DebugCamera::OnMouseDrag(float deltaX, float deltaY)
 {
     InputManager* input = InputManager::GetInstance(); // 入力マネージャのインスタンスを取得
 
-    // 左クリックが押されている間だけ回転を変更
-    if (input->IsMouseButtonPressed(0)) {
+    // 左クリック・右クリック・中クリックのいずれかが押されている間だけ回転を変更
+    if (input->IsMouseButtonPressed(0) || input->IsMouseButtonPressed(1) || input->IsMouseButtonPressed(2)) {
         // マウス移動に応じて回転を変更
         rotation_.y += deltaX * rotateSpeed_;
         rotation_.x += deltaY * rotateSpeed_;
@@ -99,14 +100,14 @@ void DebugCamera::OnMouseWheel(float delta)
 void DebugCamera::UpdateViewMatrix()
 {
     // 回転行列の作成
-    Matrix4x4 rotX = math_.MakeRotateXMatrix(rotation_.x); // X軸回転
-    Matrix4x4 rotY = math_.MakeRotateYMatrix(rotation_.y); // Y軸回転
-    Matrix4x4 rotZ = math_.MakeRotateZMatrix(rotation_.z); // Z軸回転
+    Matrix4x4 rotX = MathUtil::MakeRotateXMatrix(rotation_.x); // X軸回転
+    Matrix4x4 rotY = MathUtil::MakeRotateYMatrix(rotation_.y); // Y軸回転
+    Matrix4x4 rotZ = MathUtil::MakeRotateZMatrix(rotation_.z); // Z軸回転
     // 回転行列を合成（Z→Y→Xの順で回転）
     Matrix4x4 rotationMatrix = rotZ * rotY * rotX;
 
     // 平行移動（逆方向に移動）
-    Matrix4x4 translationMatrix = math_.MakeTranslateMatrix(-translation_);
+    Matrix4x4 translationMatrix = MathUtil::MakeTranslateMatrix(-translation_);
 
     // ビュー行列 = 回転 × 移動
     viewMatrix_ = rotationMatrix * translationMatrix;
@@ -126,5 +127,5 @@ void DebugCamera::UpdateProjectionMatrix()
     float farZ = 1000.0f; // ファークリップ距離
 
     // 透視投影行列を生成
-    projectionMatrix_ = math_.MakePerspectiveFovMatrix(fovY, aspectRatio, nearZ, farZ);
+    projectionMatrix_ = MathUtil::MakePerspectiveFovMatrix(fovY, aspectRatio, nearZ, farZ);
 }

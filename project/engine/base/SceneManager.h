@@ -48,6 +48,11 @@ public: // メンバ関数
     void Draw();
 
     /// <summary>
+    /// 描画モードをシーンコンテキストに設定する
+    /// </summary>
+    void SetSelectedDrawType(int t);
+
+    /// <summary>
     /// シーンの切り替え。現在のシーンがあればFinalizeを呼び出してクリーンアップし、新しいシーンをセットしてInitializeを呼び出す。
     /// </summary>
     void ChangeScene(std::unique_ptr<IScene> newScene);
@@ -55,9 +60,6 @@ public: // メンバ関数
     /// <summary>
     /// シーンのプッシュ。現在のシーンをスタックに保存して新しいシーンをセットし、Initializeを呼び出す。PopSceneで前のシーンに戻れるようにする。
     /// </summary>
-    // ※ 実装詳細:
-    // - 現在のシーンがあれば OnExit を呼び、スタックにムーブ保存する（Finalize は呼ばない、サスペンド扱い）。
-    // - 新しいシーンを current_ にセットして Initialize/OnEnter を呼ぶ。
     void PushScene(std::unique_ptr<IScene> newScene);
 
     /// <summary>

@@ -1,5 +1,13 @@
 #pragma once
 
+#ifdef USE_IMGUI
+
+#include "externals/imgui/imgui.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+#include "externals/imgui/imgui_impl_win32.h"
+
+#endif
+
 // 前方宣言: ID3D12GraphicsCommandList インターフェースを宣言（Render 関数の引数でポインタ参照するため）
 struct ID3D12GraphicsCommandList;
 
@@ -15,6 +23,7 @@ class ParticleManager;
 
 #include <functional>
 #include <vector>
+#include <unordered_map>
 
 namespace MyEngine {
 
@@ -63,6 +72,8 @@ public: // メンバ関数
         class ParticleManager* particleManager = nullptr;
         // フレームのデルタタイム
         float dt = 0.0f;
+        // レンダリングにデバッグカメラを使うかどうかのフラグへのポインタ
+        bool* useDebugCameraForRender = nullptr;
         // 現在のシーン名へのポインタ
         const char* currentSceneName = nullptr;
         // シーン変更要求のコールバック関数（引数は新しいシーン名）
@@ -78,5 +89,11 @@ public: // メンバ関数
     /// 描画コマンドの発行（ImGui::Render とバックエンドの Render を呼び出す）
     /// </summary>
     void Render(ID3D12GraphicsCommandList* commandList);
+
+    /// <summary>
+    /// ImGui が現在 UI によってマウス/入力をキャプチャしているかを返す
+    /// </summary>
+    bool IsCapturingInput();
+    
 };
 } // namespace MyEngine

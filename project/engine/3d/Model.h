@@ -45,7 +45,7 @@ private: // メンバ変数
     ModelCommon* modelCommon_ = nullptr;
 
     // 読み込んだモデルの構造データ
-    ModelData modelData_;
+    Object3d::ModelData modelData_;
 
     // GPU 上に配置される頂点バッファ用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;

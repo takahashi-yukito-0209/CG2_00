@@ -1,4 +1,7 @@
 #include "PlayScene.h"
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 #include "../../engine/2d/Sprite.h"
 #include "../../engine/2d/SpriteCommon.h"
 #include "../../engine/2d/TextureManager.h"
@@ -46,7 +49,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
     // 2種類のテクスチャファイル名を配列で管理
     for (uint32_t i = 0; i < kSpriteCount; ++i) {
         auto sprite = std::make_unique<Sprite>();
-        sprite->Initialize(ctx_.spriteCommon, spriteNames[(i / 2) == 0 ? 0 : 1] + ".png");
+        sprite->Initialize(ctx_.spriteCommon, spriteNames[(i / 2) == 0 ? 0 : 1] + ".png", ctx_.imguiManager);
         sprites_.push_back(std::move(sprite));
     }
 
@@ -62,7 +65,8 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     for (size_t i = 0; i < modelFileNames.size(); ++i) {
         auto obj = std::make_unique<Object3d>();
-        obj->Initialize(ctx_.object3dCommon);
+        // Object3d の初期化とモデルのセット
+        obj->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         obj->SetModel(modelFileNames[i]);
         if (modelFileNames[i].find("fence") != std::string::npos) {
             obj->SetUseAlphaCutoutSampler(true);
@@ -72,13 +76,13 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     //パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
-    particlePlane_->Initialize(ctx_.object3dCommon);
+    particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particlePlane_->SetModel("plane.obj");
     particlePlane_->SetTexture("resources/circle.png");
 
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager);
+        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
         ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
         ParticleManager::GetInstance()->CreateParticleGroup("Circle", "resources/circle.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Checker", "resources/uvChecker.png");
@@ -101,12 +105,21 @@ void PlayScene::Initialize(const SceneContext& ctx)
 void PlayScene::Finalize()
 {
     std::cout << "PlayScene Finalize\n";
+    // パーティクルマネージャーの終了処理
+    if (ParticleManager::GetInstance()) {
+        ParticleManager::GetInstance()->Finalize();
+    }
+
+    // スプライトとオブジェクトの解放
     sprites_.clear();
     objects3d_.clear();
-    // 3Dオブジェクトの解放
+
+    // パーティクル描画に使用していたプレーンを ParticleManager から解除
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->SetParticlePlane(nullptr);
     }
+
+    // プレーンのリセット
     particlePlane_.reset();
 }
 
@@ -147,35 +160,68 @@ void PlayScene::Update(float dt)
 /// </summary>
 void PlayScene::Draw()
 {
-    //オブジェクトの描画
-    if (ctx_.object3dCommon) {
-        ctx_.object3dCommon->SetCommonDrawSetting();
-        for (auto& o : objects3d_) {
-            if (o)
-                o->Draw();
-        }
-        // パーティクルの描画
-        MathUtility math;
-        if (ctx_.camera) {
-            Matrix4x4 view = ctx_.camera->GetViewMatrix();
-            Matrix4x4 proj = ctx_.camera->GetProjectionMatrix();
-            Matrix4x4 vp = math.Multiply(view, proj);
-            Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
-            Vector3 up = { view.m[0][1], view.m[1][1], view.m[2][1] };
-            ctx_.object3dCommon->SetBillboardCameraWithVP(right, up, vp, true);
+    // シーン側でも Game の選択モードに応じて個別描画できるようにする
+    int sel = ctx_.selectedDrawType;
 
-            if (ParticleManager::GetInstance()) {
-                ParticleManager::GetInstance()->Draw();
+    // オブジェクト系の描画（Model, Bunny, Fence, Checker, Sphere, All）
+    if (ctx_.object3dCommon) {
+
+        // モデル全体描画（All）または個別モデル描画
+        if (sel == -1 || sel == 7) {
+            ctx_.object3dCommon->SetCommonDrawSetting();
+            for (auto& o : objects3d_) {
+                if (o) o->Draw();
+            }
+        } else {
+            // 個別オブジェクト描画マッピング
+            ctx_.object3dCommon->SetCommonDrawSetting();
+            switch (sel) {
+            case 0: // Model -> index 0
+                if (objects3d_.size() > 0 && objects3d_[0]) objects3d_[0]->Draw();
+                break;
+            case 3: // Bunny -> index 1
+                if (objects3d_.size() > 1 && objects3d_[1]) objects3d_[1]->Draw();
+                break;
+            case 4: // Fence -> index 3
+                if (objects3d_.size() > 3 && objects3d_[3]) objects3d_[3]->Draw();
+                break;
+            case 5: // Checker -> index 2
+                if (objects3d_.size() > 2 && objects3d_[2]) objects3d_[2]->Draw();
+                break;
+            case 6: // Sphere -> index 4 and 5 if present
+                if (objects3d_.size() > 4 && objects3d_[4]) objects3d_[4]->Draw();
+                if (objects3d_.size() > 5 && objects3d_[5]) objects3d_[5]->Draw();
+                break;
+            default:
+                // その他（Particle/Sprite）はここでは扱わない
+                break;
+            }
+        }
+
+        // パーティクル描画は Particle モードまたは All のときに行う
+        if (sel == -1 || sel == 1 || sel == 7) {
+            if (ctx_.camera) {
+                Matrix4x4 view = ctx_.camera->GetViewMatrix();
+                Matrix4x4 proj = ctx_.camera->GetProjectionMatrix();
+                Matrix4x4 vp = MathUtil::Multiply(view, proj);
+                Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
+                Vector3 up = { view.m[0][1], view.m[1][1], view.m[2][1] };
+                ctx_.object3dCommon->SetBillboardCameraWithVP(right, up, vp, true);
+
+                if (ParticleManager::GetInstance()) {
+                    ParticleManager::GetInstance()->Draw();
+                }
             }
         }
     }
 
-    // スプライトの描画
+    // スプライト描画は Sprite モードまたは All のときに行う
     if (ctx_.spriteCommon) {
-        ctx_.spriteCommon->SetCommonDrawSetting();
-        for (auto& s : sprites_) {
-            if (s)
-                s->Draw();
+        if (sel == -1 || sel == 2 || sel == 7) {
+            ctx_.spriteCommon->SetCommonDrawSetting();
+            for (auto& s : sprites_) {
+                if (s) s->Draw();
+            }
         }
     }
 }
@@ -190,3 +236,37 @@ void PlayScene::OnEnter() { std::cout << "PlayScene OnEnter\n"; }
 /// シーンから出るときの処理
 /// </summary>
 void PlayScene::OnExit() { std::cout << "PlayScene OnExit\n"; }
+
+/// <summary>
+/// 描画モードの更新を受け取る
+/// </summary>
+void PlayScene::SetSelectedDrawType(int t)
+{
+    ctx_.selectedDrawType = t;
+}
+
+/// <summary>
+/// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
+/// </summary>
+void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
+{
+    if (!out) return;
+    out->clear();
+    out->reserve(objects3d_.size());
+    for (auto& o : objects3d_) {
+        out->push_back(o.get());
+    }
+}
+
+/// <summary>
+/// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
+/// </summary>
+void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
+{
+    if (!out) return;
+    out->clear();
+    out->reserve(sprites_.size());
+    for (auto& s : sprites_) {
+        out->push_back(s.get());
+    }
+}

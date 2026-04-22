@@ -1,9 +1,15 @@
 #include "ParticleEmitter.h"
 #include "engine/particle/ParticleManager.h"
-#include "externals/imgui/imgui.h"
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 #include <cstring>
 
 using namespace MyEngine;
+
+#ifdef USE_IMGUI
+static_assert(true, "ImGui available");
+#endif
 
 /// <summary>
 /// 発生させるパーティクルグループの名前を指定してエミッタを作成
@@ -44,6 +50,7 @@ void ParticleEmitter::DrawImGui()
     // 現在のグループ名をバッファにコピー（安全な関数を使用）
     strncpy_s(buf, sizeof(buf), groupName.c_str(), _TRUNCATE);
     // ImGuiのInputTextで編集。変更があったらグループ名を更新
+#ifdef USE_IMGUI
     if (ImGui::InputText("GroupName", buf, sizeof(buf))) {
         groupName = std::string(buf);
     }
@@ -54,4 +61,7 @@ void ParticleEmitter::DrawImGui()
     // 1以上1000以下の整数として編集。変更があったらcountを更新
     if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000)) count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
+#else
+    (void)buf;
+#endif
 }

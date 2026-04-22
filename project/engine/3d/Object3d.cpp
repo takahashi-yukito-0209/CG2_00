@@ -8,7 +8,9 @@
 #include "Object3dCommon.h"
 #include "StringUtility.h"
 #include "TextureManager.h"
-#include "externals/imgui/imgui.h"
+#ifdef USE_IMGUI
+#include "ImGuiManager.h"
+#endif
 #include "mathUtility.h"
 #include <algorithm>
 #include <assimp/Importer.hpp>
@@ -19,6 +21,7 @@
 
 using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
+using namespace Math;
 
 /// <summary>
 /// Assimp のノードを再帰的に読み込んで Object3d::ModelData::Node に変換する関数
@@ -52,7 +55,7 @@ static Object3d::ModelData::Node ReadNode(const aiNode* node)
 /// <summary>
 /// Object3d の初期化
 /// </summary>
-void Object3d::Initialize(Object3dCommon* object3dCommon)
+void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager)
 {
     // 引数で受け取ってメンバ変数に記録する
     this->object3dCommon_ = object3dCommon;
@@ -79,6 +82,8 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
 
     // 既定のカメラを参照
     camera_ = object3dCommon->GetDefaultCamera();
+
+    (void)imguiManager;
 }
 
 /// <summary>
@@ -86,6 +91,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon)
 /// </summary>
 void Object3d::DrawImGui(int index)
 {
+#ifdef USE_IMGUI
     // オブジェクト識別用のテキスト
     ImGui::Text("Object %d", index);
     ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f, 0.001f, 1000.0f);
@@ -97,6 +103,11 @@ void Object3d::DrawImGui(int index)
         ImGui::Checkbox("Use Alpha Cutout Sampler", &useAlphaCutoutSampler_);
         materialData_->useAlphaCutoutSampler = useAlphaCutoutSampler_ ? 1 : 0;
     }
+#else
+    (void)index;
+    (void)materialData_;
+    (void)useAlphaCutoutSampler_;
+#endif
 }
 
 /// <summary>
@@ -209,8 +220,7 @@ void Object3d::CreateMaterialResource()
     // ライティングを有効化(3Dオブジェクトはライティング対象)
     materialData_->enableLighting = 1;
     // 初期UV変換は単位行列にする
-    MathUtility math;
-    materialData_->uvTransform = math.MakeIdentity4x4();
+    materialData_->uvTransform = MathUtil::MakeIdentity4x4();
     // ライティングモードは通常のものにする
     materialData_->lightingMode = 2;
     // 既定: アルファカットアウト用サンプラーを強制しない
@@ -230,7 +240,6 @@ bool Object3d::GetEnableLighting() const { return materialData_ ? materialData_-
 /// <summary>
 /// ライティングの有効/無効を設定する関数
 /// </summary>
-/// <param name="enable"></param>
 void Object3d::SetEnableLighting(bool enable)
 {
     // マテリアルデータが存在する場合にのみ設定を変更する
@@ -327,17 +336,16 @@ void Object3d::AssignTexture()
 }
 
 /// <summary>
-/// // 座標変換行列を更新して定数バッファに転送する関数
+/// 座標変換行列を更新して定数バッファに転送する関数
 /// </summary>
 void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix)
 {
-    // WVP行列計算
-    MathUtility math;
+    // WVP行列計算 
     // ワールド行列
-    Matrix4x4 world = math.MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    Matrix4x4 world = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     // 逆転置行列（正規行列用にスケール影響除去）
-    Matrix4x4 worldInv = math.Inverse(world);
-    Matrix4x4 worldInvTranspose = math.Transpose(worldInv);
+    Matrix4x4 worldInv = MathUtil::Inverse(world);
+    Matrix4x4 worldInvTranspose = MathUtil::Transpose(worldInv);
 
     // ワールドビュー射影行列
     // カメラが設定されていればそれを使用
@@ -349,7 +357,10 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
         camView = camera_->GetViewMatrix();
         camProj = camera_->GetProjectionMatrix();
     }
-    Matrix4x4 wvp = math.Multiply(world, math.Multiply(camView, camProj));
+
+    // WVP行列の計算
+    Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(camView, camProj));
+    
     // 定数バッファに転送
     if (transformationMatrixData_) {
         transformationMatrixData_->World = world;
@@ -430,7 +441,7 @@ void Object3d::Draw()
         Logger::Log("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
-    
+
     // GPU仮想アドレスを取得してルートパラメータ1にセット
     auto wvpAddr = transformationMatrixResource_->GetGPUVirtualAddress();
     {
@@ -486,7 +497,7 @@ void Object3d::Draw()
             sprintf_s(buf, "Object3d::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, srvHandle.ptr);
             Logger::Log(buf);
         }
-        
+
         // SRVハンドルが有効か確認する
         if (srvHandle.ptr == 0) {
             char buf[128];
@@ -494,7 +505,7 @@ void Object3d::Draw()
             Logger::Log(buf);
             return;
         }
-        
+
         // ルートパラメータ2にSRVをセット
         cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
 

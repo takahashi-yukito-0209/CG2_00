@@ -7,6 +7,8 @@
 namespace MyEngine {
 class ParticleManager;
 }
+// 前方宣言: ImGuiManager in MyEngine
+namespace MyEngine { class ImGuiManager; }
 
 /// <summary>
 /// パーティクルエミッタクラス
@@ -30,11 +32,11 @@ public: // メンバ関数
 
     // エミッタ設定
     std::string groupName; // どのパーティクルグループに発生させるか
-    Transform transform { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
+    Math::Transform transform { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
     uint32_t count = 1; // 1回あたりの発生数
     float frequency = 0.0f; // 発生間隔（秒）。0で毎フレーム
     float elapsed = 0.0f; // 前回発生からの経過
 
 private: // メンバ関数
-    
+     
 };

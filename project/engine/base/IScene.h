@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace MyEngine {
 
@@ -12,6 +13,8 @@ class ParticleManager;
 class TextureManager;
 class SrvManager;
 class DirectXCommon;
+class Object3d;
+class Sprite;
 
 // シーンコンテキスト構造体（シーンに渡される共通リソースの集約）
 struct SceneContext {
@@ -22,6 +25,11 @@ struct SceneContext {
     TextureManager* textureManager = nullptr;
     SrvManager* srvManager = nullptr;
     DirectXCommon* directXCommon = nullptr;
+    // ImGuiManagerへのポインタ（シーンが必要に応じてImGui描画用のフックを提供するために使用）
+    class ImGuiManager* imguiManager = nullptr;
+    // 描画タイプ（Game の ImGui で選択された描画モードを渡すため）
+    // 0=Model,1=Particle,2=Sprite,3=Bunny,4=Fence,5=Checker,6=Sphere,7=All
+    int selectedDrawType = -1;
 };
 
 /// <summary>
@@ -69,6 +77,23 @@ public: // メンバ関数
     /// シーンの名前を取得（オプション、必要に応じてオーバーライド）
     /// </summary>
     virtual std::string GetName() const { return std::string(); }
+
+    /// <summary>
+    /// 外部から描画モードの更新を通知するためのフック（デフォルトは何もしない）
+    /// </summary>
+    virtual void SetSelectedDrawType(int) {}
+
+    /// <summary>
+    /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
+    /// デフォルト実装は何もしない
+    /// </summary>
+    virtual void FillObject3dPointers(std::vector<class Object3d*>* out) {}
+
+    /// <summary>
+    /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
+    /// デフォルト実装は何もしない
+    /// </summary>
+    virtual void FillSpritePointers(std::vector<class Sprite*>* out) {}
 };
 
 } // namespace MyEngine

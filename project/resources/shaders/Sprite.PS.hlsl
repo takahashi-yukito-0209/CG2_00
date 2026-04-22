@@ -26,5 +26,9 @@ PixelShaderOutput main(VertexShaderOutput input)
     float finalA = _gMaterial.color.a * textureColor.a;
 
     output.color = float4(finalRGB, finalA);
+#if !SWAPCHAIN_SRGB
+    // Swapchain is UNORM: perform gamma encode here to approximate sRGB output.
+    output.color.rgb = pow(output.color.rgb, 1.0/2.2);
+#endif
     return output;
 }

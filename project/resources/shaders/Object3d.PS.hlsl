@@ -78,6 +78,10 @@ PixelShaderOutput main(VertexShaderOutput input)
         // Apply directional light (as before)
         float3 accum = finalRGB * gDirectionalLight.color.rgb * lighting * gDirectionalLight.intensity + specular;
 
+        // Add a small ambient term so objects remain visible if lighting is weak
+        const float3 ambient = float3(0.15f, 0.15f, 0.15f);
+        accum = accum + finalRGB * ambient;
+
         // Accumulate single point light (if enabled). Reduced loop for single-light config.
         PointLightEntry pl = gPointLights.lights[0];
         if (pl.enabled != 0) {
@@ -135,9 +139,20 @@ PixelShaderOutput main(VertexShaderOutput input)
         }
 
         finalRGB = accum;
+        // Apply exposure and optional tone mapping to control overall brightness
+        // Multiply by exposure first
+        finalRGB *= gCamera.exposure;
+        // If tone mapping is enabled, apply Reinhard tone mapping
+        if (gCamera.toneMapOn != 0) {
+            finalRGB = finalRGB / (1.0f + finalRGB);
+        }
     }
 
     output.color = float4(finalRGB, finalA);
+#if !SWAPCHAIN_SRGB
+    // If swapchain is not sRGB, encode to approximate sRGB output
+    output.color.rgb = pow(output.color.rgb, 1.0/2.2);
+#endif
     // Binary alpha cutout: discard pixels where the texture's alpha is effectively zero.
     // This implements 2-value (on/off) transparency: fully transparent texels are discarded,
     // opaque texels are rendered normally. Use texture alpha (texA) to decide.

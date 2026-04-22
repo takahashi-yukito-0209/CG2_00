@@ -2,9 +2,8 @@
 #include "mathUtility.h"
 #include <MathTypes.h>
 
-using namespace Math;
-
 namespace MyEngine {
+
 /// <summary>
 /// カメラクラス
 /// </summary>
@@ -20,42 +19,42 @@ public:
     /// <summary>
     /// ワールド行列の取得
     /// </summary>
-    const Matrix4x4& GetWorldMatrix() const { return worldMatrix_; }
+    const Math::Matrix4x4& GetWorldMatrix() const { return worldMatrix_; }
 
     /// <summary>
     /// ビュー行列を取得
     /// </summary>
-    const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
+    const Math::Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
 
     /// <summary>
     /// プロジェクション行列を取得
     /// </summary>
-    const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
+    const Math::Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
 
     /// <summary>
     /// ビュープロジェクション行列を取得
     /// </summary>
-    const Matrix4x4& GetViewProjectionMatrix() const { return viewProjectionMatrix_; }
+    const Math::Matrix4x4& GetViewProjectionMatrix() const { return viewProjectionMatrix_; }
 
     /// <summary>
     /// 回転角（ラジアン）を取得
     /// </summary>
-    const Vector3& GetRotate() const { return transform_.rotate; }
+    const Math::Vector3& GetRotate() const { return transform_.rotate; }
 
     /// <summary>
     /// 座標（平行移動）を取得
     /// </summary>
-    const Vector3& GetTranslate() const { return transform_.translate; }
+    const Math::Vector3& GetTranslate() const { return transform_.translate; }
 
     /// <summary>
     /// 回転角（ラジアン）をセット
     /// </summary>
-    void SetRotate(const Vector3& rotate) { transform_.rotate = rotate; }
+    void SetRotate(const Math::Vector3& rotate) { transform_.rotate = rotate; }
 
     /// <summary>
     /// 座標（平行移動）をセット
     /// </summary>
-    void SetTranslate(const Vector3& translate) { transform_.translate = translate; }
+    void SetTranslate(const Math::Vector3& translate) { transform_.translate = translate; }
 
     /// <summary>
     /// 視野角（ラジアン）をセット
@@ -85,7 +84,7 @@ private: // メンバ関数
 private: // メンバ変数
 
     // カメラの変換情報（回転と平行移動）
-    Transform transform_;
+    Math::Transform transform_;
 
     // 視野角（ラジアン）
     float fovY_;
@@ -100,19 +99,17 @@ private: // メンバ変数
     float farClip_;
 
     // ワールド行列
-    Matrix4x4 worldMatrix_;
+    Math::Matrix4x4 worldMatrix_;
 
     // ビュー行列
-    Matrix4x4 viewMatrix_;
+    Math::Matrix4x4 viewMatrix_;
 
     // プロジェクション行列
-    Matrix4x4 projectionMatrix_;
+    Math::Matrix4x4 projectionMatrix_;
 
     // ビュープロジェクション行列
-    Matrix4x4 viewProjectionMatrix_;
+    Math::Matrix4x4 viewProjectionMatrix_;
 
-    // 数学ユーティリティ
-    MathUtility math_;
 };
 
 } // namespace MyEngine
