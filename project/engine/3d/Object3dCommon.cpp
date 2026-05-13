@@ -3,6 +3,7 @@
 #include "StringUtility.h"
 #include "mathUtility.h"
 #include "Camera.h"
+#include "DebugCamera.h"
 #include <algorithm>
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -190,19 +191,47 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     /// </summary>
     void Object3dCommon::DrawCameraImGui()
     {
-        // カメラのワールド位置、露出、トーンマッピングのオンオフを編集するUI
-        auto camData = GetCameraData();
-        if (camData) {
-            ImGui::DragFloat3("Camera World Position", &camData->worldPosition.x, 0.1f);
-            
-            float exposure = camData->exposure;
-            if (ImGui::DragFloat("Exposure", &exposure, 0.01f, 0.01f, 10.0f)) {
-                camData->exposure = exposure;
+        // デバッグカメラ切替・入力トグルおよびメイン/デバッグカメラのTransform編集UIを提供する
+        // Use Debug Camera for Render
+        if (ImGui::Checkbox("Use Debug Camera for Render", &useDebugCameraForRender_)) {
+            // nothing else here, Game側のフラグと同期されている場合は呼び出し元で反映される
+        }
+
+        // Enable Debug Camera Input
+        ImGui::Checkbox("Enable Debug Camera Input", &enableDebugCameraInput_);
+
+        // メインカメラの編集
+        if (ImGui::CollapsingHeader("Main Camera")) {
+            if (defaultCamera_) {
+                auto t = defaultCamera_->GetTranslate();
+                if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
+                    defaultCamera_->SetTranslate(t);
+                }
+                auto r = defaultCamera_->GetRotate();
+                if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
+                    defaultCamera_->SetRotate(r);
+                }
+            } else {
+                ImGui::Text("Main Camera not available");
             }
-            
-            bool toneOn = camData->toneMapOn != 0;
-            if (ImGui::Checkbox("Tone Map (Reinhard)", &toneOn)) {
-                camData->toneMapOn = toneOn ? 1 : 0;
+        }
+
+        // デバッグカメラの編集
+        if (ImGui::CollapsingHeader("Debug Camera")) {
+            if (debugCamera_) {
+                // DebugCamera uses Math::Vector3 for translation/rotation
+                Math::Vector3 dt = debugCamera_->GetTranslation();
+                float dt_arr[3] = { dt.x, dt.y, dt.z };
+                if (ImGui::DragFloat3("Debug Translate", dt_arr, 0.1f)) {
+                    debugCamera_->SetTranslation({ dt_arr[0], dt_arr[1], dt_arr[2] });
+                }
+                Math::Vector3 dr = debugCamera_->GetRotation();
+                float dr_arr[3] = { dr.x, dr.y, dr.z };
+                if (ImGui::DragFloat3("Debug Rotate", dr_arr, 0.01f)) {
+                    debugCamera_->SetRotation({ dr_arr[0], dr_arr[1], dr_arr[2] });
+                }
+            } else {
+                ImGui::Text("Debug Camera not available");
             }
         }
     }

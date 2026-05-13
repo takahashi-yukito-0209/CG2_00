@@ -5,6 +5,10 @@
 #include <d3d12.h>
 #include <wrl.h>
 
+
+//前方宣言
+class DebugCamera;
+
 namespace MyEngine {
 
 /// <summary>
@@ -122,6 +126,23 @@ public: // メンバ関数
     void DrawCameraImGui();
 
     /// <summary>
+    /// デバッグカメラ用ポインタをセットする
+    /// </summary>
+    void SetDebugCamera(::DebugCamera* dbg) { debugCamera_ = dbg; }
+
+    /// <summary>
+    /// レンダリングにデバッグカメラを使うかどうかを取得/設定
+    /// </summary>
+    bool GetUseDebugCameraForRender() const { return useDebugCameraForRender_; } // No-op
+    void SetUseDebugCameraForRender(bool v) { useDebugCameraForRender_ = v; } // No-op
+
+    /// <summary>
+    /// デバッグカメラの入力を有効にするかどうかを取得/設定
+    /// </summary>
+    bool GetEnableDebugCameraInput() const { return enableDebugCameraInput_; } // No-op
+    void SetEnableDebugCameraInput(bool v) { enableDebugCameraInput_ = v; } // No-op
+
+    /// <summary>
     /// ブレンドモードの取得
     /// </summary>
     BlendMode GetBlendMode() const { return blendMode_; }
@@ -207,6 +228,15 @@ private: // メンバ変数
 
     // 3Dオブジェクトが参照するデフォルトカメラ
     class Camera* defaultCamera_ = nullptr;
+
+    // デバッグカメラへのポインタ（外部からセットされる）
+    DebugCamera* debugCamera_ = nullptr;
+
+    // UIで制御されるフラグ: レンダリングにデバッグカメラを使用するか
+    bool useDebugCameraForRender_ = false;
+
+    // UIで制御されるフラグ: デバッグカメラの入力を有効にするか
+    bool enableDebugCameraInput_ = true;
 
 public: // メンバ変数へのアクセサ
     /// <summary>

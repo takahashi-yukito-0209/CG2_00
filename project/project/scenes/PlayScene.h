@@ -14,6 +14,7 @@ class Object3dCommon;
 class ParticleManager;
 class TextureManager;
 class Camera;
+class SkyBox;
 }
 
 #include "../../engine/particle/ParticleEmitter.h"
@@ -93,4 +94,5 @@ private://メンバ変数
     std::vector<std::unique_ptr<Object3d>> objects3d_;
     std::unique_ptr<Object3d> particlePlane_;
     ParticleEmitter pmEmitter_;
+    std::unique_ptr<MyEngine::SkyBox> skybox_;
 };
