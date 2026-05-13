@@ -114,7 +114,7 @@ struct Game::Impl {
 
     DrawType selectedDrawType = DRAW_SPHERE; // 描画する内容の種類を選択するための変数
 
-    DebugCamera debugCamera; // デバッグカメラ
+    DebugCamera debugCamera; // デバッグカメラ (global DebugCamera)
     bool isDebugCameraControl = true; // デバッグカメラ操作フラグ
     bool useBillboard = true; // ビルボードの使用フラグ
     bool useDebugCameraForRender = false; // レンダリングにデバッグカメラを使うか
@@ -288,6 +288,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     // デバッグカメラの初期化（ウィンドウ解像度を指定）
     impl_->debugCamera.Initialize(1280.0f, 720.0f);
 
+    // Object3dCommon にデバッグカメラをセットして、UI側で編集できるようにする
+    if (impl_->object3dCommon) {
+        impl_->object3dCommon->SetDebugCamera(&impl_->debugCamera);
+        impl_->object3dCommon->SetUseDebugCameraForRender(impl_->useDebugCameraForRender);
+        impl_->object3dCommon->SetEnableDebugCameraInput(impl_->isDebugCameraControl);
+    }
+
     // ImGuiManagerの初期化
     impl_->imguiManager.Initialize(impl_->hwnd, &impl_->srvManager);
 
@@ -344,7 +351,9 @@ void Game::Update()
     InputManager::GetInstance()->Update();
 
     // デバッグカメラの操作: マウスドラッグとホイールでカメラを操作する。ただし、ImGui のウィンドウやアイテムがアクティブな場合は操作しない
-    if (impl_->isDebugCameraControl) {
+    // Query input-enabled flag from Object3dCommon if available
+    bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
+    if (debugInputEnabled) {
         long deltaX = InputManager::GetInstance()->GetMouseDeltaX(); // 前フレームからのマウスのX移動量を取得
         long deltaY = InputManager::GetInstance()->GetMouseDeltaY(); // 前フレームからのマウスのY移動量を取得
         long wheelDelta = InputManager::GetInstance()->GetMouseDeltaZ(); // 前フレームからのマウスホイールの移動量を取得
@@ -375,7 +384,8 @@ void Game::Update()
         }
 
         if (allowCameraControl) {
-            if (impl_->useDebugCameraForRender) {
+            bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
+            if (useDebugRender) {
                 // デバッグカメラを操作
                 impl_->debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
                 impl_->debugCamera.OnMouseWheel(float(wheelDelta));
@@ -434,6 +444,26 @@ void Game::Update()
     // SoundSystem の Poll を呼び出して、サウンドの再生状態の更新やリソースの管理を行う
     impl_->soundSystem.Poll();
 
+    // デバッグカメラのマウス/ホイール入力を ImGui が入力を奪っていない場合にフォワードする
+    bool debugForwardEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
+    if (debugForwardEnabled) {
+        // ImGui が入力を処理している場合はカメラ操作を無効化
+        if (!impl_->imguiManager.IsCapturingInput()) {
+            auto input = InputManager::GetInstance();
+            long dx = input->GetMouseDeltaX();
+            long dy = input->GetMouseDeltaY();
+            long dz = input->GetMouseDeltaZ();
+            if (dx != 0 || dy != 0) {
+                impl_->debugCamera.OnMouseDrag(static_cast<float>(dx), static_cast<float>(dy));
+            }
+            if (dz != 0) {
+                impl_->debugCamera.OnMouseWheel(static_cast<float>(dz));
+            }
+        }
+        // キーボードによるデバッグカメラの移動処理（WASD等）
+        impl_->debugCamera.Update();
+    }
+
     // 3Dオブジェクトのワールド行列、ビュー行列、プロジェクション行列を計算して、各オブジェクトの Update を呼び出す
     Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(impl_->transform.scale, impl_->transform.rotate, impl_->transform.translate);
     Matrix4x4 viewMatrix;
@@ -441,13 +471,22 @@ void Game::Update()
 
     // F1 でレンダリングにデバッグカメラを切り替えられるようにする
     if (InputManager::GetInstance()->IsKeyJustPressed(DIK_F1)) {
-        impl_->useDebugCameraForRender = !impl_->useDebugCameraForRender;
-        char buf[128];
-        sprintf_s(buf, "Debug camera for render: %s\n", impl_->useDebugCameraForRender ? "ON" : "OFF");
-        Logger::Log(buf);
+        if (impl_->object3dCommon) {
+            bool cur = impl_->object3dCommon->GetUseDebugCameraForRender();
+            impl_->object3dCommon->SetUseDebugCameraForRender(!cur);
+            char buf[128];
+            sprintf_s(buf, "Debug camera for render: %s\n", !cur ? "ON" : "OFF");
+            Logger::Log(buf);
+        } else {
+            impl_->useDebugCameraForRender = !impl_->useDebugCameraForRender;
+            char buf[128];
+            sprintf_s(buf, "Debug camera for render: %s\n", impl_->useDebugCameraForRender ? "ON" : "OFF");
+            Logger::Log(buf);
+        }
     }
 
-    if (impl_->useDebugCameraForRender) {
+    bool useDebugForRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
+    if (useDebugForRender) {
         // デバッグカメラを使ってビュー/射影を取得
         impl_->debugCamera.Update();
         viewMatrix = impl_->debugCamera.GetViewMatrix();
@@ -587,8 +626,6 @@ void Game::Draw()
         impl_->sceneManager->SetSelectedDrawType(static_cast<int>(impl_->selectedDrawType));
         impl_->sceneManager->Draw();
     }
-
-    // Use MathUtil free functions
 
     // Game 側の既存描画を常に行う（シーンの描画とは併行して実行されます）
     // 描画する内容の種類に応じて、適切な描画処理を行うための switch 文

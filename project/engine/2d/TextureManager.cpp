@@ -3,6 +3,8 @@
 #include "Logger.h"
 #include "StringUtility.h"
 #include "engine/base/SrvManager.h"
+#include <algorithm>
+#include <utility>
 
 using namespace MyEngine;
 
@@ -80,26 +82,52 @@ void TextureManager::LoadTexture(const std::string& filePath)
         Logger::Log(buf);
     }
 
-    // テクスチャファイルの読んでプログラムで扱えるようにする
+    // テクスチャファイルを読み込む (.dds は DirectX::LoadFromDDSFile を使う)
     DirectX::ScratchImage image {};
-    HRESULT hr = DirectX::LoadFromWICFile(wfilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
-    {
-        char buf[128];
-        sprintf_s(buf, "DEBUG hr = 0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Log(buf);
+    HRESULT hr = S_OK;
+    // 小文字化して拡張子判定
+    std::string lowerPath = storePath;
+    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char c){ return static_cast<char>(::tolower(c)); });
+    bool isDDS = (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".dds");
+
+    if (isDDS) {
+        // DDSファイルはDirectXTexのDDSローダを使う（既にミップが含まれていることが多い）
+        // LoadFromDDSFile の第2引数は DirectX::DDS_FLAGS 型なので明示的にキャストする
+        hr = DirectX::LoadFromDDSFile(wfilePath.c_str(), static_cast<DirectX::DDS_FLAGS>(0), nullptr, image);
+        if (FAILED(hr)) {
+            char buf[256];
+            sprintf_s(buf, "ERROR LoadTexture: Failed to load DDS texture: %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
+            Logger::Log(buf);
+            return;
+        }
+    } else {
+        // それ以外は既存のWICローダを使用
+        hr = DirectX::LoadFromWICFile(wfilePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+        if (FAILED(hr)) {
+            char buf[256];
+            sprintf_s(buf, "ERROR LoadTexture: Failed to load texture: %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
+            Logger::Log(buf);
+            return;
+        }
     }
 
-    // ロード失敗時の処理（エラーハンドリング）
-    if (FAILED(hr)) {
-        char buf[256];
-        sprintf_s(buf, "ERROR LoadTexture: Failed to load texture: %s\n", filePath.c_str());
-        Logger::Log(buf);
-        return; // ロードに失敗した場合はここで終了
-    }
-
-    // ミップマップ生成
+    // ミップマップ生成／準備: DDSにミップが含まれていればそのまま、無ければ生成する
     DirectX::ScratchImage mipImages {};
-    hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
+    const DirectX::TexMetadata& srcMeta = image.GetMetadata();
+    if (isDDS && srcMeta.mipLevels > 1) {
+        // DDSにミップが含まれている
+        // ScratchImage はコピー代入が削除されているのでムーブする
+        mipImages = std::move(image);
+    } else {
+        // ミップを生成（WIC読み込み時やDDSでミップがない場合）
+        hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
+        if (FAILED(hr)) {
+            char buf[256];
+            sprintf_s(buf, "ERROR LoadTexture: GenerateMipMaps failed for %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
+            Logger::Log(buf);
+            return;
+        }
+    }
 
     // SRV確保（インデックスを割り当て）
     uint32_t nextIndex = srvManager_ ? srvManager_->Allocate() : (static_cast<uint32_t>(textureDatas.size()) + kSRVIndexTop_);
@@ -131,13 +159,37 @@ void TextureManager::LoadTexture(const std::string& filePath)
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 標準的なRGBAマッピング
 
     // リソースの種類に応じて ViewDimension を設定
-    if (textureData.metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
+    // キューブマップ判定: metadata.miscFlags に TEX_MISC_TEXTURECUBE が立っているか、arraySize==6 ならキューブとみなす
+    bool isCube = false;
+    if ((textureData.metadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE) != 0) {
+        isCube = true;
+    }
+    if (textureData.metadata.arraySize == 6) {
+        isCube = true;
+    }
+
+    if (isCube) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.MipLevels = static_cast<UINT>(textureData.metadata.mipLevels);
+        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+        {
+            char buf[256];
+            sprintf_s(buf, "DEBUG LoadTexture: Detected cubemap. arraySize=%u mipLevels=%u format=%u\n",
+                static_cast<unsigned int>(textureData.metadata.arraySize),
+                static_cast<unsigned int>(textureData.metadata.mipLevels),
+                static_cast<unsigned int>(textureData.metadata.format));
+            Logger::Log(buf);
+        }
+    } else if (textureData.metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
         // 2Dテクスチャの場合
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         // mipmap のすべてのレベルを使用するように設定
         srvDesc.Texture2D.MipLevels = static_cast<UINT>(textureData.metadata.mipLevels);
     } else {
         // その他のテクスチャ（必要に応じて処理を追加）
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = static_cast<UINT>(textureData.metadata.mipLevels);
     }
 
     // 中間リソースを生成し、転送コマンドを積む

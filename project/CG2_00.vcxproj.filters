@@ -195,6 +195,9 @@
     <ClCompile Include="project\scenes\SceneFactory.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="engine\3d\SkyBox.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -336,6 +339,12 @@
     </ClInclude>
     <ClInclude Include="engine\RenderState.h">
       <Filter>ヘッダー ファイル\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\3d\SkyBox.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="project\project\engine\3d\CameraUIState.h">
+      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

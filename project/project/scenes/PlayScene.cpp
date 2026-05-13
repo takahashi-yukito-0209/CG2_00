@@ -9,6 +9,7 @@
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/base/SrvManager.h"
+#include "../../engine/3d/SkyBox.h"
 #include "../../engine/particle/ParticleManager.h"
 #include "../../engine/utility/mathUtility.h"
 #include <iostream>
@@ -36,6 +37,21 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ctx_.textureManager->LoadTexture("resources/uvChecker.png");
         ctx_.textureManager->LoadTexture("resources/monsterBall.png");
         ctx_.textureManager->LoadTexture("resources/circle.png");
+        // 環境マップ用DDSを読み込む（確認用）
+        ctx_.textureManager->LoadTexture("resources/rostock_laage_airport_4k.dds");
+        // 読み込んだテクスチャをGPUに転送
+        ctx_.textureManager->ExecuteResourceUpload();
+    }
+
+    // SkyBox 初期化（ロード済みの cubemap を使用）
+    if (ctx_.textureManager && ctx_.srvManager && ctx_.directXCommon) {
+        uint32_t srvIdx = ctx_.textureManager->GetSrvIndex("resources/rostock_laage_airport_4k.dds");
+        if (srvIdx != UINT32_MAX) {
+            // include SkyBox header here to avoid compile-order issues
+            // The header is included at top of this cpp file
+            skybox_ = std::make_unique<MyEngine::SkyBox>();
+            skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, srvIdx);
+        }
     }
 
     // スプライトの作成
@@ -121,6 +137,10 @@ void PlayScene::Finalize()
 
     // プレーンのリセット
     particlePlane_.reset();
+    if (skybox_) {
+        skybox_->Finalize();
+        skybox_.reset();
+    }
 }
 
 /// <summary>
@@ -162,6 +182,11 @@ void PlayScene::Draw()
 {
     // シーン側でも Game の選択モードに応じて個別描画できるようにする
     int sel = ctx_.selectedDrawType;
+
+    // Draw SkyBox first so it appears behind other geometry (depth disabled in its PSO)
+    if (skybox_ && ctx_.camera) {
+        skybox_->Draw(ctx_.camera);
+    }
 
     // オブジェクト系の描画（Model, Bunny, Fence, Checker, Sphere, All）
     if (ctx_.object3dCommon) {
