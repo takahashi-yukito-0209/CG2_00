@@ -9,12 +9,13 @@
 #include <vector>
 #include <wrl.h>
 
+#include "ModelCommon.h"
+
 namespace MyEngine {
 
 // 前方宣言
 class Object3dCommon;
 class Model;
-class ModelCommon;
 
 /// <summary>
 /// 3Dオブジェクトクラス
@@ -206,7 +207,7 @@ private: // メンバ変数
     // `Model` へのポインタ
     Model* model_ = nullptr;
     // モデル用にこの `Object3d` が所有する `ModelCommon`
-    ModelCommon* modelCommon_ = nullptr;
+    std::unique_ptr<ModelCommon> modelCommon_;
 
     // 参照するカメラ（既定は Object3dCommon のデフォルトカメラ）
     class Camera* camera_ = nullptr;
@@ -252,12 +253,6 @@ public: // メンバ関数
     /// ImGuiでオブジェクトの状態を表示・編集するための関数
     /// </summary>
     void DrawImGui(int index);
-
-
-    // ImGui fields removed (centralized in ImGuiManager)
-
-public:
-
 
     /// <summary>
     /// スケール取得

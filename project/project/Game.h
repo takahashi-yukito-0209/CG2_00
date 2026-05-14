@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include <memory>
 #include "Framework.h"
 
 /// <summary>
@@ -45,5 +46,5 @@ public: // メンバ関数
 private: // メンバ変数
 
     struct Impl;
-    Impl* impl_ = nullptr; // 実装の隠蔽
+    std::unique_ptr<Impl> impl_ = nullptr; // 実装の隠蔽
 };

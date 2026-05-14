@@ -156,9 +156,6 @@
     <ClCompile Include="engine\3d\Object3dCommon.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
-    <ClCompile Include="ImGuiManager.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="engine\3d\Camera.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
@@ -183,9 +180,6 @@
     <ClCompile Include="project\Game.cpp">
       <Filter>ソース ファイル\application</Filter>
     </ClCompile>
-    <ClCompile Include="project\Framework.cpp">
-      <Filter>ソース ファイル\engine\base</Filter>
-    </ClCompile>
     <ClCompile Include="project\scenes\PlayScene.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
@@ -195,11 +189,17 @@
     <ClCompile Include="project\scenes\SceneFactory.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
-    <ClCompile Include="engine\3d\SkyBox.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="engine\utility\ResourceResolver.cpp">
-      <Filter>ソース ファイル</Filter>
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\3d\SkyBox.cpp">
+      <Filter>ソース ファイル\engine\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManager.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\Framework.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -298,9 +298,6 @@
     <ClInclude Include="engine\3d\Object3dCommon.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
-    <ClInclude Include="ImGuiManager.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
     <ClInclude Include="engine\3d\Camera.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
@@ -328,9 +325,6 @@
     <ClInclude Include="project\Game.h">
       <Filter>ヘッダー ファイル\application</Filter>
     </ClInclude>
-    <ClInclude Include="project\Framework.h">
-      <Filter>ヘッダー ファイル\engine\base</Filter>
-    </ClInclude>
     <ClInclude Include="project\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
@@ -343,14 +337,17 @@
     <ClInclude Include="engine\RenderState.h">
       <Filter>ヘッダー ファイル\engine</Filter>
     </ClInclude>
-    <ClInclude Include="engine\3d\SkyBox.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="project\project\engine\3d\CameraUIState.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
     <ClInclude Include="engine\utility\ResourceResolver.h">
-      <Filter>ヘッダー ファイル</Filter>
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\3d\SkyBox.h">
+      <Filter>ヘッダー ファイル\engine\3d</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\ImGuiManager.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\Framework.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

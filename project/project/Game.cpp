@@ -125,13 +125,11 @@ struct Game::Impl {
     std::string pendingSceneName;
 };
 
-// Game クラスのデストラクタでは、動的に確保した Impl を解放する
+/// <summary>
+/// Game クラスのデストラクタ
+/// </summary>
 Game::~Game()
 {
-    if (impl_) {
-        delete impl_;
-        impl_ = nullptr;
-    }
 }
 
 /// <summary>
@@ -146,7 +144,7 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 
     // Impl がまだ存在しない場合は新たに作成する
     if (!impl_) {
-        impl_ = new Impl();
+        impl_ = std::make_unique<Impl>();
     }
 
     // COMの初期化

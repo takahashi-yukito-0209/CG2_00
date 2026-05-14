@@ -9,6 +9,7 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "../utility/ResourceResolver.h"
+#include <memory>
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -71,13 +72,13 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     CreateTransformationMatrixResource();
 
     // ModelCommon を生成して初期化
-    modelCommon_ = new ModelCommon();
+    modelCommon_ = std::make_unique<ModelCommon>();
     modelCommon_->Initialize(object3dCommon->GetDxCommon());
 
     // Model を読み込んでセット
     ModelManager* mgr = ModelManager::GetInstance();
     // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
-    model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_);
+    model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_.get());
     // モデル読み込み後にテクスチャ割り当てを行う（MTLが先に読み込まれるように）
     AssignTexture();
 
@@ -152,10 +153,10 @@ void Object3d::SetModel(const std::string& filePath)
     if (!resolved.empty()) {
         // 解決されたパスで読み込む
         std::filesystem::path p(resolved);
-        m = mgr->LoadModel(p.parent_path().string(), p.filename().string(), modelCommon_);
+        m = mgr->LoadModel(p.parent_path().string(), p.filename().string(), modelCommon_.get());
     } else {
         // 直接指定されたパスで読み込む
-        m = mgr->LoadModel("resources", filePath, modelCommon_);
+        m = mgr->LoadModel("resources", filePath, modelCommon_.get());
     }
     model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
     // モデル読み込み後にテクスチャの割り当てを行う
@@ -167,9 +168,7 @@ void Object3d::SetModel(const std::string& filePath)
 /// </summary>
 Object3d::~Object3d()
 {
-    // ModelCommon を解放
-    delete modelCommon_;
-    modelCommon_ = nullptr;
+    // modelCommon_ は std::unique_ptr なので自動解放される
 }
 
 /// <summary>

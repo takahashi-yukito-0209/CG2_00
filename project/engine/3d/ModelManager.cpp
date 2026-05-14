@@ -7,8 +7,8 @@
 
 using namespace MyEngine;
 
-// 静的インスタンスの定義
-ModelManager* ModelManager::instance_ = nullptr;
+// シングルトンインスタンスの初期化
+std::unique_ptr<ModelManager> ModelManager::instance_ = nullptr;
 
 /// <summary>
 /// シングルトンインスタンスの取得
@@ -17,11 +17,10 @@ ModelManager* ModelManager::GetInstance()
 {
     // インスタンスがまだ存在しない場合は生成する
     if (!instance_) {
-        instance_ = new ModelManager();
+        instance_.reset(new ModelManager());
     }
 
-    // インスタンスを返す
-    return instance_;
+    return instance_.get();
 }
 
 /// <summary>
@@ -32,8 +31,7 @@ void ModelManager::Finalize()
     // すべてのモデルを解放
     models_.clear();
     // シングルトン自身を破棄
-    delete instance_;
-    instance_ = nullptr;
+    instance_.reset();
 }
 
 /// <summary>
