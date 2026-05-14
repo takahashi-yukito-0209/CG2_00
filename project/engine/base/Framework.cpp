@@ -1,4 +1,4 @@
-#include "Framework.h"
+#include "engine/base/Framework.h"
 #include <chrono>
 #include <thread>
 #include <windowsx.h>
@@ -22,7 +22,7 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
     // 引数の未使用警告を抑制
     (void)hInstance; 
     (void)hwnd;
-    
+
     // WinAppの有効性を確認
     if (!winApp) {
         return false;
@@ -41,7 +41,7 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
 
     // TextureManagerの初期化
     TextureManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), &srvManagerOut);
-                                                                                             
+
      // Object3dCommonのインスタンスを作成
     object3dCommonOut = std::make_unique<Object3dCommon>();
     // Object3dCommonの初期化
@@ -61,6 +61,7 @@ void Framework::FinalizeEngine()
     // DirectXCommonの終了処理を呼び出す
     DirectXCommon::GetInstance()->Finalize(); 
 }
+
 
 
 /// <summary>
@@ -118,7 +119,7 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
         if (IsEndRequest()) {
             break;
         }
-        
+
         // 描画処理を呼び出す
         Draw();
 

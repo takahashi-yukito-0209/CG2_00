@@ -163,6 +163,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\base\D3DResourceLeakChecker.cpp" />
     <ClCompile Include="engine\base\DirectXCommon.cpp" />
     <ClCompile Include="engine\3d\DebugCamera.cpp" />
+    <ClCompile Include="engine\base\Framework.cpp" />
     <ClCompile Include="engine\base\SceneManager.cpp" />
     <ClCompile Include="engine\base\SrvManager.cpp" />
     <ClCompile Include="engine\particle\ParticleEmitter.cpp" />
@@ -195,7 +196,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ClCompile>
     <ClCompile Include="engine\io\InputManager.cpp" />
     <ClCompile Include="engine\utility\Logger.cpp" />
-    <ClCompile Include="ImGuiManager.cpp" />
+    <ClCompile Include="engine\base\ImGuiManager.cpp" />
     <ClCompile Include="main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
@@ -209,7 +210,6 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\2d\TextureManager.cpp" />
     <ClCompile Include="engine\3d\Object3d.cpp" />
     <ClCompile Include="engine\3d\Object3dCommon.cpp" />
-    <ClCompile Include="project\Framework.cpp" />
     <ClCompile Include="project\Game.cpp" />
     <ClCompile Include="project\scenes\PlayScene.cpp" />
     <ClCompile Include="project\scenes\SceneFactory.cpp" />
@@ -262,6 +262,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\D3DResourceLeakChecker.h" />
     <ClInclude Include="engine\base\DirectXCommon.h" />
     <ClInclude Include="engine\3d\DebugCamera.h" />
+    <ClInclude Include="engine\base\Framework.h" />
     <ClInclude Include="engine\base\IScene.h" />
     <ClInclude Include="engine\base\SceneManager.h" />
     <ClInclude Include="engine\base\SrvManager.h" />
@@ -290,10 +291,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\2d\TextureManager.h" />
     <ClInclude Include="engine\3d\Object3d.h" />
     <ClInclude Include="engine\3d\Object3dCommon.h" />
-    <ClInclude Include="ImGuiManager.h" />
-    <ClInclude Include="project\Framework.h" />
+    <ClInclude Include="engine\base\ImGuiManager.h" />
     <ClInclude Include="project\Game.h" />
-    <ClInclude Include="project\project\engine\3d\CameraUIState.h" />
     <ClInclude Include="project\scenes\PlayScene.h" />
     <ClInclude Include="project\scenes\SceneFactory.h" />
     <ClInclude Include="project\scenes\TitleScene.h" />

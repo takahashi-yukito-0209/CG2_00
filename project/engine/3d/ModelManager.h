@@ -38,13 +38,11 @@ public: // メンバ関数
     Model* FindModel(const std::string& filePath);
 
 private: // メンバ関数（内部用）
-    // デフォルトコンストラクタとデストラクタは private にして外部からのインスタンス化と破棄を防止
     ModelManager() = default;
-    ~ModelManager() = default;
 
 private: // メンバ変数
 
-    static ModelManager* instance_;
+    static std::unique_ptr<ModelManager> instance_;
     // ファイルパスをキーにモデルインスタンスを保持するコンテナ
     std::map<std::string, std::unique_ptr<Model>> models_;
 };

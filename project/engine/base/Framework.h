@@ -29,27 +29,27 @@ public: // メンバ関数
     /// 初期化処理 (必要なら派生でオーバーライド)
     /// </summary>
     virtual bool Initialize(HINSTANCE hInstance, int nCmdShow) { (void)hInstance; (void)nCmdShow; return true; }
-    
+
     /// <summary>
     /// 終了処理 (必要なら派生でオーバーライド)
     /// </summary>
     virtual void Finalize() { }
-    
+
     /// <summary>
     /// 更新処理 (必要なら派生でオーバーライド)
     /// </summary>
     virtual void Update() { }
-    
+
     /// <summary>
     /// イベントポーリング (必要なら派生でオーバーライド)
     /// </summary>
     virtual bool PollEvents();
-    
+
     /// <summary>
     /// 描画処理 (必須オーバーライド: 派生クラスで実装を要求)
     /// </summary>
     virtual void Draw() = 0;
-    
+
     /// <summary>
     /// 終了要求の参照 (必要なら派生でオーバーライド)
     /// </summary>
