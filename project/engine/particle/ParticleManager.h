@@ -54,7 +54,7 @@ public: // メンバ関数
     /// <summary>
     /// 描画に使用するプレーン（Object3d）を設定
     /// </summary>
-    void SetParticlePlane(MyEngine::Object3d* plane);
+    void SetParticlePlane(Object3d* plane);
 
     /// <summary>
     /// 新しいパーティクルグループを作成

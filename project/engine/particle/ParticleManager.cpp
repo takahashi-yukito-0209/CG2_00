@@ -62,13 +62,13 @@ void ParticleManager::SetGroupTexture(const std::string& name, const std::string
         }
         // SRVインデックスをグループデータに保存
         it->second.srvIndex = (idx == UINT32_MAX) ? 0u : idx;
+        }
     }
-}
 
 /// <summary>
 /// 描画に使用するプレーン（Object3d）を設定
 /// </summary>
-void ParticleManager::SetParticlePlane(MyEngine::Object3d* plane)
+void ParticleManager::SetParticlePlane(Object3d* plane)
 {
     // プレーンモデルの参照を保存
     particlePlane_ = plane;
@@ -101,8 +101,8 @@ void ParticleManager::CreateParticleGroup(const std::string& name, const std::st
         }
         // SRVインデックスをグループデータに保存
         grp.srvIndex = (idx == UINT32_MAX) ? 0u : idx;
+        }
     }
-}
 
 /// <summary>
 ///  指定グループからパーティクルを生成

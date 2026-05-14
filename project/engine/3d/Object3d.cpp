@@ -8,6 +8,7 @@
 #include "Object3dCommon.h"
 #include "StringUtility.h"
 #include "TextureManager.h"
+#include "../utility/ResourceResolver.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -115,8 +116,10 @@ void Object3d::DrawImGui(int index)
 /// </summary>
 void Object3d::SetTexture(const std::string& filePath)
 {
-    // テクスチャをロードしてインデックスを取得
     auto texMgr = TextureManager::GetInstance();
+    std::string texToUse = filePath;
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
+    if (!resolved.empty()) texToUse = resolved;
     // 既にロード済みでなければロードを依頼
     uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
     if (idx == UINT32_MAX) {
@@ -127,7 +130,7 @@ void Object3d::SetTexture(const std::string& filePath)
     }
 
     // マテリアルデータにファイルパスとインデックスを設定
-    modelData_.material.textureFilePath = filePath;
+    modelData_.material.textureFilePath = texToUse;
     modelData_.material.textureIndex = (idx == UINT32_MAX) ? UINT32_MAX : idx;
 
     // Model が既に持つマテリアル側も更新しておく
@@ -143,9 +146,17 @@ void Object3d::SetTexture(const std::string& filePath)
 /// </summary>
 void Object3d::SetModel(const std::string& filePath)
 {
-    // resources ディレクトリを前提として ModelManager に読み込みを依頼
     ModelManager* mgr = ModelManager::GetInstance();
-    Model* m = mgr->LoadModel("resources", filePath, modelCommon_);
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model);
+    Model* m = nullptr;
+    if (!resolved.empty()) {
+        // 解決されたパスで読み込む
+        std::filesystem::path p(resolved);
+        m = mgr->LoadModel(p.parent_path().string(), p.filename().string(), modelCommon_);
+    } else {
+        // 直接指定されたパスで読み込む
+        m = mgr->LoadModel("resources", filePath, modelCommon_);
+    }
     model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
     // モデル読み込み後にテクスチャの割り当てを行う
     AssignTexture();
@@ -487,34 +498,25 @@ void Object3d::Draw()
     uint32_t texIndex = modelData_.material.textureIndex;
     // テクスチャインデックスが有効な場合のみSRVをセットする
     auto texMgr = TextureManager::GetInstance();
-    // インデックスが有効であっても、ロードされたテクスチャの数を超えていないか確認する
-    if (texIndex != UINT32_MAX && texIndex < texMgr->GetLoadedTextureCount()) {
-        // テクスチャマネージャからGPUハンドルを取得してルートパラメータ2にSRVをセット
+    // SRVハンドルを取得してルートパラメータ2にセット
+    if (texIndex != UINT32_MAX) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        // ログ出力
         {
             char buf[128];
             sprintf_s(buf, "Object3d::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, srvHandle.ptr);
             Logger::Log(buf);
         }
-
-        // SRVハンドルが有効か確認する
-        if (srvHandle.ptr == 0) {
+        if (srvHandle.ptr != 0) {
+            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        } else {
             char buf[128];
-            sprintf_s(buf, "Object3d::Draw: SRV handle for index %u is null - skipping draw\n", texIndex);
+            sprintf_s(buf, "Object3d::Draw: SRV handle for index %u is null - skipping SRV bind\n", texIndex);
             Logger::Log(buf);
-            return;
         }
-
-        // ルートパラメータ2にSRVをセット
-        cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-
     } else {
-        {
-            char buf[128];
-            sprintf_s(buf, "Object3d::Draw: no valid texture assigned (index=%u) - skipping SRV\n", texIndex);
-            Logger::Log(buf);
-        }
+        char buf[128];
+        sprintf_s(buf, "Object3d::Draw: no valid texture assigned (index=%u) - skipping SRV\n", texIndex);
+        Logger::Log(buf);
     }
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
