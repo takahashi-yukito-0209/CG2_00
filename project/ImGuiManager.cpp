@@ -78,7 +78,6 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
         srvManager->InitImGui(); // SrvManagerにImGuiの初期化を任せる
     }
 
-    
     ImGuiIO& io = ImGui::GetIO();
     bool rendererHandlesTextures = (io.BackendFlags & ImGuiBackendFlags_RendererHasTextures) != 0;
     if (!rendererHandlesTextures) {
@@ -188,67 +187,77 @@ void ImGuiManager::BuildUI(Context& ctx)
         int visibleCount = 0;
         for (size_t i = 0; i < ctx.objects3d->size(); ++i) {
             auto obj = (*ctx.objects3d)[i];
-            if (!obj) continue;
+            if (!obj)
+                continue;
             // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定
             auto isVisibleLocal = [&](int idx) -> bool {
-                if (sel == -1) return true;
-                if (sel == 7) return true;
+                if (sel == -1)
+                    return true;
+                if (sel == 7)
+                    return true;
                 switch (sel) {
-                case 0: return idx == 0;
-                case 3: return idx == 1;
-                case 4: return idx == 3;
-                case 5: return idx == 2;
-                case 6: return idx == 4;
-                default: return false;
+                case 0:
+                    return idx == 0;
+                case 3:
+                    return idx == 1;
+                case 4:
+                    return idx == 3;
+                case 5:
+                    return idx == 2;
+                case 6:
+                    return idx == 4;
+                default:
+                    return false;
                 }
             };
-            if (isVisibleLocal(static_cast<int>(i))) ++visibleCount;
+            if (isVisibleLocal(static_cast<int>(i)))
+                ++visibleCount;
         }
         if (visibleCount > 0) {
             ImGui::Separator();
             ImGui::Text("Objects");
 
-        // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定するラムダ関数
-        auto isVisible = [&](int idx) -> bool {
-            // sel == -1 (None) なら全て表示、sel == 7 (All) なら全て表示、それ以外は idx に対応するオブジェクトのみ表示
-            if (sel == -1) {
-                return true; // None なら全て表示
-            }
-            if (sel == 7) {
-                return true; // All なら全て表示
-            }
+            // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定するラムダ関数
+            auto isVisible = [&](int idx) -> bool {
+                // sel == -1 (None) なら全て表示、sel == 7 (All) なら全て表示、それ以外は idx に対応するオブジェクトのみ表示
+                if (sel == -1) {
+                    return true; // None なら全て表示
+                }
+                if (sel == 7) {
+                    return true; // All なら全て表示
+                }
 
-            // それ以外は idx に対応するオブジェクトのみ表示 (0=Model, 3=Bunny, 4=Fence, 5=Checker, 6=Sphere)
-            switch (sel) {
-            case 0:
-                return idx == 0; // Model
-            case 3:
-                return idx == 1; // Bunny
-            case 4:
-                return idx == 3; // Fence
-            case 5:
-                return idx == 2; // Checker
-            case 6:
-                return idx == 4; // Sphere
-            default:
-                return false; // その他の選択肢ではオブジェクトは表示しない
-            }
-        };
+                // それ以外は idx に対応するオブジェクトのみ表示 (0=Model, 3=Bunny, 4=Fence, 5=Checker, 6=Sphere)
+                switch (sel) {
+                case 0:
+                    return idx == 0; // Model
+                case 3:
+                    return idx == 1; // Bunny
+                case 4:
+                    return idx == 3; // Fence
+                case 5:
+                    return idx == 2; // Checker
+                case 6:
+                    return idx == 4; // Sphere
+                default:
+                    return false; // その他の選択肢ではオブジェクトは表示しない
+                }
+            };
 
             // オブジェクトごとにUIを表示
             int idx = 0;
             // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定するラムダ関数を使用して、表示すべきオブジェクトのみUIを構築する
             for (auto obj : *ctx.objects3d) {
-            // obj が nullptr ならスキップ
-            if (!obj) {
-                ++idx;
-                continue;
-            }
-            // 現在の選択に対してこのオブジェクトが表示されるべきかを判定
-            if (!isVisible(idx)) {
-                ++idx;
-                continue;
-            }
+                // obj が nullptr ならスキップ
+                if (!obj) {
+                    ++idx;
+                    continue;
+                }
+                // 現在の選択に対してこのオブジェクトが表示されるべきかを判定
+                if (!isVisible(idx)) {
+                    ++idx;
+                    continue;
+                }
                 ImGui::PushID(idx);
                 // ヘッダにオブジェクトの種類とインデックスを表示 (例: "Object 0", "Object 1", ...)
                 char header[64];
@@ -259,8 +268,8 @@ void ImGuiManager::BuildUI(Context& ctx)
                 }
 
                 ImGui::PopID();
-            ++idx;
-        }
+                ++idx;
+            }
         }
     }
 
@@ -312,7 +321,8 @@ void ImGuiManager::BuildUI(Context& ctx)
                                 const ParticleGroup& grp = kv.second;
                                 std::vector<const char*> items;
                                 items.reserve(basenames.size());
-                                for (const auto& b : basenames) items.push_back(b.c_str());
+                                for (const auto& b : basenames)
+                                    items.push_back(b.c_str());
                                 int cur = 0;
                                 std::string curName;
                                 if (!grp.texturePath.empty()) {
@@ -320,7 +330,10 @@ void ImGuiManager::BuildUI(Context& ctx)
                                     curName = (pos == std::string::npos) ? grp.texturePath : grp.texturePath.substr(pos + 1);
                                 }
                                 for (size_t i = 0; i < basenames.size(); ++i) {
-                                    if (basenames[i] == curName) { cur = static_cast<int>(i); break; }
+                                    if (basenames[i] == curName) {
+                                        cur = static_cast<int>(i);
+                                        break;
+                                    }
                                 }
                                 ImGui::PushID(gname.c_str());
                                 ImGui::Text("%s", gname.c_str());
@@ -341,7 +354,10 @@ void ImGuiManager::BuildUI(Context& ctx)
         if (ImGui::CollapsingHeader("Sprites")) {
             int sidx = 0;
             for (auto s : *ctx.sprites) {
-                if (!s) { ++sidx; continue; }
+                if (!s) {
+                    ++sidx;
+                    continue;
+                }
                 ImGui::PushID(sidx);
                 char header[64];
                 sprintf_s(header, "Sprite %d", sidx);
@@ -408,6 +424,8 @@ void ImGuiManager::Shutdown() { }
 void ImGuiManager::BuildUI(Context& /*ctx*/) { }
 
 void ImGuiManager::Render(ID3D12GraphicsCommandList* /*commandList*/) { }
+
+bool ImGuiManager::IsCapturingInput() { return false; }
 
 #endif // USE_IMGUI
 

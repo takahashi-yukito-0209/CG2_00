@@ -10,7 +10,7 @@ using namespace MyEngine;
 /// <summary>
 /// 初期化処理
 /// </summary>
-void SrvManager::Initialize(MyEngine::DirectXCommon* dxCommon)
+void SrvManager::Initialize(DirectXCommon* dxCommon)
 {
     // 参照の保存
     dxCommon_ = dxCommon;

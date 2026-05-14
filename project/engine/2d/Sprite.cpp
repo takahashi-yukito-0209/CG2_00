@@ -7,6 +7,7 @@
 #include "mathUtility.h"
 #include "TextureManager.h"
 #include "Logger.h"
+#include "../utility/ResourceResolver.h"
 #include <cstdio>
 
 using namespace MyEngine;
@@ -122,7 +123,13 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         transformationMatrixData_->World = MathUtil::MakeIdentity4x4();
     }
 
-    // 単位行列を書き込んでおく
+    // パス指定されたテクスチャをリソースリゾルバで解決してみる
+    std::string resolvedTex = ResourceResolver::Resolve(textureFilePath, ResourceResolver::Type::Texture);
+    //無かったらそのままのパスにする
+    if (!resolvedTex.empty()) {
+        textureFilePath = resolvedTex;
+    }
+    
     uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
     if (idx == UINT32_MAX) {
         // 指定が未ロード/不明なら既定のチェッカーテクスチャへフォールバックし、SRV絶対インデックスを使用

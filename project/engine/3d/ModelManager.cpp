@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <vector>
 #include "Logger.h"
+#include "../utility/ResourceResolver.h"
 
 using namespace MyEngine;
 
@@ -44,6 +45,18 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     std::string requestedDir = directory;
     std::string requestedFilename = filename;
     std::string filePath = requestedDir + "/" + requestedFilename;
+
+    // まずは ResourceResolver を使って直接解決を試みる
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model);
+    if (resolved.empty()) {
+        // 直接の結合パスで見つからない場合、ファイル名だけで再度解決を試みる（リソース登録がディレクトリ無しの場合に対応）
+        resolved = ResourceResolver::Resolve(requestedFilename, ResourceResolver::Type::Model);
+    }
+
+    // 解決されたパスが存在する場合はそれを使用する
+    if (!resolved.empty()) {
+        filePath = resolved;
+    }
 
     // ファイルが存在しない場合、いくつかの代替ディレクトリを試し、限定的な探索を行う
     if (!std::filesystem::exists(filePath)) {

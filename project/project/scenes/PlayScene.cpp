@@ -30,26 +30,24 @@ PlayScene::~PlayScene() { }
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
-    std::cout << "PlayScene Initialize\n";
 
     // テクスチャのロード
     if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("resources/uvChecker.png");
-        ctx_.textureManager->LoadTexture("resources/monsterBall.png");
-        ctx_.textureManager->LoadTexture("resources/circle.png");
+        ctx_.textureManager->LoadTexture("uvChecker.png");
+        ctx_.textureManager->LoadTexture("monsterBall.png");
+        ctx_.textureManager->LoadTexture("circle.png");
         // 環境マップ用DDSを読み込む（確認用）
-        ctx_.textureManager->LoadTexture("resources/rostock_laage_airport_4k.dds");
+        ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
         // 読み込んだテクスチャをGPUに転送
         ctx_.textureManager->ExecuteResourceUpload();
     }
 
     // SkyBox 初期化（ロード済みの cubemap を使用）
     if (ctx_.textureManager && ctx_.srvManager && ctx_.directXCommon) {
-        uint32_t srvIdx = ctx_.textureManager->GetSrvIndex("resources/rostock_laage_airport_4k.dds");
+        uint32_t srvIdx = ctx_.textureManager->GetSrvIndex("rostock_laage_airport_4k.dds");
         if (srvIdx != UINT32_MAX) {
-            // include SkyBox header here to avoid compile-order issues
-            // The header is included at top of this cpp file
-            skybox_ = std::make_unique<MyEngine::SkyBox>();
+            // 環境マップ用のDDSがロードされていれば、それを使用してSkyBoxを初期化
+            skybox_ = std::make_unique<SkyBox>();
             skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, srvIdx);
         }
     }
@@ -58,8 +56,8 @@ void PlayScene::Initialize(const SceneContext& ctx)
     const uint32_t kSpriteCount = 5;
     // 2種類のテクスチャを交互に使用してスプライトを作成
     std::array<std::string, 2> spriteNames = {
-        "resources/uvChecker",
-        "resources/monsterBall"
+        "uvChecker",
+        "monsterBall"
     };
 
     // 2種類のテクスチャファイル名を配列で管理
@@ -71,12 +69,12 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     // モデルルファイル名の配列を作成
     std::vector<std::string> modelFileNames = {
-        "plane.gltf",
-        "bunny.obj",
-        "teapot.obj",
-        "models/fence/fence.obj",
-        "models/sphere/sphere.gltf",
-        "models/terrain/terrain.obj"
+        "plane/plane.gltf",
+        "bunny/bunny.obj",
+        "teapot/teapot.obj",
+        "fence/fence.obj",
+        "sphere/sphere.gltf",
+        "terrain/terrain.obj"
     };
 
     for (size_t i = 0; i < modelFileNames.size(); ++i) {
@@ -93,16 +91,16 @@ void PlayScene::Initialize(const SceneContext& ctx)
     //パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particlePlane_->SetModel("plane.obj");
-    particlePlane_->SetTexture("resources/circle.png");
+    particlePlane_->SetModel("plane/plane.obj");
+    particlePlane_->SetTexture("circle.png");
 
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
         ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
-        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "resources/circle.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "resources/uvChecker.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "resources/monsterBall.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
     }
 
     // パーティクルエミッターと発射

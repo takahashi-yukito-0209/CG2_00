@@ -7,6 +7,7 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "mathUtility.h"
+#include "../utility/ResourceResolver.h"
 #include <cassert>
 #include <cstring>
 
