@@ -180,7 +180,7 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     Logger::SetErrorLogFile(logFilePath); // エラーログファイルのパスも同じログファイルに設定
 
     // ウィンドウを作成してハンドルを取得
-    impl_->winApp.Initialize(hInstance, nCmdShow, L"GE3_LE2B_15_タカハシ_ユキト");
+    impl_->winApp.Initialize(hInstance, nCmdShow, L"LE3C_13_タカハシ_ユキト");
     impl_->hwnd = impl_->winApp.GetHwnd();
 
 #ifdef _DEBUG
@@ -254,14 +254,17 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         // ライトの強度を 1.0f に設定
         directionalLightData->intensity = 1.0f;
         directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
+        // Shader uses L = normalize(-gDirectionalLight.direction), so invert
+        // the sign here to make the light point downward in world space.
+        directionalLightData->direction = { 0.0f, 1.0f, 0.0f };
     }
 
     // 点光源の設定
     if (impl_->object3dCommon) {
         Object3d::PointLight pl = {};
         pl.position = { 0.0f, 1.5f, 0.0f, 0.0f };
-        pl.color = { 1.0f, 1.0f, 1.0f, 6.0f };
+        // Reduce default intensity (w) to avoid overbright scenes; editable via ImGui
+        pl.color = { 1.0f, 1.0f, 1.0f, 1.5f };
         pl.radius = 6.0f;
         pl.decay = 2.0f;
         pl.enabled = 1;
@@ -273,7 +276,8 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         auto sl = impl_->object3dCommon->GetSpotLightData();
         if (sl) {
             sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
-            sl->color = { 1.0f, 1.0f, 1.0f, 4.0f };
+            // Slightly reduce default spot intensity for better starting balance
+            sl->color = { 1.0f, 1.0f, 1.0f, 2.0f };
             sl->distance = 7.0f;
             sl->direction = MathUtil::Normalize({ -1.0f, -1.0f, 0.0f });
             sl->decay = 2.0f;

@@ -104,6 +104,14 @@ void Object3d::DrawImGui(int index)
     if (materialData_) {
         ImGui::Checkbox("Use Alpha Cutout Sampler", &useAlphaCutoutSampler_);
         materialData_->useAlphaCutoutSampler = useAlphaCutoutSampler_ ? 1 : 0;
+        // Color control for material
+        float col[4] = { materialData_->color.x, materialData_->color.y, materialData_->color.z, materialData_->color.w };
+        if (ImGui::ColorEdit4("Color", col)) {
+            materialData_->color.x = col[0];
+            materialData_->color.y = col[1];
+            materialData_->color.z = col[2];
+            materialData_->color.w = col[3];
+        }
     }
 #else
     (void)index;
