@@ -48,7 +48,7 @@
 #include "engine/base/SceneManager.h"
 #include "engine/base/SrvManager.h"
 #include "engine/sound/Sound.h"
-#include "project/scenes/SceneFactory.h"
+#include "application/scenes/SceneFactory.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")

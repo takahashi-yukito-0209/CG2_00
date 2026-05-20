@@ -98,6 +98,11 @@ public: // 公開メンバ関数
     /// </summary>
     DXGI_FORMAT GetSwapChainFormat() const { return swapChainFormat_; }
 
+    /// <summary>
+    /// DSVヒープの先頭CPUディスクリプタハンドルを取得（外部でDSVを使ってOMSetRenderTargetsする場合に使用）
+    /// </summary>
+    D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const;
+
     // --- Static メンバ関数（ヘルパー/汎用機能） ---
 
     // 最大SRV数（最大テクスチャ枚数）

@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "project/Game.h"
+#include "application/Game.h"
 
 /// Windowsアプリケーションのエントリーポイント
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)

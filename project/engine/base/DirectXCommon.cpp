@@ -221,6 +221,16 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVGPUDescriptorHandle(uint32_t in
     return GetGPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDSVHandle() const
+{
+    if (!dsvDescriptorHeap_) {
+        D3D12_CPU_DESCRIPTOR_HANDLE h{};
+        h.ptr = 0;
+        return h;
+    }
+    return dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+}
+
 /// <summary>
 /// 全体の初期化フローを実行する
 /// </summary>
