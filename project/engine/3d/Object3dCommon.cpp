@@ -173,6 +173,121 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
                 if (ImGui::SliderFloat("Intensity", &intensity, 0.0f, 10.0f)) {
                     directionalLightData_->intensity = intensity;
                 }
+                // Point lights UI
+                if (ImGui::TreeNode("Point Lights")) {
+                    if (pointLightsData_) {
+                        for (uint32_t i = 0; i < Object3dCommon::kMaxPointLights; ++i) {
+                            ImGui::PushID((int)i);
+                            char label[64];
+                            sprintf_s(label, "Point %u", i);
+                            if (ImGui::CollapsingHeader(label)) {
+                                bool enabled = pointLightsData_[i].enabled != 0;
+                                if (ImGui::Checkbox("Enabled", &enabled)) {
+                                    pointLightsData_[i].enabled = enabled ? 1 : 0;
+                                }
+
+                                float pos[3] = { pointLightsData_[i].position.x, pointLightsData_[i].position.y, pointLightsData_[i].position.z };
+                                if (ImGui::DragFloat3("Position", pos, 0.1f)) {
+                                    pointLightsData_[i].position.x = pos[0];
+                                    pointLightsData_[i].position.y = pos[1];
+                                    pointLightsData_[i].position.z = pos[2];
+                                }
+
+                                float col[3] = { pointLightsData_[i].color.x, pointLightsData_[i].color.y, pointLightsData_[i].color.z };
+                                if (ImGui::ColorEdit3("Color", col)) {
+                                    pointLightsData_[i].color.x = col[0];
+                                    pointLightsData_[i].color.y = col[1];
+                                    pointLightsData_[i].color.z = col[2];
+                                }
+
+                                float pIntensity = pointLightsData_[i].color.w;
+                                if (ImGui::SliderFloat("Intensity", &pIntensity, 0.0f, 10.0f)) {
+                                    pointLightsData_[i].color.w = pIntensity;
+                                }
+
+                                float radius = pointLightsData_[i].radius;
+                                if (ImGui::SliderFloat("Radius", &radius, 0.0f, 100.0f)) {
+                                    pointLightsData_[i].radius = radius;
+                                }
+
+                                float decay = pointLightsData_[i].decay;
+                                if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                                    pointLightsData_[i].decay = decay;
+                                }
+                            }
+                            ImGui::PopID();
+                        }
+                    } else {
+                        ImGui::Text("Point lights not available");
+                    }
+                    ImGui::TreePop();
+                }
+
+                // Spot light UI
+                if (ImGui::TreeNode("Spot Light")) {
+                    if (spotLightData_) {
+                        bool enabled = spotLightData_->enabled != 0;
+                        if (ImGui::Checkbox("Enabled", &enabled)) {
+                            spotLightData_->enabled = enabled ? 1 : 0;
+                        }
+
+                        float spos[3] = { spotLightData_->position.x, spotLightData_->position.y, spotLightData_->position.z };
+                        if (ImGui::DragFloat3("Position", spos, 0.1f)) {
+                            spotLightData_->position.x = spos[0];
+                            spotLightData_->position.y = spos[1];
+                            spotLightData_->position.z = spos[2];
+                        }
+
+                        float sdir[3] = { spotLightData_->direction.x, spotLightData_->direction.y, spotLightData_->direction.z };
+                        if (ImGui::DragFloat3("Direction", sdir, 0.05f)) {
+                            // normalize direction if possible
+                            float len = sqrtf(sdir[0]*sdir[0] + sdir[1]*sdir[1] + sdir[2]*sdir[2]);
+                            if (len > 1e-6f) {
+                                spotLightData_->direction.x = sdir[0] / len;
+                                spotLightData_->direction.y = sdir[1] / len;
+                                spotLightData_->direction.z = sdir[2] / len;
+                            }
+                        }
+
+                        float scol[3] = { spotLightData_->color.x, spotLightData_->color.y, spotLightData_->color.z };
+                        if (ImGui::ColorEdit3("Color", scol)) {
+                            spotLightData_->color.x = scol[0];
+                            spotLightData_->color.y = scol[1];
+                            spotLightData_->color.z = scol[2];
+                        }
+
+                        float sIntensity = spotLightData_->color.w;
+                        if (ImGui::SliderFloat("Intensity", &sIntensity, 0.0f, 10.0f)) {
+                            spotLightData_->color.w = sIntensity;
+                        }
+
+                        float distance = spotLightData_->distance;
+                        if (ImGui::SliderFloat("Distance", &distance, 0.0f, 100.0f)) {
+                            spotLightData_->distance = distance;
+                        }
+
+                        float decay = spotLightData_->decay;
+                        if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                            spotLightData_->decay = decay;
+                        }
+
+                        // Cone angle editing (convert between cos and degrees for usability)
+                        const float rad2deg = 57.29577951308232f;
+                        const float deg2rad = 0.017453292519943295f;
+                        float angleDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosAngle))) * rad2deg;
+                        if (ImGui::SliderFloat("Cone Angle (deg)", &angleDeg, 0.1f, 179.0f)) {
+                            spotLightData_->cosAngle = cosf(angleDeg * deg2rad);
+                        }
+
+                        float falloffDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosFalloffStart))) * rad2deg;
+                        if (ImGui::SliderFloat("Falloff Start (deg)", &falloffDeg, 0.0f, angleDeg)) {
+                            spotLightData_->cosFalloffStart = cosf(falloffDeg * deg2rad);
+                        }
+                    } else {
+                        ImGui::Text("Spot light not available");
+                    }
+                    ImGui::TreePop();
+                }
             }
         }
 
