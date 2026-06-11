@@ -99,6 +99,7 @@ public: // メンバ関数
     /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする
     /// </summary>
     virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) {}
+
 };
 
 } // namespace MyEngine
