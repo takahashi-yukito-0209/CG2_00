@@ -164,6 +164,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\base\DirectXCommon.cpp" />
     <ClCompile Include="engine\3d\DebugCamera.cpp" />
     <ClCompile Include="engine\base\Framework.cpp" />
+    <ClCompile Include="engine\base\PostProcess.cpp" />
+    <ClCompile Include="engine\base\RenderTarget.cpp" />
     <ClCompile Include="engine\base\SceneManager.cpp" />
     <ClCompile Include="engine\base\SrvManager.cpp" />
     <ClCompile Include="engine\particle\ParticleEmitter.cpp" />
@@ -210,10 +212,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\2d\TextureManager.cpp" />
     <ClCompile Include="engine\3d\Object3d.cpp" />
     <ClCompile Include="engine\3d\Object3dCommon.cpp" />
-    <ClCompile Include="project\Game.cpp" />
-    <ClCompile Include="project\scenes\PlayScene.cpp" />
-    <ClCompile Include="project\scenes\SceneFactory.cpp" />
-    <ClCompile Include="project\scenes\TitleScene.cpp" />
+    <ClCompile Include="application\Game.cpp" />
+    <ClCompile Include="application\scenes\PlayScene.cpp" />
+    <ClCompile Include="application\scenes\SceneFactory.cpp" />
+    <ClCompile Include="application\scenes\TitleScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -264,6 +266,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\3d\DebugCamera.h" />
     <ClInclude Include="engine\base\Framework.h" />
     <ClInclude Include="engine\base\IScene.h" />
+    <ClInclude Include="engine\base\PostProcess.h" />
+    <ClInclude Include="engine\base\RenderTarget.h" />
     <ClInclude Include="engine\base\SceneManager.h" />
     <ClInclude Include="engine\base\SrvManager.h" />
     <ClInclude Include="engine\particle\ParticleEmitter.h" />
@@ -292,10 +296,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\3d\Object3d.h" />
     <ClInclude Include="engine\3d\Object3dCommon.h" />
     <ClInclude Include="engine\base\ImGuiManager.h" />
-    <ClInclude Include="project\Game.h" />
-    <ClInclude Include="project\scenes\PlayScene.h" />
-    <ClInclude Include="project\scenes\SceneFactory.h" />
-    <ClInclude Include="project\scenes\TitleScene.h" />
+    <ClInclude Include="application\Game.h" />
+    <ClInclude Include="application\scenes\PlayScene.h" />
+    <ClInclude Include="application\scenes\SceneFactory.h" />
+    <ClInclude Include="application\scenes\TitleScene.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
@@ -306,6 +310,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\shaders\CopyImage.hlsli" />
     <None Include="resources\shaders\Object3d.hlsli" />
     <None Include="resources\shaders\Particle.hlsli" />
   </ItemGroup>

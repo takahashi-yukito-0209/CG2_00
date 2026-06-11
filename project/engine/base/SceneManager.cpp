@@ -12,6 +12,21 @@ SceneManager::~SceneManager() {
 }
 
 /// <summary>
+/// ウィンドウリサイズをシーンへ伝播する
+/// </summary>
+void SceneManager::OnWindowResize(uint32_t width, uint32_t height) {
+    // 必要ならシーンコンテキスト中の値を更新しておく
+    // (SceneContext 自体には幅/高さのフィールドがないため、各シーンがカメラ等を参照している想定)
+    if (current_) {
+        try {
+            current_->OnWindowResize(width, height);
+        } catch (...) {
+            Logger::Log("SceneManager::OnWindowResize: exception in current_->OnWindowResize\n");
+        }
+    }
+}
+
+/// <summary>
 /// シーンマネージャの初期化（必要なリソースのセットアップなどを行う）。現状は特に処理なし。
 /// </summary>
 void SceneManager::Initialize() {

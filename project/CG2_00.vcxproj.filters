@@ -177,18 +177,6 @@
     <ClCompile Include="engine\particle\ParticleManager.cpp">
       <Filter>ソース ファイル\engine\particle</Filter>
     </ClCompile>
-    <ClCompile Include="project\Game.cpp">
-      <Filter>ソース ファイル\application</Filter>
-    </ClCompile>
-    <ClCompile Include="project\scenes\PlayScene.cpp">
-      <Filter>ソース ファイル\application\scenes</Filter>
-    </ClCompile>
-    <ClCompile Include="project\scenes\TitleScene.cpp">
-      <Filter>ソース ファイル\application\scenes</Filter>
-    </ClCompile>
-    <ClCompile Include="project\scenes\SceneFactory.cpp">
-      <Filter>ソース ファイル\application\scenes</Filter>
-    </ClCompile>
     <ClCompile Include="engine\utility\ResourceResolver.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
@@ -200,6 +188,24 @@
     </ClCompile>
     <ClCompile Include="engine\base\Framework.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\RenderTarget.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="application\Game.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\PlayScene.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\SceneFactory.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\TitleScene.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\PostProcess.cpp">
+      <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -322,18 +328,6 @@
     <ClInclude Include="engine\particle\ParticleManager.h">
       <Filter>ヘッダー ファイル\engine\particle</Filter>
     </ClInclude>
-    <ClInclude Include="project\Game.h">
-      <Filter>ヘッダー ファイル\application</Filter>
-    </ClInclude>
-    <ClInclude Include="project\scenes\PlayScene.h">
-      <Filter>ヘッダー ファイル\application\scenes</Filter>
-    </ClInclude>
-    <ClInclude Include="project\scenes\SceneFactory.h">
-      <Filter>ヘッダー ファイル\application\scenes</Filter>
-    </ClInclude>
-    <ClInclude Include="project\scenes\TitleScene.h">
-      <Filter>ヘッダー ファイル\application\scenes</Filter>
-    </ClInclude>
     <ClInclude Include="engine\RenderState.h">
       <Filter>ヘッダー ファイル\engine</Filter>
     </ClInclude>
@@ -349,6 +343,24 @@
     <ClInclude Include="engine\base\Framework.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
+    <ClInclude Include="engine\base\RenderTarget.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="application\Game.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\PlayScene.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\SceneFactory.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\TitleScene.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcess.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt">
@@ -362,5 +374,6 @@
     <None Include="resources\shaders\Particle.hlsli">
       <Filter>シェーダーファイル</Filter>
     </None>
+    <None Include="resources\shaders\CopyImage.hlsli" />
   </ItemGroup>
 </Project>

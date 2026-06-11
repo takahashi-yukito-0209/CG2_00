@@ -20,7 +20,7 @@ public: // メンバ関数
     /// <summary>
     /// 初期化処理
     /// </summary>
-    void Initialize(MyEngine::DirectXCommon* dxCommon);
+    void Initialize(DirectXCommon* dxCommon);
 
     /// <summary>
     /// 終了処理

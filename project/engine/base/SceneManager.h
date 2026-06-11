@@ -53,6 +53,11 @@ public: // メンバ関数
     void SetSelectedDrawType(int t);
 
     /// <summary>
+    /// ウィンドウリサイズをシーンへ伝播する
+    /// </summary>
+    void OnWindowResize(uint32_t width, uint32_t height);
+
+    /// <summary>
     /// シーンの切り替え。現在のシーンがあればFinalizeを呼び出してクリーンアップし、新しいシーンをセットしてInitializeを呼び出す。
     /// </summary>
     void ChangeScene(std::unique_ptr<IScene> newScene);

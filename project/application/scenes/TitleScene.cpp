@@ -1,4 +1,6 @@
 #include "TitleScene.h"
+#include "../../engine/base/DirectXCommon.h"
+#include "../../engine/base/SrvManager.h"
 #include <iostream>
 
 using namespace MyEngine;
@@ -21,6 +23,20 @@ void TitleScene::Initialize(const SceneContext& ctx)
     // 初期化処理（サンプル）
     (void)ctx;
     std::cout << "TitleScene Initialize\n";
+
+    // デモ用のレンダーターゲットとSRVの作成
+    auto dx = DirectXCommon::GetInstance();
+    if (dx) {
+        rtHandle_ = dx->CreateRenderTarget(
+            800, 600, dx->GetSwapChainFormat(),
+            true, { 0.53f, 0.71f, 0.82f, 1.0f });
+
+        if (rtHandle_ >= 0 && ctx.srvManager) {
+            rtSrvIndex_ = ctx.srvManager->Allocate();
+            dx->CreateRenderTargetSRV(rtHandle_, rtSrvIndex_);
+        }
+        postProcess_.Initialize(dx);
+    }
 }
 
 /// <summary>
@@ -29,6 +45,14 @@ void TitleScene::Initialize(const SceneContext& ctx)
 void TitleScene::Finalize()
 {
     std::cout << "TitleScene Finalize\n";
+    // デモ用のレンダーターゲットとSRVの破棄
+    auto dx = DirectXCommon::GetInstance();
+    if (dx) {
+        if (rtHandle_ >= 0) {
+            dx->DestroyRenderTarget(rtHandle_);
+            rtHandle_ = -1;
+        }
+    }
 }
 
 /// <summary>
@@ -46,6 +70,21 @@ void TitleScene::Update(float dt)
 void TitleScene::Draw()
 {
     // サンプル: 何もしない
+    auto dx = DirectXCommon::GetInstance();
+    if (!dx)
+        return;
+
+    // 描画前処理（SRVヒープの設定など）
+    if (rtHandle_ >= 0) {
+        // デモ用のレンダーターゲットに描画してみる
+        dx->BeginRenderTo(rtHandle_, true);
+        dx->EndRenderTo(rtHandle_);
+
+        // ポストプロセスで描画してみる
+        if (postProcess_.IsReady() && rtSrvIndex_ != UINT32_MAX) {
+            postProcess_.DrawTexture(rtSrvIndex_);
+        }
+    }
 }
 
 /// <summary>

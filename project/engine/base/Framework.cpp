@@ -34,6 +34,9 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
      // SrvManagerの初期化
     srvManagerOut.Initialize(DirectXCommon::GetInstance());
 
+    // DirectXCommon に SrvManager を登録しておく（RenderTarget の破棄時に SRV を解放するため）
+    DirectXCommon::GetInstance()->SetSrvManager(&srvManagerOut);
+
      // SpriteCommonのインスタンスを作成
     spriteCommonOut = std::make_unique<SpriteCommon>();
     // SpriteCommonの初期化
