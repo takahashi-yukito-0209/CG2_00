@@ -4,6 +4,7 @@
 #pragma comment(lib, "winmm.lib")
 
 #include "ImGuiManager.h"
+#include "DirectXCommon.h"
 
 // ImGui のウィンドウプロシージャハンドラの宣言 (存在する場合のみ)
 #ifdef USE_IMGUI
@@ -119,6 +120,41 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
+
+    case WM_SIZE:
+        // WM_SIZE は連続で来るため短いデバウンスを行い、最終的なサイズだけ通知する
+        // 単純化のため WindowProc 内の静的変数で保管する
+        {
+            static const UINT_PTR kResizeTimerId = 1;
+            static UINT pendingWidth = 0;
+            static UINT pendingHeight = 0;
+
+            pendingWidth = LOWORD(lparam);
+            pendingHeight = HIWORD(lparam);
+            // 既存のタイマーをクリアして新たにセット（100ms デバウンス）
+            KillTimer(hwnd, kResizeTimerId);
+            SetTimer(hwnd, kResizeTimerId, 100, nullptr);
+        }
+        return 0;
+
+    case WM_TIMER:
+        {
+            static const UINT_PTR kResizeTimerId = 1;
+            if (wparam == kResizeTimerId) {
+                // タイマーが発火したときに、最新のクライアントサイズを取得してリサイズ処理を呼び出す
+                RECT rc;
+                if (GetClientRect(hwnd, &rc)) {
+                    UINT w = static_cast<UINT>(rc.right - rc.left);
+                    UINT h = static_cast<UINT>(rc.bottom - rc.top);
+                    if (w != 0 && h != 0) {
+                        DirectXCommon::GetInstance()->OnWindowResize(w, h);
+                    }
+                }
+                KillTimer(hwnd, kResizeTimerId);
+            }
+        }
+        return 0;
+
     }
 
     // ImGui のハンドラは最後にする（ImGui 有効時のみ）

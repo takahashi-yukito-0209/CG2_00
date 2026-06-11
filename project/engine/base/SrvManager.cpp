@@ -35,6 +35,8 @@ void SrvManager::Finalize()
     descriptorHeap_.Reset();
     descriptorSize_ = 0;
     useIndex_ = 0;
+    freeList_.clear();
+    allocatedSet_.clear();
 }
 
 /// <summary>

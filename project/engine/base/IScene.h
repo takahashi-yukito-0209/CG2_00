@@ -94,6 +94,11 @@ public: // メンバ関数
     /// デフォルト実装は何もしない
     /// </summary>
     virtual void FillSpritePointers(std::vector<class Sprite*>* out) {}
+
+    /// <summary>
+    /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする
+    /// </summary>
+    virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) {}
 };
 
 } // namespace MyEngine

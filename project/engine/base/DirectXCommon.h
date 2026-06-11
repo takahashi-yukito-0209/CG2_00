@@ -9,11 +9,20 @@
 #include <wrl.h>
 
 #include "externals/DirectXTex/DirectXTex.h"
+#include <atomic>
+#include <functional>
+#include <memory>
+#include <vector>
 
 // 前方宣言: MyEngine 名前空間内の WinApp を宣言
-namespace MyEngine { class WinApp; }
+namespace MyEngine {
+class WinApp;
+}
 
 namespace MyEngine {
+
+class SrvManager;
+
 /// <summary>
 /// DirectX関連の共通処理をまとめたクラス
 /// </summary>
@@ -111,24 +120,78 @@ public: // 公開メンバ関数
     // シングルトンインスタンスを取得するための静的メソッドの宣言
     static DirectXCommon* GetInstance();
 
+    // --- RenderTarget (offscreen) 管理 ---
+
+    /// <summary>
+    /// 指定したサイズとフォーマットでオフスクリーンのレンダーターゲットを作成し、管理リストに追加する
+    /// </summary>
+    int CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORMAT format, bool useDepth = true,
+        const std::array<float, 4>& clearColor = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f });
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットを破棄し、管理リストから削除する
+    /// </summary>
+    void DestroyRenderTarget(int handle);
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットを新しいサイズにリサイズする
+    /// </summary>
+    void ResizeRenderTarget(int handle, uint32_t width, uint32_t height);
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットのカラーテクスチャに対してSRVを作成し、グローバルSRVヒープの指定されたインデックスに配置する
+    /// </summary>
+    void CreateRenderTargetSRV(int handle, uint32_t srvIndex);
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットのRTVのCPUディスクリプタハンドルを取得する
+    /// </summary>
+    D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetRTV(int handle) const;
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットのDSVのCPUディスクリプタハンドルを取得する
+    /// </summary>
+    D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetDSV(int handle) const;
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットを描画対象として設定する
+    /// </summary>
+    void BeginRenderTo(int handle, bool clear = true);
+
+    /// <summary>
+    /// 指定したハンドルのレンダーターゲットへの描画を終了し、必要に応じてリソースバリアで状態を遷移させる
+    /// </summary>
+    void EndRenderTo(int handle);
+
     // コピー/ムーブは禁止
     DirectXCommon(const DirectXCommon&) = delete;
     DirectXCommon& operator=(const DirectXCommon&) = delete;
     DirectXCommon(DirectXCommon&&) = delete;
     DirectXCommon& operator=(DirectXCommon&&) = delete;
 
-    //終了
+    // 終了
     void Finalize();
 
     // コマンドリストを実行し、フェンスにシグナルを送る
     void ExecuteCommandList();
-   
+
     // GPUコマンドの完了を待機する
     void WaitForCommandExecution();
 
     // コマンドアロケータとコマンドリストをリセットする
     void ResetCommandList();
 
+    // SrvManager の登録
+    void SetSrvManager(class SrvManager* mgr);
+
+    // ウィンドウリサイズ通知 (WinApp から呼ばれる)
+    void OnWindowResize(uint32_t width, uint32_t height);
+
+    // リサイズ時のコールバック登録（外部でカメラやシーンへ通知するため）
+    void SetOnResizeCallback(const std::function<void(uint32_t, uint32_t)>& cb);
+
+    // 深度バッファを指定サイズで再作成する（リサイズ時に使用）
+    void ResizeDepthStencil(uint32_t width, uint32_t height);
 
 private: // Private メンバ変数
     // WinApp のポインタ（外部で管理される）
@@ -170,10 +233,19 @@ private: // Private メンバ変数
     // 深度ステンシルバッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
 
+    // SrvManager の参照（存在すればレンダーターゲットの SRV 解放に使用）
+    class SrvManager* srvManager_ = nullptr;
+
     // フェンスと同期イベント
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
+
+    // リサイズ処理中フラグ（再入防止）
+    std::atomic<bool> resizingInProgress_ { false };
+
+    // リサイズ通知用コールバック
+    std::function<void(uint32_t, uint32_t)> onResizeCallback_;
 
     // ビューポートとシザー矩形
     D3D12_VIEWPORT viewport_ {};

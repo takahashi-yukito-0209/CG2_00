@@ -8,9 +8,12 @@
 #include <d3d12sdklayers.h>
 #include <externals/DirectXTex/d3dx12.h>
 
+#include "RenderTarget.h"
+#include "SrvManager.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
+#include <array>
 #include <thread>
 
 #pragma comment(lib, "d3d12.lib")
@@ -23,6 +26,26 @@ using namespace MyEngine;
 
 // 最大SRV数を定義
 const uint32_t DirectXCommon::kMaxSRVCount = 512;
+
+// レンダーターゲットの内部構造体定義
+struct RenderTargetInternal {
+    Microsoft::WRL::ComPtr<ID3D12Resource> colorResource;
+    Microsoft::WRL::ComPtr<ID3D12Resource> depthResource;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap; // per-RT RTV heap
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap; // per-RT DSV heap (optional)
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle {};
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle {};
+    DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    bool useDepth = false;
+    D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
+    std::array<float, 4> clearColor { 0.0f, 0.0f, 0.0f, 1.0f };
+    // SRVヒープ上のインデックス（存在しない場合は UINT32_MAX）
+    uint32_t srvIndex = UINT32_MAX;
+};
+
+static std::vector<std::unique_ptr<RenderTargetInternal>> g_renderTargets;
 
 // ----------------------------------------------------------------------
 // Static メンバ関数の実装
@@ -37,6 +60,22 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetCPUDescriptorHandle(
     D3D12_CPU_DESCRIPTOR_HANDLE handle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += (descriptorSize * index);
     return handle;
+}
+
+void DirectXCommon::SetOnResizeCallback(const std::function<void(uint32_t, uint32_t)>& cb)
+{
+    onResizeCallback_ = cb;
+}
+
+/// <summary>
+/// ウィンドウリサイズ通知 (デフォルト実装はファイル下部にある実装を使用)
+/// </summary>
+// (OnWindowResize implementation is defined later in this file)
+
+// SrvManager の登録実装
+void DirectXCommon::SetSrvManager(SrvManager* mgr)
+{
+    srvManager_ = mgr;
 }
 
 // ディスクリプタハンドルの取得用の静的関数の実装
@@ -86,36 +125,76 @@ void DirectXCommon::Finalize()
 
     // 明示的にComPtrをリセットして参照カウントを減らす
     // コマンド周り
-    if (commandList_) commandList_.Reset();
-    if (commandAllocator_) commandAllocator_.Reset();
-    if (commandQueue_) commandQueue_.Reset();
+    if (commandList_) {
+        commandList_.Reset();
+    }
+
+    if (commandAllocator_) {
+        commandAllocator_.Reset();
+    }
+
+    if (commandQueue_) {
+        commandQueue_.Reset();
+    }
 
     // スワップチェーン関連
-    if (swapChain_) swapChain_.Reset();
+    if (swapChain_) {
+        swapChain_.Reset();
+    }
+
     for (auto& res : swapChainResources_) {
-        if (res) res.Reset();
+        if (res) {
+            res.Reset();
+        }
     }
 
     // リソース/ヒープ類
-    if (rtvDescriptorHeap_) rtvDescriptorHeap_.Reset();
-    if (srvDescriptorHeap_) srvDescriptorHeap_.Reset();
-    if (dsvDescriptorHeap_) dsvDescriptorHeap_.Reset();
-    if (depthStencilResource_) depthStencilResource_.Reset();
+    if (rtvDescriptorHeap_) {
+        rtvDescriptorHeap_.Reset();
+    }
+
+    if (srvDescriptorHeap_) {
+        srvDescriptorHeap_.Reset();
+    }
+
+    if (dsvDescriptorHeap_) {
+        dsvDescriptorHeap_.Reset();
+    }
+
+    if (depthStencilResource_) {
+        depthStencilResource_.Reset();
+    }
 
     // フェンス/イベント
-    if (fence_) fence_.Reset();
+    if (fence_) {
+        fence_.Reset();
+    }
+
     if (fenceEvent_) {
         CloseHandle(fenceEvent_);
         fenceEvent_ = nullptr;
     }
 
     // コンパイラ/ファクトリ/デバイス
-    if (dxcCompiler_) dxcCompiler_.Reset();
-    if (dxcUtils_) dxcUtils_.Reset();
-    if (includeHandler_) includeHandler_.Reset();
-    if (device_) device_.Reset();
-    if (dxgiFactory_) dxgiFactory_.Reset();
+    if (dxcCompiler_) {
+        dxcCompiler_.Reset();
+    }
 
+    if (dxcUtils_) {
+        dxcUtils_.Reset();
+    }
+
+    if (includeHandler_) {
+        includeHandler_.Reset();
+    }
+
+    if (device_) {
+        device_.Reset();
+    }
+
+    if (dxgiFactory_) {
+        dxgiFactory_.Reset();
+    }
 }
 
 /// <summary>
@@ -221,14 +300,361 @@ D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVGPUDescriptorHandle(uint32_t in
     return GetGPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
+// DSVヒープの先頭CPUディスクリプタハンドルを取得
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDSVHandle() const
 {
+    // DSVヒープが存在しない場合は無効なハンドルを返す
     if (!dsvDescriptorHeap_) {
-        D3D12_CPU_DESCRIPTOR_HANDLE h{};
+        D3D12_CPU_DESCRIPTOR_HANDLE h {};
         h.ptr = 0;
         return h;
     }
     return dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+}
+
+/// <summary>
+/// 指定したサイズとフォーマットでオフスクリーンのレンダーターゲットを作成し、管理リストに追加する
+/// </summary>
+int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORMAT format, bool useDepth,
+    const std::array<float, 4>& clearColor)
+{
+    // パラメータチェック
+    auto rt = std::make_unique<RenderTargetInternal>();
+    rt->width = width;
+    rt->height = height;
+    rt->format = format;
+    rt->useDepth = useDepth;
+
+    // レンダーターゲット用のテクスチャリソースを作成
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    // ヒーププロパティの設定
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProps.CreationNodeMask = 1;
+    heapProps.VisibleNodeMask = 1;
+
+    // クリア値の設定
+    D3D12_CLEAR_VALUE clearValue = {};
+    clearValue.Format = format;
+    clearValue.Color[0] = clearColor[0];
+    clearValue.Color[1] = clearColor[1];
+    clearValue.Color[2] = clearColor[2];
+    clearValue.Color[3] = clearColor[3];
+
+    // リソースの生成
+    HRESULT hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&rt->colorResource));
+
+    if (FAILED(hr)) {
+        return -1;
+    }
+
+    // 初期状態はレンダーターゲットとして設定
+    rt->currentState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    // store clear color for later ClearRenderTargetView calls
+    rt->clearColor = clearColor;
+
+    // レンダーターゲット用のテクスチャリソースができたので、RTVヒープとRTVを作成して関連付けるレンダーターゲット
+    D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
+    rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvDesc.NumDescriptors = 1;
+    rtvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    hr = device_->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&rt->rtvHeap));
+    if (FAILED(hr)) {
+        return -1;
+    }
+    rt->rtvHandle = rt->rtvHeap->GetCPUDescriptorHandleForHeapStart();
+
+    // RTVの設定と作成
+    D3D12_RENDER_TARGET_VIEW_DESC rtvViewDesc = {};
+    rtvViewDesc.Format = format;
+    rtvViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    device_->CreateRenderTargetView(rt->colorResource.Get(), &rtvViewDesc, rt->rtvHandle);
+
+    if (useDepth) {
+        // 深度ステンシルバッファも必要な場合は、同様にリソースとDSVを作成
+        D3D12_RESOURCE_DESC ddesc = {};
+        ddesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        ddesc.Width = width;
+        ddesc.Height = height;
+        ddesc.DepthOrArraySize = 1;
+        ddesc.MipLevels = 1;
+        ddesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        ddesc.SampleDesc.Count = 1;
+        ddesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        ddesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+        // 深度ステンシルバッファのクリア値
+        D3D12_CLEAR_VALUE dclear = {};
+        dclear.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dclear.DepthStencil.Depth = 1.0f;
+        dclear.DepthStencil.Stencil = 0;
+
+        // 深度ステンシルバッファのリソースを生成
+        hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &ddesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &dclear, IID_PPV_ARGS(&rt->depthResource));
+        if (FAILED(hr)) {
+            return -1;
+        }
+
+        // DSVヒープとDSVの作成
+        D3D12_DESCRIPTOR_HEAP_DESC dsvDesc = {};
+        dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        dsvDesc.NumDescriptors = 1;
+        dsvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        hr = device_->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&rt->dsvHeap));
+        if (FAILED(hr)) {
+            return -1;
+        }
+
+        // DSVの設定と作成
+        rt->dsvHandle = rt->dsvHeap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvView = {};
+        dsvView.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dsvView.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        device_->CreateDepthStencilView(rt->depthResource.Get(), &dsvView, rt->dsvHandle);
+    }
+
+    // 管理リストに追加してハンドル（インデックス）を返す
+    int idx = static_cast<int>(g_renderTargets.size());
+    g_renderTargets.push_back(std::move(rt));
+    return idx;
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットを破棄する
+/// </summary>
+void DirectXCommon::DestroyRenderTarget(int handle)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+    // SRV が割り当てられている場合は SrvManager に解放を依頼する
+    auto& rt = g_renderTargets[handle];
+    if (rt) {
+        if (rt->srvIndex != UINT32_MAX && srvManager_) {
+            srvManager_->Free(rt->srvIndex);
+            rt->srvIndex = UINT32_MAX;
+        }
+    }
+    g_renderTargets[handle].reset();
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットを新しいサイズにリサイズする
+/// </summary>
+void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t height)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+
+    // 既存のレンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt) {
+        return;
+    }
+
+    // 現在のフォーマットと深度使用フラグを保存しておく
+    DXGI_FORMAT fmt = rt->format;
+    bool useDepth = rt->useDepth;
+    uint32_t oldSrv = rt->srvIndex;
+    // DestroyRenderTarget will free SRV via SrvManager; call it to cleanup existing resources
+    DestroyRenderTarget(handle);
+    // 同じハンドルで新しいレンダーターゲットを作成
+    int newIdx = CreateRenderTarget(width, height, fmt, useDepth);
+    // 新しいレンダーターゲットが作成できたら、管理リスト内で入れ替える
+    if (newIdx != handle && newIdx >= 0) {
+        g_renderTargets[handle].swap(g_renderTargets[newIdx]);
+        g_renderTargets[newIdx].reset();
+    }
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットのカラーテクスチャに対してSRVを作成し、グローバルSRVヒープの指定されたインデックスに配置する
+/// </summary>
+void DirectXCommon::CreateRenderTargetSRV(int handle, uint32_t srvIndex)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+    // レンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt || !rt->colorResource) {
+        return;
+    }
+
+    // SRVの設定と作成
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = rt->colorResource->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    // グローバルSRVヒープの指定されたインデックスにSRVを作成
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = GetSRVCPUDescriptorHandle(srvIndex);
+    device_->CreateShaderResourceView(rt->colorResource.Get(), &srvDesc, cpu);
+    // 保存しておく
+    rt->srvIndex = srvIndex;
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットのRTVとDSVのCPUディスクリプタハンドルを取得する
+/// </summary>
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetRenderTargetRTV(int handle) const
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE h {};
+    h.ptr = 0;
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return h;
+    }
+
+    // レンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt) {
+        return h;
+    }
+
+    return rt->rtvHandle;
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットのDSVのCPUディスクリプタハンドルを取得する
+/// </summary>
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetRenderTargetDSV(int handle) const
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE h {};
+    h.ptr = 0;
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return h;
+    }
+
+    // レンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt) {
+        return h;
+    }
+
+    return rt->dsvHandle;
+}
+
+/// <summary>
+/// 指定したハンドルのレンダーターゲットを描画対象として設定する
+/// </summary>
+void DirectXCommon::BeginRenderTo(int handle, bool clear)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+
+    // レンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt) {
+        return;
+    }
+
+    // コマンドリストを取得
+    auto cmd = commandList_.Get();
+    // レンダーターゲットのカラーテクスチャをレンダーターゲット状態に遷移させる
+    if (rt->currentState != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = rt->colorResource.Get();
+        barrier.Transition.StateBefore = rt->currentState;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmd->ResourceBarrier(1, &barrier);
+        rt->currentState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
+
+    // レンダーターゲットのRTVとDSVを設定する
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv = rt->dsvHandle;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv = rt->rtvHandle;
+
+    // 深度バッファを使用する場合はDSVもセット、そうでない場合はDSVはnullでOMSetRenderTargetsを呼び出す
+    if (rt->useDepth) {
+        cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    } else {
+        cmd->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    }
+
+    // ビューポートをRTサイズに合わせる
+    D3D12_VIEWPORT vp {};
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    vp.Width = static_cast<float>(rt->width);
+    vp.Height = static_cast<float>(rt->height);
+    vp.MinDepth = 0;
+    vp.MaxDepth = 1;
+
+    // シザー矩形も同様にRTサイズに合わせる
+    D3D12_RECT sc {};
+    sc.left = 0;
+    sc.top = 0;
+    sc.right = rt->width;
+    sc.bottom = rt->height;
+
+    // ビューポートとシザー矩形を設定
+    cmd->RSSetViewports(1, &vp);
+    cmd->RSSetScissorRects(1, &sc);
+
+    // クリアフラグが立っている場合は、指定したクリアカラーでRTVをクリアし、必要に応じてDSVもクリアする
+    if (clear) {
+        float clearCol[4] = { rt->clearColor[0], rt->clearColor[1], rt->clearColor[2], rt->clearColor[3] };
+        cmd->ClearRenderTargetView(rt->rtvHandle, clearCol, 0, nullptr);
+        if (rt->useDepth) {
+            cmd->ClearDepthStencilView(rt->dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        }
+    }
+}
+
+/// <summary>
+/// 描画対象をデフォルトのスワップチェーンのバックバッファに戻す
+/// </summary>
+void DirectXCommon::EndRenderTo(int handle)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+
+    // レンダーターゲットを取得
+    auto& rt = g_renderTargets[handle];
+    if (!rt) {
+        return;
+    }
+
+    // コマンドリストを取得
+    auto cmd = commandList_.Get();
+
+    // レンダーターゲットのカラーテクスチャをピクセルシェーダーリソース状態に遷移させる
+    if (rt->currentState != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = rt->colorResource.Get();
+        barrier.Transition.StateBefore = rt->currentState;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmd->ResourceBarrier(1, &barrier);
+        rt->currentState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
+
+    // スワップチェーンのバックバッファに描画対象を戻す
+    if (swapChain_) {
+        UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
+        D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+        cmd->OMSetRenderTargets(1, &rtvHandles_[bbIndex], FALSE, &dsvHandle);
+        // ビューポートとシザー矩形もスワップチェーンのサイズに合わせて設定し直す
+        cmd->RSSetViewports(1, &viewport_);
+        cmd->RSSetScissorRects(1, &scissorRect_);
+    }
 }
 
 /// <summary>
@@ -514,9 +940,12 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     // 3. コンパイル引数の設定
     std::vector<std::wstring> argStrings;
     argStrings.push_back(filePath);
-    argStrings.push_back(L"-E"); argStrings.push_back(L"main");
-    argStrings.push_back(L"-T"); argStrings.push_back(profile);
-    argStrings.push_back(L"-Zi"); argStrings.push_back(L"-Qembed_debug");
+    argStrings.push_back(L"-E"); // エントリポイント指定
+    argStrings.push_back(L"main"); // エントリポイントは "main" に固定
+    argStrings.push_back(L"-T"); // プロファイル指定
+    argStrings.push_back(profile); // プロファイルは引数で指定されたものを使用
+    argStrings.push_back(L"-Zi"); // デバッグ情報を埋め込む
+    argStrings.push_back(L"-Qembed_debug"); // デバッグ情報をシェーダーバイトコードに埋め込む
     argStrings.push_back(L"-Od"); // 最適化を外しておく
     argStrings.push_back(L"-Zpr"); // メモリレイアウトは行優先
 
@@ -532,7 +961,9 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     // std::vector<std::wstring> から LPCWSTR* への変換が必要
     std::vector<LPCWSTR> arguments;
     arguments.reserve(argStrings.size());
-    for (auto& s : argStrings) arguments.push_back(s.c_str());
+    for (auto& s : argStrings) {
+        arguments.push_back(s.c_str());
+    }
     UINT32 argCount = static_cast<UINT32>(arguments.size());
 
     // 4. シェーダーのコンパイル実行 (6引数シグネチャに適合)
@@ -637,14 +1068,14 @@ void DirectXCommon::CreateDevice()
         // エラー時に止まる
         infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
 
-        // 警告時に止まる
+        // 警告時に止まるように設定（開発時の厳密チェックを有効化）
         infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
 
         // 抑制するメッセージのID
+        // ClearRenderTargetView mismatch 警告はスワップチェーンや一部のケースで頻出し、致命的でないためここで抑制する
         D3D12_MESSAGE_ID denyIds[] = {
-            // Windows11でのDXGIデバックレイヤーとDX12デバッグレイヤーの相互作用バグによるエラーメッセージ
-            // https://stackoverflow.com/questions/69805245/directx-12-application-is-crashing-in-windows-11
-            D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
+            D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE,
+            D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
         };
 
         // 抑制するレベル
@@ -708,7 +1139,7 @@ void DirectXCommon::CreateSwapChain()
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 
-    // IDXGISwapChain1 を作成してから、成功したフォーマットで 
+    // IDXGISwapChain1 を作成してから、成功したフォーマットで
     // IDXGISwapChain4 にクエリする方式でスワップチェーンを生成
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
 
@@ -717,7 +1148,7 @@ void DirectXCommon::CreateSwapChain()
     DXGI_FORMAT formatsToTryIntelOnly[] = { DXGI_FORMAT_R8G8B8A8_UNORM };
     DXGI_FORMAT* formatsToTry = formatsToTryDefault;
     size_t formatsCount = _countof(formatsToTryDefault);
-    
+
     if (adapterVendorId_ == 0x8086) {
         formatsToTry = formatsToTryIntelOnly;
         formatsCount = _countof(formatsToTryIntelOnly);
@@ -831,6 +1262,53 @@ void DirectXCommon::CreateDepthBuffer()
 }
 
 /// <summary>
+/// 深度ステンシルバッファを指定サイズで再作成する
+/// </summary>
+void DirectXCommon::ResizeDepthStencil(uint32_t width, uint32_t height)
+{
+    // 既存の深度リソースを破棄
+    if (depthStencilResource_) {
+        depthStencilResource_.Reset();
+    }
+
+    // 新しいサイズでリソースを作成
+    D3D12_RESOURCE_DESC resourceDesc {};
+    resourceDesc.Width = width;
+    resourceDesc.Height = height;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+    D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+    D3D12_CLEAR_VALUE clearValue {};
+    clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    clearValue.DepthStencil.Depth = 1.0f;
+    clearValue.DepthStencil.Stencil = 0;
+
+    HRESULT hr = device_->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        &clearValue,
+        IID_PPV_ARGS(&depthStencilResource_));
+    assert(SUCCEEDED(hr));
+
+    // DSVを再生成
+    if (dsvDescriptorHeap_) {
+        D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc {};
+        dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        device_->CreateDepthStencilView(depthStencilResource_.Get(), &dsvDesc, dsvHandle);
+    }
+}
+
+/// <summary>
 /// ディスクリプタヒープの生成
 /// </summary>
 void DirectXCommon::CreateDescriptorHeaps()
@@ -895,6 +1373,94 @@ void DirectXCommon::InitRenderTargetView()
         rtvHandles_[i] = GetCPUDescriptorHandle(rtvDescriptorHeap_, descriptorSizeRTV_, i);
         device_->CreateRenderTargetView(res, &rtvDesc, rtvHandles_[i]);
     }
+}
+
+/// <summary>
+/// ウィンドウサイズ変更に伴うリサイズ処理
+/// </summary>
+void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
+{
+    // 再入防止
+    bool expected = false;
+    if (!resizingInProgress_.compare_exchange_strong(expected, true)) {
+        Logger::Log("DirectXCommon::OnWindowResize: resize already in progress\n");
+        return;
+    }
+
+    // まずGPUの処理完了を待つ
+    WaitForCommandExecution();
+
+    // 0 は最小化など無効なサイズなので無視
+    if (width == 0 || height == 0) {
+        resizingInProgress_ = false;
+        return;
+    }
+
+    // 既存のバックバッファ関連リソースを解放
+    for (int i = 0; i < kBackBufferCount; ++i) {
+        if (swapChainResources_[i]) {
+            swapChainResources_[i].Reset();
+        }
+    }
+
+    if (rtvDescriptorHeap_) {
+        rtvDescriptorHeap_.Reset();
+    }
+
+    // swap chain のリサイズ
+    HRESULT hr = swapChain_->ResizeBuffers(kBackBufferCount, width, height, swapChainFormat_, 0);
+    if (FAILED(hr)) {
+        char buf[256];
+        sprintf_s(buf, "DirectXCommon::OnWindowResize: ResizeBuffers failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
+        Logger::Log(std::string(buf));
+        // 失敗時はフラグを戻して終了
+        resizingInProgress_ = false;
+        return;
+    }
+
+    // バックバッファを再取得
+    for (int i = 0; i < kBackBufferCount; ++i) {
+        hr = swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainResources_[i]));
+        if (FAILED(hr)) {
+            char buf[256];
+            sprintf_s(buf, "DirectXCommon::OnWindowResize: GetBuffer[%d] failed. HRESULT=0x%08X\n", i, static_cast<unsigned int>(hr));
+            Logger::Log(std::string(buf));
+            resizingInProgress_ = false;
+            return;
+        }
+    }
+
+    // RTVヒープを再作成
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc {};
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.NumDescriptors = kBackBufferCount;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rtvDescriptorHeap_));
+        if (FAILED(hr)) {
+            Logger::Log("DirectXCommon::OnWindowResize: CreateDescriptorHeap(RTV) failed\n");
+            resizingInProgress_ = false;
+            return;
+        }
+    }
+
+    // RTV を再初期化
+    InitRenderTargetView();
+
+    // 深度バッファを新サイズで再作成
+    ResizeDepthStencil(width, height);
+
+    // ビューポートとシザー矩形を更新
+    viewport_.Width = static_cast<float>(width);
+    viewport_.Height = static_cast<float>(height);
+    scissorRect_.right = width;
+    scissorRect_.bottom = height;
+
+    // オフスクリーンレンダーターゲットも必要なら再作成（既定では手動で再作成する設計）
+    // TODO: 自動 SRV 再割当を行いたい場合はここで g_renderTargets を走査して再作成処理を追加
+
+    // リサイズ終了
+    resizingInProgress_ = false;
 }
 
 /// <summary>

@@ -1,6 +1,9 @@
 #include "InputManager.h"
 #include <cstring>
 
+#pragma comment(lib, "dinput8.lib")
+#pragma comment(lib, "dxguid.lib")
+
 using namespace MyEngine;
 
 /// <summary>

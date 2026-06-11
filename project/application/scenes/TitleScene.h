@@ -1,5 +1,6 @@
 #pragma once
 #include "../../engine/base/IScene.h"
+#include "../../engine/base/PostProcess.h"
 
 using namespace MyEngine;
 
@@ -8,7 +9,6 @@ using namespace MyEngine;
 /// </summary>
 class TitleScene : public IScene {
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ
     /// </summary>
@@ -39,12 +39,10 @@ public: // メンバ関数
     /// </summary>
     void Draw() override;
 
-
     /// <summary>
     /// シーンに入るときの処理
     /// </summary>
     void OnEnter() override;
-
 
     /// <summary>
     /// シーンから出るときの処理
@@ -55,4 +53,15 @@ public: // メンバ関数
     /// シーンの名前を取得
     /// </summary>
     std::string GetName() const override { return "Title"; }
+
+private: // メンバ変数
+
+    // デモ用のレンダーターゲットハンドルとSRVインデックス
+    int rtHandle_ = -1;
+
+    // SRVインデックスはUINT32_MAXで初期化して、未割り当て状態を表す
+    uint32_t rtSrvIndex_ = UINT32_MAX;
+
+    // ポストプロセスクラスのインスタンス
+    PostProcess postProcess_;
 };

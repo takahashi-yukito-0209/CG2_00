@@ -88,6 +88,8 @@ void PlayScene::Initialize(const SceneContext& ctx)
         objects3d_.push_back(std::move(obj));
     }
 
+    objects3d_[5]->SetScale({ 5.0f, 5.0f, 5.0f }); // terrain を大きくする
+
     //パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);

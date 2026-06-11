@@ -61,9 +61,6 @@
 
 using namespace MyEngine;
 
-// （前方宣言を削除し、詳細な Impl を下に定義）
-
-// Game クラスのコンストラクタでは、Impl ポインタを nullptr に初期化する
 Game::Game()
     : impl_(nullptr)
 {
@@ -121,6 +118,7 @@ struct Game::Impl {
 
     ImGuiManager imguiManager; // ImGui管理
     std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
+    
     // 保留中のシーン切替要求を格納する（ImGui コールバックから直接 ChangeScene を呼ばないため）
     std::string pendingSceneName;
 };
@@ -254,8 +252,7 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         // ライトの強度を 1.0f に設定
         directionalLightData->intensity = 1.0f;
         directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        // Shader uses L = normalize(-gDirectionalLight.direction), so invert
-        // the sign here to make the light point downward in world space.
+        // ライトの方向を上向きに設定
         directionalLightData->direction = { 0.0f, 1.0f, 0.0f };
     }
 
@@ -263,11 +260,12 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     if (impl_->object3dCommon) {
         Object3d::PointLight pl = {};
         pl.position = { 0.0f, 1.5f, 0.0f, 0.0f };
-        // Reduce default intensity (w) to avoid overbright scenes; editable via ImGui
+        // 点光源の色を白に設定し、w成分に輝度を指定する（ここでは1.5fで少し強めの光にしている）
         pl.color = { 1.0f, 1.0f, 1.0f, 1.5f };
-        pl.radius = 6.0f;
-        pl.decay = 2.0f;
-        pl.enabled = 1;
+        pl.radius = 6.0f; // 点光源の有効範囲を半径6.0fに設定
+        pl.decay = 2.0f; // 減衰を2.0fに設定
+        pl.enabled = 1; // 点光源を有効にする
+        // Object3dCommon に点光源を追加する
         impl_->object3dCommon->AddPointLight(pl);
     }
 
@@ -276,14 +274,14 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         auto sl = impl_->object3dCommon->GetSpotLightData();
         if (sl) {
             sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
-            // Slightly reduce default spot intensity for better starting balance
+            // スポットライトの色を白に設定し、w成分に輝度を指定する（ここでは2.0fで少し強めの光にしている）
             sl->color = { 1.0f, 1.0f, 1.0f, 2.0f };
-            sl->distance = 7.0f;
-            sl->direction = MathUtil::Normalize({ -1.0f, -1.0f, 0.0f });
-            sl->decay = 2.0f;
-            sl->cosAngle = cosf(3.14159265358979323846f / 3.0f);
-            sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f);
-            sl->enabled = 1;
+            sl->distance = 7.0f; // スポットライトの有効範囲を距離7.0fに設定
+            sl->direction = MathUtil::Normalize({ -1.0f, -1.0f, 0.0f }); // スポットライトの向きを下斜め左に設定
+            sl->decay = 2.0f; // 減衰を2.0fに設定
+            sl->cosAngle = cosf(3.14159265358979323846f / 3.0f); // スポットライトの照射角を60度に設定（コサイン値で指定）
+            sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f); // スポットライトの減衰開始角を90度に設定（コサイン値で指定）
+            sl->enabled = 1; // スポットライトを有効にする
         }
     }
 
@@ -307,6 +305,23 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     // シーンマネージャ初期化と初期シーン設定
     impl_->sceneManager = std::make_unique<SceneManager>();
     impl_->sceneManager->Initialize();
+    // DirectXCommon のリサイズコールバックを設定して、ウィンドウリサイズ時に
+    // シーンやカメラへ通知する
+    DirectXCommon::GetInstance()->SetOnResizeCallback([this](uint32_t w, uint32_t h) {
+        // カメラのアスペクト比を更新
+        if (impl_->camera) {
+            float aspect = (h != 0) ? static_cast<float>(w) / static_cast<float>(h) : 1.0f;
+            impl_->camera->SetAspectRatio(aspect);
+            impl_->camera->Update();
+        }
+        // デバッグカメラは画面サイズを再初期化
+        impl_->debugCamera.Initialize(static_cast<float>(w), static_cast<float>(h));
+        // SceneManager にもリサイズを伝播
+        if (impl_->sceneManager) {
+            impl_->sceneManager->OnWindowResize(w, h);
+        }
+    });
+
     // SceneContext を構築して SceneManager に渡す
     SceneContext sctx;
     sctx.object3dCommon = impl_->object3dCommon.get();
@@ -317,12 +332,15 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     sctx.textureManager = TextureManager::GetInstance();
     sctx.srvManager = &impl_->srvManager;
     sctx.directXCommon = DirectXCommon::GetInstance();
-    // Provide ImGuiManager to scenes so they can register UI callbacks for objects
+
+    // ImGuiManager へのポインタを SceneContext にセットして、シーンが必要に応じて ImGui 描画用のフックを提供できるようにする
     sctx.imguiManager = &impl_->imguiManager;
     impl_->sceneManager->SetContext(sctx);
 
+    // 最初のシーンをタイトルシーンに設定する
     auto initial = GameApp::SceneFactory::Create("Title");
     if (initial) {
+        // シーンマネージャに最初のシーンをセットする
         impl_->sceneManager->ChangeScene(std::move(initial));
     }
 
@@ -353,7 +371,6 @@ void Game::Update()
     InputManager::GetInstance()->Update();
 
     // デバッグカメラの操作: マウスドラッグとホイールでカメラを操作する。ただし、ImGui のウィンドウやアイテムがアクティブな場合は操作しない
-    // Query input-enabled flag from Object3dCommon if available
     bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
     if (debugInputEnabled) {
         long deltaX = InputManager::GetInstance()->GetMouseDeltaX(); // 前フレームからのマウスのX移動量を取得
@@ -596,8 +613,9 @@ void Game::Draw()
         ctx.currentSceneName = sname.c_str();
         // シーン切替要求のコールバックを渡す
         ctx.requestSceneChange = [this](const char* name) {
-            if (!impl_ || !impl_->sceneManager)
+            if (!impl_ || !impl_->sceneManager) {
                 return;
+            }
             impl_->pendingSceneName = std::string(name);
         };
     }
