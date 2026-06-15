@@ -13,11 +13,16 @@
 // CPU側のパーティクルデータ構造体
 struct PM_CpuParticle {
     Math::Transform transform;
+    Math::Vector3 startScale;
+    Math::Vector3 endScale;
     Math::Vector3 velocity;
     Math::Vector4 color;
+    Math::Vector4 startColor;
     float lifeTime = 1.0f;
     float currentTime = 0.0f;
     float spawnTime = 0.0f;
+    bool useScaleOverLife = false;
+    bool useFadeOut = false;
 };
 
 // パーティクルグループ
@@ -70,6 +75,11 @@ public: // メンバ関数
     /// 指定グループからパーティクルを生成
     /// </summary>
     void Emit(const std::string& name, const Math::Vector3& position, uint32_t count);
+
+    /// <summary>
+    /// ヒットエフェクト用の細長いパーティクルを生成
+    /// </summary>
+    void EmitHitEffect(const std::string& name, const Math::Vector3& position, uint32_t count);
 
     /// <summary>
     /// パーティクルを更新する（位置・寿命・物理簡易処理）

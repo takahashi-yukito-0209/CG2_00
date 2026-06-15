@@ -5,212 +5,225 @@
 #include "engine/3d/Object3d.h"
 #include "engine/3d/Model.h"
 #include "engine/3d/Camera.h"
-#include <algorithm>
-#include <vector>
 #include "ImGuiManager.h"
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <numbers>
+#include <vector>
 
 using namespace Math;
 using namespace MyEngine;
 
 /// <summary>
-/// 初期化
+/// パーティクルマネージャーを初期化する
 /// </summary>
 void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, SrvManager* srv, TextureManager* texMgr, ImGuiManager* imguiManager)
 {
-    // 参照の保存
     dxCommon_ = dx;
     object3dCommon_ = objCommon;
     srvManager_ = srv;
     texManager_ = texMgr;
-#ifdef USE_IMGUI
-    if (imguiManager) {
-        imguiManager_ = imguiManager;
-    }
-#else
-    (void)imguiManager;
-#endif
+    imguiManager_ = imguiManager;
 }
 
+/// <summary>
+/// パーティクルマネージャーを終了する
+/// </summary>
 void ParticleManager::Finalize()
 {
-    // ImGuiコールバックの登録解除
     particleGroups_.clear();
 }
 
 /// <summary>
-/// 既存グループにテクスチャを割り当て
+/// 既存グループにテクスチャを割り当てる
 /// </summary>
 void ParticleManager::SetGroupTexture(const std::string& name, const std::string& textureFilePath)
 {
-    // グループ名で検索
     auto it = particleGroups_.find(name);
-    // 見つからなければ終了
-    if (it == particleGroups_.end()) return;
-    // テクスチャパスを更新
-    it->second.texturePath = textureFilePath;
-
-    // テクスチャを確実にロードしてSRVインデックスを記録
-    if (texManager_) {
-        // すでにロードされているか確認
-        uint32_t idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
-        // ロードされていなければロードしてインデックスを取得
-        if (idx == UINT32_MAX) {
-            // ロードしてリソース転送を実行
-            texManager_->LoadTexture(textureFilePath);
-            texManager_->ExecuteResourceUpload();
-            idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
-        }
-        // SRVインデックスをグループデータに保存
-        it->second.srvIndex = (idx == UINT32_MAX) ? 0u : idx;
-        }
+    if (it == particleGroups_.end()) {
+        return;
     }
 
+    it->second.texturePath = textureFilePath;
+    if (texManager_) {
+        uint32_t index = texManager_->GetTextureIndexByFilePath(textureFilePath); // テクスチャ番号
+        if (index == UINT32_MAX) {
+            texManager_->LoadTexture(textureFilePath);
+            texManager_->ExecuteResourceUpload();
+            index = texManager_->GetTextureIndexByFilePath(textureFilePath);
+        }
+        it->second.srvIndex = (index == UINT32_MAX) ? 0u : index;
+    }
+}
+
 /// <summary>
-/// 描画に使用するプレーン（Object3d）を設定
+/// 描画に使用するプレーンを設定する
 /// </summary>
 void ParticleManager::SetParticlePlane(Object3d* plane)
 {
-    // プレーンモデルの参照を保存
     particlePlane_ = plane;
 }
 
 /// <summary>
-/// 新しいパーティクルグループを作成
+/// 新しいパーティクルグループを作成する
 /// </summary>
 void ParticleManager::CreateParticleGroup(const std::string& name, const std::string& textureFilePath)
 {
-    // グループ名が空なら作成しない
-    if (name.empty()) { return; }
-    
-    // すでに存在するグループ名なら上書き
-    auto& grp = particleGroups_[name];
-    
-    // テクスチャパスを保存
-    grp.texturePath = textureFilePath;
-
-    // テクスチャを確実にロードしてSRVインデックスを記録
-    if (texManager_) {
-        // すでにロードされているか確認
-        uint32_t idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
-        // ロードされていなければロードしてインデックスを取得
-        if (idx == UINT32_MAX) {
-            // ロードしてリソース転送を実行
-            texManager_->LoadTexture(textureFilePath);
-            texManager_->ExecuteResourceUpload();
-            idx = texManager_->GetTextureIndexByFilePath(textureFilePath);
-        }
-        // SRVインデックスをグループデータに保存
-        grp.srvIndex = (idx == UINT32_MAX) ? 0u : idx;
-        }
+    if (name.empty()) {
+        return;
     }
 
-/// <summary>
-///  指定グループからパーティクルを生成
-/// </summary>
-void ParticleManager::Emit(const std::string& name, const Vector3& position, uint32_t count)
-{
-    // グループ名で検索
-    auto it = particleGroups_.find(name);
+    auto& group = particleGroups_[name]; // 作成または更新するグループ
+    group.texturePath = textureFilePath;
+    group.particles.clear();
 
-    // 見つからなければ終了
-    if (it == particleGroups_.end()) { return; }
-
-    // 生成するパーティクルのリストへの参照
-    auto& list = it->second.particles;
-
-    // ランダム分布の定義
-    std::uniform_real_distribution<float> lifeDist(lifeMin_, lifeMax_); // 寿命分布
-    std::uniform_real_distribution<float> rx(spawnPosMin_.x, spawnPosMax_.x); // 発生位置の分布
-    std::uniform_real_distribution<float> ry(spawnPosMin_.y, spawnPosMax_.y); // 発生位置の分布
-    std::uniform_real_distribution<float> rz(spawnPosMin_.z, spawnPosMax_.z); // 発生位置の分布
-    std::uniform_real_distribution<float> rvx(velMin_.x, velMax_.x); // 初速の分布
-    std::uniform_real_distribution<float> rvy(velMin_.y, velMax_.y); // 初速の分布
-    std::uniform_real_distribution<float> rvz(velMin_.z, velMax_.z); // 初速の分布
-    std::uniform_real_distribution<float> rsx(scaleMin_.x, scaleMax_.x); // スケールの分布
-    std::uniform_real_distribution<float> rsy(scaleMin_.y, scaleMax_.y); // スケールの分布
-    std::uniform_real_distribution<float> rsz(scaleMin_.z, scaleMax_.z); // スケールの分布
-    std::uniform_real_distribution<float> rcx(colMin_.x, colMax_.x); // カラーの分布
-    std::uniform_real_distribution<float> rcy(colMin_.y, colMax_.y); // カラーの分布
-    std::uniform_real_distribution<float> rcz(colMin_.z, colMax_.z); // カラーの分布
-    std::uniform_real_distribution<float> rca(colMin_.w, colMax_.w); // カラーの分布
-
-    // パーティクルの生成
-    for (uint32_t i = 0; i < count; ++i) {
-        // パーティクルデータの生成
-        PM_CpuParticle p{};
-        // ランダムなスケール、回転（今回は固定）、位置、速度、カラーを設定
-        p.transform.scale = { rsx(rng_), rsy(rng_), rsz(rng_) };
-        p.transform.rotate = { 0.0f, 0.0f, 0.0f };
-        p.transform.translate = { position.x + rx(rng_), position.y + ry(rng_), position.z + rz(rng_) };
-        p.velocity = { rvx(rng_), rvy(rng_), rvz(rng_) };
-        p.color = { rcx(rng_), rcy(rng_), rcz(rng_), rca(rng_) };
-
-        // 寿命をランダムに設定
-        float life = lifeDist(rng_);
-        
-        // 寿命が極端に短くならないように最低値を設定
-        if (life < 0.01f) {
-            life = 0.01f;
+    if (texManager_) {
+        uint32_t index = texManager_->GetTextureIndexByFilePath(textureFilePath); // テクスチャ番号
+        if (index == UINT32_MAX) {
+            texManager_->LoadTexture(textureFilePath);
+            texManager_->ExecuteResourceUpload();
+            index = texManager_->GetTextureIndexByFilePath(textureFilePath);
         }
-
-        // パーティクルの寿命と生成時間を設定
-        p.lifeTime = life;
-        p.currentTime = 0.0f;
-        p.spawnTime = globalTime_;
-
-        // 生成したパーティクルをリストに追加
-        list.push_back(p);
+        group.srvIndex = (index == UINT32_MAX) ? 0u : index;
     }
 }
 
 /// <summary>
-/// パーティクルを更新する（位置・寿命・物理簡易処理）
+/// 通常パーティクルを生成する
+/// </summary>
+void ParticleManager::Emit(const std::string& name, const Vector3& position, uint32_t count)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    std::uniform_real_distribution<float> lifeDist(lifeMin_, lifeMax_); // 寿命範囲
+    std::uniform_real_distribution<float> rx(spawnPosMin_.x, spawnPosMax_.x); // X位置範囲
+    std::uniform_real_distribution<float> ry(spawnPosMin_.y, spawnPosMax_.y); // Y位置範囲
+    std::uniform_real_distribution<float> rz(spawnPosMin_.z, spawnPosMax_.z); // Z位置範囲
+    std::uniform_real_distribution<float> rvx(velMin_.x, velMax_.x); // X速度範囲
+    std::uniform_real_distribution<float> rvy(velMin_.y, velMax_.y); // Y速度範囲
+    std::uniform_real_distribution<float> rvz(velMin_.z, velMax_.z); // Z速度範囲
+    std::uniform_real_distribution<float> rsx(scaleMin_.x, scaleMax_.x); // Xスケール範囲
+    std::uniform_real_distribution<float> rsy(scaleMin_.y, scaleMax_.y); // Yスケール範囲
+    std::uniform_real_distribution<float> rsz(scaleMin_.z, scaleMax_.z); // Zスケール範囲
+    std::uniform_real_distribution<float> rcx(colMin_.x, colMax_.x); // R範囲
+    std::uniform_real_distribution<float> rcy(colMin_.y, colMax_.y); // G範囲
+    std::uniform_real_distribution<float> rcz(colMin_.z, colMax_.z); // B範囲
+    std::uniform_real_distribution<float> rca(colMin_.w, colMax_.w); // A範囲
+
+    for (uint32_t i = 0; i < count; ++i) {
+        PM_CpuParticle particle {}; // 生成するパーティクル
+        particle.transform.scale = { rsx(rng_), rsy(rng_), rsz(rng_) };
+        particle.startScale = particle.transform.scale;
+        particle.endScale = particle.transform.scale;
+        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.translate = { position.x + rx(rng_), position.y + ry(rng_), position.z + rz(rng_) };
+        particle.velocity = { rvx(rng_), rvy(rng_), rvz(rng_) };
+        particle.color = { rcx(rng_), rcy(rng_), rcz(rng_), rca(rng_) };
+        particle.startColor = particle.color;
+        particle.lifeTime = lifeDist(rng_);
+        particle.currentTime = 0.0f;
+        particle.spawnTime = globalTime_;
+
+        list.push_back(particle);
+    }
+}
+
+/// <summary>
+/// ヒットエフェクト用の細長いパーティクルを生成する
+/// </summary>
+void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& position, uint32_t count)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    std::uniform_real_distribution<float> rotateDist(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // Z回転範囲
+    std::uniform_real_distribution<float> scaleYDist(0.9f, 1.8f); // 縦方向スケール範囲
+    std::uniform_real_distribution<float> alphaDist(0.75f, 1.0f); // 透明度範囲
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const float length = scaleYDist(rng_); // 光の筋の最大長さ
+        const float alpha = alphaDist(rng_); // 発生時の透明度
+
+        PM_CpuParticle particle {}; // 生成するパーティクル
+        particle.startScale = { 0.01f, length * 0.15f, 1.0f };
+        particle.endScale = { 0.045f, length, 1.0f };
+        particle.transform.scale = particle.startScale;
+        particle.transform.rotate = { 0.0f, 0.0f, rotateDist(rng_) };
+        particle.transform.translate = position;
+        particle.velocity = { 0.0f, 0.0f, 0.0f };
+        particle.color = { 1.0f, 1.0f, 1.0f, alpha };
+        particle.startColor = particle.color;
+        particle.lifeTime = 0.6f;
+        particle.currentTime = 0.0f;
+        particle.spawnTime = globalTime_;
+        particle.useScaleOverLife = true;
+        particle.useFadeOut = true;
+
+        list.push_back(particle);
+    }
+}
+
+/// <summary>
+/// パーティクルを更新する
 /// </summary>
 void ParticleManager::Update(float dt)
 {
-    // 経過時間を加算
     globalTime_ += dt;
 
-    // すべてのグループのすべてのパーティクルを更新
     for (auto& kv : particleGroups_) {
-        // パーティクルのリストへの参照
-        auto& plist = kv.second.particles;
-        
-        // イテレータを使ってリストを走査し、寿命切れのパーティクルを削除
-        for (auto it = plist.begin(); it != plist.end(); ) {
-            PM_CpuParticle& p = *it;
-            // フィールド適用（AABB内）
+        auto& particles = kv.second.particles; // 更新するパーティクルリスト
+        for (auto it = particles.begin(); it != particles.end();) {
+            PM_CpuParticle& particle = *it; // 更新対象のパーティクル
+
             if (fieldEnabled_) {
-                const Vector3& pos = p.transform.translate;
-                if (pos.x >= fieldMin_.x && pos.y >= fieldMin_.y && pos.z >= fieldMin_.z &&
-                    pos.x <= fieldMax_.x && pos.y <= fieldMax_.y && pos.z <= fieldMax_.z) {
-                    p.velocity.x += fieldAccel_.x * dt;
-                    p.velocity.y += fieldAccel_.y * dt;
-                    p.velocity.z += fieldAccel_.z * dt;
+                const Vector3& position = particle.transform.translate; // 現在位置
+                if (position.x >= fieldMin_.x && position.y >= fieldMin_.y && position.z >= fieldMin_.z &&
+                    position.x <= fieldMax_.x && position.y <= fieldMax_.y && position.z <= fieldMax_.z) {
+                    particle.velocity.x += fieldAccel_.x * dt;
+                    particle.velocity.y += fieldAccel_.y * dt;
+                    particle.velocity.z += fieldAccel_.z * dt;
                 }
             }
-            // 重力
-            if (gravityEnabled_) {
-                p.velocity.x += gravity_.x * dt;
-                p.velocity.y += gravity_.y * dt;
-                p.velocity.z += gravity_.z * dt;
-            }
-            // 減衰（一次減衰）
-            if (damping_ > 0.0f) {
-                float k = damping_ * dt;
-                p.velocity.x *= (1.0f - k);
-                p.velocity.y *= (1.0f - k);
-                p.velocity.z *= (1.0f - k);
-            }
-            // 位置更新
-            p.transform.translate.x += p.velocity.x * dt;
-            p.transform.translate.y += p.velocity.y * dt;
-            p.transform.translate.z += p.velocity.z * dt;
 
-            // 経過時間
-            p.currentTime += dt;
-            if (p.currentTime >= p.lifeTime) {
-                it = plist.erase(it);
+            if (gravityEnabled_) {
+                particle.velocity.x += gravity_.x * dt;
+                particle.velocity.y += gravity_.y * dt;
+                particle.velocity.z += gravity_.z * dt;
+            }
+
+            if (damping_ > 0.0f) {
+                const float dampingRate = std::clamp(1.0f - damping_ * dt, 0.0f, 1.0f); // 減衰率
+                particle.velocity.x *= dampingRate;
+                particle.velocity.y *= dampingRate;
+                particle.velocity.z *= dampingRate;
+            }
+
+            particle.transform.translate.x += particle.velocity.x * dt;
+            particle.transform.translate.y += particle.velocity.y * dt;
+            particle.transform.translate.z += particle.velocity.z * dt;
+
+            particle.currentTime += dt;
+            const float lifeRate = particle.lifeTime > 0.0f ? std::clamp(particle.currentTime / particle.lifeTime, 0.0f, 1.0f) : 1.0f; // 寿命の進行率
+            if (particle.useScaleOverLife) {
+                const float scaleRate = std::sin(lifeRate * std::numbers::pi_v<float>); // 中間で最大になる倍率
+                particle.transform.scale.x = particle.startScale.x + (particle.endScale.x - particle.startScale.x) * scaleRate;
+                particle.transform.scale.y = particle.startScale.y + (particle.endScale.y - particle.startScale.y) * scaleRate;
+                particle.transform.scale.z = particle.startScale.z + (particle.endScale.z - particle.startScale.z) * scaleRate;
+            }
+            if (particle.useFadeOut) {
+                particle.color.w = particle.startColor.w * (1.0f - lifeRate);
+            }
+
+            if (particle.currentTime >= particle.lifeTime) {
+                it = particles.erase(it);
             } else {
                 ++it;
             }
@@ -219,89 +232,76 @@ void ParticleManager::Update(float dt)
 }
 
 /// <summary>
-/// パーティクルを描画
+/// パーティクルを描画する
 /// </summary>
 void ParticleManager::Draw()
 {
-    // 必要な参照が揃っているか確認
-    if (!dxCommon_ || !object3dCommon_ || !particlePlane_) { return; }
+    if (!dxCommon_ || !object3dCommon_ || !particlePlane_) {
+        return;
+    }
 
-    // PSO/RS 切り替え（パーティクル用）
     object3dCommon_->SetInstancingDrawSetting();
 
-    // カメラ取得（非ビルボード時のWVP計算用）
-    Camera* cam = object3dCommon_->GetDefaultCamera();
-    Matrix4x4 view = cam ? cam->GetViewMatrix() : Matrix4x4();
-    Matrix4x4 proj = cam ? cam->GetProjectionMatrix() : Matrix4x4();
+    Camera* camera = object3dCommon_->GetDefaultCamera(); // 描画に使うカメラ
+    Matrix4x4 view = camera ? camera->GetViewMatrix() : Matrix4x4();
+    Matrix4x4 projection = camera ? camera->GetProjectionMatrix() : Matrix4x4();
 
-    // インスタンシングバッファ
-    auto instData = object3dCommon_->GetInstancingData();
-    const uint32_t instSlots = object3dCommon_->GetInstancingSlotCount();
-    if (!instData || instSlots == 0) { return; }
+    auto instancingData = object3dCommon_->GetInstancingData(); // インスタンス転送先
+    const uint32_t instancingSlots = object3dCommon_->GetInstancingSlotCount(); // 最大描画数
+    if (!instancingData || instancingSlots == 0) {
+        return;
+    }
 
-    // すべてのグループのパーティクルを描画
     for (auto& kv : particleGroups_) {
-        auto& grp = kv.second;
-        // 描画個数を決定
-        uint32_t count = static_cast<uint32_t>(grp.particles.size());
-        // インスタンススロット数を超える場合は描画数を制限
-        if (count == 0) { continue; }
-        // 描画数をインスタンススロット数に制限
-        count = std::min<uint32_t>(count, instSlots);
+        ParticleGroup& group = kv.second; // 描画対象グループ
+        uint32_t count = static_cast<uint32_t>(group.particles.size());
+        if (count == 0) {
+            continue;
+        }
+        count = std::min<uint32_t>(count, instancingSlots);
 
-        // 安定ソート用に参照配列を作る
-        std::vector<std::reference_wrapper<const PM_CpuParticle>> sorted;
-        // 参照配列にパーティクルを追加
-        sorted.reserve(grp.particles.size());
-        // 生成時間で安定ソート（同一フレーム生成のパーティクルは元の順序を保つ）
-        for (const auto& p : grp.particles) { sorted.emplace_back(std::cref(p)); }
-        std::stable_sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        std::vector<std::reference_wrapper<const PM_CpuParticle>> sortedParticles; // 生成順に並べる参照配列
+        sortedParticles.reserve(group.particles.size());
+        for (const auto& particle : group.particles) {
+            sortedParticles.emplace_back(std::cref(particle));
+        }
+        std::stable_sort(sortedParticles.begin(), sortedParticles.end(), [](const auto& a, const auto& b) {
             return a.get().spawnTime < b.get().spawnTime;
         });
 
-        // パーティクルプレーンにテクスチャ適用
-        if (!grp.texturePath.empty()) {
-            particlePlane_->SetTexture(grp.texturePath);
+        if (!group.texturePath.empty()) {
+            particlePlane_->SetTexture(group.texturePath);
         }
 
-        // インスタンスデータ転送
         for (uint32_t i = 0; i < count; ++i) {
-            const auto& pt = sorted[i].get();
-            Transform tr = pt.transform;
-            // ZオフセットでZ Fighting軽減
-            tr.translate.z += static_cast<float>(i) * 1e-3f;
-            // ワールド行列の作成
-            Matrix4x4 world = MathUtil::MakeAffineMatrix(tr.scale, tr.rotate, tr.translate);
-            // WVP行列の作成
-            Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, proj));
-            // ワールドの逆行列の転置を作成（法線変換用）
-            Matrix4x4 inv = MathUtil::Inverse(world);
-            // 逆行列の転置を計算
-            Matrix4x4 invT = MathUtil::Transpose(inv);
+            const PM_CpuParticle& particle = sortedParticles[i].get(); // 転送するパーティクル
+            Transform transform = particle.transform;
+            transform.translate.z += static_cast<float>(i) * 1e-3f;
 
-            // インスタンスデータに転送
-            instData[i].World = world;
-            instData[i].WVP = wvp;
-            instData[i].WorldInverseTranspose = invT;
-            instData[i].color = pt.color;
+            Matrix4x4 world = MathUtil::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+            Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, projection));
+            Matrix4x4 worldInverse = MathUtil::Inverse(world);
+            Matrix4x4 worldInverseTranspose = MathUtil::Transpose(worldInverse);
+
+            instancingData[i].World = world;
+            instancingData[i].WVP = wvp;
+            instancingData[i].WorldInverseTranspose = worldInverseTranspose;
+            instancingData[i].color = particle.color;
         }
 
-        // インスタンス描画
         if (auto* model = particlePlane_->GetModel()) {
             model->DrawInstanced(particlePlane_, count);
         } else {
-            // モデルが無い場合は通常描画で1枚だけ（安全策）
-            particlePlane_->Draw();
+            particlePlane_->DrawInstanced(count);
         }
     }
 }
 
 /// <summary>
-/// 寿命の範囲を設定
+/// 寿命の範囲を設定する
 /// </summary>
 void ParticleManager::SetLifetimeRange(float minL, float maxL)
 {
-    // 最小値と最大値を入れ替える必要があるか確認
     if (minL <= maxL) {
         lifeMin_ = minL;
         lifeMax_ = maxL;
@@ -312,92 +312,71 @@ void ParticleManager::SetLifetimeRange(float minL, float maxL)
 }
 
 /// <summary>
-/// フィールド（ランダム加速度）有効フラグを設定
+/// フィールド有効フラグを設定する
 /// </summary>
-void ParticleManager::SetFieldEnabled(bool enabled)
-{
-    // フィールド有効フラグを設定
-    fieldEnabled_ = enabled;
-}
+void ParticleManager::SetFieldEnabled(bool enabled) { fieldEnabled_ = enabled; }
 
 /// <summary>
-/// フィールド加速度を設定
+/// フィールド加速度を設定する
 /// </summary>
-void ParticleManager::SetFieldAccel(const Vector3& a)
-{
-    // フィールド加速度を設定
-    fieldAccel_ = a;
-}
+void ParticleManager::SetFieldAccel(const Vector3& a) { fieldAccel_ = a; }
 
 /// <summary>
-/// フィールドの影響範囲をAABBで設定
+/// フィールドの影響範囲を設定する
 /// </summary>
 void ParticleManager::SetFieldAABB(const Vector3& mn, const Vector3& mx)
 {
-    // フィールドの影響範囲をAABBで設定
     fieldMin_ = mn;
     fieldMax_ = mx;
 }
 
-// 発生時のランダム範囲設定
 void ParticleManager::SetSpawnPosRange(const Vector3& mn, const Vector3& mx) { spawnPosMin_ = mn; spawnPosMax_ = mx; }
 void ParticleManager::SetVelocityRange(const Vector3& mn, const Vector3& mx) { velMin_ = mn; velMax_ = mx; }
 void ParticleManager::SetScaleRange(const Vector3& mn, const Vector3& mx) { scaleMin_ = mn; scaleMax_ = mx; }
 void ParticleManager::SetColorRange(const Vector4& mn, const Vector4& mx) { colMin_ = mn; colMax_ = mx; }
 
-// 重力関連の設定
 void ParticleManager::SetGravityEnabled(bool enabled) { gravityEnabled_ = enabled; }
 void ParticleManager::SetGravity(const Vector3& g) { gravity_ = g; }
 void ParticleManager::SetDamping(float d) { damping_ = d < 0.0f ? 0.0f : d; }
 
 /// <summary>
-/// このマネージャ用の ImGui コントロールを描画
+/// ImGuiでパーティクル設定を編集する
 /// </summary>
 void ParticleManager::DrawImGui()
 {
 #ifdef USE_IMGUI
-    // グループ数を表示
     ImGui::Text("Groups: %zu", particleGroups_.size());
-    // フィールド設定
     ImGui::Checkbox("Enable Field", &fieldEnabled_);
     ImGui::DragFloat3("Field Accel", &fieldAccel_.x, 0.1f, -100.0f, 100.0f);
     ImGui::DragFloat3("Field Min", &fieldMin_.x, 0.1f, -100.0f, 100.0f);
     ImGui::DragFloat3("Field Max", &fieldMax_.x, 0.1f, -100.0f, 100.0f);
 
     ImGui::Separator();
-    // 寿命設定
     ImGui::Text("Lifetime");
     ImGui::DragFloatRange2("Life Min/Max", &lifeMin_, &lifeMax_, 0.01f, 0.1f, 100.0f);
 
     ImGui::Separator();
-    // 重力と減衰設定
     ImGui::Text("Dynamics");
     ImGui::Checkbox("Enable Gravity", &gravityEnabled_);
     ImGui::DragFloat3("Gravity", &gravity_.x, 0.1f, -100.0f, 100.0f);
-    ImGui::DragFloat("Damping (1/s)", &damping_, 0.01f, 0.0f, 10.0f);
+    ImGui::DragFloat("Damping", &damping_, 0.01f, 0.0f, 100.0f);
 
     ImGui::Separator();
-    // スポーン範囲設定
-    ImGui::Text("Spawn Ranges");
-    ImGui::DragFloat3("Pos Min", &spawnPosMin_.x, 0.01f, -10.0f, 10.0f);
-    ImGui::DragFloat3("Pos Max", &spawnPosMax_.x, 0.01f, -10.0f, 10.0f);
+    ImGui::Text("Spawn Random");
+    ImGui::DragFloat3("Spawn Pos Min", &spawnPosMin_.x, 0.01f, -50.0f, 50.0f);
+    ImGui::DragFloat3("Spawn Pos Max", &spawnPosMax_.x, 0.01f, -50.0f, 50.0f);
     ImGui::DragFloat3("Vel Min", &velMin_.x, 0.01f, -50.0f, 50.0f);
     ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
     ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
     ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
 
-    // カラー範囲設定
     ImGui::ColorEdit4("Color Min", &colMin_.x);
     ImGui::ColorEdit4("Color Max", &colMax_.x);
 
     ImGui::Separator();
-    // グループごとのパーティクル数を表示
     ImGui::Text("Groups");
-    // グループごとにツリー表示
     for (auto& kv : particleGroups_) {
-        // グループ名をツリーのラベルにして表示
         if (ImGui::TreeNode(kv.first.c_str())) {
-            // パーティクル数を表示
             ImGui::Text("Count = %zu", kv.second.particles.size());
             ImGui::TreePop();
         }

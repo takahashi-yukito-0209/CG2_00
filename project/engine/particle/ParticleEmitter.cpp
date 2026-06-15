@@ -18,7 +18,11 @@ void ParticleEmitter::Emit() {
     // グループ名が空なら発生させない
     if (groupName.empty()) { return; }
 
-    ParticleManager::GetInstance()->Emit(groupName, transform.translate, count);
+    if (useHitEffect) {
+        ParticleManager::GetInstance()->EmitHitEffect(groupName, transform.translate, count);
+    } else {
+        ParticleManager::GetInstance()->Emit(groupName, transform.translate, count);
+    }
 }
 
 /// <summary>
@@ -61,6 +65,7 @@ void ParticleEmitter::DrawImGui()
     // 1以上1000以下の整数として編集。変更があったらcountを更新
     if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000)) count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
+    ImGui::Checkbox("Use Hit Effect", &useHitEffect);
 #else
     (void)buf;
 #endif

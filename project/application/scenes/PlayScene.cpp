@@ -8,6 +8,7 @@
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
+#include "../../engine/3d/PrimitiveFactory.h"
 #include "../../engine/base/SrvManager.h"
 #include "../../engine/3d/SkyBox.h"
 #include "../../engine/particle/ParticleManager.h"
@@ -105,7 +106,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
     //パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particlePlane_->SetModel("plane/plane.obj");
+    particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
     particlePlane_->SetTexture("circle.png");
 
     // パーティクルマネージャー化とグループの作成
@@ -115,16 +116,16 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
     }
 
     // パーティクルエミッターと発射
-    pmEmitter_.groupName = "Circle";
+    pmEmitter_.groupName = "Hit";
     pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    pmEmitter_.count = 3;
-    pmEmitter_.frequency = 0.5f;
-    for (int i = 0; i < 20; ++i) {
-        pmEmitter_.Emit();
-    }
+    pmEmitter_.count = 8;
+    pmEmitter_.frequency = 1.0f;
+    pmEmitter_.useHitEffect = true;
+    pmEmitter_.Emit();
 }
 
 /// <summary>
