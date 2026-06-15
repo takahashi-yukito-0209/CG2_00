@@ -18,7 +18,9 @@ void ParticleEmitter::Emit() {
     // グループ名が空なら発生させない
     if (groupName.empty()) { return; }
 
-    if (useHitEffect) {
+    if (useRingEffect) {
+        ParticleManager::GetInstance()->EmitRingEffect(groupName, transform.translate, count);
+    } else if (useHitEffect) {
         ParticleManager::GetInstance()->EmitHitEffect(groupName, transform.translate, count);
     } else {
         ParticleManager::GetInstance()->Emit(groupName, transform.translate, count);
@@ -66,6 +68,7 @@ void ParticleEmitter::DrawImGui()
     if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000)) count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
     ImGui::Checkbox("Use Hit Effect", &useHitEffect);
+    ImGui::Checkbox("Use Ring Effect", &useRingEffect);
 #else
     (void)buf;
 #endif

@@ -66,6 +66,19 @@ void ParticleManager::SetParticlePlane(Object3d* plane)
 }
 
 /// <summary>
+/// 指定グループの描画Primitiveを設定する
+/// </summary>
+void ParticleManager::SetParticleObject(const std::string& name, Object3d* object)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    it->second.renderObject = object;
+}
+
+/// <summary>
 /// 新しいパーティクルグループを作成する
 /// </summary>
 void ParticleManager::CreateParticleGroup(const std::string& name, const std::string& textureFilePath)
@@ -162,6 +175,38 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
         particle.color = { 1.0f, 1.0f, 1.0f, alpha };
         particle.startColor = particle.color;
         particle.lifeTime = 0.6f;
+        particle.currentTime = 0.0f;
+        particle.spawnTime = globalTime_;
+        particle.useScaleOverLife = true;
+        particle.useFadeOut = true;
+
+        list.push_back(particle);
+    }
+}
+
+/// <summary>
+/// Ringエフェクト用のパーティクルを生成する
+/// </summary>
+void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& position, uint32_t count)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    auto& list = it->second.particles; // 生成先のパーティクルリスト
+
+    for (uint32_t i = 0; i < count; ++i) {
+        PM_CpuParticle particle {}; // 生成するパーティクル
+        particle.startScale = { 0.2f, 0.2f, 1.0f };
+        particle.endScale = { 1.6f, 1.6f, 1.0f };
+        particle.transform.scale = particle.startScale;
+        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.translate = position;
+        particle.velocity = { 0.0f, 0.0f, 0.0f };
+        particle.color = { 1.0f, 1.0f, 1.0f, 0.75f };
+        particle.startColor = particle.color;
+        particle.lifeTime = 0.8f;
         particle.currentTime = 0.0f;
         particle.spawnTime = globalTime_;
         particle.useScaleOverLife = true;
@@ -269,8 +314,13 @@ void ParticleManager::Draw()
             return a.get().spawnTime < b.get().spawnTime;
         });
 
+        Object3d* renderObject = group.renderObject ? group.renderObject : particlePlane_; // グループ用Primitive
+        if (!renderObject) {
+            continue;
+        }
+
         if (!group.texturePath.empty()) {
-            particlePlane_->SetTexture(group.texturePath);
+            renderObject->SetTexture(group.texturePath);
         }
 
         for (uint32_t i = 0; i < count; ++i) {
@@ -289,10 +339,10 @@ void ParticleManager::Draw()
             instancingData[i].color = particle.color;
         }
 
-        if (auto* model = particlePlane_->GetModel()) {
-            model->DrawInstanced(particlePlane_, count);
+        if (auto* model = renderObject->GetModel()) {
+            model->DrawInstanced(renderObject, count);
         } else {
-            particlePlane_->DrawInstanced(count);
+            renderObject->DrawInstanced(count);
         }
     }
 }

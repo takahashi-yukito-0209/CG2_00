@@ -37,6 +37,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ctx_.textureManager->LoadTexture("uvChecker.png");
         ctx_.textureManager->LoadTexture("monsterBall.png");
         ctx_.textureManager->LoadTexture("circle.png");
+        ctx_.textureManager->LoadTexture("gradationLine.png");
         // 環境マップ用DDSを読み込む（確認用）
         ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
         // 読み込んだテクスチャをGPUに転送
@@ -109,6 +110,12 @@ void PlayScene::Initialize(const SceneContext& ctx)
     particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
     particlePlane_->SetTexture("circle.png");
 
+    particleRing_ = std::make_unique<Object3d>();
+    particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
+    particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetUseAlphaCutoutSampler(true);
+
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
@@ -117,6 +124,9 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
+        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
     }
 
     // パーティクルエミッターと発射
@@ -126,6 +136,13 @@ void PlayScene::Initialize(const SceneContext& ctx)
     pmEmitter_.frequency = 1.0f;
     pmEmitter_.useHitEffect = true;
     pmEmitter_.Emit();
+
+    ringEmitter_.groupName = "Ring";
+    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    ringEmitter_.count = 1;
+    ringEmitter_.frequency = 1.0f;
+    ringEmitter_.useRingEffect = true;
+    ringEmitter_.Emit();
 }
 
 /// <summary>
@@ -150,6 +167,7 @@ void PlayScene::Finalize()
 
     // プレーンのリセット
     particlePlane_.reset();
+    particleRing_.reset();
     if (skybox_) {
         skybox_->Finalize();
         skybox_.reset();
@@ -168,6 +186,7 @@ void PlayScene::Update(float dt)
 
     // パーティクルエミッターの更新とマネージャーの更新
     pmEmitter_.Update(dt);
+    ringEmitter_.Update(dt);
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Update(dt);
     }

@@ -34,4 +34,5 @@ public:
     float frequency = 0.0f; // 発生間隔
     float elapsed = 0.0f; // 前回発生からの経過時間
     bool useHitEffect = false; // ヒットエフェクト用の発生を使うか
+    bool useRingEffect = false; // Ringエフェクト用の発生を使うか
 };
