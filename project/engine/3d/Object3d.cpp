@@ -327,6 +327,16 @@ float Object3d::GetEnvironmentCoefficient() const
 }
 
 /// <summary>
+/// UV変換行列を設定する
+/// </summary>
+void Object3d::SetUVTransform(const Math::Matrix4x4& uvTransform)
+{
+    if (materialData_) {
+        materialData_->uvTransform = uvTransform;
+    }
+}
+
+/// <summary>
 /// 座標変換行列用リソースを作成する関数
 /// </summary>
 void Object3d::CreateTransformationMatrixResource()

@@ -31,6 +31,7 @@ struct ParticleGroup {
     std::list<PM_CpuParticle> particles; // パーティクルリスト
     uint32_t srvIndex = 0; // SRVインデックス
     MyEngine::Object3d* renderObject = nullptr; // 描画に使うPrimitive
+    bool useBillboard = true; // ビルボード描画を使うか
 };
 
 namespace MyEngine {
@@ -70,6 +71,11 @@ public:
     void SetParticleObject(const std::string& name, Object3d* object);
 
     /// <summary>
+    /// 指定グループのビルボード使用設定を変更する
+    /// </summary>
+    void SetGroupBillboard(const std::string& name, bool useBillboard);
+
+    /// <summary>
     /// 新しいパーティクルグループを作成する
     /// </summary>
     void CreateParticleGroup(const std::string& name, const std::string& textureFilePath);
@@ -93,6 +99,11 @@ public:
     /// Ringエフェクト用のパーティクルを生成する
     /// </summary>
     void EmitRingEffect(const std::string& name, const Math::Vector3& position, uint32_t count);
+
+    /// <summary>
+    /// Cylinderエフェクト用のパーティクルを生成する
+    /// </summary>
+    void EmitCylinderEffect(const std::string& name, const Math::Vector3& position, uint32_t count);
 
     /// <summary>
     /// パーティクルを更新する

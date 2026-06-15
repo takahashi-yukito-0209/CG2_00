@@ -311,6 +311,11 @@ public: // メンバ関数
     float GetEnvironmentCoefficient() const;
 
     /// <summary>
+    /// UV変換行列を設定する
+    /// </summary>
+    void SetUVTransform(const Math::Matrix4x4& uvTransform);
+
+    /// <summary>
     /// アルファカットアウト用サンプラーの使用設定
     /// </summary>
     void SetUseAlphaCutoutSampler(bool use)

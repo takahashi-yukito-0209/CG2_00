@@ -35,4 +35,5 @@ public:
     float elapsed = 0.0f; // 前回発生からの経過時間
     bool useHitEffect = false; // ヒットエフェクト用の発生を使うか
     bool useRingEffect = false; // Ringエフェクト用の発生を使うか
+    bool useCylinderEffect = false; // Cylinderエフェクト用の発生を使うか
 };

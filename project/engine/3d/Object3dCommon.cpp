@@ -865,8 +865,8 @@ void Object3dCommon::CreateGraphicsPipeline()
 
     // RasterizerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
-    // 裏面（時計回り）を表示しない
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+    // Effect用Primitiveの裏側も見えるようにカリングしない
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
     // 三角形の中を塗りつぶす
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
     // デフォルトのワインディング（時計回りを前面）を使用し、多くのOBJエクスポートと整合させる

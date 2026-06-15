@@ -116,6 +116,12 @@ void PlayScene::Initialize(const SceneContext& ctx)
     particleRing_->SetTexture("gradationLine.png");
     particleRing_->SetUseAlphaCutoutSampler(true);
 
+    particleCylinder_ = std::make_unique<Object3d>();
+    particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
+    particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetUseAlphaCutoutSampler(true);
+
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
@@ -125,8 +131,11 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
         ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
         ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
+        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
     }
 
     // パーティクルエミッターと発射
@@ -143,6 +152,13 @@ void PlayScene::Initialize(const SceneContext& ctx)
     ringEmitter_.frequency = 1.0f;
     ringEmitter_.useRingEffect = true;
     ringEmitter_.Emit();
+
+    cylinderEmitter_.groupName = "Cylinder";
+    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    cylinderEmitter_.count = 1;
+    cylinderEmitter_.frequency = 1.0f;
+    cylinderEmitter_.useCylinderEffect = true;
+    cylinderEmitter_.Emit();
 }
 
 /// <summary>
@@ -168,6 +184,7 @@ void PlayScene::Finalize()
     // プレーンのリセット
     particlePlane_.reset();
     particleRing_.reset();
+    particleCylinder_.reset();
     if (skybox_) {
         skybox_->Finalize();
         skybox_.reset();
@@ -187,6 +204,7 @@ void PlayScene::Update(float dt)
     // パーティクルエミッターの更新とマネージャーの更新
     pmEmitter_.Update(dt);
     ringEmitter_.Update(dt);
+    cylinderEmitter_.Update(dt);
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Update(dt);
     }

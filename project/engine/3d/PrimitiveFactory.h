@@ -18,6 +18,11 @@ public:
     /// XY平面のRing頂点データを生成する
     /// </summary>
     static std::vector<Object3d::VertexData> CreateRing(float outerRadius = 1.0f, float innerRadius = 0.2f, uint32_t divide = 32);
+
+    /// <summary>
+    /// Y方向に伸びるCylinderの頂点データを生成する
+    /// </summary>
+    static std::vector<Object3d::VertexData> CreateCylinder(float topRadius = 1.0f, float bottomRadius = 1.0f, float height = 1.0f, uint32_t divide = 32);
 };
 
 } // namespace MyEngine

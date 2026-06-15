@@ -79,6 +79,19 @@ void ParticleManager::SetParticleObject(const std::string& name, Object3d* objec
 }
 
 /// <summary>
+/// 指定グループのビルボード使用設定を変更する
+/// </summary>
+void ParticleManager::SetGroupBillboard(const std::string& name, bool useBillboard)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    it->second.useBillboard = useBillboard;
+}
+
+/// <summary>
 /// 新しいパーティクルグループを作成する
 /// </summary>
 void ParticleManager::CreateParticleGroup(const std::string& name, const std::string& textureFilePath)
@@ -217,6 +230,38 @@ void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& pos
 }
 
 /// <summary>
+/// Cylinderエフェクト用のパーティクルを生成する
+/// </summary>
+void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3& position, uint32_t count)
+{
+    auto it = particleGroups_.find(name);
+    if (it == particleGroups_.end()) {
+        return;
+    }
+
+    auto& list = it->second.particles; // 生成先のパーティクルリスト
+
+    for (uint32_t i = 0; i < count; ++i) {
+        PM_CpuParticle particle {}; // 生成するパーティクル
+        particle.startScale = { 0.35f, 0.7f, 0.35f };
+        particle.endScale = { 1.2f, 0.9f, 1.2f };
+        particle.transform.scale = particle.startScale;
+        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.translate = position;
+        particle.velocity = { 0.0f, 0.0f, 0.0f };
+        particle.color = { 0.55f, 0.75f, 1.0f, 0.55f };
+        particle.startColor = particle.color;
+        particle.lifeTime = 1.0f;
+        particle.currentTime = 0.0f;
+        particle.spawnTime = globalTime_;
+        particle.useScaleOverLife = true;
+        particle.useFadeOut = true;
+
+        list.push_back(particle);
+    }
+}
+
+/// <summary>
 /// パーティクルを更新する
 /// </summary>
 void ParticleManager::Update(float dt)
@@ -290,6 +335,9 @@ void ParticleManager::Draw()
     Camera* camera = object3dCommon_->GetDefaultCamera(); // 描画に使うカメラ
     Matrix4x4 view = camera ? camera->GetViewMatrix() : Matrix4x4();
     Matrix4x4 projection = camera ? camera->GetProjectionMatrix() : Matrix4x4();
+    Matrix4x4 viewProjection = MathUtil::Multiply(view, projection); // ビルボード用のビュー射影行列
+    Vector3 cameraRight = { view.m[0][0], view.m[1][0], view.m[2][0] }; // カメラの右方向
+    Vector3 cameraUp = { view.m[0][1], view.m[1][1], view.m[2][1] }; // カメラの上方向
 
     auto instancingData = object3dCommon_->GetInstancingData(); // インスタンス転送先
     const uint32_t instancingSlots = object3dCommon_->GetInstancingSlotCount(); // 最大描画数
@@ -322,6 +370,7 @@ void ParticleManager::Draw()
         if (!group.texturePath.empty()) {
             renderObject->SetTexture(group.texturePath);
         }
+        object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
 
         for (uint32_t i = 0; i < count; ++i) {
             const PM_CpuParticle& particle = sortedParticles[i].get(); // 転送するパーティクル
