@@ -103,6 +103,9 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
         cameraData_->exposure = 1.0f; // デフォルトの露出値
         cameraData_->toneMapOn = 1; // デフォルトでトーンマッピング有効
         cameraData_->pad0 = 0.0f;
+        cameraData_->pad1[0] = 0.0f;
+        cameraData_->pad1[1] = 0.0f;
+        cameraData_->view = MathUtil::MakeIdentity4x4();
     }
 
     // グラフィックスパイプラインの生成
@@ -152,6 +155,14 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
     }
 }
 
+void Object3dCommon::SetEnvironmentMapSrvIndex(uint32_t srvIndex)
+{
+    environmentMapSrvHandleGPU_ = {};
+    if (!dxCommon_ || srvIndex == UINT32_MAX) {
+        return;
+    }
+    environmentMapSrvHandleGPU_ = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
+}
 
 
 #ifdef USE_IMGUI
@@ -423,6 +434,10 @@ void Object3dCommon::SetInstancingDrawSetting()
         cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
     }
 
+    if (environmentMapSrvHandleGPU_.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
+    }
+
 #ifdef _DEBUG
     // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
     {
@@ -499,6 +514,10 @@ void Object3dCommon::SetCommonDrawSetting()
         cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
     }
 
+    if (environmentMapSrvHandleGPU_.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
+    }
+
 #ifdef _DEBUG
     // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
     {
@@ -549,6 +568,12 @@ void Object3dCommon::CreateRootSignature()
     descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForEnvironment[1] = {};
+    descriptorRangeForEnvironment[0].BaseShaderRegister = 2; // t2 in PS
+    descriptorRangeForEnvironment[0].NumDescriptors = 1;
+    descriptorRangeForEnvironment[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeForEnvironment[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     // ルートシグネチャ作成
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature {};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -566,7 +591,7 @@ void Object3dCommon::CreateRootSignature()
 
     // 注意: 互換性のため既存のインデックスを維持する: 0=Material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // 既存コードのインデックスを変更せずに済むよう、インスタンシングSRVテーブルはインデックス4（頂点）に追加する。
-    D3D12_ROOT_PARAMETER rootParameters[9] = {};
+    D3D12_ROOT_PARAMETER rootParameters[10] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -606,6 +631,11 @@ void Object3dCommon::CreateRootSignature()
     rootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[8].Descriptor.ShaderRegister = 5; // b5
+
+    rootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[9].DescriptorTable.pDescriptorRanges = descriptorRangeForEnvironment;
+    rootParameters[9].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForEnvironment);
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 

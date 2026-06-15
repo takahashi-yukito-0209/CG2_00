@@ -40,7 +40,8 @@ public: // メンバ構造体
         int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
         float padding2[2];
         float shininess; // 反射の鋭さ（スペキュラー強度の指数）
-        float pad3[3];
+        float environmentCoefficient; // 環境マップ反射の強さ
+        float pad3[2];
     };
 
     // 座標変換行列データ
@@ -288,6 +289,16 @@ public: // メンバ関数
     /// ライティングモードの設定
     /// </summary>
     void SetLightingMode(int mode);
+
+    /// <summary>
+    /// 環境マップ反射の強さを設定する
+    /// </summary>
+    void SetEnvironmentCoefficient(float coefficient);
+
+    /// <summary>
+    /// 環境マップ反射の強さを取得する
+    /// </summary>
+    float GetEnvironmentCoefficient() const;
 
     /// <summary>
     /// アルファカットアウト用サンプラーの使用設定

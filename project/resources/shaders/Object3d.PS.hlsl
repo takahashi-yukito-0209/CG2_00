@@ -1,6 +1,7 @@
 #include "Object3d.hlsli"
 
 Texture2D<float4> gtexture : register(t0);
+TextureCube<float4> gEnvironment : register(t2);
 SamplerState gSampler : register(s0);
 SamplerState gSamplerPointClamp : register(s1);
 
@@ -54,6 +55,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     {
         float3 N = normalize(input.normal);
         float3 L = normalize(-gDirectionalLight.direction);
+        float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
         float NdotL = dot(N, L);
         float lighting = 1.0f;
 
@@ -69,7 +71,6 @@ PixelShaderOutput main(VertexShaderOutput input)
         }
 
         // Specular: reflect light vector around normal and compute view direction
-        float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
         float3 halfVector = normalize(L + toEye);
         float NdotH = dot(N, halfVector);
         float specularPow = pow(saturate(NdotH), gMaterial.shininess);
@@ -101,7 +102,6 @@ PixelShaderOutput main(VertexShaderOutput input)
 
                 float3 diffuseContrib = finalRGB * pl.color.rgb * pl.color.w * NdotLp * attenuation;
 
-                float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
                 float3 halfVec = normalize(Lp + toEye);
                 float NdotH = max(dot(N, halfVec), 0.0f);
                 float specularPow = pow(saturate(NdotH), gMaterial.shininess);
@@ -145,6 +145,13 @@ PixelShaderOutput main(VertexShaderOutput input)
         // If tone mapping is enabled, apply Reinhard tone mapping
         if (gCamera.toneMapOn != 0) {
             finalRGB = finalRGB / (1.0f + finalRGB);
+        }
+
+        if (gMaterial.environmentCoefficient > 0.0f) {
+            float3 reflected = reflect(-toEye, N);
+            float3 environmentDir = normalize(mul(float4(reflected, 0.0f), gCamera.view).xyz);
+            float3 environmentRGB = gEnvironment.Sample(gSampler, environmentDir).rgb;
+            finalRGB = lerp(finalRGB, environmentRGB, saturate(gMaterial.environmentCoefficient));
         }
     }
 

@@ -40,6 +40,11 @@ public: // メンバ関数
     void SetCommonDrawSetting();
 
     /// <summary>
+    /// オブジェクト反射に使う環境マップのSRVインデックスを設定
+    /// </summary>
+    void SetEnvironmentMapSrvIndex(uint32_t srvIndex);
+
+    /// <summary>
     /// インスタンシング／パーティクル用の描画設定をコマンドリストに設定
     /// </summary>
     void SetInstancingDrawSetting();
@@ -88,6 +93,8 @@ public: // メンバ関数
         float exposure;
         int toneMapOn;
         float pad0;
+        float pad1[2];
+        Math::Matrix4x4 view;
     };
 
     /// <summary>
@@ -212,6 +219,8 @@ private: // メンバ変数
     D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_ = {};
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_ = {};
     uint32_t kNumInstance_ = 0;
+
+    D3D12_GPU_DESCRIPTOR_HANDLE environmentMapSrvHandleGPU_ = {};
 
     // ビルボード用カメラベクトル（b2）
     struct CameraCB {
