@@ -527,9 +527,13 @@ void Game::Update()
     // Object3dCommon にカメラのワールド位置をセット
     if (impl_->object3dCommon) {
         auto cam = impl_->object3dCommon->GetCameraData();
-        // カメラのワールド位置を取得してセット
         if (cam) {
-            cam->worldPosition = impl_->debugCamera.GetTranslation();
+            if (useDebugForRender) {
+                cam->worldPosition = impl_->debugCamera.GetTranslation();
+            } else if (impl_->camera) {
+                cam->worldPosition = impl_->camera->GetTranslate();
+            }
+            cam->view = viewMatrix;
         }
     }
 

@@ -238,7 +238,7 @@ void ImGuiManager::BuildUI(Context& ctx)
                 case 5:
                     return idx == 2; // Checker
                 case 6:
-                    return idx == 4; // Sphere
+                    return idx == 4 || idx == 6; // Sphere and reflected cube
                 default:
                     return false; // その他の選択肢ではオブジェクトは表示しない
                 }

@@ -112,6 +112,7 @@ void Object3d::DrawImGui(int index)
             materialData_->color.z = col[2];
             materialData_->color.w = col[3];
         }
+        ImGui::SliderFloat("Environment Reflection", &materialData_->environmentCoefficient, 0.0f, 1.0f);
     }
 #else
     (void)index;
@@ -248,6 +249,7 @@ void Object3d::CreateMaterialResource()
     materialData_->useAlphaCutoutSampler = 0;
     // 光沢（shininess）の既定値
     materialData_->shininess = 32.0f;
+    materialData_->environmentCoefficient = 0.0f;
 }
 
 /// <summary>
@@ -280,6 +282,18 @@ void Object3d::SetLightingMode(int mode)
     if (materialData_) {
         materialData_->lightingMode = mode;
     }
+}
+
+void Object3d::SetEnvironmentCoefficient(float coefficient)
+{
+    if (materialData_) {
+        materialData_->environmentCoefficient = std::clamp(coefficient, 0.0f, 1.0f);
+    }
+}
+
+float Object3d::GetEnvironmentCoefficient() const
+{
+    return materialData_ ? materialData_->environmentCoefficient : 0.0f;
 }
 
 /// <summary>
@@ -369,12 +383,6 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
     // カメラが設定されていればそれを使用
     Matrix4x4 camView = viewMatrix;
     Matrix4x4 camProj = projectionMatrix;
-
-    // カメラが Object3dCommon で設定されていればそちらを優先して使用する
-    if (camera_) {
-        camView = camera_->GetViewMatrix();
-        camProj = camera_->GetProjectionMatrix();
-    }
 
     // WVP行列の計算
     Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(camView, camProj));

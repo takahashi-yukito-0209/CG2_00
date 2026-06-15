@@ -49,6 +49,9 @@ void PlayScene::Initialize(const SceneContext& ctx)
             // 環境マップ用のDDSがロードされていれば、それを使用してSkyBoxを初期化
             skybox_ = std::make_unique<SkyBox>();
             skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, srvIdx);
+            if (ctx_.object3dCommon) {
+                ctx_.object3dCommon->SetEnvironmentMapSrvIndex(srvIdx);
+            }
         }
     }
 
@@ -74,7 +77,8 @@ void PlayScene::Initialize(const SceneContext& ctx)
         "teapot/teapot.obj",
         "fence/fence.obj",
         "sphere/sphere.gltf",
-        "terrain/terrain.obj"
+        "terrain/terrain.obj",
+        "cube/Cube.obj"
     };
 
     for (size_t i = 0; i < modelFileNames.size(); ++i) {
@@ -84,6 +88,14 @@ void PlayScene::Initialize(const SceneContext& ctx)
         obj->SetModel(modelFileNames[i]);
         if (modelFileNames[i].find("fence") != std::string::npos) {
             obj->SetUseAlphaCutoutSampler(true);
+        }
+        if (modelFileNames[i].find("sphere") != std::string::npos) {
+            obj->SetEnvironmentCoefficient(0.5f);
+        }
+        if (modelFileNames[i].find("cube") != std::string::npos ||
+            modelFileNames[i].find("Cube") != std::string::npos) {
+            obj->SetEnvironmentCoefficient(0.85f);
+            obj->SetTranslate({ 3.0f, 0.0f, 0.0f });
         }
         objects3d_.push_back(std::move(obj));
     }
@@ -216,6 +228,7 @@ void PlayScene::Draw()
             case 6: // Sphere -> index 4 and 5 if present
                 if (objects3d_.size() > 4 && objects3d_[4]) objects3d_[4]->Draw();
                 if (objects3d_.size() > 5 && objects3d_[5]) objects3d_[5]->Draw();
+                if (objects3d_.size() > 6 && objects3d_[6]) objects3d_[6]->Draw();
                 break;
             default:
                 // その他（Particle/Sprite）はここでは扱わない
