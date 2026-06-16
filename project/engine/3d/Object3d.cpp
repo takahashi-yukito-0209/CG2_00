@@ -18,6 +18,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 
@@ -173,6 +174,35 @@ void Object3d::SetModel(const std::string& filePath)
 }
 
 /// <summary>
+/// 頂点データを直接セットする関数
+/// </summary>
+void Object3d::SetMesh(const std::vector<VertexData>& vertices)
+{
+    model_ = nullptr;
+    modelData_.vertices = vertices;
+
+    if (vertices.empty() || !object3dCommon_ || !object3dCommon_->GetDxCommon()) {
+        vertexResource_.Reset();
+        vertexData_ = nullptr;
+        vertexBufferView_ = {};
+        return;
+    }
+
+    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon(); // DirectX共通処理
+    const size_t vertexBufferSize = sizeof(VertexData) * vertices.size(); // 頂点バッファサイズ
+
+    vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
+    vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vertexData_));
+    std::memcpy(vertexData_, vertices.data(), vertexBufferSize);
+    vertexResource_->Unmap(0, nullptr);
+    vertexData_ = nullptr;
+
+    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
+    vertexBufferView_.SizeInBytes = static_cast<UINT>(vertexBufferSize);
+    vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(VertexData));
+}
+
+/// <summary>
 /// Object3d の終了処理
 /// </summary>
 Object3d::~Object3d()
@@ -294,6 +324,16 @@ void Object3d::SetEnvironmentCoefficient(float coefficient)
 float Object3d::GetEnvironmentCoefficient() const
 {
     return materialData_ ? materialData_->environmentCoefficient : 0.0f;
+}
+
+/// <summary>
+/// UV変換行列を設定する
+/// </summary>
+void Object3d::SetUVTransform(const Math::Matrix4x4& uvTransform)
+{
+    if (materialData_) {
+        materialData_->uvTransform = uvTransform;
+    }
 }
 
 /// <summary>
@@ -535,6 +575,73 @@ void Object3d::Draw()
     }
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
+}
+
+/// <summary>
+/// 同じメッシュを指定数だけインスタンシング描画する関数
+/// </summary>
+void Object3d::DrawInstanced(uint32_t instanceCount)
+{
+    if (instanceCount == 0 || !object3dCommon_ || !object3dCommon_->GetDxCommon()) {
+        return;
+    }
+
+    if (model_) {
+        model_->DrawInstanced(this, instanceCount);
+        return;
+    }
+
+    if (vertexBufferView_.SizeInBytes == 0 || modelData_.vertices.empty()) {
+        return;
+    }
+
+    auto cmdList = object3dCommon_->GetDxCommon()->GetCommandList(); // 描画コマンドリスト
+    if (!cmdList) {
+        return;
+    }
+
+    cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+
+    if (materialResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+    } else {
+        return;
+    }
+
+    if (transformationMatrixResource_) {
+        cmdList->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源のGPUアドレス
+    if (lightAddress != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(3, lightAddress);
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS cameraAddress = object3dCommon_->GetCameraGPUAddress(); // カメラ情報のGPUアドレス
+    if (cameraAddress != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraAddress);
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS pointLightAddress = object3dCommon_->GetPointLightsGPUAddress(); // 点光源のGPUアドレス
+    if (pointLightAddress != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
+    }
+
+    auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
+    const uint32_t textureIndex = modelData_.material.textureIndex; // 使用するテクスチャ番号
+    if (texMgr && textureIndex != UINT32_MAX) {
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(textureIndex);
+        if (srvHandle.ptr != 0) {
+            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
+        }
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
+    if (instancingSrvHandle.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(4, instancingSrvHandle);
+    }
+
+    cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), instanceCount, 0, 0);
 }
 
 /// <summary>

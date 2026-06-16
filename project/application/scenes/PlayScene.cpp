@@ -8,6 +8,7 @@
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
+#include "../../engine/3d/PrimitiveFactory.h"
 #include "../../engine/base/SrvManager.h"
 #include "../../engine/3d/SkyBox.h"
 #include "../../engine/particle/ParticleManager.h"
@@ -36,6 +37,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ctx_.textureManager->LoadTexture("uvChecker.png");
         ctx_.textureManager->LoadTexture("monsterBall.png");
         ctx_.textureManager->LoadTexture("circle.png");
+        ctx_.textureManager->LoadTexture("gradationLine.png");
         // 環境マップ用DDSを読み込む（確認用）
         ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
         // 読み込んだテクスチャをGPUに転送
@@ -105,8 +107,20 @@ void PlayScene::Initialize(const SceneContext& ctx)
     //パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particlePlane_->SetModel("plane/plane.obj");
+    particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
     particlePlane_->SetTexture("circle.png");
+
+    particleRing_ = std::make_unique<Object3d>();
+    particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
+    particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetUseAlphaCutoutSampler(true);
+
+    particleCylinder_ = std::make_unique<Object3d>();
+    particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
+    particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetUseAlphaCutoutSampler(true);
 
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
@@ -115,16 +129,36 @@ void PlayScene::Initialize(const SceneContext& ctx)
         ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
         ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
+        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
+        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
     }
 
     // パーティクルエミッターと発射
-    pmEmitter_.groupName = "Circle";
+    pmEmitter_.groupName = "Hit";
     pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    pmEmitter_.count = 3;
-    pmEmitter_.frequency = 0.5f;
-    for (int i = 0; i < 20; ++i) {
-        pmEmitter_.Emit();
-    }
+    pmEmitter_.count = 8;
+    pmEmitter_.frequency = 1.0f;
+    pmEmitter_.useHitEffect = true;
+    pmEmitter_.Emit();
+
+    ringEmitter_.groupName = "Ring";
+    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    ringEmitter_.count = 1;
+    ringEmitter_.frequency = 1.0f;
+    ringEmitter_.useRingEffect = true;
+    ringEmitter_.Emit();
+
+    cylinderEmitter_.groupName = "Cylinder";
+    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    cylinderEmitter_.count = 1;
+    cylinderEmitter_.frequency = 1.0f;
+    cylinderEmitter_.useCylinderEffect = true;
+    cylinderEmitter_.Emit();
 }
 
 /// <summary>
@@ -149,6 +183,8 @@ void PlayScene::Finalize()
 
     // プレーンのリセット
     particlePlane_.reset();
+    particleRing_.reset();
+    particleCylinder_.reset();
     if (skybox_) {
         skybox_->Finalize();
         skybox_.reset();
@@ -167,6 +203,8 @@ void PlayScene::Update(float dt)
 
     // パーティクルエミッターの更新とマネージャーの更新
     pmEmitter_.Update(dt);
+    ringEmitter_.Update(dt);
+    cylinderEmitter_.Update(dt);
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Update(dt);
     }

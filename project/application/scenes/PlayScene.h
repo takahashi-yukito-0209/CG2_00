@@ -93,6 +93,10 @@ private://メンバ変数
     std::vector<std::unique_ptr<Sprite>> sprites_;
     std::vector<std::unique_ptr<Object3d>> objects3d_;
     std::unique_ptr<Object3d> particlePlane_;
+    std::unique_ptr<Object3d> particleRing_;
+    std::unique_ptr<Object3d> particleCylinder_;
     ParticleEmitter pmEmitter_;
+    ParticleEmitter ringEmitter_;
+    ParticleEmitter cylinderEmitter_;
     std::unique_ptr<SkyBox> skybox_;
 };

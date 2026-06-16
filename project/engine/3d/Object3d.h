@@ -123,6 +123,11 @@ public: // メンバ関数
     void Draw();
 
     /// <summary>
+    /// 同じメッシュを指定数だけインスタンシング描画する
+    /// </summary>
+    void DrawInstanced(uint32_t instanceCount);
+
+    /// <summary>
     /// マテリアルテンプレートファイルを読みこむ（マテリアルの基本情報を格納した独自フォーマットのファイルを想定）
     /// </summary>
     static MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
@@ -146,6 +151,11 @@ public: // メンバ関数
     /// テクスチャのセット
     /// </summary>
     void SetTexture(const std::string& filePath);
+
+    /// <summary>
+    /// 頂点データを直接セットする
+    /// </summary>
+    void SetMesh(const std::vector<VertexData>& vertices);
 
     /// <summary>
     /// モデルのゲット
@@ -299,6 +309,11 @@ public: // メンバ関数
     /// 環境マップ反射の強さを取得する
     /// </summary>
     float GetEnvironmentCoefficient() const;
+
+    /// <summary>
+    /// UV変換行列を設定する
+    /// </summary>
+    void SetUVTransform(const Math::Matrix4x4& uvTransform);
 
     /// <summary>
     /// アルファカットアウト用サンプラーの使用設定

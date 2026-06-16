@@ -30,7 +30,8 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
         float3 center = float3(p.World._41, p.World._42, p.World._43);
         float3 right = normalize(gCameraRight);
         float3 up = normalize(gCameraUp);
-        float3 billboardPos = center + right * pos.x + up * pos.y;
+        float2 localOffset = mul(float4(input.position.xyz, 0.0f), p.World).xy;
+        float3 billboardPos = center + right * localOffset.x + up * localOffset.y;
         pos = float4(billboardPos, 1.0f);
         // 法線はカメラ方向に向ける（簡易）
         nrm = normalize(cross(right, up));

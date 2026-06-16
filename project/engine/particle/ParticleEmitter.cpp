@@ -18,7 +18,15 @@ void ParticleEmitter::Emit() {
     // グループ名が空なら発生させない
     if (groupName.empty()) { return; }
 
-    ParticleManager::GetInstance()->Emit(groupName, transform.translate, count);
+    if (useCylinderEffect) {
+        ParticleManager::GetInstance()->EmitCylinderEffect(groupName, transform.translate, count);
+    } else if (useRingEffect) {
+        ParticleManager::GetInstance()->EmitRingEffect(groupName, transform.translate, count);
+    } else if (useHitEffect) {
+        ParticleManager::GetInstance()->EmitHitEffect(groupName, transform.translate, count);
+    } else {
+        ParticleManager::GetInstance()->Emit(groupName, transform.translate, count);
+    }
 }
 
 /// <summary>
@@ -61,6 +69,9 @@ void ParticleEmitter::DrawImGui()
     // 1以上1000以下の整数として編集。変更があったらcountを更新
     if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000)) count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
+    ImGui::Checkbox("Use Hit Effect", &useHitEffect);
+    ImGui::Checkbox("Use Ring Effect", &useRingEffect);
+    ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);
 #else
     (void)buf;
 #endif
