@@ -1,15 +1,15 @@
 #include "Logger.h"
 #include <Windows.h>
-#include <mutex>
 #include <chrono>
 #include <ctime>
-#include <sstream>
 #include <fstream>
+#include <mutex>
+#include <sstream>
 
 namespace Logger {
 
 // 現在の最小出力レベル
-static Level s_minLevel = Level::Debug;
+static Level s_minLevel = Level::Info;
 // ミューテックス
 static std::mutex s_mutex;
 // ログファイルストリーム
@@ -20,7 +20,8 @@ static std::ofstream s_errorLogFile;
 /// <summary>
 /// ログレベルを文字列に変換するユーティリティ関数
 /// </summary>
-static const char* LevelToString(Level l) {
+static const char* LevelToString(Level l)
+{
     // レベルを文字列に変換
     switch (l) {
     case Level::Debug:
@@ -39,14 +40,15 @@ static const char* LevelToString(Level l) {
 /// <summary>
 /// 現在のタイムスタンプを文字列で取得するユーティリティ関数
 /// </summary>
-static std::string GetTimestamp() {
+static std::string GetTimestamp()
+{
     // 現在時刻を取得
     using namespace std::chrono;
     auto now = system_clock::now();
 
     // 文字列に変換
     std::time_t t = system_clock::to_time_t(now);
-    std::tm tm{};
+    std::tm tm {};
     localtime_s(&tm, &t);
 
     // 文字列フォーマット
@@ -65,7 +67,8 @@ static std::string GetTimestamp() {
 /// <summary>
 /// ログファイルを設定する（空文字でファイル出力を無効化）
 /// </summary>
-bool SetLogFile(const std::string& filePath) {
+bool SetLogFile(const std::string& filePath)
+{
     // ミューテックスで保護
     std::lock_guard<std::mutex> lk(s_mutex);
 
@@ -89,7 +92,8 @@ bool SetLogFile(const std::string& filePath) {
 /// <summary>
 /// 異常系（Warn/Error）専用のログファイルを設定する（空文字で無効化）
 /// </summary>
-bool SetErrorLogFile(const std::string& filePath) {
+bool SetErrorLogFile(const std::string& filePath)
+{
     // ミューテックスで保護
     std::lock_guard<std::mutex> lk(s_mutex);
 
@@ -113,7 +117,8 @@ bool SetErrorLogFile(const std::string& filePath) {
 /// <summary>
 /// レベルを設定する
 /// </summary>
-void SetLevel(Level level) {
+void SetLevel(Level level)
+{
     // ミューテックスで保護
     std::lock_guard<std::mutex> lk(s_mutex);
     // レベルを設定
@@ -123,7 +128,8 @@ void SetLevel(Level level) {
 /// <summary>
 /// レベル付きログ出力
 /// </summary>
-void Log(Level level, const std::string& message) {
+void Log(Level level, const std::string& message)
+{
     // レベルによるフィルタリング
     if (level < s_minLevel) {
         return;
@@ -158,7 +164,8 @@ void Log(Level level, const std::string& message) {
 /// <summary>
 /// 互換性のための既存API
 /// </summary>
-void Log(const std::string& message) {
+void Log(const std::string& message)
+{
     Log(Level::Info, message);
 }
 

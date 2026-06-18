@@ -118,277 +118,21 @@ void ImGuiManager::Shutdown()
 void ImGuiManager::BuildUI(Context& ctx)
 {
 
-    // メインウィンドウの開始
     ImGui::Begin("Settings");
 
-    // 現在のシーン名を表示（あれば）
-    if (ctx.currentSceneName) {
-        ImGui::Text("Current Scene: %s", ctx.currentSceneName);
-    }
+    DrawSceneSection(ctx);
+    DrawViewFilterSection(ctx);
 
-    // シーン切替UI（デバッグ用）
-    if (ImGui::BeginCombo("Change Scene", "Select")) {
-        if (ImGui::Selectable("Title")) {
-            if (ctx.requestSceneChange)
-                ctx.requestSceneChange("Title");
-        }
-        if (ImGui::Selectable("Play")) {
-            if (ctx.requestSceneChange)
-                ctx.requestSceneChange("Play");
-        }
-        ImGui::EndCombo();
-    }
+    int selectedDrawType = ctx.selectedDrawType ? *ctx.selectedDrawType : -1; // 現在選択されている表示対象
 
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        ImVec4 bg = style.Colors[ImGuiCol_WindowBg];
-        if (ImGui::ColorEdit3("UI Window Bg", (float*)&bg)) {
-            style.Colors[ImGuiCol_WindowBg] = bg;
-        }
-    }
-
-    // タイトルシーン用の簡易フルスクリーンUI（デバッグ／見た目確認用）
-    if (ctx.currentSceneName && strcmp(ctx.currentSceneName, "Title") == 0) {
-        // 中央に大きなウィンドウを表示して Start ボタンを置く
-        ImGuiIO& io = ImGui::GetIO();
-        ImVec2 center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
-        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowSize(ImVec2(400, 200));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-        ImGui::Begin("TitleScreen", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::Dummy(ImVec2(0, 10));
-        // 中央揃えでタイトルを描画
-        float textW = ImGui::CalcTextSize("GAME TITLE").x;
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - textW) * 0.5f);
-        ImGui::Text("GAME TITLE");
-        ImGui::Dummy(ImVec2(0, 20));
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - 80.0f) * 0.5f);
-        if (ImGui::Button("Start", ImVec2(80, 40))) {
-            if (ctx.requestSceneChange)
-                ctx.requestSceneChange("Play");
-        }
-
-        ImGui::End();
-        ImGui::PopStyleVar();
-    }
-
-    // 描画タイプ選択UI（例: Model, Particle, Sprite など)
-    if (ctx.selectedDrawType) {
-        const char* drawOptions[] = { "Model", "Particle", "Sprite", "Bunny", "Fence", "Checker", "Sphere", "All" };
-        ImGui::Combo("Model", ctx.selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
-    }
-
-    // 現在の描画タイプ選択をローカル変数にコピーして使用
-    int sel = ctx.selectedDrawType ? *ctx.selectedDrawType : -1;
-
-    // オブジェクトごとのUI（Model, Bunny, Fence, Checker, Sphere のみ）
-    if (ctx.objects3d) {
-        // 現在の選択状態に基づいて表示されるべきオブジェクトの数をカウント
-        int visibleCount = 0;
-        for (size_t i = 0; i < ctx.objects3d->size(); ++i) {
-            auto obj = (*ctx.objects3d)[i];
-            if (!obj)
-                continue;
-            // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定
-            auto isVisibleLocal = [&](int idx) -> bool {
-                if (sel == -1)
-                    return true;
-                if (sel == 7)
-                    return true;
-                switch (sel) {
-                case 0:
-                    return idx == 0;
-                case 3:
-                    return idx == 1;
-                case 4:
-                    return idx == 3;
-                case 5:
-                    return idx == 2;
-                case 6:
-                    return idx == 4;
-                default:
-                    return false;
-                }
-            };
-            if (isVisibleLocal(static_cast<int>(i)))
-                ++visibleCount;
-        }
-        if (visibleCount > 0) {
-            ImGui::Separator();
-            ImGui::Text("Objects");
-
-            // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定するラムダ関数
-            auto isVisible = [&](int idx) -> bool {
-                // sel == -1 (None) なら全て表示、sel == 7 (All) なら全て表示、それ以外は idx に対応するオブジェクトのみ表示
-                if (sel == -1) {
-                    return true; // None なら全て表示
-                }
-                if (sel == 7) {
-                    return true; // All なら全て表示
-                }
-
-                // それ以外は idx に対応するオブジェクトのみ表示 (0=Model, 3=Bunny, 4=Fence, 5=Checker, 6=Sphere)
-                switch (sel) {
-                case 0:
-                    return idx == 0; // Model
-                case 3:
-                    return idx == 1; // Bunny
-                case 4:
-                    return idx == 3; // Fence
-                case 5:
-                    return idx == 2; // Checker
-                case 6:
-                    return idx == 4 || idx == 6; // Sphere and reflected cube
-                default:
-                    return false; // その他の選択肢ではオブジェクトは表示しない
-                }
-            };
-
-            // オブジェクトごとにUIを表示
-            int idx = 0;
-            // それぞれのオブジェクトが現在の選択に対して表示されるべきかを判定するラムダ関数を使用して、表示すべきオブジェクトのみUIを構築する
-            for (auto obj : *ctx.objects3d) {
-                // obj が nullptr ならスキップ
-                if (!obj) {
-                    ++idx;
-                    continue;
-                }
-                // 現在の選択に対してこのオブジェクトが表示されるべきかを判定
-                if (!isVisible(idx)) {
-                    ++idx;
-                    continue;
-                }
-                ImGui::PushID(idx);
-                // ヘッダにオブジェクトの種類とインデックスを表示 (例: "Object 0", "Object 1", ...)
-                char header[64];
-                sprintf_s(header, "Object %d", idx);
-                // 現在のオブジェクトのUIを表示
-                if (ImGui::CollapsingHeader(header)) {
-                    obj->DrawImGui(idx);
-                }
-
-                ImGui::PopID();
-                ++idx;
-            }
-        }
-    }
-
-    // 描画タイプ選択に基づいて、ParticleセクションとSpritesセクションの表示を制御
-
-    // Particleセクション: 表示は選択状態（Particle または All）のときのみ行う
-    if ((sel == 1 || sel == 7) && (ctx.particleEmitter || ctx.particleManager)) {
-        if (ImGui::CollapsingHeader("Particle")) {
-            // パーティクルエミッタのUIを表示
-            if (ctx.particleEmitter) {
-                ImGui::PushID((void*)ctx.particleEmitter);
-                ctx.particleEmitter->DrawImGui();
-                ImGui::PopID();
-            }
-
-            ImGui::Separator();
-
-            // パーティクルマネージャのUIを表示
-            if (ctx.particleManager) {
-                ctx.particleManager->DrawImGui();
-            }
-
-            // パーティクルグループのテクスチャ選択UIを表示
-            if (ctx.particleManager) {
-                const auto& groups = ctx.particleManager->GetGroups();
-                if (!groups.empty()) {
-                    auto loaded = TextureManager::GetInstance()->GetLoadedTextureFilePaths();
-                    if (!loaded.empty()) {
-                        std::vector<std::string> basenames;
-                        basenames.reserve(loaded.size());
-                        std::vector<std::string> fullPaths;
-                        fullPaths.reserve(loaded.size());
-                        std::unordered_set<std::string> seen;
-                        for (const auto& p : loaded) {
-                            size_t pos = p.find_last_of("/\\");
-                            std::string name = (pos == std::string::npos) ? p : p.substr(pos + 1);
-                            if (seen.find(name) != seen.end())
-                                continue;
-                            seen.insert(name);
-                            basenames.push_back(name);
-                            fullPaths.push_back(p);
-                        }
-
-                        if (!basenames.empty()) {
-                            ImGui::Separator();
-                            ImGui::Text("Particle Group Textures");
-                            for (const auto& kv : groups) {
-                                const std::string& gname = kv.first;
-                                const ParticleGroup& grp = kv.second;
-                                std::vector<const char*> items;
-                                items.reserve(basenames.size());
-                                for (const auto& b : basenames)
-                                    items.push_back(b.c_str());
-                                int cur = 0;
-                                std::string curName;
-                                if (!grp.texturePath.empty()) {
-                                    size_t pos = grp.texturePath.find_last_of("/\\");
-                                    curName = (pos == std::string::npos) ? grp.texturePath : grp.texturePath.substr(pos + 1);
-                                }
-                                for (size_t i = 0; i < basenames.size(); ++i) {
-                                    if (basenames[i] == curName) {
-                                        cur = static_cast<int>(i);
-                                        break;
-                                    }
-                                }
-                                ImGui::PushID(gname.c_str());
-                                ImGui::Text("%s", gname.c_str());
-                                if (ImGui::Combo("Texture", &cur, items.data(), static_cast<int>(items.size()))) {
-                                    ctx.particleManager->SetGroupTexture(gname, fullPaths[cur]);
-                                }
-                                ImGui::PopID();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // スプライトセクション
-    if ((sel == 2 || sel == 7) && ctx.sprites && ctx.spriteCommon) {
-        if (ImGui::CollapsingHeader("Sprites")) {
-            int sidx = 0;
-            for (auto s : *ctx.sprites) {
-                if (!s) {
-                    ++sidx;
-                    continue;
-                }
-                ImGui::PushID(sidx);
-                char header[64];
-                sprintf_s(header, "Sprite %d", sidx);
-                if (ImGui::CollapsingHeader(header)) {
-                    s->DrawImGui();
-                }
-                ImGui::PopID();
-                ++sidx;
-            }
-        }
-    }
-
-    // Object3dCommon の UI はクラス側に委譲済み (DrawImGui)
-    if (ctx.spriteCommon) {
-        ctx.spriteCommon->DrawImGui();
-    }
-
-    // Object3dCommon の UI はクラス側に委譲済み (DrawImGui)
-    if (ctx.object3dCommon) {
-        ctx.object3dCommon->DrawImGui();
-    }
+    DrawObjectSection(ctx, selectedDrawType);
+    DrawParticleSection(ctx, selectedDrawType);
+    DrawSpriteSection(ctx, selectedDrawType);
+    DrawCommonSection(ctx);
 
     ImGui::End();
 
-    // カメラのUIは常に表示する
-    ImGui::Begin("Camera");
-    if (ctx.object3dCommon) {
-        ctx.object3dCommon->DrawCameraImGui();
-    }
-
-    ImGui::End();
+    DrawCameraWindow(ctx);
 }
 
 /// <summary>
@@ -409,6 +153,238 @@ bool ImGuiManager::IsCapturingInput()
     return ImGui::IsAnyItemActive() || ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) || io.WantCaptureMouse || io.WantCaptureKeyboard;
 #else
     return false;
+#endif
+}
+
+/// <summary>
+/// シーン情報をImGuiで描画する
+/// </summary>
+void ImGuiManager::DrawSceneSection(Context& ctx)
+{
+#ifdef USE_IMGUI
+    if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ctx.currentSceneName) {
+            ImGui::Text("Current Scene: %s", ctx.currentSceneName);
+        }
+    }
+#else
+    (void)ctx;
+#endif
+}
+
+/// <summary>
+/// 表示対象の選択UIを描画する
+/// </summary>
+void ImGuiManager::DrawViewFilterSection(Context& ctx)
+{
+#ifdef USE_IMGUI
+    if (!ctx.selectedDrawType) {
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("View Filter", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const char* drawOptions[] = {
+            "Model",
+            "Particle",
+            "Sprite",
+            "Bunny",
+            "Fence",
+            "Checker",
+            "Sphere",
+            "All"
+        };
+
+        ImGui::Combo("Draw Type", ctx.selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
+    }
+#else
+    (void)ctx;
+#endif
+}
+
+/// <summary>
+/// パーティクル関連のImGuiを描画する
+/// </summary>
+void ImGuiManager::DrawParticleSection(Context& ctx, int selectedDrawType)
+{
+#ifdef USE_IMGUI
+    if (selectedDrawType != 1 && selectedDrawType != 7) {
+        return;
+    }
+
+    if (!ctx.particleEmitter && !ctx.particleManager) {
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Particle")) {
+        if (ctx.particleEmitter) {
+            ImGui::PushID(ctx.particleEmitter);
+            ctx.particleEmitter->DrawImGui();
+            ImGui::PopID();
+        }
+
+        ImGui::Separator();
+
+        if (ctx.particleManager) {
+            ctx.particleManager->DrawImGui();
+        }
+    }
+#else
+    (void)ctx;
+    (void)selectedDrawType;
+#endif
+}
+
+/// <summary>
+/// 3Dオブジェクト関連のImGuiを描画する
+/// </summary>
+void ImGuiManager::DrawObjectSection(Context& ctx, int selectedDrawType)
+{
+#ifdef USE_IMGUI
+    if (!ctx.objects3d) {
+        return;
+    }
+
+    auto IsVisibleObject = [](int selectedDrawType, int objectIndex) -> bool {
+        // 未選択またはAllの場合はすべて表示
+        if (selectedDrawType == -1 || selectedDrawType == 7) {
+            return true;
+        }
+
+        switch (selectedDrawType) {
+        case 0:
+            return objectIndex == 0; // Model
+        case 3:
+            return objectIndex == 1; // Bunny
+        case 4:
+            return objectIndex == 3; // Fence
+        case 5:
+            return objectIndex == 2; // Checker
+        case 6:
+            return objectIndex == 4 || objectIndex == 6; // Sphere / reflected cube
+        default:
+            return false;
+        }
+    };
+
+    bool hasVisibleObject = false; // 表示対象のオブジェクトがあるか
+    for (int objectIndex = 0; objectIndex < static_cast<int>(ctx.objects3d->size()); ++objectIndex) {
+        Object3d* object = (*ctx.objects3d)[objectIndex]; // 確認対象の3Dオブジェクト
+        if (object && IsVisibleObject(selectedDrawType, objectIndex)) {
+            hasVisibleObject = true;
+            break;
+        }
+    }
+
+    if (!hasVisibleObject) {
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Objects")) {
+        for (int objectIndex = 0; objectIndex < static_cast<int>(ctx.objects3d->size()); ++objectIndex) {
+            Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示対象の3Dオブジェクト
+            if (!object) {
+                continue;
+            }
+
+            if (!IsVisibleObject(selectedDrawType, objectIndex)) {
+                continue;
+            }
+
+            ImGui::PushID(objectIndex);
+
+            char header[64] = {};
+            sprintf_s(header, "Object %d", objectIndex);
+
+            if (ImGui::CollapsingHeader(header)) {
+                object->DrawImGui(objectIndex);
+            }
+
+            ImGui::PopID();
+        }
+    }
+#else
+    (void)ctx;
+    (void)selectedDrawType;
+#endif
+}
+
+/// <summary>
+/// スプライト関連のImGuiを描画する
+/// </summary>
+void ImGuiManager::DrawSpriteSection(Context& ctx, int selectedDrawType)
+{
+#ifdef USE_IMGUI
+    if (selectedDrawType != 2 && selectedDrawType != 7) {
+        return;
+    }
+
+    if (!ctx.sprites) {
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Sprites")) {
+        int spriteIndex = 0; // 表示中のスプライト番号
+
+        for (auto* sprite : *ctx.sprites) {
+            if (!sprite) {
+                ++spriteIndex;
+                continue;
+            }
+
+            ImGui::PushID(spriteIndex);
+
+            char header[64] = {};
+            sprintf_s(header, "Sprite %d", spriteIndex);
+
+            if (ImGui::CollapsingHeader(header)) {
+                sprite->DrawImGui();
+            }
+
+            ImGui::PopID();
+            ++spriteIndex;
+        }
+    }
+#else
+    (void)ctx;
+    (void)selectedDrawType;
+#endif
+}
+
+/// <summary>
+/// 3Dオブジェクト関連のImGuiを描画する
+/// </summary>
+void ImGuiManager::DrawCommonSection(Context& ctx)
+{
+#ifdef USE_IMGUI
+    if (ImGui::CollapsingHeader("Common")) {
+        if (ctx.spriteCommon) {
+            ctx.spriteCommon->DrawImGui();
+        }
+
+        if (ctx.object3dCommon) {
+            ctx.object3dCommon->DrawImGui();
+        }
+    }
+#else
+    (void)ctx;
+#endif
+}
+
+/// <summary>
+/// カメラ関連のImGuiを描画する
+/// </summary>
+void ImGuiManager::DrawCameraWindow(Context& ctx)
+{
+#ifdef USE_IMGUI
+    ImGui::Begin("Camera");
+
+    if (ctx.object3dCommon) {
+        ctx.object3dCommon->DrawCameraImGui();
+    }
+
+    ImGui::End();
+#else
+    (void)ctx;
 #endif
 }
 

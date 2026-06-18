@@ -1,11 +1,11 @@
 #include "ParticleManager.h"
-#include "engine/utility/Logger.h"
-#include "engine/base/DirectXCommon.h"
-#include "engine/3d/Object3dCommon.h"
-#include "engine/3d/Object3d.h"
-#include "engine/3d/Model.h"
-#include "engine/3d/Camera.h"
 #include "ImGuiManager.h"
+#include "engine/3d/Camera.h"
+#include "engine/3d/Model.h"
+#include "engine/3d/Object3d.h"
+#include "engine/3d/Object3dCommon.h"
+#include "engine/base/DirectXCommon.h"
+#include "engine/utility/Logger.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -14,6 +14,10 @@
 
 using namespace Math;
 using namespace MyEngine;
+
+namespace {
+constexpr uint32_t kFallbackParticleLimit = 1024; // 初期化前に参照された場合の最低限の保持上限
+}
 
 /// <summary>
 /// パーティクルマネージャーを初期化する
@@ -36,6 +40,37 @@ void ParticleManager::Finalize()
 }
 
 /// <summary>
+/// 1グループで保持できるパーティクル数の上限を取得する
+/// </summary>
+uint32_t ParticleManager::GetParticleLimit() const
+{
+    if (object3dCommon_) {
+        const uint32_t instancingSlotCount = object3dCommon_->GetInstancingSlotCount(); // GPUへ転送できる最大インスタンス数
+        if (instancingSlotCount > 0) {
+            return instancingSlotCount;
+        }
+    }
+
+    return kFallbackParticleLimit;
+}
+
+/// <summary>
+/// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
+/// </summary>
+uint32_t ParticleManager::GetEmitCountWithinLimit(const ParticleGroup& group, uint32_t requestCount) const
+{
+    const uint32_t particleLimit = GetParticleLimit(); // 1グループで保持する最大数
+    const size_t currentCount = group.particles.size(); // 現在保持しているパーティクル数
+
+    if (currentCount >= static_cast<size_t>(particleLimit)) {
+        return 0;
+    }
+
+    const uint32_t remainingCount = particleLimit - static_cast<uint32_t>(currentCount); // 追加で生成できる残り数
+    return std::min<uint32_t>(requestCount, remainingCount);
+}
+
+/// <summary>
 /// 既存グループにテクスチャを割り当てる
 /// </summary>
 void ParticleManager::SetGroupTexture(const std::string& name, const std::string& textureFilePath)
@@ -54,6 +89,10 @@ void ParticleManager::SetGroupTexture(const std::string& name, const std::string
             index = texManager_->GetTextureIndexByFilePath(textureFilePath);
         }
         it->second.srvIndex = (index == UINT32_MAX) ? 0u : index;
+    }
+
+    if (it->second.renderObject) {
+        it->second.renderObject->SetTexture(textureFilePath);
     }
 }
 
@@ -76,6 +115,9 @@ void ParticleManager::SetParticleObject(const std::string& name, Object3d* objec
     }
 
     it->second.renderObject = object;
+    if (object && !it->second.texturePath.empty()) {
+        object->SetTexture(it->second.texturePath);
+    }
 }
 
 /// <summary>
@@ -126,6 +168,11 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, uin
     }
 
     auto& list = it->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
+    if (emitCount == 0) {
+        return;
+    }
+
     std::uniform_real_distribution<float> lifeDist(lifeMin_, lifeMax_); // 寿命範囲
     std::uniform_real_distribution<float> rx(spawnPosMin_.x, spawnPosMax_.x); // X位置範囲
     std::uniform_real_distribution<float> ry(spawnPosMin_.y, spawnPosMax_.y); // Y位置範囲
@@ -141,7 +188,7 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, uin
     std::uniform_real_distribution<float> rcz(colMin_.z, colMax_.z); // B範囲
     std::uniform_real_distribution<float> rca(colMin_.w, colMax_.w); // A範囲
 
-    for (uint32_t i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
         particle.transform.scale = { rsx(rng_), rsy(rng_), rsz(rng_) };
         particle.startScale = particle.transform.scale;
@@ -170,11 +217,16 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
     }
 
     auto& list = it->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
+    if (emitCount == 0) {
+        return;
+    }
+
     std::uniform_real_distribution<float> rotateDist(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // Z回転範囲
     std::uniform_real_distribution<float> scaleYDist(0.9f, 1.8f); // 縦方向スケール範囲
     std::uniform_real_distribution<float> alphaDist(0.75f, 1.0f); // 透明度範囲
 
-    for (uint32_t i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < emitCount; ++i) {
         const float length = scaleYDist(rng_); // 光の筋の最大長さ
         const float alpha = alphaDist(rng_); // 発生時の透明度
 
@@ -208,8 +260,12 @@ void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& pos
     }
 
     auto& list = it->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
+    if (emitCount == 0) {
+        return;
+    }
 
-    for (uint32_t i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
         particle.startScale = { 0.2f, 0.2f, 1.0f };
         particle.endScale = { 1.6f, 1.6f, 1.0f };
@@ -240,8 +296,12 @@ void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3&
     }
 
     auto& list = it->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
+    if (emitCount == 0) {
+        return;
+    }
 
-    for (uint32_t i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
         particle.startScale = { 0.35f, 0.7f, 0.35f };
         particle.endScale = { 1.2f, 0.9f, 1.2f };
@@ -275,8 +335,7 @@ void ParticleManager::Update(float dt)
 
             if (fieldEnabled_) {
                 const Vector3& position = particle.transform.translate; // 現在位置
-                if (position.x >= fieldMin_.x && position.y >= fieldMin_.y && position.z >= fieldMin_.z &&
-                    position.x <= fieldMax_.x && position.y <= fieldMax_.y && position.z <= fieldMax_.z) {
+                if (position.x >= fieldMin_.x && position.y >= fieldMin_.y && position.z >= fieldMin_.z && position.x <= fieldMax_.x && position.y <= fieldMax_.y && position.z <= fieldMax_.z) {
                     particle.velocity.x += fieldAccel_.x * dt;
                     particle.velocity.y += fieldAccel_.y * dt;
                     particle.velocity.z += fieldAccel_.z * dt;
@@ -367,9 +426,6 @@ void ParticleManager::Draw()
             continue;
         }
 
-        if (!group.texturePath.empty()) {
-            renderObject->SetTexture(group.texturePath);
-        }
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
 
         for (uint32_t i = 0; i < count; ++i) {
@@ -429,10 +485,26 @@ void ParticleManager::SetFieldAABB(const Vector3& mn, const Vector3& mx)
     fieldMax_ = mx;
 }
 
-void ParticleManager::SetSpawnPosRange(const Vector3& mn, const Vector3& mx) { spawnPosMin_ = mn; spawnPosMax_ = mx; }
-void ParticleManager::SetVelocityRange(const Vector3& mn, const Vector3& mx) { velMin_ = mn; velMax_ = mx; }
-void ParticleManager::SetScaleRange(const Vector3& mn, const Vector3& mx) { scaleMin_ = mn; scaleMax_ = mx; }
-void ParticleManager::SetColorRange(const Vector4& mn, const Vector4& mx) { colMin_ = mn; colMax_ = mx; }
+void ParticleManager::SetSpawnPosRange(const Vector3& mn, const Vector3& mx)
+{
+    spawnPosMin_ = mn;
+    spawnPosMax_ = mx;
+}
+void ParticleManager::SetVelocityRange(const Vector3& mn, const Vector3& mx)
+{
+    velMin_ = mn;
+    velMax_ = mx;
+}
+void ParticleManager::SetScaleRange(const Vector3& mn, const Vector3& mx)
+{
+    scaleMin_ = mn;
+    scaleMax_ = mx;
+}
+void ParticleManager::SetColorRange(const Vector4& mn, const Vector4& mx)
+{
+    colMin_ = mn;
+    colMax_ = mx;
+}
 
 void ParticleManager::SetGravityEnabled(bool enabled) { gravityEnabled_ = enabled; }
 void ParticleManager::SetGravity(const Vector3& g) { gravity_ = g; }
@@ -445,59 +517,48 @@ void ParticleManager::DrawImGui()
 {
 #ifdef USE_IMGUI
     ImGui::Text("Groups: %zu", particleGroups_.size());
-    ImGui::Checkbox("Enable Field", &fieldEnabled_);
-    ImGui::DragFloat3("Field Accel", &fieldAccel_.x, 0.1f, -100.0f, 100.0f);
-    ImGui::DragFloat3("Field Min", &fieldMin_.x, 0.1f, -100.0f, 100.0f);
-    ImGui::DragFloat3("Field Max", &fieldMax_.x, 0.1f, -100.0f, 100.0f);
 
-    ImGui::Separator();
-    ImGui::Text("Lifetime");
-    ImGui::DragFloatRange2("Life Min/Max", &lifeMin_, &lifeMax_, 0.01f, 0.1f, 100.0f);
+    if (ImGui::CollapsingHeader("Lifetime", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloatRange2("Life Min/Max", &lifeMin_, &lifeMax_, 0.01f, 0.1f, 100.0f);
+    }
 
-    ImGui::Separator();
-    ImGui::Text("Dynamics");
-    ImGui::Checkbox("Enable Gravity", &gravityEnabled_);
-    ImGui::DragFloat3("Gravity", &gravity_.x, 0.1f, -100.0f, 100.0f);
-    ImGui::DragFloat("Damping", &damping_, 0.01f, 0.0f, 100.0f);
+    if (ImGui::CollapsingHeader("Spawn Random", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3("Spawn Pos Min", &spawnPosMin_.x, 0.01f, -50.0f, 50.0f);
+        ImGui::DragFloat3("Spawn Pos Max", &spawnPosMax_.x, 0.01f, -50.0f, 50.0f);
+        ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
+        ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
+    }
 
-    ImGui::Separator();
-    ImGui::Text("Spawn Random");
-    ImGui::DragFloat3("Spawn Pos Min", &spawnPosMin_.x, 0.01f, -50.0f, 50.0f);
-    ImGui::DragFloat3("Spawn Pos Max", &spawnPosMax_.x, 0.01f, -50.0f, 50.0f);
-    ImGui::DragFloat3("Vel Min", &velMin_.x, 0.01f, -50.0f, 50.0f);
-    ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
-    ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
-    ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
+    if (ImGui::CollapsingHeader("Velocity / Physics")) {
+        ImGui::DragFloat3("Vel Min", &velMin_.x, 0.01f, -50.0f, 50.0f);
+        ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
 
-    ImGui::ColorEdit4("Color Min", &colMin_.x);
-    ImGui::ColorEdit4("Color Max", &colMax_.x);
+        ImGui::Checkbox("Enable Gravity", &gravityEnabled_);
+        ImGui::DragFloat3("Gravity", &gravity_.x, 0.1f, -100.0f, 100.0f);
+        ImGui::DragFloat("Damping", &damping_, 0.01f, 0.0f, 100.0f);
+    }
 
-    ImGui::Separator();
-    ImGui::Text("Groups");
-    for (auto& kv : particleGroups_) {
-        if (ImGui::TreeNode(kv.first.c_str())) {
-            ImGui::Text("Count = %zu", kv.second.particles.size());
-            ImGui::TreePop();
+    if (ImGui::CollapsingHeader("Field")) {
+        ImGui::Checkbox("Enable Field", &fieldEnabled_);
+        ImGui::DragFloat3("Field Accel", &fieldAccel_.x, 0.1f, -100.0f, 100.0f);
+        ImGui::DragFloat3("Field Min", &fieldMin_.x, 0.1f, -100.0f, 100.0f);
+        ImGui::DragFloat3("Field Max", &fieldMax_.x, 0.1f, -100.0f, 100.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Color")) {
+        ImGui::ColorEdit4("Color Min", &colMin_.x);
+        ImGui::ColorEdit4("Color Max", &colMax_.x);
+    }
+
+    if (ImGui::CollapsingHeader("Groups")) {
+        for (auto& kv : particleGroups_) {
+            if (ImGui::TreeNode(kv.first.c_str())) {
+                ImGui::Text("Count = %zu", kv.second.particles.size());
+                ImGui::Text("Texture = %s", kv.second.texturePath.c_str());
+                ImGui::Checkbox("Use Billboard", &kv.second.useBillboard);
+                ImGui::TreePop();
+            }
         }
     }
-#else
-    (void)particleGroups_;
-    (void)fieldEnabled_;
-    (void)fieldAccel_;
-    (void)fieldMin_;
-    (void)fieldMax_;
-    (void)lifeMin_;
-    (void)lifeMax_;
-    (void)gravityEnabled_;
-    (void)gravity_;
-    (void)damping_;
-    (void)spawnPosMin_;
-    (void)spawnPosMax_;
-    (void)velMin_;
-    (void)velMax_;
-    (void)scaleMin_;
-    (void)scaleMax_;
-    (void)colMin_;
-    (void)colMax_;
 #endif
 }

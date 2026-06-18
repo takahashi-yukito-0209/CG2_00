@@ -192,9 +192,6 @@
     <ClCompile Include="engine\base\Framework.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
-    <ClCompile Include="engine\base\RenderTarget.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="application\Game.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
@@ -348,9 +345,6 @@
     </ClInclude>
     <ClInclude Include="engine\base\Framework.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\base\RenderTarget.h">
-      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="application\Game.h">
       <Filter>ヘッダー ファイル</Filter>

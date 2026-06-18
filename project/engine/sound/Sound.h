@@ -44,14 +44,29 @@ public: // メンバ関数
 class SoundSystem {
 public: // メンバ関数
     /// <summary>
-    /// コンストラクタで XAudio2 エンジンを初期化する
+    /// 未初期化状態のサウンドシステムを作成する
     /// </summary>
-    SoundSystem();
+    SoundSystem() = default;
 
     /// <summary>
-    /// デストラクタで XAudio2 エンジンをクリーンアップする
+    /// 音声システムが終了済みであることを保証する
     /// </summary>
     ~SoundSystem();
+
+    /// <summary>
+    /// Media FoundationとXAudio2を初期化する
+    /// </summary>
+    bool Initialize();
+
+    /// <summary>
+    /// 再生中ボイスと音声システムを終了する
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
+    /// 音声再生が利用可能か取得する
+    /// </summary>
+    bool IsReady() const { return xaudio2_.Get() != nullptr && masteringVoice_ != nullptr; }
 
     /// <summary>
     /// 指定されたファイルパスからサウンドを読み込む。WAV 形式は LoadWav、MP3 などの圧縮フォーマットは LoadViaMediaFoundation を内部で呼び分け
@@ -80,15 +95,16 @@ private: // メンバ関数（内部実装用）
     std::shared_ptr<SoundClip> LoadViaMediaFoundation(const std::wstring& wpath);
 
 private: // メンバ変数
-
     // XAudio2 エンジン
     Microsoft::WRL::ComPtr<IXAudio2> xaudio2_;
     IXAudio2MasteringVoice* masteringVoice_ = nullptr;
+    bool mediaFoundationStarted_ = false; // Media Foundationの開始状態
 
     // 再生中コンテキストの管理
     // 再生中コンテキスト: IXAudio2VoiceCallback を実装し、再生終了をフラグで通知する
     struct SourceVoiceContext : public IXAudio2VoiceCallback {
         IXAudio2SourceVoice* voice = nullptr;
+        std::shared_ptr<SoundClip> clip; // 再生中の音声データ寿命を保持する
         std::atomic<bool> finished { false };
         // IUnknown
         STDMETHOD(QueryInterface)(REFIID, void**) { return E_NOINTERFACE; }

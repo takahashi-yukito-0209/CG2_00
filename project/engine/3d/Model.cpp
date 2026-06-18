@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
 #include "ModelCommon.h"
@@ -7,12 +8,15 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "mathUtility.h"
-#include "../utility/ResourceResolver.h"
 #include <cassert>
 #include <cstring>
 
 using namespace MyEngine;
 using namespace Math;
+
+namespace {
+constexpr const char* kFallbackModelTexturePath = "resources/uvChecker.png";
+}
 
 /// <summary>
 /// 描画
@@ -21,7 +25,8 @@ void Model::Draw(Object3d* owner)
 {
     // 前提条件のチェック
     // オーナーオブジェクトが有効でなければ描画できない
-    if (!owner) return;
+    if (!owner)
+        return;
 
     // DirectXCommon の参照はオーナーの Object3dCommon から取得するのが安全
     DirectXCommon* dxCommon = nullptr;
@@ -161,36 +166,23 @@ void Model::Draw(Object3d* owner)
             sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
             Logger::Log(buf);
         } else {
-            
-            {
-                // デバッグログ: SRVハンドルの値を16進数で表示
-                char buf[256];
-                sprintf_s(buf, "Model::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, static_cast<unsigned long long>(srvHandle.ptr));
-                Logger::Log(buf);
-            }
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
 
     } else {
         // フォールバック: 既定のチェッカーテクスチャを使用（SRV絶対インデックス）
-        uint32_t fallbackIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+        uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
         // フォールバックのチェッカーテクスチャのSRVインデックスを取得
         if (fallbackIdx == UINT32_MAX) {
-            texMgr->LoadTexture("resources/uvChecker.png");
-            texMgr->ExecuteResourceUpload();
-            fallbackIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
+            Logger::Log("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
+            return;
         }
 
-        
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
         // フォールバックのSRVハンドルを取得
         if (srvHandle.ptr == 0) {
             Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
         } else {
-            char buf[256];
-            sprintf_s(buf, "Model::Draw: using fallback uvChecker srvIndex=%u srv.ptr=0x%016llX\n", fallbackIdx, static_cast<unsigned long long>(srvHandle.ptr));
-            Logger::Log(buf);
-
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
     }
@@ -214,7 +206,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     if (!owner) {
         return;
     }
-    
+
     DirectXCommon* dxCommon = nullptr;
     // DirectXCommon の参照はオーナーの Object3dCommon から取得するのが安全
     if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
@@ -242,7 +234,6 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     // モデル側の頂点バッファが有効であればそれを使用、無ければオーナー側の頂点バッファを使用
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
-    
     if (materialResource_) {
         // モデル側のマテリアルリソースが有効であればそれを優先して使用
         cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
@@ -262,7 +253,6 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(1, owner->GetTransformationMatrixResource()->GetGPUVirtualAddress());
     }
 
-    
     // オブジェクト3D共通情報の取得
     Object3dCommon* common = owner->GetObject3dCommon();
     // Object3dCommonが有効でない場合は描画できない
@@ -276,7 +266,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     if (lightAddr == 0) {
         return;
     }
-    
+
     // ルートパラメータ3に平行光源CBVをバインド
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
@@ -294,7 +284,6 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(7, plAddrInst);
     }
 
-    
     uint32_t texIndex = UINT32_MAX;
     const auto& ownerMat2 = owner->GetModelData().material;
     // オーナーのマテリアル情報を確認してテクスチャインデックスを取得
@@ -314,17 +303,27 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         } else {
             // フォールバック
-            uint32_t fb = texMgr->GetSrvIndex("resources/uvChecker.png");
+            uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
             if (fb == UINT32_MAX) {
-                texMgr->LoadTexture("resources/uvChecker.png");
-                texMgr->ExecuteResourceUpload();
-                fb = texMgr->GetSrvIndex("resources/uvChecker.png");
+                Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+                return;
             }
 
             D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
             if (fbHandle.ptr != 0) {
                 cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
             }
+        }
+    } else {
+        uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
+        if (fb == UINT32_MAX) {
+            Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+            return;
+        }
+
+        D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
+        if (fbHandle.ptr != 0) {
+            cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
         }
     }
 
@@ -364,6 +363,13 @@ void Model::Initialize(ModelCommon* modelCommon)
     }
 
     // 頂点バッファの生成
+    auto texMgr = TextureManager::GetInstance();
+    uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
+    if (fallbackIdx == UINT32_MAX) {
+        texMgr->LoadTexture(kFallbackModelTexturePath);
+        texMgr->ExecuteResourceUpload();
+    }
+
     DirectXCommon* dx = modelCommon_->GetDxCommon();
     size_t vbSize = sizeof(Object3d::VertexData) * modelData_.vertices.size();
     vertexResource_ = dx->CreateBufferResource(vbSize);
@@ -381,7 +387,6 @@ void Model::Initialize(ModelCommon* modelCommon)
 
     // マテリアル用定数バッファの生成
     if (!modelData_.material.textureFilePath.empty()) {
-        auto texMgr = TextureManager::GetInstance();
         uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
         if (idx == UINT32_MAX) {
             // テクスチャがまだロードされていなければ読み込んでアップロードする

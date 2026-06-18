@@ -4,10 +4,11 @@ namespace MyEngine {
 // ブレンドモードの列挙型
 enum class BlendMode {
     None = 0,
-    Alpha,    // SrcAlpha, InvSrcAlpha
-    Add,      // Additive
+    Alpha, // SrcAlpha, InvSrcAlpha
+    Add, // Additive
+    Subtract, // Subtractive
     Multiply, // Multiply
-    Screen,
+    Screen, // Screen
     Count
 };
 

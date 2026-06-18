@@ -5,11 +5,12 @@
 #include <d3d12.h>
 #include <wrl.h>
 
-
-//前方宣言
+// 前方宣言
 class DebugCamera;
 
 namespace MyEngine {
+
+class SrvManager;
 
 /// <summary>
 /// Object3d クラスで共有される DirectX リソースや描画設定を管理するクラス
@@ -19,7 +20,12 @@ public: // メンバ関数
     /// <summary>
     /// 初期化処理
     /// </summary>
-    void Initialize(DirectXCommon* dxCommon);
+    void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager);
+
+    /// <summary>
+    /// インスタンシング用SRVの割り当てを解放する
+    /// </summary>
+    void Finalize();
 
     // 最大点光源数（スポットライトも点光源としてカウントする）
     static const uint32_t kMaxPointLights = 1;
@@ -188,7 +194,6 @@ private: // メンバ関数
     void CreateGraphicsPipeline();
 
 private: // メンバ変数
-
     DirectXCommon* dxCommon_; // DirectXCommon へのポインタ（外部で管理される）
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 3Dオブジェクトの描画に使用するルートシグネチャ
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_; // 3Dオブジェクトの描画に使用するグラフィックスパイプラインステート
@@ -218,6 +223,8 @@ private: // メンバ変数
     Object3d::TransformationMatrix* instancingData_ = nullptr; // マップ済みCPUポインタ
     D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_ = {};
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_ = {};
+    SrvManager* srvManager_ = nullptr; // SRVの割り当てと解放を管理する
+    uint32_t instancingSrvIndex_ = UINT32_MAX; // インスタンシング用SRVの割り当て位置
     uint32_t kNumInstance_ = 0;
 
     D3D12_GPU_DESCRIPTOR_HANDLE environmentMapSrvHandleGPU_ = {};

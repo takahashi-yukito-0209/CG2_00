@@ -21,9 +21,7 @@ class Object3d;
 class ParticleManager;
 }
 
-#include <functional>
 #include <vector>
-#include <unordered_map>
 
 namespace MyEngine {
 
@@ -77,7 +75,6 @@ public: // メンバ関数
         // 現在のシーン名へのポインタ
         const char* currentSceneName = nullptr;
         // シーン変更要求のコールバック関数（引数は新しいシーン名）
-        std::function<void(const char*)> requestSceneChange;
     };
 
     /// <summary>
@@ -94,6 +91,41 @@ public: // メンバ関数
     /// ImGui が現在 UI によってマウス/入力をキャプチャしているかを返す
     /// </summary>
     bool IsCapturingInput();
-    
+
+private: // メンバ関数
+    /// <summary>
+    /// シーン情報をImGuiで描画する
+    /// </summary>
+    void DrawSceneSection(Context& ctx);
+
+    /// <summary>
+    /// 表示対象の選択UIを描画する
+    /// </summary>
+    void DrawViewFilterSection(Context& ctx);
+
+    /// <summary>
+    /// 3Dオブジェクト関連のImGuiを描画する
+    /// </summary>
+    void DrawObjectSection(Context& ctx, int selectedDrawType);
+
+    /// <summary>
+    /// パーティクル関連のImGuiを描画する
+    /// </summary>
+    void DrawParticleSection(Context& ctx, int selectedDrawType);
+
+    /// <summary>
+    /// スプライト関連のImGuiを描画する
+    /// </summary>
+    void DrawSpriteSection(Context& ctx, int selectedDrawType);
+
+    /// <summary>
+    /// 共通設定のImGuiを描画する
+    /// </summary>
+    void DrawCommonSection(Context& ctx);
+
+    /// <summary>
+    /// カメラ関連のImGuiを描画する
+    /// </summary>
+    void DrawCameraWindow(Context& ctx);
 };
 } // namespace MyEngine

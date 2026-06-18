@@ -9,8 +9,8 @@
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/3d/PrimitiveFactory.h"
-#include "../../engine/base/SrvManager.h"
 #include "../../engine/3d/SkyBox.h"
+#include "../../engine/base/SrvManager.h"
 #include "../../engine/particle/ParticleManager.h"
 #include "../../engine/utility/mathUtility.h"
 #include <iostream>
@@ -91,11 +91,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
         if (modelFileNames[i].find("fence") != std::string::npos) {
             obj->SetUseAlphaCutoutSampler(true);
         }
-        if (modelFileNames[i].find("sphere") != std::string::npos) {
-            obj->SetEnvironmentCoefficient(0.5f);
-        }
-        if (modelFileNames[i].find("cube") != std::string::npos ||
-            modelFileNames[i].find("Cube") != std::string::npos) {
+        if (modelFileNames[i].find("cube") != std::string::npos || modelFileNames[i].find("Cube") != std::string::npos) {
             obj->SetEnvironmentCoefficient(0.85f);
             obj->SetTranslate({ 3.0f, 0.0f, 0.0f });
         }
@@ -104,7 +100,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     objects3d_[5]->SetScale({ 5.0f, 5.0f, 5.0f }); // terrain を大きくする
 
-    //パーティクルの初期化
+    // パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
@@ -196,7 +192,7 @@ void PlayScene::Finalize()
 /// </summary>
 void PlayScene::Update(float dt)
 {
-    //カメラの更新
+    // カメラの更新
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
@@ -209,7 +205,7 @@ void PlayScene::Update(float dt)
         ParticleManager::GetInstance()->Update(dt);
     }
 
-    //オブジェクトの更新
+    // オブジェクトの更新
     for (auto& o : objects3d_) {
         if (o) {
             if (ctx_.camera) {
@@ -218,7 +214,7 @@ void PlayScene::Update(float dt)
         }
     }
 
-    //スプライトの更新
+    // スプライトの更新
     for (auto& s : sprites_) {
         if (s)
             s->Update();
@@ -245,28 +241,36 @@ void PlayScene::Draw()
         if (sel == -1 || sel == 7) {
             ctx_.object3dCommon->SetCommonDrawSetting();
             for (auto& o : objects3d_) {
-                if (o) o->Draw();
+                if (o)
+                    o->Draw();
             }
         } else {
             // 個別オブジェクト描画マッピング
             ctx_.object3dCommon->SetCommonDrawSetting();
             switch (sel) {
             case 0: // Model -> index 0
-                if (objects3d_.size() > 0 && objects3d_[0]) objects3d_[0]->Draw();
+                if (objects3d_.size() > 0 && objects3d_[0])
+                    objects3d_[0]->Draw();
                 break;
             case 3: // Bunny -> index 1
-                if (objects3d_.size() > 1 && objects3d_[1]) objects3d_[1]->Draw();
+                if (objects3d_.size() > 1 && objects3d_[1])
+                    objects3d_[1]->Draw();
                 break;
             case 4: // Fence -> index 3
-                if (objects3d_.size() > 3 && objects3d_[3]) objects3d_[3]->Draw();
+                if (objects3d_.size() > 3 && objects3d_[3])
+                    objects3d_[3]->Draw();
                 break;
             case 5: // Checker -> index 2
-                if (objects3d_.size() > 2 && objects3d_[2]) objects3d_[2]->Draw();
+                if (objects3d_.size() > 2 && objects3d_[2])
+                    objects3d_[2]->Draw();
                 break;
             case 6: // Sphere -> index 4 and 5 if present
-                if (objects3d_.size() > 4 && objects3d_[4]) objects3d_[4]->Draw();
-                if (objects3d_.size() > 5 && objects3d_[5]) objects3d_[5]->Draw();
-                if (objects3d_.size() > 6 && objects3d_[6]) objects3d_[6]->Draw();
+                if (objects3d_.size() > 4 && objects3d_[4])
+                    objects3d_[4]->Draw();
+                if (objects3d_.size() > 5 && objects3d_[5])
+                    objects3d_[5]->Draw();
+                if (objects3d_.size() > 6 && objects3d_[6])
+                    objects3d_[6]->Draw();
                 break;
             default:
                 // その他（Particle/Sprite）はここでは扱わない
@@ -296,7 +300,8 @@ void PlayScene::Draw()
         if (sel == -1 || sel == 2 || sel == 7) {
             ctx_.spriteCommon->SetCommonDrawSetting();
             for (auto& s : sprites_) {
-                if (s) s->Draw();
+                if (s)
+                    s->Draw();
             }
         }
     }
@@ -306,7 +311,6 @@ void PlayScene::Draw()
 /// シーンに入るときの処理
 /// </summary>
 void PlayScene::OnEnter() { std::cout << "PlayScene OnEnter\n"; }
-
 
 /// <summary>
 /// シーンから出るときの処理
@@ -326,7 +330,8 @@ void PlayScene::SetSelectedDrawType(int t)
 /// </summary>
 void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 {
-    if (!out) return;
+    if (!out)
+        return;
     out->clear();
     out->reserve(objects3d_.size());
     for (auto& o : objects3d_) {
@@ -339,7 +344,8 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 /// </summary>
 void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
 {
-    if (!out) return;
+    if (!out)
+        return;
     out->clear();
     out->reserve(sprites_.size());
     for (auto& s : sprites_) {

@@ -45,10 +45,10 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include "application/scenes/SceneFactory.h"
 #include "engine/base/SceneManager.h"
 #include "engine/base/SrvManager.h"
 #include "engine/sound/Sound.h"
-#include "application/scenes/SceneFactory.h"
 #include <dinput.h>
 
 #pragma comment(lib, "d3d12.lib")
@@ -118,7 +118,7 @@ struct Game::Impl {
 
     ImGuiManager imguiManager; // ImGui管理
     std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
-    
+
     // 保留中のシーン切替要求を格納する（ImGui コールバックから直接 ChangeScene を呼ばないため）
     std::string pendingSceneName;
 };
@@ -145,8 +145,6 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         impl_ = std::make_unique<Impl>();
     }
 
-    // COMの初期化
-    CoInitializeEx(0, COINIT_MULTITHREADED);
     SetUnhandledExceptionFilter([](EXCEPTION_POINTERS* exception) -> LONG {
         SYSTEMTIME time;
         GetLocalTime(&time);
@@ -200,16 +198,12 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     impl_->leakChecker = std::make_unique<D3DResourceLeakChecker>();
 #endif
 
-    // サウンドシステムからサウンドデータを読み込む
-    impl_->soundData1 = impl_->soundSystem.LoadFromFile("resources/mokugyo.wav");
-
     // DirectInput を初期化
     HRESULT result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(impl_->directInput.GetAddressOf()), nullptr);
     // DirectInput8Create を呼び出して DirectInput インターフェースを取得し、失敗した場合はエラーログを出力して初期化を終了する
     if (FAILED(result)) {
         Logger::Log("Error: DirectInput8Create failed.\n");
         impl_->winApp.Finalize();
-        CoUninitialize();
         return false;
     }
 
@@ -226,12 +220,11 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
             spriteCommonTmp, impl_->srvManager, object3dCommonTmp)) {
         Logger::Log("Error: Framework::InitializeEngine failed\n");
         impl_->winApp.Finalize();
-        CoUninitialize();
         return false;
     }
 
     // 共通管理オブジェクトを Impl に移動
-    
+
     // スプライト共通管理を Impl に移動
     impl_->spriteCommon = std::move(spriteCommonTmp);
     // 3Dオブジェクト共通管理を Impl に移動
@@ -297,6 +290,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 
     // ImGuiManagerの初期化
     impl_->imguiManager.Initialize(impl_->hwnd, &impl_->srvManager);
+
+    // Media FoundationとXAudio2を明示的に初期化する
+    if (impl_->soundSystem.Initialize()) {
+        impl_->soundData1 = impl_->soundSystem.LoadFromFile("resources/mokugyo.wav");
+    } else {
+        Logger::Warn("Game::Initialize: sound system initialization failed.\n");
+    }
 
     // 初期化完了フラグを立てる
     impl_->initialized = true;
@@ -391,9 +391,7 @@ void Game::Update()
 #endif
 
         // いずれかのマウスボタンを押している場合はカメラ操作を許可
-        if (InputManager::GetInstance()->IsMouseButtonPressed(0) ||
-            InputManager::GetInstance()->IsMouseButtonPressed(1) ||
-            InputManager::GetInstance()->IsMouseButtonPressed(2)) {
+        if (InputManager::GetInstance()->IsMouseButtonPressed(0) || InputManager::GetInstance()->IsMouseButtonPressed(1) || InputManager::GetInstance()->IsMouseButtonPressed(2)) {
             allowCameraControl = true;
         }
 
@@ -447,8 +445,7 @@ void Game::Update()
                     // pending にセットして後続の処理で安全に切り替える
                     impl_->pendingSceneName = "Play";
                 }
-            }
-            catch (...) {
+            } catch (...) {
                 // 念のため例外は握り潰す（GetCurrentSceneName が例外を投げる想定は低いが安全措置）
             }
         }
@@ -456,10 +453,6 @@ void Game::Update()
 
     // 固定タイムステップで更新（ここでは 1/60 秒固定）
     const float dt = 1.0f / 60.0f;
-    // パーティクルのインスタンス生成
-    auto* pm = ParticleManager::GetInstance();
-    // ParticleManager の Update を呼び出して、すべてのパーティクルの状態の更新や寿命の管理を行う
-    pm->Update(dt);
     // SoundSystem の Poll を呼び出して、サウンドの再生状態の更新やリソースの管理を行う
     impl_->soundSystem.Poll();
 
@@ -615,18 +608,11 @@ void Game::Draw()
         static std::string sname;
         sname = impl_->sceneManager->GetCurrentSceneName();
         ctx.currentSceneName = sname.c_str();
-        // シーン切替要求のコールバックを渡す
-        ctx.requestSceneChange = [this](const char* name) {
-            if (!impl_ || !impl_->sceneManager) {
-                return;
-            }
-            impl_->pendingSceneName = std::string(name);
-        };
     }
     // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
     impl_->imguiManager.BuildUI(ctx);
 
-    // BuildUI 内でシーン切替要求があった場合は、ctx.requestSceneChange を通じて impl_->pendingSceneName にシーン名がセットされる
+    // 入力処理などでシーン切替要求がある場合は、ここで安全に反映する
     if (impl_->pendingSceneName.size() > 0) {
 
         if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
@@ -651,139 +637,6 @@ void Game::Draw()
         impl_->sceneManager->Draw();
     }
 
-    // Game 側の既存描画を常に行う（シーンの描画とは併行して実行されます）
-    // 描画する内容の種類に応じて、適切な描画処理を行うための switch 文
-    switch (impl_->selectedDrawType) {
-
-    case DRAW_PARTICLE: // パーティクル描画
-
-        // パーティクル描画の前に、Object3dCommon にビルボード用のカメラ情報をセット
-        if (impl_->object3dCommon) {
-            // デバッグカメラのビュー行列とプロジェクション行列を取得して、ビルボード描画に必要な情報を計算する
-            Matrix4x4 view = impl_->debugCamera.GetViewMatrix();
-            Matrix4x4 proj = impl_->debugCamera.GetProjectionMatrix();
-            Matrix4x4 vp = MathUtil::Multiply(view, proj);
-
-            // ビルボードの描画に必要なカメラの右ベクトルと上ベクトルをビュー行列から抽出してセット
-            Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
-            Vector3 up = { view.m[0][1], view.m[1][1], view.m[2][1] };
-
-            // Object3dCommon にビルボード用のカメラ情報をセットして、ビルボード描画の準備をする
-            impl_->object3dCommon->SetBillboardCameraWithVP(right, up, vp, impl_->useBillboard);
-
-            // ParticleManager の Draw を呼び出して、すべてのパーティクルを描画する
-            ParticleManager::GetInstance()->Draw();
-        }
-
-        break;
-
-    case DRAW_MODEL: // モデル描画
-
-        // モデル描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストの最初のオブジェクトが存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 0 && impl_->objects3d[0]) {
-            impl_->objects3d[0]->Draw();
-        }
-
-        break;
-
-    case DRAW_SPRITE:
-
-        // スプライト描画の前に、SpriteCommon に共通の描画設定をセット
-        impl_->spriteCommon->SetCommonDrawSetting();
-        // スプライトのリストをループして、各スプライトの Draw を呼び出して描画する
-        for (uint32_t i = 0; i < impl_->sprites.size(); i++) {
-            impl_->sprites[i]->Draw();
-        }
-
-        break;
-
-    case DRAW_BUNNY: // バニー描画
-
-        // バニー描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストの2番目のオブジェクトが存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 1 && impl_->objects3d[1]) {
-            impl_->objects3d[1]->Draw();
-        }
-
-        break;
-
-    case DRAW_FENCE: // フェンス描画
-
-        // フェンス描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストの4番目のオブジェクトが存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 3 && impl_->objects3d[3]) {
-            impl_->objects3d[3]->Draw();
-        }
-
-        break;
-
-    case DRAW_CHECKER: // チェッカー描画
-
-        // チェッカー描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストの3番目のオブジェクトが存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 2 && impl_->objects3d[2]) {
-            impl_->objects3d[2]->Draw();
-        }
-
-        break;
-
-    case DRAW_SPHERE: // 球描画
-
-        // 球描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストの5番目が存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 4 && impl_->objects3d[4]) {
-            impl_->objects3d[4]->Draw();
-        }
-        // 3Dオブジェクトのリストの6番目が存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-        if (impl_->objects3d.size() > 5 && impl_->objects3d[5]) {
-            impl_->objects3d[5]->Draw();
-        }
-
-        break;
-
-    case DRAW_ALL: // すべて描画
-
-        // すべて描画の前に、Object3dCommon に共通の描画設定をセット
-        impl_->object3dCommon->SetCommonDrawSetting();
-        // 3Dオブジェクトのリストをループして、存在するオブジェクトの Draw を呼び出して描画する
-        for (auto& obj : impl_->objects3d) {
-            // obj が存在する場合は、そのオブジェクトの Draw を呼び出して描画する
-            if (obj) {
-                obj->Draw();
-            }
-        }
-
-        // パーティクル描画の前に、Object3dCommon にビルボード用のカメラ情報をセット
-        Matrix4x4 view = impl_->debugCamera.GetViewMatrix();
-        Matrix4x4 proj = impl_->debugCamera.GetProjectionMatrix();
-        Matrix4x4 vp = MathUtil::Multiply(view, proj);
-
-        // ビルボードの描画に必要なカメラの右ベクトルと上ベクトルをビュー行列から抽出してセット
-        Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
-        Vector3 up = { view.m[0][1], view.m[1][1], view.m[2][1] };
-
-        // Object3dCommon にビルボード用のカメラ情報をセットして、ビルボード描画の準備をする
-        impl_->object3dCommon->SetBillboardCameraWithVP(right, up, vp, impl_->useBillboard);
-
-        // ParticleManager の Draw を呼び出して、すべてのパーティクルを描画する
-        ParticleManager::GetInstance()->Draw();
-
-        // スプライト描画の前に、SpriteCommon に共通の描画設定をセット
-        impl_->spriteCommon->SetCommonDrawSetting();
-        // スプライトのリストをループして、存在するスプライトの Draw を呼び出して描画する
-        for (uint32_t i = 0; i < impl_->sprites.size(); i++) {
-            impl_->sprites[i]->Draw();
-        }
-
-        break;
-    }
-
     // ImGui の描画を行う。DirectXCommon のコマンドリストを渡して、ImGuiManager に描画してもらう
     impl_->imguiManager.Render(DirectXCommon::GetInstance()->GetCommandList());
     // 描画後の共通処理を呼び出す（コマンドリストの終了やバックバッファの表示など）
@@ -800,29 +653,55 @@ void Game::Finalize()
         return;
     }
 
+    if (!impl_->initialized) {
+        return;
+    }
+
+    impl_->initialized = false;
+    impl_->endRequested = true;
+
     CloseWindow(impl_->hwnd); // ウィンドウを閉じる
 
-    // 終了処理の順番に注意して、リソースの解放やマネージャの終了処理を行う
+    // シーンは描画共通リソースを参照しているため、エンジン基盤より先に破棄する
+    if (impl_->sceneManager) {
+        impl_->sceneManager->Finalize();
+        impl_->sceneManager.reset();
+    }
 
-    // 3Dオブジェクトのリストをクリアして、Object3dCommon のリセットを行う
+    // アプリケーション側が直接所有する描画リソースを先に破棄する
+    impl_->particlePlane.reset();
     impl_->objects3d.clear();
-    impl_->object3dCommon.reset();
+    impl_->sprites.clear();
+    impl_->camera.reset();
+
+    // パーティクルは描画オブジェクトやテクスチャを参照するため、共通基盤より先に終了する
+    ParticleManager::GetInstance()->Finalize();
+
+    // サウンドデータのリセット
+    impl_->soundData1.reset();
+    impl_->soundSystem.Finalize();
+
+    // ImGuiManager の終了処理を呼び出す
+    impl_->imguiManager.Shutdown();
+
+    // スプライト/3D共通管理は個別描画リソース破棄後、DirectXCommon より前に破棄する
+    impl_->spriteCommon.reset();
+    if (impl_->object3dCommon) {
+        impl_->object3dCommon->Finalize();
+        impl_->object3dCommon.reset();
+    }
 
     // TextureManager の終了処理を呼び出す
     TextureManager::GetInstance()->Finalize();
 
-    // ImGuiManager の終了処理を呼び出す
-    impl_->imguiManager.Shutdown();
+    // 管理中のオフスクリーンレンダーターゲットをSRV管理の終了前に破棄する
+    DirectXCommon::GetInstance()->DestroyAllRenderTargets();
 
     // SrvManager の終了処理を呼び出す
     impl_->srvManager.Finalize();
 
     // モデルマネージャの終了処理を呼び出す
     ModelManager::GetInstance()->Finalize();
-
-    // スプライトのリストをクリアして、SpriteCommon のリセットを行う
-    impl_->spriteCommon.reset();
-    impl_->sprites.clear();
 
     // DirectXCommon の終了処理を呼び出す
     DirectXCommon::GetInstance()->Finalize();
@@ -832,9 +711,6 @@ void Game::Finalize()
         impl_->leakChecker.reset();
     }
 
-    // サウンドデータのリセット
-    impl_->soundData1.reset();
-
     // InputManager の終了処理を呼び出す
     InputManager::GetInstance()->Finalize();
 
@@ -843,20 +719,6 @@ void Game::Finalize()
 
     // WinApp の終了処理を呼び出す
     impl_->winApp.Finalize();
-
-    // COM のクリーンアップ
-    // リークチェッカーは COM が有効なうちに破棄する
-    if (impl_->leakChecker) {
-        impl_->leakChecker.reset();
-    }
-
-    // シーンマネージャーの終了処理を呼び出す
-    if (impl_->sceneManager) {
-        impl_->sceneManager->Finalize();
-        impl_->sceneManager.reset();
-    }
-
-    CoUninitialize();
 
     // 基底クラスの終了処理を呼び出す
     Framework::Finalize();

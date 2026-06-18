@@ -1,12 +1,12 @@
 #include "engine/base/Framework.h"
-#include <chrono>
-#include <thread>
-#include <windowsx.h>
-#include <objbase.h>
-#include <atomic>
+#include "engine/2d/TextureManager.h"
 #include "engine/base/DirectXCommon.h"
 #include "engine/base/WinApp.h"
-#include "engine/2d/TextureManager.h"
+#include <atomic>
+#include <chrono>
+#include <objbase.h>
+#include <thread>
+#include <windowsx.h>
 
 using namespace MyEngine;
 
@@ -14,13 +14,13 @@ using namespace MyEngine;
 /// エンジンの初期化処理をまとめて行うユーティリティ関数
 /// </summary>
 bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
-                                 std::unique_ptr<SpriteCommon>& spriteCommonOut,
-                                 SrvManager& srvManagerOut,
-                                 std::unique_ptr<Object3dCommon>& object3dCommonOut)
+    std::unique_ptr<SpriteCommon>& spriteCommonOut,
+    SrvManager& srvManagerOut,
+    std::unique_ptr<Object3dCommon>& object3dCommonOut)
 {
 
     // 引数の未使用警告を抑制
-    (void)hInstance; 
+    (void)hInstance;
     (void)hwnd;
 
     // WinAppの有効性を確認
@@ -29,15 +29,15 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
     }
 
     // DirectXCommonの初期化
-    DirectXCommon::GetInstance()->Initialize(winApp); 
+    DirectXCommon::GetInstance()->Initialize(winApp);
 
-     // SrvManagerの初期化
+    // SrvManagerの初期化
     srvManagerOut.Initialize(DirectXCommon::GetInstance());
 
     // DirectXCommon に SrvManager を登録しておく（RenderTarget の破棄時に SRV を解放するため）
     DirectXCommon::GetInstance()->SetSrvManager(&srvManagerOut);
 
-     // SpriteCommonのインスタンスを作成
+    // SpriteCommonのインスタンスを作成
     spriteCommonOut = std::make_unique<SpriteCommon>();
     // SpriteCommonの初期化
     spriteCommonOut->Initialize(DirectXCommon::GetInstance());
@@ -45,13 +45,13 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
     // TextureManagerの初期化
     TextureManager::GetInstance()->Initialize(DirectXCommon::GetInstance(), &srvManagerOut);
 
-     // Object3dCommonのインスタンスを作成
+    // Object3dCommonのインスタンスを作成
     object3dCommonOut = std::make_unique<Object3dCommon>();
     // Object3dCommonの初期化
-    object3dCommonOut->Initialize(DirectXCommon::GetInstance());
+    object3dCommonOut->Initialize(DirectXCommon::GetInstance(), &srvManagerOut);
 
     // すべての初期化が成功した場合は true を返す
-    return true; 
+    return true;
 }
 
 /// <summary>
@@ -60,12 +60,10 @@ bool Framework::InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
 void Framework::FinalizeEngine()
 {
     // TextureManagerの終了処理を呼び出す
-    TextureManager::GetInstance()->Finalize(); 
+    TextureManager::GetInstance()->Finalize();
     // DirectXCommonの終了処理を呼び出す
-    DirectXCommon::GetInstance()->Finalize(); 
+    DirectXCommon::GetInstance()->Finalize();
 }
-
-
 
 /// <summary>
 /// アプリケーションの実行: 初期化、メインループ、終了処理をまとめて行う
@@ -79,7 +77,7 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
     // 派生クラスの初期化を呼び出す
     if (!Initialize(hInstance, nCmdShow)) {
         // 初期化失敗: 終了処理を行ってからアプリケーションを終了する
-        if (comInitialized) { 
+        if (comInitialized) {
             CoUninitialize();
         }
         return 1; // 終了コード 1 を返して異常終了を示す
@@ -155,7 +153,6 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
 
     return 0;
 }
-
 
 /// <summary>
 /// Windows メッセージをポーリングし、WM_QUIT を検出すると終了要求フラグを立てて false を返す

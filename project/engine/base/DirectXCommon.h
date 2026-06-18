@@ -126,12 +126,18 @@ public: // 公開メンバ関数
     /// 指定したサイズとフォーマットでオフスクリーンのレンダーターゲットを作成し、管理リストに追加する
     /// </summary>
     int CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORMAT format, bool useDepth = true,
-        const std::array<float, 4>& clearColor = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f });
+        const std::array<float, 4>& clearColor = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f },
+        bool resizeWithWindow = false);
 
     /// <summary>
     /// 指定したハンドルのレンダーターゲットを破棄し、管理リストから削除する
     /// </summary>
     void DestroyRenderTarget(int handle);
+
+    /// <summary>
+    /// 管理中のオフスクリーンレンダーターゲットをすべて破棄する
+    /// </summary>
+    void DestroyAllRenderTargets();
 
     /// <summary>
     /// 指定したハンドルのレンダーターゲットを新しいサイズにリサイズする

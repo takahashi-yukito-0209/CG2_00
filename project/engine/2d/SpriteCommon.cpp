@@ -12,22 +12,38 @@ using namespace MyEngine;
 /// </summary>
 void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 {
-	//引数で受け取ってメンバ変数に記録する
+    // 引数で受け取ってメンバ変数に記録する
     dxCommon_ = dxCommon;
 
-	//グラフィクスパイプラインの生成
+    // グラフィクスパイプラインの生成
     CreateGraphicsPipeline();
 }
 
 #ifdef USE_IMGUI
 void SpriteCommon::DrawImGui()
 {
+    // Sprite用のID空間を分ける
+    ImGui::PushID("SpriteCommon");
+
     // ブレンドモード設定
-    const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
-    int spriteBlendIdx = static_cast<int>(GetBlendMode());
-    if (ImGui::Combo("Sprite Blend", &spriteBlendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-        SetBlendMode(static_cast<BlendMode>(spriteBlendIdx));
+    if (ImGui::CollapsingHeader("Blend Mode")) {
+        const char* blendNames[] = {
+            "None",
+            "Alpha",
+            "Add",
+            "Subtract",
+            "Multiply",
+            "Screen"
+        };
+
+        int spriteBlendIdx = static_cast<int>(GetBlendMode()); // 現在選択中のスプライト用ブレンドモード
+
+        if (ImGui::Combo("Sprite Blend", &spriteBlendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
+            SetBlendMode(static_cast<BlendMode>(spriteBlendIdx));
+        }
     }
+
+    ImGui::PopID();
 }
 #else
 void SpriteCommon::DrawImGui() { (void)0; }
@@ -43,7 +59,6 @@ void SpriteCommon::SetBlendMode(BlendMode mode)
     // ブレンドモードの変更に伴い、グラフィクスパイプラインを再生成する
     CreateGraphicsPipeline();
 }
-
 
 /// <summary>
 /// スプライト描画の共通設定をコマンドリストに設定
@@ -144,7 +159,7 @@ void SpriteCommon::CreateRootSignature()
     staticSamplers[0].MipLODBias = 0.0f; // ミップマップレベルのバイアスはなし
     staticSamplers[0].MinLOD = 0.0f; // ミップマップレベルの最小値は0
     staticSamplers[0].ShaderRegister = 0; // シェーダーのレジスタ0にバインドする
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;// ピクセルシェーダーで使用することを明示
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
 
     // s1: ポイントフィルタ + クランプ
     staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; // ポイントフィルタ
@@ -158,7 +173,7 @@ void SpriteCommon::CreateRootSignature()
     staticSamplers[1].ShaderRegister = 1; // シェーダーのレジスタ1にバインドする
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
 
-    descriptionRootSignature.pStaticSamplers = staticSamplers;// スタティックサンプラー配列へのポインタ
+    descriptionRootSignature.pStaticSamplers = staticSamplers; // スタティックサンプラー配列へのポインタ
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers); // スタティックサンプラーの数
 
     // シリアライズしてバイナリにする
@@ -184,7 +199,7 @@ void SpriteCommon::CreateRootSignature()
 void SpriteCommon::CreateGraphicsPipeline()
 {
     // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
-    HRESULT hr; 
+    HRESULT hr;
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -270,7 +285,6 @@ void SpriteCommon::CreateGraphicsPipeline()
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
-
     }
 
     // RasterizerStateの設定
@@ -337,11 +351,13 @@ void SpriteCommon::CreateGraphicsPipeline()
         char buf[512];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
         Logger::Log(buf);
-        
+
         // デバイスが削除理由を返す場合はそれもログ出力
         HRESULT removedHr = dxCommon_->GetDevice()->GetDeviceRemovedReason();
         if (removedHr != S_OK) {
-            char buf2[256]; sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr)); Logger::Log(buf2);
+            char buf2[256];
+            sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr));
+            Logger::Log(buf2);
         }
 
         // PSOの生成に失敗した場合は、ルートシグネチャとPSOを両方とも破棄して、描画できない状態にする

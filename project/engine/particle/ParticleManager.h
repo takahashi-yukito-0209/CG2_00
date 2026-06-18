@@ -137,6 +137,16 @@ public:
 private:
     ParticleManager() = default;
 
+    /// <summary>
+    /// 1グループで保持できるパーティクル数の上限を取得する
+    /// </summary>
+    uint32_t GetParticleLimit() const;
+
+    /// <summary>
+    /// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
+    /// </summary>
+    uint32_t GetEmitCountWithinLimit(const ParticleGroup& group, uint32_t requestCount) const;
+
 private:
     std::unordered_map<std::string, ParticleGroup> particleGroups_; // グループ一覧
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通処理
