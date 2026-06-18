@@ -225,7 +225,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Copy",
             "Grayscale",
             "Vignette",
-            "Box Filter"
+            "Box Filter",
+            "Gaussian Filter"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -256,6 +257,43 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::GaussianFilter) {
+            uint32_t currentKernelSize =
+                ctx.postProcess->GetGaussianKernelSize(); // 現在のカーネルサイズ
+            int kernelIndex =
+                currentKernelSize == 3 ? 0 : (currentKernelSize == 5 ? 1 : 2);
+            const char* kernelNames[] = {
+                "3x3",
+                "5x5",
+                "7x7"
+            }; // 選択可能なカーネルサイズ
+
+            if (ImGui::Combo(
+                    "Gaussian Kernel",
+                    &kernelIndex,
+                    kernelNames,
+                    IM_ARRAYSIZE(kernelNames))) {
+                const uint32_t kernelSizes[] = { 3u, 5u, 7u }; // 選択値に対応するサイズ
+                ctx.postProcess->SetGaussianKernelSize(kernelSizes[kernelIndex]);
+            }
+
+            float sigma =
+                ctx.postProcess->GetGaussianSigma(); // 現在の標準偏差
+            if (ImGui::DragFloat(
+                    "Sigma",
+                    &sigma,
+                    0.05f,
+                    0.1f,
+                    10.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetGaussianSigma(sigma);
+            }
+
+            uint32_t sampleCount =
+                ctx.postProcess->GetGaussianKernelSize() * 2; // 分離処理の総サンプル数
+            ImGui::Text("Samples: %u (separable 2-pass)", sampleCount);
+        }
+
         ImGui::SeparatorText("Status");
         ImGui::Text(
             "PostProcess: %s",
@@ -272,6 +310,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Box Filter PSO: %s",
             ctx.postProcess->IsBoxFilterReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Gaussian Filter PSO: %s",
+            ctx.postProcess->IsGaussianFilterReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

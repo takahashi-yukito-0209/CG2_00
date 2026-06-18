@@ -16,6 +16,7 @@ enum class PostEffectType {
     Grayscale, // 元画像をグレイスケール化して描画する
     Vignette,  // 画面周辺を暗くして描画する
     BoxFilter, // Box Filterによる平均化処理を適用する
+    GaussianFilter, // 分離型Gaussian Filterを適用する
 };
 
 /// <summary>
@@ -109,6 +110,39 @@ public:
     uint32_t GetBoxFilterKernelSize() const { return boxFilterKernelSize_; }
 
     /// <summary>
+    /// Gaussian Filter用PSOが生成済みか確認する
+    /// </summary>
+    bool IsGaussianFilterReady() const { return gaussianFilterPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Gaussian Filterで使用するカーネルサイズを設定する
+    /// </summary>
+    void SetGaussianKernelSize(uint32_t kernelSize);
+
+    /// <summary>
+    /// Gaussian Filterで使用するカーネルサイズを取得する
+    /// </summary>
+    uint32_t GetGaussianKernelSize() const { return gaussianKernelSize_; }
+
+    /// <summary>
+    /// Gaussian Filterで使用する標準偏差を設定する
+    /// </summary>
+    void SetGaussianSigma(float sigma);
+
+    /// <summary>
+    /// Gaussian Filterで使用する標準偏差を取得する
+    /// </summary>
+    float GetGaussianSigma() const { return gaussianSigma_; }
+
+    /// <summary>
+    /// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
+    /// </summary>
+    void DrawGaussianTexture(
+        uint32_t sourceSrvIndex,
+        int intermediateRenderTargetHandle,
+        uint32_t intermediateSrvIndex);
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -130,6 +164,11 @@ private:
     /// </summary>
     ID3D12PipelineState* GetPipelineState(PostEffectType effectType) const;
 
+    /// <summary>
+    /// Gaussian Filterの1方向分を描画する
+    /// </summary>
+    void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
+
 private:
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通基盤
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 全画面描画用ルートシグネチャ
@@ -137,10 +176,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレイスケール用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> boxFilterPipelineState_; // Box Filter用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianFilterPipelineState_; // Gaussian Filter用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
     uint32_t boxFilterKernelSize_ = 3; // Box Filterに使用するカーネルサイズ
+    uint32_t gaussianKernelSize_ = 7; // Gaussian Filterに使用するカーネルサイズ
+    float gaussianSigma_ = 2.0f; // Gaussian Filterの標準偏差
 };
 
 } // namespace MyEngine

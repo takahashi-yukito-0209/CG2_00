@@ -4,6 +4,7 @@
 #include "Logger.h"
 
 #include <cassert>
+#include <cstring>
 
 using namespace Microsoft::WRL;
 using namespace MyEngine;
@@ -36,6 +37,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/Vignette.PS.hlsl");
     boxFilterPipelineState_ = CreatePipelineState(
         L"resources/shaders/BoxFilter.PS.hlsl");
+    gaussianFilterPipelineState_ = CreatePipelineState(
+        L"resources/shaders/GaussianFilter.PS.hlsl");
 
     return IsReady();
 }
@@ -45,6 +48,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    gaussianFilterPipelineState_.Reset();
     boxFilterPipelineState_.Reset();
     vignettePipelineState_.Reset();
     grayscalePipelineState_.Reset();
@@ -61,7 +65,7 @@ bool PostProcess::IsReady() const
 {
     return dxCommon_ && rootSignature_ && copyPipelineState_
         && grayscalePipelineState_ && vignettePipelineState_
-        && boxFilterPipelineState_;
+        && boxFilterPipelineState_ && gaussianFilterPipelineState_;
 }
 
 /// <summary>
@@ -84,7 +88,7 @@ void PostProcess::CreateRootSignature()
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     rootParameters[1].Constants.ShaderRegister = 0;
     rootParameters[1].Constants.RegisterSpace = 0;
-    rootParameters[1].Constants.Num32BitValues = 1;
+    rootParameters[1].Constants.Num32BitValues = 4;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_STATIC_SAMPLER_DESC staticSampler = {}; // 入力テクスチャ用サンプラー
@@ -200,6 +204,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::GaussianFilter:
+        return gaussianFilterPipelineState_.Get();
     case PostEffectType::BoxFilter:
         return boxFilterPipelineState_.Get();
     case PostEffectType::Vignette:
@@ -241,9 +247,18 @@ void PostProcess::DrawTexture(
     commandList->SetPipelineState(pipelineState);
     commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
-    commandList->SetGraphicsRoot32BitConstant(
-        1,
+    uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
+    std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
+    uint32_t filterSettings[4] = {
         boxFilterKernelSize_,
+        0,
+        sigmaBits,
+        0
+    }; // 通常の1パスエフェクト用設定
+    commandList->SetGraphicsRoot32BitConstants(
+        1,
+        _countof(filterSettings),
+        filterSettings,
         0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -259,6 +274,87 @@ void PostProcess::SetBoxFilterKernelSize(uint32_t kernelSize)
     if (kernelSize == 3 || kernelSize == 5) {
         boxFilterKernelSize_ = kernelSize;
     }
+}
+
+/// <summary>
+/// Gaussian Filterで使用するカーネルサイズを設定する
+/// </summary>
+void PostProcess::SetGaussianKernelSize(uint32_t kernelSize)
+{
+    if (kernelSize == 3 || kernelSize == 5 || kernelSize == 7) {
+        gaussianKernelSize_ = kernelSize;
+    }
+}
+
+/// <summary>
+/// Gaussian Filterで使用する標準偏差を設定する
+/// </summary>
+void PostProcess::SetGaussianSigma(float sigma)
+{
+    if (sigma >= 0.1f && sigma <= 10.0f) {
+        gaussianSigma_ = sigma;
+    }
+}
+
+/// <summary>
+/// Gaussian Filterの1方向分を描画する
+/// </summary>
+void PostProcess::DrawGaussianPass(uint32_t srvIndex, uint32_t direction)
+{
+    if (!IsReady() || !gaussianFilterPipelineState_) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList* commandList =
+        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
+    ID3D12DescriptorHeap* descriptorHeaps[] = {
+        dxCommon_->GetSrvDescriptorHeap()
+    }; // 描画で使用するSRVヒープ
+
+    uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
+    std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
+    uint32_t filterSettings[4] = {
+        gaussianKernelSize_,
+        direction,
+        sigmaBits,
+        0
+    }; // Gaussian Filter用設定
+
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(gaussianFilterPipelineState_.Get());
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
+    commandList->SetGraphicsRoot32BitConstants(
+        1,
+        _countof(filterSettings),
+        filterSettings,
+        0);
+    commandList->IASetPrimitiveTopology(
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->DrawInstanced(3, 1, 0, 0);
+    lastSrvIndex_ = srvIndex;
+}
+
+/// <summary>
+/// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
+/// </summary>
+void PostProcess::DrawGaussianTexture(
+    uint32_t sourceSrvIndex,
+    int intermediateRenderTargetHandle,
+    uint32_t intermediateSrvIndex)
+{
+    if (!enabled_) {
+        DrawTexture(sourceSrvIndex, PostEffectType::Copy);
+        return;
+    }
+
+    dxCommon_->BeginRenderTo(intermediateRenderTargetHandle, true);
+    DrawGaussianPass(sourceSrvIndex, 0); // 横方向へぼかす
+    dxCommon_->EndRenderTo(intermediateRenderTargetHandle);
+
+    DrawGaussianPass(intermediateSrvIndex, 1); // 縦方向へぼかす
 }
 
 /// <summary>

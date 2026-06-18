@@ -54,6 +54,21 @@ void TitleScene::Initialize(const SceneContext& ctx)
         dxCommon->CreateRenderTargetSRV(rtHandle_, rtSrvIndex_);
     }
 
+    gaussianRtHandle_ = dxCommon->CreateRenderTarget(
+        800,
+        600,
+        dxCommon->GetSwapChainFormat(),
+        false,
+        { 0.0f, 0.0f, 0.0f, 1.0f },
+        true);
+
+    if (gaussianRtHandle_ >= 0 && ctx_.srvManager) {
+        gaussianSrvIndex_ = ctx_.srvManager->Allocate();
+        dxCommon->CreateRenderTargetSRV(
+            gaussianRtHandle_,
+            gaussianSrvIndex_);
+    }
+
     postProcess_.Initialize(dxCommon);
 }
 
@@ -72,6 +87,12 @@ void TitleScene::Finalize()
         dxCommon->DestroyRenderTarget(rtHandle_);
         rtHandle_ = -1;
         rtSrvIndex_ = UINT32_MAX;
+    }
+
+    if (dxCommon && gaussianRtHandle_ >= 0) {
+        dxCommon->DestroyRenderTarget(gaussianRtHandle_);
+        gaussianRtHandle_ = -1;
+        gaussianSrvIndex_ = UINT32_MAX;
     }
 
     postProcess_.Finalize();
@@ -117,7 +138,16 @@ void TitleScene::Draw()
     dxCommon->EndRenderTo(rtHandle_);
 
     if (postProcess_.IsReady() && rtSrvIndex_ != UINT32_MAX) {
-        postProcess_.DrawTexture(rtSrvIndex_);
+        if (postProcess_.GetEffectType() == PostEffectType::GaussianFilter
+            && gaussianRtHandle_ >= 0
+            && gaussianSrvIndex_ != UINT32_MAX) {
+            postProcess_.DrawGaussianTexture(
+                rtSrvIndex_,
+                gaussianRtHandle_,
+                gaussianSrvIndex_);
+        } else {
+            postProcess_.DrawTexture(rtSrvIndex_);
+        }
     }
 }
 
