@@ -80,5 +80,6 @@ private:
     uint32_t rtDepthSrvIndex_ = UINT32_MAX; // オフスクリーン深度のSRV番号
     int gaussianRtHandle_ = -1; // Gaussian Filterの横方向処理結果
     uint32_t gaussianSrvIndex_ = UINT32_MAX; // Gaussian中間テクスチャのSRV番号
+    uint32_t dissolveMaskSrvIndex_ = UINT32_MAX; // Dissolve用ノイズマスクのSRV番号
     PostProcess postProcess_; // タイトル画面に適用するポストプロセス
 };

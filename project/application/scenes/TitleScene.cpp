@@ -5,6 +5,7 @@
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/base/DirectXCommon.h"
 #include "../../engine/base/SrvManager.h"
+#include "../../engine/2d/TextureManager.h"
 
 #include <iostream>
 
@@ -58,6 +59,13 @@ void TitleScene::Initialize(const SceneContext& ctx)
             rtDepthSrvIndex_);
     }
 
+    if (ctx_.textureManager) {
+        ctx_.textureManager->LoadTexture("noise0.png");
+        ctx_.textureManager->ExecuteResourceUpload();
+        dissolveMaskSrvIndex_ =
+            ctx_.textureManager->GetSrvIndex("noise0.png");
+    }
+
     gaussianRtHandle_ = dxCommon->CreateRenderTarget(
         800,
         600,
@@ -101,6 +109,7 @@ void TitleScene::Finalize()
     }
 
     postProcess_.Finalize();
+    dissolveMaskSrvIndex_ = UINT32_MAX;
     ctx_ = {};
 }
 
@@ -158,6 +167,12 @@ void TitleScene::Draw()
                 rtSrvIndex_,
                 rtDepthSrvIndex_,
                 ctx_.camera->GetProjectionMatrix());
+        } else if (
+            postProcess_.GetEffectType() == PostEffectType::Dissolve
+            && dissolveMaskSrvIndex_ != UINT32_MAX) {
+            postProcess_.DrawDissolveTexture(
+                rtSrvIndex_,
+                dissolveMaskSrvIndex_);
         } else {
             postProcess_.DrawTexture(rtSrvIndex_);
         }

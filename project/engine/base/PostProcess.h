@@ -21,6 +21,7 @@ enum class PostEffectType {
     LuminanceOutline, // 輝度差から輪郭を検出する
     DepthOutline, // 深度差から輪郭を検出する
     RadialBlur, // 指定した中心から放射状にぼかす
+    Dissolve, // ノイズマスクの閾値で画面を消去する
 };
 
 /// <summary>
@@ -230,6 +231,48 @@ public:
     uint32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
 
     /// <summary>
+    /// Dissolve用PSOが生成済みか確認する
+    /// </summary>
+    bool IsDissolveReady() const { return dissolvePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Dissolveの閾値を設定する
+    /// </summary>
+    void SetDissolveThreshold(float threshold);
+
+    /// <summary>
+    /// Dissolveの閾値を取得する
+    /// </summary>
+    float GetDissolveThreshold() const { return dissolveThreshold_; }
+
+    /// <summary>
+    /// Dissolve境界の幅を設定する
+    /// </summary>
+    void SetDissolveEdgeWidth(float edgeWidth);
+
+    /// <summary>
+    /// Dissolve境界の幅を取得する
+    /// </summary>
+    float GetDissolveEdgeWidth() const { return dissolveEdgeWidth_; }
+
+    /// <summary>
+    /// Dissolve境界の色を設定する
+    /// </summary>
+    void SetDissolveEdgeColor(const Math::Vector3& color);
+
+    /// <summary>
+    /// Dissolve境界の色を取得する
+    /// </summary>
+    const Math::Vector3& GetDissolveEdgeColor() const { return dissolveEdgeColor_; }
+
+    /// <summary>
+    /// ノイズマスクを使用してDissolveを描画する
+    /// </summary>
+    void DrawDissolveTexture(
+        uint32_t sourceSrvIndex,
+        uint32_t maskSrvIndex);
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -267,6 +310,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> luminanceOutlinePipelineState_; // 輝度Outline用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depthOutlinePipelineState_; // 深度Outline用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_; // Radial Blur用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> dissolvePipelineState_; // Dissolve用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
@@ -279,6 +323,9 @@ private:
     Math::Vector2 radialBlurCenter_ = { 0.5f, 0.5f }; // 放射状ブラーの中心
     float radialBlurWidth_ = 0.01f; // 1サンプルごとのUV移動量
     uint32_t radialBlurSampleCount_ = 10; // 放射状ブラーのサンプル数
+    float dissolveThreshold_ = 0.0f; // マスクを破棄する閾値
+    float dissolveEdgeWidth_ = 0.03f; // Dissolve境界の幅
+    Math::Vector3 dissolveEdgeColor_ = { 1.0f, 0.4f, 0.3f }; // Dissolve境界の色
 };
 
 } // namespace MyEngine

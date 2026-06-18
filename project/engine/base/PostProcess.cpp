@@ -47,6 +47,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/DepthBasedOutline.PS.hlsl");
     radialBlurPipelineState_ = CreatePipelineState(
         L"resources/shaders/RadialBlur.PS.hlsl");
+    dissolvePipelineState_ = CreatePipelineState(
+        L"resources/shaders/Dissolve.PS.hlsl");
 
     return IsReady();
 }
@@ -56,6 +58,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    dissolvePipelineState_.Reset();
     radialBlurPipelineState_.Reset();
     depthOutlinePipelineState_.Reset();
     luminanceOutlinePipelineState_.Reset();
@@ -78,7 +81,7 @@ bool PostProcess::IsReady() const
         && grayscalePipelineState_ && vignettePipelineState_
         && boxFilterPipelineState_ && gaussianFilterPipelineState_
         && luminanceOutlinePipelineState_ && depthOutlinePipelineState_
-        && radialBlurPipelineState_;
+        && radialBlurPipelineState_ && dissolvePipelineState_;
 }
 
 /// <summary>
@@ -232,6 +235,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::Dissolve:
+        return dissolvePipelineState_.Get();
     case PostEffectType::RadialBlur:
         return radialBlurPipelineState_.Get();
     case PostEffectType::DepthOutline:
@@ -299,6 +304,18 @@ void PostProcess::DrawTexture(
         &radialBlurWidth_,
         sizeof(float));
     filterSettings[7] = radialBlurSampleCount_;
+    std::memcpy(
+        &filterSettings[8],
+        &dissolveThreshold_,
+        sizeof(float));
+    std::memcpy(
+        &filterSettings[9],
+        &dissolveEdgeWidth_,
+        sizeof(float));
+    std::memcpy(
+        &filterSettings[12],
+        &dissolveEdgeColor_,
+        sizeof(Math::Vector3));
     commandList->SetGraphicsRoot32BitConstants(
         2,
         _countof(filterSettings),
@@ -456,6 +473,93 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
     if (sampleCount >= 1 && sampleCount <= 32) {
         radialBlurSampleCount_ = sampleCount;
     }
+}
+
+/// <summary>
+/// Dissolveの閾値を設定する
+/// </summary>
+void PostProcess::SetDissolveThreshold(float threshold)
+{
+    dissolveThreshold_ =
+        (std::max)(0.0f, (std::min)(1.0f, threshold));
+}
+
+/// <summary>
+/// Dissolve境界の幅を設定する
+/// </summary>
+void PostProcess::SetDissolveEdgeWidth(float edgeWidth)
+{
+    dissolveEdgeWidth_ =
+        (std::max)(0.001f, (std::min)(0.25f, edgeWidth));
+}
+
+/// <summary>
+/// Dissolve境界の色を設定する
+/// </summary>
+void PostProcess::SetDissolveEdgeColor(const Math::Vector3& color)
+{
+    dissolveEdgeColor_.x =
+        (std::max)(0.0f, (std::min)(1.0f, color.x));
+    dissolveEdgeColor_.y =
+        (std::max)(0.0f, (std::min)(1.0f, color.y));
+    dissolveEdgeColor_.z =
+        (std::max)(0.0f, (std::min)(1.0f, color.z));
+}
+
+/// <summary>
+/// ノイズマスクを使用してDissolveを描画する
+/// </summary>
+void PostProcess::DrawDissolveTexture(
+    uint32_t sourceSrvIndex,
+    uint32_t maskSrvIndex)
+{
+    if (!enabled_) {
+        DrawTexture(sourceSrvIndex, PostEffectType::Copy);
+        return;
+    }
+
+    if (!IsReady() || !dissolvePipelineState_) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList* commandList =
+        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE sourceSrvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(sourceSrvIndex); // 元画像のSRV
+    D3D12_GPU_DESCRIPTOR_HANDLE maskSrvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(maskSrvIndex); // ノイズマスクのSRV
+    ID3D12DescriptorHeap* descriptorHeaps[] = {
+        dxCommon_->GetSrvDescriptorHeap()
+    }; // 描画で使用するSRVヒープ
+
+    uint32_t dissolveSettings[20] = {}; // Dissolve用ルート定数
+    std::memcpy(
+        &dissolveSettings[8],
+        &dissolveThreshold_,
+        sizeof(float));
+    std::memcpy(
+        &dissolveSettings[9],
+        &dissolveEdgeWidth_,
+        sizeof(float));
+    std::memcpy(
+        &dissolveSettings[12],
+        &dissolveEdgeColor_,
+        sizeof(Math::Vector3));
+
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(dissolvePipelineState_.Get());
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    commandList->SetGraphicsRootDescriptorTable(0, sourceSrvHandle);
+    commandList->SetGraphicsRootDescriptorTable(1, maskSrvHandle);
+    commandList->SetGraphicsRoot32BitConstants(
+        2,
+        _countof(dissolveSettings),
+        dissolveSettings,
+        0);
+    commandList->IASetPrimitiveTopology(
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->DrawInstanced(3, 1, 0, 0);
+    lastSrvIndex_ = sourceSrvIndex;
 }
 
 /// <summary>

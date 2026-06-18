@@ -229,7 +229,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Gaussian Filter",
             "Luminance Outline",
             "Depth Outline",
-            "Radial Blur"
+            "Radial Blur",
+            "Dissolve"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -380,6 +381,47 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::Dissolve) {
+            float threshold =
+                ctx.postProcess->GetDissolveThreshold(); // 現在のDissolve閾値
+            if (ImGui::SliderFloat(
+                    "Threshold",
+                    &threshold,
+                    0.0f,
+                    1.0f,
+                    "%.3f")) {
+                ctx.postProcess->SetDissolveThreshold(threshold);
+            }
+
+            float edgeWidth =
+                ctx.postProcess->GetDissolveEdgeWidth(); // 現在の境界幅
+            if (ImGui::DragFloat(
+                    "Edge Width",
+                    &edgeWidth,
+                    0.001f,
+                    0.001f,
+                    0.25f,
+                    "%.3f")) {
+                ctx.postProcess->SetDissolveEdgeWidth(edgeWidth);
+            }
+
+            Math::Vector3 edgeColor =
+                ctx.postProcess->GetDissolveEdgeColor(); // 現在の境界色
+            float edgeColorValues[3] = {
+                edgeColor.x,
+                edgeColor.y,
+                edgeColor.z
+            }; // ImGui編集用の境界色
+            if (ImGui::ColorEdit3("Edge Color", edgeColorValues)) {
+                ctx.postProcess->SetDissolveEdgeColor(
+                    {
+                        edgeColorValues[0],
+                        edgeColorValues[1],
+                        edgeColorValues[2]
+                    });
+            }
+        }
+
         ImGui::SeparatorText("Status");
         ImGui::Text(
             "PostProcess: %s",
@@ -408,6 +450,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Radial Blur PSO: %s",
             ctx.postProcess->IsRadialBlurReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Dissolve PSO: %s",
+            ctx.postProcess->IsDissolveReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV
