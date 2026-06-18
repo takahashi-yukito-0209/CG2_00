@@ -1,4 +1,5 @@
 #include "Sound.h"
+#include "engine/utility/Logger.h"
 #include <Windows.h>
 #include <atomic>
 #include <cassert>
@@ -21,45 +22,82 @@
 namespace MyEngine {
 
 /// <summary>
-/// コンストラクタ: Media Foundation と XAudio2 エンジンを初期化する
+/// Media FoundationとXAudio2を初期化する
 /// </summary>
-SoundSystem::SoundSystem()
+bool SoundSystem::Initialize()
 {
-    // エラーコードを格納する変数
-    HRESULT hr = S_OK;
-
-    // Media Foundation を初期化（MP3 等の圧縮フォーマット対応のため）
-    hr = MFStartup(MF_VERSION);
-    if (FAILED(hr)) {
-        // 初期化に失敗した場合はログ等で通知するがアプリ継続を優先する
+    if (IsReady()) {
+        return true;
     }
 
-    // XAudio2 を初期化
+    Finalize();
+
+    HRESULT hr = MFStartup(MF_VERSION); // Media Foundationの初期化結果
+    if (FAILED(hr)) {
+        Logger::Error("SoundSystem::Initialize: MFStartup failed.\n");
+        return false;
+    }
+    mediaFoundationStarted_ = true;
+
     hr = XAudio2Create(&xaudio2_, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr)) {
-        xaudio2_.Reset();
-        return;
+        Logger::Error("SoundSystem::Initialize: XAudio2Create failed.\n");
+        Finalize();
+        return false;
     }
 
-    // マスタリングボイスを作成
     hr = xaudio2_->CreateMasteringVoice(&masteringVoice_);
     if (FAILED(hr)) {
-        masteringVoice_ = nullptr;
+        Logger::Error("SoundSystem::Initialize: CreateMasteringVoice failed.\n");
+        Finalize();
+        return false;
     }
+
+    return true;
 }
 
 /// <summary>
-/// デストラクタ: XAudio2 エンジンと Media Foundation をクリーンアップする
+/// 音声システムが終了済みであることを保証する
 /// </summary>
 SoundSystem::~SoundSystem()
 {
+    Finalize();
+}
+
+/// <summary>
+/// 再生中ボイスと音声システムを終了する
+/// </summary>
+void SoundSystem::Finalize()
+{
+    {
+        std::lock_guard<std::mutex> lk(contextsMutex_);
+        for (SourceVoiceContext* ctx : contexts_) {
+            if (!ctx) {
+                continue;
+            }
+
+            if (ctx->voice) {
+                ctx->voice->Stop();
+                ctx->voice->FlushSourceBuffers();
+                ctx->voice->DestroyVoice();
+                ctx->voice = nullptr;
+            }
+
+            ctx->clip.reset();
+            delete ctx;
+        }
+        contexts_.clear();
+    }
 
     if (masteringVoice_) {
         masteringVoice_->DestroyVoice();
         masteringVoice_ = nullptr;
     }
     xaudio2_.Reset();
-    MFShutdown();
+    if (mediaFoundationStarted_) {
+        MFShutdown();
+        mediaFoundationStarted_ = false;
+    }
 }
 
 /// <summary>
@@ -158,6 +196,10 @@ std::shared_ptr<SoundClip> SoundSystem::LoadWav(const std::string& path)
 /// </summary>
 std::shared_ptr<SoundClip> SoundSystem::LoadViaMediaFoundation(const std::wstring& wpath)
 {
+    if (!mediaFoundationStarted_) {
+        Logger::Warn("SoundSystem::LoadViaMediaFoundation: Media Foundation is not initialized.\n");
+        return {};
+    }
 
     // 変数の宣言と初期化
     HRESULT hr = S_OK;
@@ -266,7 +308,7 @@ std::shared_ptr<SoundClip> SoundSystem::LoadViaMediaFoundation(const std::wstrin
 void SoundSystem::Play(const std::shared_ptr<SoundClip>& clip)
 {
     // クリップが有効でない場合は再生しない
-    if (!clip || !clip->IsValid() || !xaudio2_) {
+    if (!clip || !clip->IsValid() || !IsReady()) {
         return;
     }
 
@@ -286,21 +328,38 @@ void SoundSystem::Play(const std::shared_ptr<SoundClip>& clip)
 
     // コンテキストにボイスを保持する。再生終了時に DestroyVoice() するため
     ctx->voice = pSourceVoice;
+    ctx->clip = clip;
 
     // contexts_ に追加して Poll() でクリーンナップする
-    {
-        std::lock_guard<std::mutex> lk(contextsMutex_);
-        contexts_.push_back(ctx);
-    }
-
     XAUDIO2_BUFFER buf {};
     buf.pAudioData = clip->GetData();
     buf.AudioBytes = clip->GetSize();
     buf.Flags = XAUDIO2_END_OF_STREAM;
 
     // ボイスにバッファを送信して再生開始する
-    pSourceVoice->SubmitSourceBuffer(&buf);
-    pSourceVoice->Start();
+    hr = pSourceVoice->SubmitSourceBuffer(&buf);
+    if (FAILED(hr)) {
+        pSourceVoice->DestroyVoice();
+        ctx->voice = nullptr;
+        ctx->clip.reset();
+        delete ctx;
+        return;
+    }
+
+    hr = pSourceVoice->Start();
+    if (FAILED(hr)) {
+        pSourceVoice->DestroyVoice();
+        ctx->voice = nullptr;
+        ctx->clip.reset();
+        delete ctx;
+        return;
+    }
+
+    // 再生開始後に登録し、Poll() で終了済みVoiceを破棄する
+    {
+        std::lock_guard<std::mutex> lk(contextsMutex_);
+        contexts_.push_back(ctx);
+    }
 }
 
 /// <summary>
@@ -320,6 +379,7 @@ void SoundSystem::Poll()
                 ctx->voice->DestroyVoice();
                 ctx->voice = nullptr;
             }
+            ctx->clip.reset();
             delete ctx;
             it = contexts_.erase(it);
         } else {

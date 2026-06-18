@@ -1,9 +1,9 @@
 #include "SrvManager.h"
-#include "engine/base/DirectXCommon.h"
 #include "ImGuiManager.h"
+#include "engine/base/DirectXCommon.h"
 
-#include <cassert>
 #include "engine/utility/Logger.h"
+#include <cassert>
 
 using namespace MyEngine;
 
@@ -63,8 +63,7 @@ uint32_t SrvManager::Allocate()
     if (!freeList_.empty()) {
         index = freeList_.back();
         freeList_.pop_back();
-    }
-    else {
+    } else {
         // 無ければ新しいインデックスを返す
         index = useIndex_;
         useIndex_++;
@@ -81,10 +80,12 @@ uint32_t SrvManager::Allocate()
 void SrvManager::Free(uint32_t index)
 {
     // 0 は ImGui 予約で解放禁止
-    if (index == 0) return;
+    if (index == 0)
+        return;
 
     // 範囲外チェック
-    if (index >= DirectXCommon::kMaxSRVCount) return;
+    if (index >= DirectXCommon::kMaxSRVCount)
+        return;
 
     // 二重解放チェック: allocatedSet_ に存在しなければ無視
     auto it = allocatedSet_.find(index);
@@ -105,7 +106,7 @@ void SrvManager::Free(uint32_t index)
 bool SrvManager::CanAllocate() const
 {
     // DirectXCommonの最大数に依存
-    return useIndex_ < DirectXCommon::kMaxSRVCount;
+    return !freeList_.empty() || useIndex_ < DirectXCommon::kMaxSRVCount;
 }
 
 /// <summary>
@@ -156,10 +157,10 @@ void SrvManager::InitImGui()
 
     // ImGui_ImplDX12_InitInfo 構造体を設定して初期化する
 #ifdef USE_IMGUI
-    ImGui_ImplDX12_InitInfo init_info{};
+    ImGui_ImplDX12_InitInfo init_info {};
     init_info.Device = dxCommon_->GetDevice();
     // ImGuiのバックエンドがテクスチャアップロードに使用するコマンドキュー
-    init_info.CommandQueue = dxCommon_->GetCommandQueue(); 
+    init_info.CommandQueue = dxCommon_->GetCommandQueue();
     init_info.NumFramesInFlight = 2; // フレームインフライト数（例: 2）
     init_info.RTVFormat = dxCommon_->GetSwapChainFormat();
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -167,8 +168,7 @@ void SrvManager::InitImGui()
     init_info.SrvDescriptorHeap = descriptorHeap_.Get();
 
     // SRVディスクリプタの割り当てと解放のコールバック関数を設定
-    init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle)
-    {
+    init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle) {
         SrvManager* self = reinterpret_cast<SrvManager*>(info->UserData);
         uint32_t idx = self->Allocate();
         *out_cpu_desc_handle = self->GetCPUDescriptorHandle(idx);
@@ -176,8 +176,7 @@ void SrvManager::InitImGui()
     };
 
     // 解放コールバックでは、GPUディスクリプタハンドルからインデックスを計算して解放する
-    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc)
-    {
+    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc) {
         SrvManager* self = reinterpret_cast<SrvManager*>(info->UserData);
         // GPUディスクリプタハンドルからインデックスを計算して解放
         ID3D12DescriptorHeap* heap = self->descriptorHeap_.Get();

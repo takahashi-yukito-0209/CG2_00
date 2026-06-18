@@ -18,7 +18,6 @@ class SpriteCommon;
 class Sprite {
 
 public: // メンバ構造体
-
     // 頂点データ構造体
     struct VertexData {
         Vector4 position;
@@ -46,7 +45,6 @@ public: // メンバ構造体
     };
 
 public: // メンバ関数
-
     /// <summary>
     /// 初期化
     /// </summary>
@@ -102,7 +100,7 @@ public: // メンバ関数
     /// テクスチャ左上座標取得
     /// </summary>
     const Vector2& GetTextureLeftTop() const { return textureLeftTop_; }
-    
+
     /// <summary>
     /// テクスチャサイズ取得
     /// </summary>
@@ -154,7 +152,7 @@ public: // メンバ関数
     void SetTextureSize(const Vector2& textureSize) { textureSize_ = textureSize; }
 
     /// <summary>
-    /// テクスチャ設定（ファイルパス指定）。テクスチャマネージャを通じてテクスチャをロードし、SRVインデックスを取得して設定
+    /// ロード済みテクスチャをスプライトへ設定する
     /// </summary>
     void SetTexture(const std::string& filePath);
 
@@ -167,14 +165,12 @@ public: // メンバ関数
     ~Sprite();
 
 private: // メンバ関数
-
     /// <summary>
     /// テクスチャサイズをイメージに合わせてスプライトのサイズも調整する
     /// </summary>
     void AdjustTextureSize();
 
 private: // メンバ変数
-
     SpriteCommon* spriteCommon_ = nullptr; // スプライト描画の共通設定を管理するクラスへの参照
 
     // 頂点バッファリソース

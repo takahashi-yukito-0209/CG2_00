@@ -8,7 +8,6 @@
 #include <d3d12sdklayers.h>
 #include <externals/DirectXTex/d3dx12.h>
 
-#include "RenderTarget.h"
 #include "SrvManager.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -39,6 +38,7 @@ struct RenderTargetInternal {
     uint32_t width = 0;
     uint32_t height = 0;
     bool useDepth = false;
+    bool resizeWithWindow = false;
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
     std::array<float, 4> clearColor { 0.0f, 0.0f, 0.0f, 1.0f };
     // SRVヒープ上のインデックス（存在しない場合は UINT32_MAX）
@@ -316,7 +316,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDSVHandle() const
 /// 指定したサイズとフォーマットでオフスクリーンのレンダーターゲットを作成し、管理リストに追加する
 /// </summary>
 int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORMAT format, bool useDepth,
-    const std::array<float, 4>& clearColor)
+    const std::array<float, 4>& clearColor, bool resizeWithWindow)
 {
     // パラメータチェック
     auto rt = std::make_unique<RenderTargetInternal>();
@@ -324,6 +324,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     rt->height = height;
     rt->format = format;
     rt->useDepth = useDepth;
+    rt->resizeWithWindow = resizeWithWindow;
 
     // レンダーターゲット用のテクスチャリソースを作成
     D3D12_RESOURCE_DESC desc = {};
@@ -449,6 +450,17 @@ void DirectXCommon::DestroyRenderTarget(int handle)
 }
 
 /// <summary>
+/// 管理中のオフスクリーンレンダーターゲットをすべて破棄する
+/// </summary>
+void DirectXCommon::DestroyAllRenderTargets()
+{
+    for (size_t i = 0; i < g_renderTargets.size(); ++i) {
+        DestroyRenderTarget(static_cast<int>(i));
+    }
+    g_renderTargets.clear();
+}
+
+/// <summary>
 /// 指定したハンドルのレンダーターゲットを新しいサイズにリサイズする
 /// </summary>
 void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t height)
@@ -463,16 +475,31 @@ void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t heig
         return;
     }
 
-    // 現在のフォーマットと深度使用フラグを保存しておく
+    if (width == 0 || height == 0) {
+        return;
+    }
+
+    WaitForCommandExecution();
+
+    // 現在の設定を保存しておく
     DXGI_FORMAT fmt = rt->format;
     bool useDepth = rt->useDepth;
+    bool resizeWithWindow = rt->resizeWithWindow;
     uint32_t oldSrv = rt->srvIndex;
-    // DestroyRenderTarget will free SRV via SrvManager; call it to cleanup existing resources
-    DestroyRenderTarget(handle);
-    // 同じハンドルで新しいレンダーターゲットを作成
-    int newIdx = CreateRenderTarget(width, height, fmt, useDepth);
+    std::array<float, 4> clearColor = rt->clearColor;
+
+    int newIdx = CreateRenderTarget(width, height, fmt, useDepth, clearColor, resizeWithWindow);
+    if (newIdx < 0) {
+        return;
+    }
+
+    // 既存のSRV番号を維持し、リサイズ後のカラーバッファへ張り替える
+    if (oldSrv != UINT32_MAX) {
+        CreateRenderTargetSRV(newIdx, oldSrv);
+    }
+
     // 新しいレンダーターゲットが作成できたら、管理リスト内で入れ替える
-    if (newIdx != handle && newIdx >= 0) {
+    if (newIdx != handle) {
         g_renderTargets[handle].swap(g_renderTargets[newIdx]);
         g_renderTargets[newIdx].reset();
     }
@@ -729,11 +756,10 @@ void DirectXCommon::PreDraw()
 
     // SRV用ディスクリプタヒープを指定
     ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
-    // 診断用ログ
+    // SRVヒープがない場合は異常として記録する
     if (!srvDescriptorHeap_) {
         Logger::Log("DirectXCommon::PreDraw: srvDescriptorHeap_ is null\n");
-    } else {
-        Logger::Log("DirectXCommon::PreDraw: setting SRV descriptor heap for command list\n");
+        return;
     }
     commandList_->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
@@ -1456,8 +1482,17 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
     scissorRect_.right = width;
     scissorRect_.bottom = height;
 
-    // オフスクリーンレンダーターゲットも必要なら再作成（既定では手動で再作成する設計）
-    // TODO: 自動 SRV 再割当を行いたい場合はここで g_renderTargets を走査して再作成処理を追加
+    // ウィンドウサイズへ追従するオフスクリーンレンダーターゲットを再作成する
+    std::vector<int> resizeTargetHandles; // リサイズ対象のレンダーターゲットハンドル
+    resizeTargetHandles.reserve(g_renderTargets.size());
+    for (size_t i = 0; i < g_renderTargets.size(); ++i) {
+        if (g_renderTargets[i] && g_renderTargets[i]->resizeWithWindow) {
+            resizeTargetHandles.push_back(static_cast<int>(i));
+        }
+    }
+    for (int handle : resizeTargetHandles) {
+        ResizeRenderTarget(handle, width, height);
+    }
 
     // リサイズ終了
     resizingInProgress_ = false;

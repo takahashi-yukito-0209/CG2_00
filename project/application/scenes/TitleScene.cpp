@@ -29,7 +29,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
     if (dx) {
         rtHandle_ = dx->CreateRenderTarget(
             800, 600, dx->GetSwapChainFormat(),
-            true, { 0.53f, 0.71f, 0.82f, 1.0f });
+            true, { 0.53f, 0.71f, 0.82f, 1.0f }, true);
 
         if (rtHandle_ >= 0 && ctx.srvManager) {
             rtSrvIndex_ = ctx.srvManager->Allocate();
@@ -51,8 +51,10 @@ void TitleScene::Finalize()
         if (rtHandle_ >= 0) {
             dx->DestroyRenderTarget(rtHandle_);
             rtHandle_ = -1;
+            rtSrvIndex_ = UINT32_MAX;
         }
     }
+    postProcess_.Finalize();
 }
 
 /// <summary>

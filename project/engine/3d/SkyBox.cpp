@@ -1,9 +1,9 @@
 #include "SkyBox.h"
 #include "engine/3d/Camera.h"
-#include "engine/utility/StringUtility.h"
-#include "engine/utility/Logger.h"
-#include <vector>
 #include "engine/base/DirectXCommon.h"
+#include "engine/utility/Logger.h"
+#include "engine/utility/StringUtility.h"
+#include <vector>
 
 using namespace MyEngine;
 
@@ -15,14 +15,16 @@ struct Vertex {
 /// <summary>
 /// デストラクタ
 /// </summary>
-SkyBox::~SkyBox() {
+SkyBox::~SkyBox()
+{
     Finalize();
 }
 
 /// <summary>
 /// 初期化
 /// </summary>
-void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_t srvIndex) {
+void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_t srvIndex)
+{
     // 引数で受け取ってメンバ変数に記録する
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
@@ -31,27 +33,45 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
     // 頂点データ（キューブの8頂点を定義）
     std::vector<Vertex> baseVerts = {
         // -X
-        {{-1, -1, -1}}, {{-1, -1, 1}}, {{-1, 1, 1}}, {{-1, 1, -1}},
+        { { -1, -1, -1 } },
+        { { -1, -1, 1 } },
+        { { -1, 1, 1 } },
+        { { -1, 1, -1 } },
         // +X
-        {{1, -1, 1}}, {{1, -1, -1}}, {{1, 1, -1}}, {{1, 1, 1}},
+        { { 1, -1, 1 } },
+        { { 1, -1, -1 } },
+        { { 1, 1, -1 } },
+        { { 1, 1, 1 } },
         // -Y
-        {{-1, -1, 1}}, {{1, -1, 1}}, {{1, -1, -1}}, {{-1, -1, -1}},
+        { { -1, -1, 1 } },
+        { { 1, -1, 1 } },
+        { { 1, -1, -1 } },
+        { { -1, -1, -1 } },
         // +Y
-        {{-1, 1, -1}}, {{1, 1, -1}}, {{1, 1, 1}}, {{-1, 1, 1}},
+        { { -1, 1, -1 } },
+        { { 1, 1, -1 } },
+        { { 1, 1, 1 } },
+        { { -1, 1, 1 } },
         // -Z
-        {{1, -1, -1}}, {{-1, -1, -1}}, {{-1, 1, -1}}, {{1, 1, -1}},
+        { { 1, -1, -1 } },
+        { { -1, -1, -1 } },
+        { { -1, 1, -1 } },
+        { { 1, 1, -1 } },
         // +Z
-        {{-1, -1, 1}}, {{1, -1, 1}}, {{1, 1, 1}}, {{-1, 1, 1}},
+        { { -1, -1, 1 } },
+        { { 1, -1, 1 } },
+        { { 1, 1, 1 } },
+        { { -1, 1, 1 } },
     };
 
     // インデックスデータ（12三角形を定義）
     std::vector<uint16_t> indices = {
-        0,1,2, 0,2,3,
-        4,5,6, 4,6,7,
-        8,9,10, 8,10,11,
-        12,13,14, 12,14,15,
-        16,17,18, 16,18,19,
-        20,21,22, 20,22,23
+        0, 1, 2, 0, 2, 3,
+        4, 5, 6, 4, 6, 7,
+        8, 9, 10, 8, 10, 11,
+        12, 13, 14, 12, 14, 15,
+        16, 17, 18, 16, 18, 19,
+        20, 21, 22, 20, 22, 23
     };
 
     // インデックスを展開して非インデックスド描画用の頂点バッファを作成する
@@ -61,12 +81,14 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         expanded.push_back(baseVerts[idx]);
     }
     // 展開後の頂点数を記録
-    indexCount_ = static_cast<uint32_t>(expanded.size()); 
+    indexCount_ = static_cast<uint32_t>(expanded.size());
 
     // 頂点バッファの作成とデータ転送
     size_t vbSize = expanded.size() * sizeof(Vertex);
     vertexBuffer_ = dxCommon_->CreateBufferResource(vbSize);
-    void* vbPtr = nullptr; vertexBuffer_->Map(0, nullptr, &vbPtr); memcpy(vbPtr, expanded.data(), vbSize);
+    void* vbPtr = nullptr;
+    vertexBuffer_->Map(0, nullptr, &vbPtr);
+    memcpy(vbPtr, expanded.data(), vbSize);
 
     // 頂点バッファビューの作成
     vbView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
@@ -122,7 +144,8 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         Microsoft::WRL::ComPtr<ID3DBlob> err;
         hr = D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sig, &err);
         if (FAILED(hr)) {
-            if (err) Logger::Log(reinterpret_cast<const char*>(err->GetBufferPointer()));
+            if (err)
+                Logger::Log(reinterpret_cast<const char*>(err->GetBufferPointer()));
         }
         hr = dxCommon_->GetDevice()->CreateRootSignature(0, sig->GetBufferPointer(), sig->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
         assert(SUCCEEDED(hr));
@@ -170,13 +193,6 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
             char buf[256];
             sprintf_s(buf, "ERROR SkyBox::Initialize: CreateGraphicsPipelineState failed hr=0x%08X\n", static_cast<unsigned int>(hr));
             Logger::Log(buf);
-        } else {
-            char buf[256];
-            sprintf_s(buf, "DEBUG SkyBox::Initialize: PSO created. srvIndex=%u vb.gpu=0x%016llX vertexCount=%u\n",
-                static_cast<unsigned int>(srvIndex_),
-                static_cast<unsigned long long>(vbView_.BufferLocation),
-                static_cast<unsigned int>(indexCount_));
-            Logger::Log(buf);
         }
         assert(SUCCEEDED(hr));
     }
@@ -185,14 +201,15 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
 /// <summary>
 /// 終了
 /// </summary>
-void SkyBox::Finalize() {
+void SkyBox::Finalize()
+{
     // 定数バッファのアンマップとリセット
     if (constantBuffer_) {
         constantBuffer_->Unmap(0, nullptr);
         mappedCB_ = nullptr;
         constantBuffer_.Reset();
     }
-    
+
     // バッファのリセット
     vertexBuffer_.Reset();
     indexBuffer_.Reset();
@@ -201,19 +218,24 @@ void SkyBox::Finalize() {
 /// <summary>
 /// ビュープロジェクション行列の更新
 /// </summary>
-void SkyBox::UpdateViewProj(const float vp[16]) {
-    if (!mappedCB_) return;
+void SkyBox::UpdateViewProj(const float vp[16])
+{
+    if (!mappedCB_)
+        return;
     memcpy(mappedCB_, vp, sizeof(float) * 16);
 }
 
 /// <summary>
 /// 描画
 /// </summary>
-void SkyBox::Draw(Camera* camera) {
-    if (!dxCommon_) return;
+void SkyBox::Draw(Camera* camera)
+{
+    if (!dxCommon_)
+        return;
     auto cmd = dxCommon_->GetCommandList();
-    if (!cmd) return;
-    
+    if (!cmd)
+        return;
+
     // エラーチェックとログ出力
     if (!pipelineState_) {
         Logger::Log("ERROR SkyBox::Draw: pipelineState_ is null\n");
@@ -227,42 +249,7 @@ void SkyBox::Draw(Camera* camera) {
         Logger::Log("ERROR SkyBox::Draw: vertex buffer GPU address is null\n");
         return;
     }
-
-    // デバッグ用: 描画前のSRVインデックス、頂点バッファのGPUアドレス、描画する頂点数をログ出力して確認する
-    {
-        char buf[1024];
-        sprintf_s(buf, "DEBUG SkyBox::Draw: attempt srvIndex=%u vb.gpu=0x%016llX vertexCount=%u\n",
-            static_cast<unsigned int>(srvIndex_), static_cast<unsigned long long>(vbView_.BufferLocation), static_cast<unsigned int>(indexCount_));
-        Logger::Log(buf);
-    }
-
-    // カメラのビューとプロジェクション行列をログ出力して確認する
-    if (camera) {
-        const auto& view = camera->GetViewMatrix();
-        const auto& proj = camera->GetProjectionMatrix();
-        char buf2[1024];
-        sprintf_s(buf2, "DEBUG SkyBox::Draw: Camera translate=(%f,%f,%f) view.m00=%f view.m11=%f proj.m00=%f proj.m11=%f\n",
-            camera->GetTranslate().x, camera->GetTranslate().y, camera->GetTranslate().z,
-            view.m[0][0], view.m[1][1], proj.m[0][0], proj.m[1][1]);
-        Logger::Log(buf2);
-    } else {
-        Logger::Log("DEBUG SkyBox::Draw: camera is null\n");
-    }
-
-    // デバッグ用: SRVマネージャーからSRVのGPUハンドルを取得してログ出力する
-    if (srvManager_) {
-        auto h = srvManager_->GetGPUDescriptorHandle(srvIndex_);
-        char buf3[256];
-        sprintf_s(buf3, "DEBUG SkyBox::Draw: srvManager GPU handle.ptr=0x%016llX\n", static_cast<unsigned long long>(h.ptr));
-        Logger::Log(buf3);
-    } else if (dxCommon_) {
-        auto h = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex_);
-        char buf4[256];
-        sprintf_s(buf4, "DEBUG SkyBox::Draw: dxCommon GPU handle.ptr=0x%016llX\n", static_cast<unsigned long long>(h.ptr));
-        Logger::Log(buf4);
-    }
-
-    // SRVヒープの設定
+    // SRVヒープを設定する
     ID3D12DescriptorHeap* heaps[] = { dxCommon_->GetSrvDescriptorHeap() };
     cmd->SetDescriptorHeaps(_countof(heaps), heaps);
 

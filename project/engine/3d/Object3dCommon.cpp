@@ -1,9 +1,10 @@
 #include "Object3dCommon.h"
-#include "Logger.h"
-#include "StringUtility.h"
-#include "mathUtility.h"
 #include "Camera.h"
 #include "DebugCamera.h"
+#include "Logger.h"
+#include "StringUtility.h"
+#include "engine/base/SrvManager.h"
+#include "mathUtility.h"
 #include <algorithm>
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -15,10 +16,11 @@ using namespace MyEngine;
 /// <summary>
 /// 初期化
 /// </summary>
-void Object3dCommon::Initialize(DirectXCommon* dxCommon)
+void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 {
     // 引数で受け取ってメンバ変数に記録する
     dxCommon_ = dxCommon;
+    srvManager_ = srvManager;
     // 共有の平行光源用定数バッファを作成
     // これにより main/ImGui からすべての Object3d インスタンスで使用する単一のライトを編集できる
     directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
@@ -141,18 +143,44 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 
     // グローバルSRVヒープにSRVディスクリプタを作成
     // TextureManagerと競合しにくいディスクリプタスロットとして、ヒープの最後のスロットを使用
-    uint32_t srvIndex = DirectXCommon::kMaxSRVCount - 1;
-    instancingSrvHandleCPU_ = dxCommon_->GetSRVCPUDescriptorHandle(srvIndex);
-    instancingSrvHandleGPU_ = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
+    if (!srvManager_ || !srvManager_->CanAllocate()) {
+        Logger::Log("Object3dCommon::Initialize: failed to allocate instancing SRV.\n");
+        instancingResource_.Reset();
+        instancingData_ = nullptr;
+        kNumInstance_ = 0;
+        return;
+    }
+
+    instancingSrvIndex_ = srvManager_->Allocate(); // インスタンシング用SRVの管理番号
+    instancingSrvHandleCPU_ = srvManager_->GetCPUDescriptorHandle(instancingSrvIndex_);
+    instancingSrvHandleGPU_ = srvManager_->GetGPUDescriptorHandle(instancingSrvIndex_);
     dxCommon_->GetDevice()->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
 
     // デバッグログ
     {
         char buf[256];
         sprintf_s(buf, "Object3dCommon::Initialize: created instancingResource size=%zu srvIndex=%u srvGPU=0x%016llX\n",
-            instancingBufferSize, srvIndex, static_cast<unsigned long long>(instancingSrvHandleGPU_.ptr));
+            instancingBufferSize, instancingSrvIndex_, static_cast<unsigned long long>(instancingSrvHandleGPU_.ptr));
         Logger::Log(buf);
     }
+}
+
+/// <summary>
+/// インスタンシング用SRVの割り当てを解放する
+/// </summary>
+void Object3dCommon::Finalize()
+{
+    if (srvManager_ && instancingSrvIndex_ != UINT32_MAX) {
+        srvManager_->Free(instancingSrvIndex_);
+    }
+
+    instancingSrvIndex_ = UINT32_MAX;
+    instancingSrvHandleCPU_ = {};
+    instancingSrvHandleGPU_ = {};
+    instancingData_ = nullptr;
+    instancingResource_.Reset();
+    kNumInstance_ = 0;
+    srvManager_ = nullptr;
 }
 
 void Object3dCommon::SetEnvironmentMapSrvIndex(uint32_t srvIndex)
@@ -164,208 +192,210 @@ void Object3dCommon::SetEnvironmentMapSrvIndex(uint32_t srvIndex)
     environmentMapSrvHandleGPU_ = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
 }
 
-
 #ifdef USE_IMGUI
-    /// <summary>
-    /// Object3dCommon に関連する共通設定を編集する関数
-    /// </summary>
-    void Object3dCommon::DrawImGui()
-    {
-        // 平行光源の編集UI
-        if (directionalLightData_) {
-            if (ImGui::CollapsingHeader("Light")) {
-                float color[3] = { directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z };
-                if (ImGui::ColorEdit3("Color", color)) {
-                    directionalLightData_->color.x = color[0];
-                    directionalLightData_->color.y = color[1];
-                    directionalLightData_->color.z = color[2];
-                }
-                float intensity = directionalLightData_->intensity;
-                if (ImGui::SliderFloat("Intensity", &intensity, 0.0f, 10.0f)) {
-                    directionalLightData_->intensity = intensity;
-                }
-                // Point lights UI
-                if (ImGui::TreeNode("Point Lights")) {
-                    if (pointLightsData_) {
-                        for (uint32_t i = 0; i < Object3dCommon::kMaxPointLights; ++i) {
-                            ImGui::PushID((int)i);
-                            char label[64];
-                            sprintf_s(label, "Point %u", i);
-                            if (ImGui::CollapsingHeader(label)) {
-                                bool enabled = pointLightsData_[i].enabled != 0;
-                                if (ImGui::Checkbox("Enabled", &enabled)) {
-                                    pointLightsData_[i].enabled = enabled ? 1 : 0;
-                                }
+/// <summary>
+/// Object3dCommon に関連する共通設定を編集する関数
+/// </summary>
+void Object3dCommon::DrawImGui()
+{
+    ImGui::PushID("Object3dCommon");
 
-                                float pos[3] = { pointLightsData_[i].position.x, pointLightsData_[i].position.y, pointLightsData_[i].position.z };
-                                if (ImGui::DragFloat3("Position", pos, 0.1f)) {
-                                    pointLightsData_[i].position.x = pos[0];
-                                    pointLightsData_[i].position.y = pos[1];
-                                    pointLightsData_[i].position.z = pos[2];
-                                }
-
-                                float col[3] = { pointLightsData_[i].color.x, pointLightsData_[i].color.y, pointLightsData_[i].color.z };
-                                if (ImGui::ColorEdit3("Color", col)) {
-                                    pointLightsData_[i].color.x = col[0];
-                                    pointLightsData_[i].color.y = col[1];
-                                    pointLightsData_[i].color.z = col[2];
-                                }
-
-                                float pIntensity = pointLightsData_[i].color.w;
-                                if (ImGui::SliderFloat("Intensity", &pIntensity, 0.0f, 10.0f)) {
-                                    pointLightsData_[i].color.w = pIntensity;
-                                }
-
-                                float radius = pointLightsData_[i].radius;
-                                if (ImGui::SliderFloat("Radius", &radius, 0.0f, 100.0f)) {
-                                    pointLightsData_[i].radius = radius;
-                                }
-
-                                float decay = pointLightsData_[i].decay;
-                                if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
-                                    pointLightsData_[i].decay = decay;
-                                }
-                            }
-                            ImGui::PopID();
-                        }
-                    } else {
-                        ImGui::Text("Point lights not available");
-                    }
-                    ImGui::TreePop();
-                }
-
-                // Spot light UI
-                if (ImGui::TreeNode("Spot Light")) {
-                    if (spotLightData_) {
-                        bool enabled = spotLightData_->enabled != 0;
-                        if (ImGui::Checkbox("Enabled", &enabled)) {
-                            spotLightData_->enabled = enabled ? 1 : 0;
-                        }
-
-                        float spos[3] = { spotLightData_->position.x, spotLightData_->position.y, spotLightData_->position.z };
-                        if (ImGui::DragFloat3("Position", spos, 0.1f)) {
-                            spotLightData_->position.x = spos[0];
-                            spotLightData_->position.y = spos[1];
-                            spotLightData_->position.z = spos[2];
-                        }
-
-                        float sdir[3] = { spotLightData_->direction.x, spotLightData_->direction.y, spotLightData_->direction.z };
-                        if (ImGui::DragFloat3("Direction", sdir, 0.05f)) {
-                            // normalize direction if possible
-                            float len = sqrtf(sdir[0]*sdir[0] + sdir[1]*sdir[1] + sdir[2]*sdir[2]);
-                            if (len > 1e-6f) {
-                                spotLightData_->direction.x = sdir[0] / len;
-                                spotLightData_->direction.y = sdir[1] / len;
-                                spotLightData_->direction.z = sdir[2] / len;
-                            }
-                        }
-
-                        float scol[3] = { spotLightData_->color.x, spotLightData_->color.y, spotLightData_->color.z };
-                        if (ImGui::ColorEdit3("Color", scol)) {
-                            spotLightData_->color.x = scol[0];
-                            spotLightData_->color.y = scol[1];
-                            spotLightData_->color.z = scol[2];
-                        }
-
-                        float sIntensity = spotLightData_->color.w;
-                        if (ImGui::SliderFloat("Intensity", &sIntensity, 0.0f, 10.0f)) {
-                            spotLightData_->color.w = sIntensity;
-                        }
-
-                        float distance = spotLightData_->distance;
-                        if (ImGui::SliderFloat("Distance", &distance, 0.0f, 100.0f)) {
-                            spotLightData_->distance = distance;
-                        }
-
-                        float decay = spotLightData_->decay;
-                        if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
-                            spotLightData_->decay = decay;
-                        }
-
-                        // Cone angle editing (convert between cos and degrees for usability)
-                        const float rad2deg = 57.29577951308232f;
-                        const float deg2rad = 0.017453292519943295f;
-                        float angleDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosAngle))) * rad2deg;
-                        if (ImGui::SliderFloat("Cone Angle (deg)", &angleDeg, 0.1f, 179.0f)) {
-                            spotLightData_->cosAngle = cosf(angleDeg * deg2rad);
-                        }
-
-                        float falloffDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosFalloffStart))) * rad2deg;
-                        if (ImGui::SliderFloat("Falloff Start (deg)", &falloffDeg, 0.0f, angleDeg)) {
-                            spotLightData_->cosFalloffStart = cosf(falloffDeg * deg2rad);
-                        }
-                    } else {
-                        ImGui::Text("Spot light not available");
-                    }
-                    ImGui::TreePop();
-                }
+    // 平行光源の編集UI
+    if (directionalLightData_) {
+        if (ImGui::CollapsingHeader("Light")) {
+            float color[3] = { directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z };
+            if (ImGui::ColorEdit3("Color", color)) {
+                directionalLightData_->color.x = color[0];
+                directionalLightData_->color.y = color[1];
+                directionalLightData_->color.z = color[2];
             }
-        }
+            float intensity = directionalLightData_->intensity;
+            if (ImGui::SliderFloat("Intensity", &intensity, 0.0f, 10.0f)) {
+                directionalLightData_->intensity = intensity;
+            }
+            // Point lights UI
+            if (ImGui::TreeNode("Point Lights")) {
+                if (pointLightsData_) {
+                    for (uint32_t i = 0; i < Object3dCommon::kMaxPointLights; ++i) {
+                        ImGui::PushID((int)i);
+                        char label[64];
+                        sprintf_s(label, "Point %u", i);
+                        if (ImGui::CollapsingHeader(label)) {
+                            bool enabled = pointLightsData_[i].enabled != 0;
+                            if (ImGui::Checkbox("Enabled", &enabled)) {
+                                pointLightsData_[i].enabled = enabled ? 1 : 0;
+                            }
 
-        // ブレンドモードの編集UI
-        if (ImGui::CollapsingHeader("Blend Mode")) {
-            const char* blendNames[] = { "None", "Alpha", "Add", "Multiply", "Screen" };
-            int blendIdx = static_cast<int>(GetBlendMode());
-            if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-                SetBlendMode(static_cast<BlendMode>(blendIdx));
+                            float pos[3] = { pointLightsData_[i].position.x, pointLightsData_[i].position.y, pointLightsData_[i].position.z };
+                            if (ImGui::DragFloat3("Position", pos, 0.1f)) {
+                                pointLightsData_[i].position.x = pos[0];
+                                pointLightsData_[i].position.y = pos[1];
+                                pointLightsData_[i].position.z = pos[2];
+                            }
+
+                            float col[3] = { pointLightsData_[i].color.x, pointLightsData_[i].color.y, pointLightsData_[i].color.z };
+                            if (ImGui::ColorEdit3("Color", col)) {
+                                pointLightsData_[i].color.x = col[0];
+                                pointLightsData_[i].color.y = col[1];
+                                pointLightsData_[i].color.z = col[2];
+                            }
+
+                            float pIntensity = pointLightsData_[i].color.w;
+                            if (ImGui::SliderFloat("Intensity", &pIntensity, 0.0f, 10.0f)) {
+                                pointLightsData_[i].color.w = pIntensity;
+                            }
+
+                            float radius = pointLightsData_[i].radius;
+                            if (ImGui::SliderFloat("Radius", &radius, 0.0f, 100.0f)) {
+                                pointLightsData_[i].radius = radius;
+                            }
+
+                            float decay = pointLightsData_[i].decay;
+                            if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                                pointLightsData_[i].decay = decay;
+                            }
+                        }
+                        ImGui::PopID();
+                    }
+                } else {
+                    ImGui::Text("Point lights not available");
+                }
+                ImGui::TreePop();
+            }
+
+            // Spot light UI
+            if (ImGui::TreeNode("Spot Light")) {
+                if (spotLightData_) {
+                    bool enabled = spotLightData_->enabled != 0;
+                    if (ImGui::Checkbox("Enabled", &enabled)) {
+                        spotLightData_->enabled = enabled ? 1 : 0;
+                    }
+
+                    float spos[3] = { spotLightData_->position.x, spotLightData_->position.y, spotLightData_->position.z };
+                    if (ImGui::DragFloat3("Position", spos, 0.1f)) {
+                        spotLightData_->position.x = spos[0];
+                        spotLightData_->position.y = spos[1];
+                        spotLightData_->position.z = spos[2];
+                    }
+
+                    float sdir[3] = { spotLightData_->direction.x, spotLightData_->direction.y, spotLightData_->direction.z };
+                    if (ImGui::DragFloat3("Direction", sdir, 0.05f)) {
+                        // normalize direction if possible
+                        float len = sqrtf(sdir[0] * sdir[0] + sdir[1] * sdir[1] + sdir[2] * sdir[2]);
+                        if (len > 1e-6f) {
+                            spotLightData_->direction.x = sdir[0] / len;
+                            spotLightData_->direction.y = sdir[1] / len;
+                            spotLightData_->direction.z = sdir[2] / len;
+                        }
+                    }
+
+                    float scol[3] = { spotLightData_->color.x, spotLightData_->color.y, spotLightData_->color.z };
+                    if (ImGui::ColorEdit3("Color", scol)) {
+                        spotLightData_->color.x = scol[0];
+                        spotLightData_->color.y = scol[1];
+                        spotLightData_->color.z = scol[2];
+                    }
+
+                    float sIntensity = spotLightData_->color.w;
+                    if (ImGui::SliderFloat("Intensity", &sIntensity, 0.0f, 10.0f)) {
+                        spotLightData_->color.w = sIntensity;
+                    }
+
+                    float distance = spotLightData_->distance;
+                    if (ImGui::SliderFloat("Distance", &distance, 0.0f, 100.0f)) {
+                        spotLightData_->distance = distance;
+                    }
+
+                    float decay = spotLightData_->decay;
+                    if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                        spotLightData_->decay = decay;
+                    }
+
+                    // Cone angle editing (convert between cos and degrees for usability)
+                    const float rad2deg = 57.29577951308232f;
+                    const float deg2rad = 0.017453292519943295f;
+                    float angleDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosAngle))) * rad2deg;
+                    if (ImGui::SliderFloat("Cone Angle (deg)", &angleDeg, 0.1f, 179.0f)) {
+                        spotLightData_->cosAngle = cosf(angleDeg * deg2rad);
+                    }
+
+                    float falloffDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosFalloffStart))) * rad2deg;
+                    if (ImGui::SliderFloat("Falloff Start (deg)", &falloffDeg, 0.0f, angleDeg)) {
+                        spotLightData_->cosFalloffStart = cosf(falloffDeg * deg2rad);
+                    }
+                } else {
+                    ImGui::Text("Spot light not available");
+                }
+                ImGui::TreePop();
             }
         }
     }
 
-    /// <summary>
-    /// カメラ関連の設定を編集する関数
-    /// </summary>
-    void Object3dCommon::DrawCameraImGui()
-    {
-        // デバッグカメラ切替・入力トグルおよびメイン/デバッグカメラのTransform編集UIを提供する
-        // Use Debug Camera for Render
-        if (ImGui::Checkbox("Use Debug Camera for Render", &useDebugCameraForRender_)) {
-            // nothing else here, Game側のフラグと同期されている場合は呼び出し元で反映される
-        }
-
-        // Enable Debug Camera Input
-        ImGui::Checkbox("Enable Debug Camera Input", &enableDebugCameraInput_);
-
-        // メインカメラの編集
-        if (ImGui::CollapsingHeader("Main Camera")) {
-            if (defaultCamera_) {
-                auto t = defaultCamera_->GetTranslate();
-                if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
-                    defaultCamera_->SetTranslate(t);
-                }
-                auto r = defaultCamera_->GetRotate();
-                if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
-                    defaultCamera_->SetRotate(r);
-                }
-            } else {
-                ImGui::Text("Main Camera not available");
-            }
-        }
-
-        // デバッグカメラの編集
-        if (ImGui::CollapsingHeader("Debug Camera")) {
-            if (debugCamera_) {
-                // DebugCamera uses Math::Vector3 for translation/rotation
-                Math::Vector3 dt = debugCamera_->GetTranslation();
-                float dt_arr[3] = { dt.x, dt.y, dt.z };
-                if (ImGui::DragFloat3("Debug Translate", dt_arr, 0.1f)) {
-                    debugCamera_->SetTranslation({ dt_arr[0], dt_arr[1], dt_arr[2] });
-                }
-                Math::Vector3 dr = debugCamera_->GetRotation();
-                float dr_arr[3] = { dr.x, dr.y, dr.z };
-                if (ImGui::DragFloat3("Debug Rotate", dr_arr, 0.01f)) {
-                    debugCamera_->SetRotation({ dr_arr[0], dr_arr[1], dr_arr[2] });
-                }
-            } else {
-                ImGui::Text("Debug Camera not available");
-            }
+    // ブレンドモードの編集UI
+    if (ImGui::CollapsingHeader("Blend Mode")) {
+        const char* blendNames[] = { "None", "Alpha", "Add", "Subtract", "Multiply", "Screen" };
+        int blendIdx = static_cast<int>(GetBlendMode());
+        if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
+            SetBlendMode(static_cast<BlendMode>(blendIdx));
         }
     }
+
+    ImGui::PopID();
+}
+
+/// <summary>
+/// カメラ関連の設定を編集する関数
+/// </summary>
+void Object3dCommon::DrawCameraImGui()
+{
+    // デバッグカメラ切替・入力トグルおよびメイン/デバッグカメラのTransform編集UIを提供する
+    // Use Debug Camera for Render
+    if (ImGui::Checkbox("Use Debug Camera for Render", &useDebugCameraForRender_)) {
+        // nothing else here, Game側のフラグと同期されている場合は呼び出し元で反映される
+    }
+
+    // Enable Debug Camera Input
+    ImGui::Checkbox("Enable Debug Camera Input", &enableDebugCameraInput_);
+
+    // メインカメラの編集
+    if (ImGui::CollapsingHeader("Main Camera")) {
+        if (defaultCamera_) {
+            auto t = defaultCamera_->GetTranslate();
+            if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
+                defaultCamera_->SetTranslate(t);
+            }
+            auto r = defaultCamera_->GetRotate();
+            if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
+                defaultCamera_->SetRotate(r);
+            }
+        } else {
+            ImGui::Text("Main Camera not available");
+        }
+    }
+
+    // デバッグカメラの編集
+    if (ImGui::CollapsingHeader("Debug Camera")) {
+        if (debugCamera_) {
+            // DebugCamera uses Math::Vector3 for translation/rotation
+            Math::Vector3 dt = debugCamera_->GetTranslation();
+            float dt_arr[3] = { dt.x, dt.y, dt.z };
+            if (ImGui::DragFloat3("Debug Translate", dt_arr, 0.1f)) {
+                debugCamera_->SetTranslation({ dt_arr[0], dt_arr[1], dt_arr[2] });
+            }
+            Math::Vector3 dr = debugCamera_->GetRotation();
+            float dr_arr[3] = { dr.x, dr.y, dr.z };
+            if (ImGui::DragFloat3("Debug Rotate", dr_arr, 0.01f)) {
+                debugCamera_->SetRotation({ dr_arr[0], dr_arr[1], dr_arr[2] });
+            }
+        } else {
+            ImGui::Text("Debug Camera not available");
+        }
+    }
+}
 #else
-    void Object3dCommon::DrawImGui() { (void)0; }
-    void Object3dCommon::DrawCameraImGui() { (void)0; }
+void Object3dCommon::DrawImGui() { (void)0; }
+void Object3dCommon::DrawCameraImGui() { (void)0; }
 #endif
-
 
 /// <summary>
 /// ブレンドモードの設定
@@ -437,33 +467,6 @@ void Object3dCommon::SetInstancingDrawSetting()
     if (environmentMapSrvHandleGPU_.ptr != 0) {
         cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
     }
-
-#ifdef _DEBUG
-    // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
-    {
-        char buf[512];
-        D3D12_GPU_VIRTUAL_ADDRESS dirAddr = directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0;
-        D3D12_GPU_VIRTUAL_ADDRESS camAddr = cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0;
-        sprintf_s(buf, "DEBUG SetInstancingDrawSetting: bound CBVs dirGPU=0x%016llX camGPU=0x%016llX\n",
-            static_cast<unsigned long long>(dirAddr), static_cast<unsigned long long>(camAddr));
-        Logger::Log(buf);
-
-        if (directionalLightData_) {
-            char buf2[256];
-            sprintf_s(buf2, "DEBUG DirectionalLight currently: color=(%f,%f,%f) intensity=%f dir=(%f,%f,%f)\n",
-                directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
-                directionalLightData_->intensity,
-                directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z);
-            Logger::Log(buf2);
-        }
-
-        if (cameraData_) {
-            char buf3[128];
-            sprintf_s(buf3, "DEBUG Camera worldPosition=(%f,%f,%f)\n", cameraData_->worldPosition.x, cameraData_->worldPosition.y, cameraData_->worldPosition.z);
-            Logger::Log(buf3);
-        }
-    }
-#endif
 }
 
 /// <summary>
@@ -517,33 +520,6 @@ void Object3dCommon::SetCommonDrawSetting()
     if (environmentMapSrvHandleGPU_.ptr != 0) {
         cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
     }
-
-#ifdef _DEBUG
-    // デバッグ用: バインドしているCBVのGPUアドレスと現在のライト/カメラデータをログ出力
-    {
-        char buf[512];
-        D3D12_GPU_VIRTUAL_ADDRESS dirAddr = directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0;
-        D3D12_GPU_VIRTUAL_ADDRESS camAddr = cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0;
-        sprintf_s(buf, "DEBUG SetCommonDrawSetting: bound CBVs dirGPU=0x%016llX camGPU=0x%016llX\n",
-            static_cast<unsigned long long>(dirAddr), static_cast<unsigned long long>(camAddr));
-        Logger::Log(buf);
-
-        if (directionalLightData_) {
-            char buf2[256];
-            sprintf_s(buf2, "DEBUG DirectionalLight currently: color=(%f,%f,%f) intensity=%f dir=(%f,%f,%f)\n",
-                directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
-                directionalLightData_->intensity,
-                directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z);
-            Logger::Log(buf2);
-        }
-
-        if (cameraData_) {
-            char buf3[128];
-            sprintf_s(buf3, "DEBUG Camera worldPosition=(%f,%f,%f)\n", cameraData_->worldPosition.x, cameraData_->worldPosition.y, cameraData_->worldPosition.z);
-            Logger::Log(buf3);
-        }
-    }
-#endif
 }
 
 /// <summary>
@@ -552,7 +528,7 @@ void Object3dCommon::SetCommonDrawSetting()
 void Object3dCommon::CreateRootSignature()
 {
 
-    HRESULT hr; 
+    HRESULT hr;
 
     // ディスクリプタレンジ作成 (pixel texture SRV)
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
@@ -767,7 +743,7 @@ bool Object3dCommon::UpdatePointLight(int index, const Object3d::PointLight& pl)
 void Object3dCommon::CreateGraphicsPipeline()
 {
 
-    HRESULT hr; 
+    HRESULT hr;
 
     // ルートシグネチャの作成を先に実行する
     CreateRootSignature();
@@ -830,6 +806,18 @@ void Object3dCommon::CreateGraphicsPipeline()
         rtBlend.DestBlend = D3D12_BLEND_ONE;
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
         rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+        break;
+
+    case BlendMode::Subtract: // 減算
+
+        // ブレンドを有効にして、ソースの色を減算させる
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_ONE;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+
         break;
 
     case BlendMode::Multiply: // 乗算ブレンド（影や暗い部分の表現に有用）
@@ -909,7 +897,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     depthStencilDesc.DepthEnable = true;
     // Depth書き込みマスク: 透明表現（例: Alpha）を使用するブレンドモードでは不正なオクルージョンを防ぐため深度書き込みを無効化。
     // 不透明（None）のレンダリングでは深度書き込みを有効化する。
-    if (blendMode_ == BlendMode::Alpha || blendMode_ == BlendMode::Add || blendMode_ == BlendMode::Multiply || blendMode_ == BlendMode::Screen) {
+    if (blendMode_ == BlendMode::Alpha || blendMode_ == BlendMode::Add || blendMode_ == BlendMode::Subtract || blendMode_ == BlendMode::Multiply || blendMode_ == BlendMode::Screen) {
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     } else {
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;

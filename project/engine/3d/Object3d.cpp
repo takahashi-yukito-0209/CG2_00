@@ -1,4 +1,5 @@
 #include "Object3d.h"
+#include "../utility/ResourceResolver.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
@@ -8,7 +9,6 @@
 #include "Object3dCommon.h"
 #include "StringUtility.h"
 #include "TextureManager.h"
-#include "../utility/ResourceResolver.h"
 #include <memory>
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -130,7 +130,8 @@ void Object3d::SetTexture(const std::string& filePath)
     auto texMgr = TextureManager::GetInstance();
     std::string texToUse = filePath;
     std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
-    if (!resolved.empty()) texToUse = resolved;
+    if (!resolved.empty())
+        texToUse = resolved;
     // 既にロード済みでなければロードを依頼
     uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
     if (idx == UINT32_MAX) {
@@ -412,7 +413,7 @@ void Object3d::AssignTexture()
 /// </summary>
 void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix)
 {
-    // WVP行列計算 
+    // WVP行列計算
     // ワールド行列
     Matrix4x4 world = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     // 逆転置行列（正規行列用にスケール影響除去）
@@ -426,7 +427,7 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
 
     // WVP行列の計算
     Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(camView, camProj));
-    
+
     // 定数バッファに転送
     if (transformationMatrixData_) {
         transformationMatrixData_->World = world;
@@ -461,16 +462,6 @@ void Object3d::Draw()
         return;
     }
 
-    // ログ：描画開始、状態確認
-    {
-        char buf[256];
-        sprintf_s(buf, "Object3d::Draw start: model=%p materialRes=%p transformRes=%p\n",
-            reinterpret_cast<void*>(model_),
-            reinterpret_cast<void*>(materialResource_.Get()),
-            reinterpret_cast<void*>(transformationMatrixResource_.Get()));
-        Logger::Log(buf);
-    }
-
     // モデルがセットされていればモデル描画に任せる
     if (model_) {
         model_->Draw(this);
@@ -493,12 +484,6 @@ void Object3d::Draw()
     }
     // GPU仮想アドレスを取得してルートパラメータ0にセット
     auto matAddr = materialResource_->GetGPUVirtualAddress();
-    {
-        char buf[128];
-        sprintf_s(buf, "Object3d::Draw: material GPUAddr=0x%016llX\n", matAddr);
-        Logger::Log(buf);
-    }
-
     // ルートパラメータ0にマテリアルCBVをセット
     cmdList->SetGraphicsRootConstantBufferView(0, matAddr);
 
@@ -510,12 +495,6 @@ void Object3d::Draw()
 
     // GPU仮想アドレスを取得してルートパラメータ1にセット
     auto wvpAddr = transformationMatrixResource_->GetGPUVirtualAddress();
-    {
-        char buf[128];
-        sprintf_s(buf, "Object3d::Draw: WVP GPUAddr=0x%016llX\n", wvpAddr);
-        Logger::Log(buf);
-    }
-
     // ルートパラメータ1に座標変換行列CBVをセット
     cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
@@ -526,12 +505,6 @@ void Object3d::Draw()
         Logger::Log("Object3d::Draw skipped: directional light GPU address is null\n");
         return;
     }
-    {
-        char buf[128];
-        sprintf_s(buf, "Object3d::Draw: Light GPUAddr=0x%016llX\n", lightAddr);
-        Logger::Log(buf);
-    }
-
     // ルートパラメータ3に光源CBVをセット
     cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
@@ -556,11 +529,6 @@ void Object3d::Draw()
     // SRVハンドルを取得してルートパラメータ2にセット
     if (texIndex != UINT32_MAX) {
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        {
-            char buf[128];
-            sprintf_s(buf, "Object3d::Draw: textureIndex=%u srv.ptr=0x%016llX\n", texIndex, srvHandle.ptr);
-            Logger::Log(buf);
-        }
         if (srvHandle.ptr != 0) {
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         } else {

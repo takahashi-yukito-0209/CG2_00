@@ -3,11 +3,11 @@
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
+#include "../utility/ResourceResolver.h"
+#include "Logger.h"
+#include "TextureManager.h"
 #include "WinApp.h"
 #include "mathUtility.h"
-#include "TextureManager.h"
-#include "Logger.h"
-#include "../utility/ResourceResolver.h"
 #include <cstdio>
 
 using namespace MyEngine;
@@ -125,16 +125,16 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
 
     // パス指定されたテクスチャをリソースリゾルバで解決してみる
     std::string resolvedTex = ResourceResolver::Resolve(textureFilePath, ResourceResolver::Type::Texture);
-    //無かったらそのままのパスにする
+    // 無かったらそのままのパスにする
     if (!resolvedTex.empty()) {
         textureFilePath = resolvedTex;
     }
-    
+
     uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
     if (idx == UINT32_MAX) {
         // 指定が未ロード/不明なら既定のチェッカーテクスチャへフォールバックし、SRV絶対インデックスを使用
         uint32_t srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
-        
+
         // まだチェッカーテクスチャがロードされていない場合はロードしてSRVを確保
         if (srvIdx == UINT32_MAX) {
             TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
@@ -321,7 +321,6 @@ void Sprite::Update()
     }
 }
 
-
 /// <summary>
 /// 頂点バッファビュー、インデックスバッファビュー、マテリアル定数バッファ、変換行列定数バッファ、SRVをコマンドリストにセットして描画
 /// </summary>
@@ -394,7 +393,6 @@ void Sprite::Draw()
     dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
 }
 
-
 /// <summary>
 /// テクスチャサイズをイメージに合わせる
 /// </summary>
@@ -406,32 +404,26 @@ void Sprite::AdjustTextureSize()
     // テクスチャサイズを反映
     textureSize_.x = static_cast<float>(metadata.width);
     textureSize_.y = static_cast<float>(metadata.height);
-    //画像サイズをテクスチャサイズに合わせつ
+    // 画像サイズをテクスチャサイズに合わせつ
     size_ = textureSize_;
 }
 
-
 /// <summary>
-/// テクスチャを設定する。指定されたファイルパスのテクスチャがTextureManagerに存在しない場合はロードしてからSRVインデックスを取得
+/// ロード済みテクスチャをスプライトへ設定する
 /// </summary>
 void Sprite::SetTexture(const std::string& filePath)
 {
 
     auto texMgr = TextureManager::GetInstance(); // テクスチャマネージャーのインスタンスを取得
-    // 指定されたファイルパスのテクスチャがすでにロードされているか確認し、SRVインデックスを取得
+    // 登録済みテクスチャのSRVインデックスを取得する
     uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
-    // テクスチャがロードされていない場合はロードしてからSRVインデックスを取得
+    // 未ロードの場合は現在のテクスチャを維持する
     if (idx == UINT32_MAX) {
-        texMgr->LoadTexture(filePath);
-        texMgr->ExecuteResourceUpload();
-        idx = texMgr->GetTextureIndexByFilePath(filePath);
+        Logger::Log(std::string("Sprite::SetTexture: texture is not loaded: ") + filePath + "\n");
+        return;
     }
 
-    // テクスチャがロードされている場合はSRVインデックスを設定してテクスチャサイズを調整。ロードに失敗している場合は警告を出す。
-    if (idx != UINT32_MAX) {
-        textureIndex_ = idx;
-        AdjustTextureSize();
-    } else {
-        Logger::Log(std::string("Sprite::SetTexture: failed to load ") + filePath);
-    }
+    // テクスチャと表示サイズを更新する
+    textureIndex_ = idx;
+    AdjustTextureSize();
 }
