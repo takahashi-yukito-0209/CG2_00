@@ -1,12 +1,17 @@
 #include "TitleScene.h"
+
+#include "../../engine/3d/Camera.h"
+#include "../../engine/3d/Object3d.h"
+#include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/base/DirectXCommon.h"
 #include "../../engine/base/SrvManager.h"
+
 #include <iostream>
 
 using namespace MyEngine;
 
 /// <summary>
-/// コンストラクタ
+/// デフォルトコンストラクタ
 /// </summary>
 TitleScene::TitleScene() { }
 
@@ -16,81 +21,108 @@ TitleScene::TitleScene() { }
 TitleScene::~TitleScene() { }
 
 /// <summary>
-/// 初期化処理
+/// タイトルシーンを初期化する
 /// </summary>
 void TitleScene::Initialize(const SceneContext& ctx)
 {
-    // 初期化処理（サンプル）
-    (void)ctx;
+    ctx_ = ctx; // シーン共通リソースを保持する
     std::cout << "TitleScene Initialize\n";
 
-    // デモ用のレンダーターゲットとSRVの作成
-    auto dx = DirectXCommon::GetInstance();
-    if (dx) {
-        rtHandle_ = dx->CreateRenderTarget(
-            800, 600, dx->GetSwapChainFormat(),
-            true, { 0.53f, 0.71f, 0.82f, 1.0f }, true);
-
-        if (rtHandle_ >= 0 && ctx.srvManager) {
-            rtSrvIndex_ = ctx.srvManager->Allocate();
-            dx->CreateRenderTargetSRV(rtHandle_, rtSrvIndex_);
-        }
-        postProcess_.Initialize(dx);
+    if (ctx_.object3dCommon) {
+        terrain_ = std::make_unique<Object3d>(); // タイトル表示用の地形
+        terrain_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+        terrain_->SetModel("terrain/terrain.obj");
+        terrain_->SetScale({ 5.0f, 5.0f, 5.0f });
     }
+
+    DirectXCommon* dxCommon =
+        DirectXCommon::GetInstance(); // オフスクリーン描画に使用するDirectX基盤
+    if (!dxCommon) {
+        return;
+    }
+
+    rtHandle_ = dxCommon->CreateRenderTarget(
+        800,
+        600,
+        dxCommon->GetSwapChainFormat(),
+        true,
+        { 0.53f, 0.71f, 0.82f, 1.0f },
+        true);
+
+    if (rtHandle_ >= 0 && ctx_.srvManager) {
+        rtSrvIndex_ = ctx_.srvManager->Allocate();
+        dxCommon->CreateRenderTargetSRV(rtHandle_, rtSrvIndex_);
+    }
+
+    postProcess_.Initialize(dxCommon);
 }
 
 /// <summary>
-/// 終了処理
+/// タイトルシーンが保持するリソースを解放する
 /// </summary>
 void TitleScene::Finalize()
 {
     std::cout << "TitleScene Finalize\n";
-    // デモ用のレンダーターゲットとSRVの破棄
-    auto dx = DirectXCommon::GetInstance();
-    if (dx) {
-        if (rtHandle_ >= 0) {
-            dx->DestroyRenderTarget(rtHandle_);
-            rtHandle_ = -1;
-            rtSrvIndex_ = UINT32_MAX;
-        }
+
+    terrain_.reset();
+
+    DirectXCommon* dxCommon =
+        DirectXCommon::GetInstance(); // レンダーターゲットを管理するDirectX基盤
+    if (dxCommon && rtHandle_ >= 0) {
+        dxCommon->DestroyRenderTarget(rtHandle_);
+        rtHandle_ = -1;
+        rtSrvIndex_ = UINT32_MAX;
     }
+
     postProcess_.Finalize();
+    ctx_ = {};
 }
 
 /// <summary>
-/// 更新処理（引数は前のフレームからの経過時間）。ここでタイトルシーンのロゴのアニメーションや、ユーザー入力の処理などを行うことができる。
+/// タイトルシーンの状態を更新する
 /// </summary>
 void TitleScene::Update(float dt)
 {
-    // サンプル: 何もしない
     (void)dt;
-}
 
-/// <summary>
-/// 描画処理。ここでタイトルシーンのロゴや背景などを描画することができる。
-/// </summary>
-void TitleScene::Draw()
-{
-    // サンプル: 何もしない
-    auto dx = DirectXCommon::GetInstance();
-    if (!dx)
-        return;
+    if (ctx_.camera) {
+        ctx_.camera->Update();
+    }
 
-    // 描画前処理（SRVヒープの設定など）
-    if (rtHandle_ >= 0) {
-        // デモ用のレンダーターゲットに描画してみる
-        dx->BeginRenderTo(rtHandle_, true);
-        dx->EndRenderTo(rtHandle_);
-
-        // ポストプロセスで描画してみる
-        if (postProcess_.IsReady() && rtSrvIndex_ != UINT32_MAX) {
-            postProcess_.DrawTexture(rtSrvIndex_);
-        }
+    if (terrain_ && ctx_.camera) {
+        terrain_->Update(
+            ctx_.camera->GetViewMatrix(),
+            ctx_.camera->GetProjectionMatrix());
     }
 }
 
 /// <summary>
-/// シーンに入るときの処理。ここでシーンが切り替わったときの初期化や、BGMの再生などを行うことができる。
+/// タイトルシーンを描画する
+/// </summary>
+void TitleScene::Draw()
+{
+    DirectXCommon* dxCommon =
+        DirectXCommon::GetInstance(); // 描画先を切り替えるDirectX基盤
+    if (!dxCommon || rtHandle_ < 0) {
+        return;
+    }
+
+    dxCommon->BeginRenderTo(rtHandle_, true);
+
+    if (terrain_ && ctx_.object3dCommon) {
+        ctx_.object3dCommon->SetCommonDrawSetting();
+        terrain_->Draw();
+    }
+
+    dxCommon->EndRenderTo(rtHandle_);
+
+    if (postProcess_.IsReady() && rtSrvIndex_ != UINT32_MAX) {
+        postProcess_.DrawTexture(rtSrvIndex_);
+    }
+}
+
+/// <summary>
+/// タイトルシーンへ入ったときの処理を行う
 /// </summary>
 void TitleScene::OnEnter()
 {
@@ -98,9 +130,24 @@ void TitleScene::OnEnter()
 }
 
 /// <summary>
-/// シーンから出るときの処理。ここでシーンが切り替わる前のクリーンアップや、BGMの停止などを行うことができる。
+/// タイトルシーンから出るときの処理を行う
 /// </summary>
 void TitleScene::OnExit()
 {
     std::cout << "TitleScene OnExit\n";
+}
+
+/// <summary>
+/// タイトルシーンが所有する3DオブジェクトをImGuiへ渡す
+/// </summary>
+void TitleScene::FillObject3dPointers(std::vector<Object3d*>* out)
+{
+    if (!out) {
+        return;
+    }
+
+    out->clear();
+    if (terrain_) {
+        out->push_back(terrain_.get());
+    }
 }

@@ -13,6 +13,7 @@
 #include "engine/3d/Object3d.h"
 #include "engine/3d/Object3dCommon.h"
 #include "engine/base/SrvManager.h"
+#include "engine/base/PostProcess.h"
 #include "engine/particle/ParticleEmitter.h"
 #include "engine/particle/ParticleManager.h"
 #include <cmath>
@@ -122,6 +123,7 @@ void ImGuiManager::BuildUI(Context& ctx)
 
     DrawSceneSection(ctx);
     DrawViewFilterSection(ctx);
+    DrawPostProcessSection(ctx);
 
     int selectedDrawType = ctx.selectedDrawType ? *ctx.selectedDrawType : -1; // 現在選択されている表示対象
 
@@ -195,6 +197,64 @@ void ImGuiManager::DrawViewFilterSection(Context& ctx)
         };
 
         ImGui::Combo("Draw Type", ctx.selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
+    }
+#else
+    (void)ctx;
+#endif
+}
+
+/// <summary>
+/// ポストエフェクトの設定と状態をImGuiへ表示する
+/// </summary>
+void ImGuiManager::DrawPostProcessSection(Context& ctx)
+{
+#ifdef USE_IMGUI
+    if (!ctx.postProcess) {
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Post Process", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool enabled = ctx.postProcess->IsEnabled(); // 現在の有効状態
+        if (ImGui::Checkbox("Enabled", &enabled)) {
+            ctx.postProcess->SetEnabled(enabled);
+        }
+
+        int effectIndex =
+            static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
+        const char* effectNames[] = {
+            "Copy",
+            "Grayscale"
+        }; // 選択可能なエフェクト名
+
+        if (ImGui::Combo(
+                "Effect",
+                &effectIndex,
+                effectNames,
+                IM_ARRAYSIZE(effectNames))) {
+            ctx.postProcess->SetEffectType(
+                static_cast<PostEffectType>(effectIndex));
+        }
+
+        ImGui::SeparatorText("Status");
+        ImGui::Text(
+            "PostProcess: %s",
+            ctx.postProcess->IsReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Copy PSO: %s",
+            ctx.postProcess->IsCopyReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Grayscale PSO: %s",
+            ctx.postProcess->IsGrayscaleReady() ? "Ready" : "Not Ready");
+
+        uint32_t srvIndex =
+            ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV
+        if (srvIndex == UINT32_MAX) {
+            ImGui::Text("Input SRV: Not Drawn");
+        } else {
+            ImGui::Text("Input SRV: %u", srvIndex);
+        }
+
+        ImGui::TextDisabled("Disabled uses the Copy pipeline.");
     }
 #else
     (void)ctx;
