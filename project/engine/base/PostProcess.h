@@ -15,6 +15,7 @@ enum class PostEffectType {
     Copy,      // 元画像をそのまま描画する
     Grayscale, // 元画像をグレイスケール化して描画する
     Vignette,  // 画面周辺を暗くして描画する
+    BoxFilter, // Box Filterによる平均化処理を適用する
 };
 
 /// <summary>
@@ -93,6 +94,21 @@ public:
     bool IsVignetteReady() const { return vignettePipelineState_ != nullptr; }
 
     /// <summary>
+    /// Box Filter用PSOが生成済みか確認する
+    /// </summary>
+    bool IsBoxFilterReady() const { return boxFilterPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Box Filterで使用するカーネルサイズを設定する
+    /// </summary>
+    void SetBoxFilterKernelSize(uint32_t kernelSize);
+
+    /// <summary>
+    /// Box Filterで使用するカーネルサイズを取得する
+    /// </summary>
+    uint32_t GetBoxFilterKernelSize() const { return boxFilterKernelSize_; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -120,9 +136,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_; // 通常コピー用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレイスケール用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> boxFilterPipelineState_; // Box Filter用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
+    uint32_t boxFilterKernelSize_ = 3; // Box Filterに使用するカーネルサイズ
 };
 
 } // namespace MyEngine

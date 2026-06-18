@@ -224,7 +224,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         const char* effectNames[] = {
             "Copy",
             "Grayscale",
-            "Vignette"
+            "Vignette",
+            "Box Filter"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -234,6 +235,25 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 IM_ARRAYSIZE(effectNames))) {
             ctx.postProcess->SetEffectType(
                 static_cast<PostEffectType>(effectIndex));
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::BoxFilter) {
+            int kernelIndex =
+                ctx.postProcess->GetBoxFilterKernelSize() == 5 ? 1 : 0; // 現在のカーネル番号
+            const char* kernelNames[] = {
+                "3x3",
+                "5x5"
+            }; // 選択可能なカーネルサイズ
+
+            if (ImGui::Combo(
+                    "Kernel Size",
+                    &kernelIndex,
+                    kernelNames,
+                    IM_ARRAYSIZE(kernelNames))) {
+                uint32_t kernelSize =
+                    kernelIndex == 1 ? 5u : 3u; // 選択されたカーネルサイズ
+                ctx.postProcess->SetBoxFilterKernelSize(kernelSize);
+            }
         }
 
         ImGui::SeparatorText("Status");
@@ -249,6 +269,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Vignette PSO: %s",
             ctx.postProcess->IsVignetteReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Box Filter PSO: %s",
+            ctx.postProcess->IsBoxFilterReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

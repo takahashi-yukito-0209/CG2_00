@@ -34,6 +34,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/Grayscale.PS.hlsl");
     vignettePipelineState_ = CreatePipelineState(
         L"resources/shaders/Vignette.PS.hlsl");
+    boxFilterPipelineState_ = CreatePipelineState(
+        L"resources/shaders/BoxFilter.PS.hlsl");
 
     return IsReady();
 }
@@ -43,6 +45,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    boxFilterPipelineState_.Reset();
     vignettePipelineState_.Reset();
     grayscalePipelineState_.Reset();
     copyPipelineState_.Reset();
@@ -57,7 +60,8 @@ void PostProcess::Finalize()
 bool PostProcess::IsReady() const
 {
     return dxCommon_ && rootSignature_ && copyPipelineState_
-        && grayscalePipelineState_ && vignettePipelineState_;
+        && grayscalePipelineState_ && vignettePipelineState_
+        && boxFilterPipelineState_;
 }
 
 /// <summary>
@@ -72,11 +76,16 @@ void PostProcess::CreateRootSignature()
     descriptorRange.OffsetInDescriptorsFromTableStart =
         D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameter = {}; // SRVを受け取るルートパラメータ
-    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRange;
-    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_PARAMETER rootParameters[2] = {}; // PixelShaderへ渡すルートパラメータ
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRange;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[1].Constants.ShaderRegister = 0;
+    rootParameters[1].Constants.RegisterSpace = 0;
+    rootParameters[1].Constants.Num32BitValues = 1;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_STATIC_SAMPLER_DESC staticSampler = {}; // 入力テクスチャ用サンプラー
     staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -87,8 +96,8 @@ void PostProcess::CreateRootSignature()
     staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {}; // ルートシグネチャ設定
-    rootSignatureDesc.NumParameters = 1;
-    rootSignatureDesc.pParameters = &rootParameter;
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 1;
     rootSignatureDesc.pStaticSamplers = &staticSampler;
     rootSignatureDesc.Flags =
@@ -191,6 +200,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::BoxFilter:
+        return boxFilterPipelineState_.Get();
     case PostEffectType::Vignette:
         return vignettePipelineState_.Get();
     case PostEffectType::Grayscale:
@@ -230,10 +241,24 @@ void PostProcess::DrawTexture(
     commandList->SetPipelineState(pipelineState);
     commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
+    commandList->SetGraphicsRoot32BitConstant(
+        1,
+        boxFilterKernelSize_,
+        0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->DrawInstanced(3, 1, 0, 0);
     lastSrvIndex_ = srvIndex;
+}
+
+/// <summary>
+/// Box Filterで使用するカーネルサイズを設定する
+/// </summary>
+void PostProcess::SetBoxFilterKernelSize(uint32_t kernelSize)
+{
+    if (kernelSize == 3 || kernelSize == 5) {
+        boxFilterKernelSize_ = kernelSize;
+    }
 }
 
 /// <summary>
