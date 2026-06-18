@@ -223,7 +223,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
         const char* effectNames[] = {
             "Copy",
-            "Grayscale"
+            "Grayscale",
+            "Vignette"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -245,6 +246,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Grayscale PSO: %s",
             ctx.postProcess->IsGrayscaleReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Vignette PSO: %s",
+            ctx.postProcess->IsVignetteReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

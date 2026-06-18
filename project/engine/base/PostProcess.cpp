@@ -32,6 +32,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/CopyImage.PS.hlsl");
     grayscalePipelineState_ = CreatePipelineState(
         L"resources/shaders/Grayscale.PS.hlsl");
+    vignettePipelineState_ = CreatePipelineState(
+        L"resources/shaders/Vignette.PS.hlsl");
 
     return IsReady();
 }
@@ -41,6 +43,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    vignettePipelineState_.Reset();
     grayscalePipelineState_.Reset();
     copyPipelineState_.Reset();
     rootSignature_.Reset();
@@ -53,7 +56,8 @@ void PostProcess::Finalize()
 /// </summary>
 bool PostProcess::IsReady() const
 {
-    return dxCommon_ && rootSignature_ && copyPipelineState_ && grayscalePipelineState_;
+    return dxCommon_ && rootSignature_ && copyPipelineState_
+        && grayscalePipelineState_ && vignettePipelineState_;
 }
 
 /// <summary>
@@ -187,6 +191,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::Vignette:
+        return vignettePipelineState_.Get();
     case PostEffectType::Grayscale:
         return grayscalePipelineState_.Get();
     case PostEffectType::Copy:

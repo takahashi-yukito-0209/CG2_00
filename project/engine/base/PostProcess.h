@@ -14,6 +14,7 @@ class DirectXCommon;
 enum class PostEffectType {
     Copy,      // 元画像をそのまま描画する
     Grayscale, // 元画像をグレイスケール化して描画する
+    Vignette,  // 画面周辺を暗くして描画する
 };
 
 /// <summary>
@@ -87,6 +88,11 @@ public:
     bool IsGrayscaleReady() const { return grayscalePipelineState_ != nullptr; }
 
     /// <summary>
+    /// ビネット用PSOが生成済みか確認する
+    /// </summary>
+    bool IsVignetteReady() const { return vignettePipelineState_ != nullptr; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -113,6 +119,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 全画面描画用ルートシグネチャ
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_; // 通常コピー用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレイスケール用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
