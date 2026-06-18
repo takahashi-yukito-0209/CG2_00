@@ -118,7 +118,7 @@ void TitleScene::Finalize()
 /// </summary>
 void TitleScene::Update(float dt)
 {
-    (void)dt;
+    postProcess_.Update(dt);
 
     if (ctx_.camera) {
         ctx_.camera->Update();

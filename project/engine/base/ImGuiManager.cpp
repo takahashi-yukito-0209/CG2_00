@@ -230,7 +230,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Luminance Outline",
             "Depth Outline",
             "Radial Blur",
-            "Dissolve"
+            "Dissolve",
+            "Random"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -422,6 +423,43 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::Random) {
+            float randomStrength =
+                ctx.postProcess->GetRandomStrength(); // 現在のノイズ強度
+            if (ImGui::SliderFloat(
+                    "Noise Strength",
+                    &randomStrength,
+                    0.0f,
+                    1.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetRandomStrength(randomStrength);
+            }
+
+            float randomScale =
+                ctx.postProcess->GetRandomScale(); // 現在のノイズの細かさ
+            if (ImGui::DragFloat(
+                    "Noise Scale",
+                    &randomScale,
+                    1.0f,
+                    1.0f,
+                    2000.0f,
+                    "%.0f")) {
+                ctx.postProcess->SetRandomScale(randomScale);
+            }
+
+            float randomSpeed =
+                ctx.postProcess->GetRandomSpeed(); // 現在の変化速度
+            if (ImGui::DragFloat(
+                    "Noise Speed",
+                    &randomSpeed,
+                    0.05f,
+                    0.0f,
+                    20.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetRandomSpeed(randomSpeed);
+            }
+        }
+
         ImGui::SeparatorText("Status");
         ImGui::Text(
             "PostProcess: %s",
@@ -453,6 +491,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Dissolve PSO: %s",
             ctx.postProcess->IsDissolveReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Random PSO: %s",
+            ctx.postProcess->IsRandomReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

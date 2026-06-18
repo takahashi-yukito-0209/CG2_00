@@ -49,6 +49,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/RadialBlur.PS.hlsl");
     dissolvePipelineState_ = CreatePipelineState(
         L"resources/shaders/Dissolve.PS.hlsl");
+    randomPipelineState_ = CreatePipelineState(
+        L"resources/shaders/Random.PS.hlsl");
 
     return IsReady();
 }
@@ -58,6 +60,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    randomPipelineState_.Reset();
     dissolvePipelineState_.Reset();
     radialBlurPipelineState_.Reset();
     depthOutlinePipelineState_.Reset();
@@ -81,7 +84,8 @@ bool PostProcess::IsReady() const
         && grayscalePipelineState_ && vignettePipelineState_
         && boxFilterPipelineState_ && gaussianFilterPipelineState_
         && luminanceOutlinePipelineState_ && depthOutlinePipelineState_
-        && radialBlurPipelineState_ && dissolvePipelineState_;
+        && radialBlurPipelineState_ && dissolvePipelineState_
+        && randomPipelineState_;
 }
 
 /// <summary>
@@ -235,6 +239,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::Random:
+        return randomPipelineState_.Get();
     case PostEffectType::Dissolve:
         return dissolvePipelineState_.Get();
     case PostEffectType::RadialBlur:
@@ -316,6 +322,18 @@ void PostProcess::DrawTexture(
         &filterSettings[12],
         &dissolveEdgeColor_,
         sizeof(Math::Vector3));
+    std::memcpy(
+        &filterSettings[16],
+        &randomTime_,
+        sizeof(float));
+    std::memcpy(
+        &filterSettings[17],
+        &randomStrength_,
+        sizeof(float));
+    std::memcpy(
+        &filterSettings[18],
+        &randomScale_,
+        sizeof(float));
     commandList->SetGraphicsRoot32BitConstants(
         2,
         _countof(filterSettings),
@@ -560,6 +578,43 @@ void PostProcess::DrawDissolveTexture(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->DrawInstanced(3, 1, 0, 0);
     lastSrvIndex_ = sourceSrvIndex;
+}
+
+/// <summary>
+/// 時間経過を使用するポストエフェクトを更新する
+/// </summary>
+void PostProcess::Update(float deltaTime)
+{
+    if (deltaTime > 0.0f) {
+        randomTime_ += deltaTime * randomSpeed_;
+    }
+}
+
+/// <summary>
+/// Randomのノイズ強度を設定する
+/// </summary>
+void PostProcess::SetRandomStrength(float strength)
+{
+    randomStrength_ =
+        (std::max)(0.0f, (std::min)(1.0f, strength));
+}
+
+/// <summary>
+/// Randomのノイズの細かさを設定する
+/// </summary>
+void PostProcess::SetRandomScale(float scale)
+{
+    randomScale_ =
+        (std::max)(1.0f, (std::min)(2000.0f, scale));
+}
+
+/// <summary>
+/// Randomの時間変化速度を設定する
+/// </summary>
+void PostProcess::SetRandomSpeed(float speed)
+{
+    randomSpeed_ =
+        (std::max)(0.0f, (std::min)(20.0f, speed));
 }
 
 /// <summary>

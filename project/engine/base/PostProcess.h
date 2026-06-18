@@ -22,6 +22,7 @@ enum class PostEffectType {
     DepthOutline, // 深度差から輪郭を検出する
     RadialBlur, // 指定した中心から放射状にぼかす
     Dissolve, // ノイズマスクの閾値で画面を消去する
+    Random, // GPUで生成した乱数を入力画像へ乗算する
 };
 
 /// <summary>
@@ -273,6 +274,46 @@ public:
         uint32_t maskSrvIndex);
 
     /// <summary>
+    /// 時間経過を使用するポストエフェクトを更新する
+    /// </summary>
+    void Update(float deltaTime);
+
+    /// <summary>
+    /// Random用PSOが生成済みか確認する
+    /// </summary>
+    bool IsRandomReady() const { return randomPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Randomのノイズ強度を設定する
+    /// </summary>
+    void SetRandomStrength(float strength);
+
+    /// <summary>
+    /// Randomのノイズ強度を取得する
+    /// </summary>
+    float GetRandomStrength() const { return randomStrength_; }
+
+    /// <summary>
+    /// Randomのノイズの細かさを設定する
+    /// </summary>
+    void SetRandomScale(float scale);
+
+    /// <summary>
+    /// Randomのノイズの細かさを取得する
+    /// </summary>
+    float GetRandomScale() const { return randomScale_; }
+
+    /// <summary>
+    /// Randomの時間変化速度を設定する
+    /// </summary>
+    void SetRandomSpeed(float speed);
+
+    /// <summary>
+    /// Randomの時間変化速度を取得する
+    /// </summary>
+    float GetRandomSpeed() const { return randomSpeed_; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -311,6 +352,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depthOutlinePipelineState_; // 深度Outline用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_; // Radial Blur用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> dissolvePipelineState_; // Dissolve用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> randomPipelineState_; // Random用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
@@ -326,6 +368,10 @@ private:
     float dissolveThreshold_ = 0.0f; // マスクを破棄する閾値
     float dissolveEdgeWidth_ = 0.03f; // Dissolve境界の幅
     Math::Vector3 dissolveEdgeColor_ = { 1.0f, 0.4f, 0.3f }; // Dissolve境界の色
+    float randomTime_ = 0.0f; // RandomのSeedに使用する経過時間
+    float randomStrength_ = 1.0f; // 入力画像へ乗算するノイズ強度
+    float randomScale_ = 600.0f; // UVに掛けるノイズの細かさ
+    float randomSpeed_ = 1.0f; // ノイズの時間変化速度
 };
 
 } // namespace MyEngine
