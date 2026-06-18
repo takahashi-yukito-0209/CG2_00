@@ -223,7 +223,15 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
         const char* effectNames[] = {
             "Copy",
-            "Grayscale"
+            "Grayscale",
+            "Vignette",
+            "Box Filter",
+            "Gaussian Filter",
+            "Luminance Outline",
+            "Depth Outline",
+            "Radial Blur",
+            "Dissolve",
+            "Random"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -233,6 +241,223 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 IM_ARRAYSIZE(effectNames))) {
             ctx.postProcess->SetEffectType(
                 static_cast<PostEffectType>(effectIndex));
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::BoxFilter) {
+            int kernelIndex =
+                ctx.postProcess->GetBoxFilterKernelSize() == 5 ? 1 : 0; // 現在のカーネル番号
+            const char* kernelNames[] = {
+                "3x3",
+                "5x5"
+            }; // 選択可能なカーネルサイズ
+
+            if (ImGui::Combo(
+                    "Kernel Size",
+                    &kernelIndex,
+                    kernelNames,
+                    IM_ARRAYSIZE(kernelNames))) {
+                uint32_t kernelSize =
+                    kernelIndex == 1 ? 5u : 3u; // 選択されたカーネルサイズ
+                ctx.postProcess->SetBoxFilterKernelSize(kernelSize);
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::GaussianFilter) {
+            uint32_t currentKernelSize =
+                ctx.postProcess->GetGaussianKernelSize(); // 現在のカーネルサイズ
+            int kernelIndex =
+                currentKernelSize == 3 ? 0 : (currentKernelSize == 5 ? 1 : 2);
+            const char* kernelNames[] = {
+                "3x3",
+                "5x5",
+                "7x7"
+            }; // 選択可能なカーネルサイズ
+
+            if (ImGui::Combo(
+                    "Gaussian Kernel",
+                    &kernelIndex,
+                    kernelNames,
+                    IM_ARRAYSIZE(kernelNames))) {
+                const uint32_t kernelSizes[] = { 3u, 5u, 7u }; // 選択値に対応するサイズ
+                ctx.postProcess->SetGaussianKernelSize(kernelSizes[kernelIndex]);
+            }
+
+            float sigma =
+                ctx.postProcess->GetGaussianSigma(); // 現在の標準偏差
+            if (ImGui::DragFloat(
+                    "Sigma",
+                    &sigma,
+                    0.05f,
+                    0.1f,
+                    10.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetGaussianSigma(sigma);
+            }
+
+            uint32_t sampleCount =
+                ctx.postProcess->GetGaussianKernelSize() * 2; // 分離処理の総サンプル数
+            ImGui::Text("Samples: %u (separable 2-pass)", sampleCount);
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::LuminanceOutline
+            || ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
+            float outlineStrength =
+                ctx.postProcess->GetOutlineStrength(); // 現在の輪郭強度
+            if (ImGui::DragFloat(
+                    "Outline Strength",
+                    &outlineStrength,
+                    0.1f,
+                    0.0f,
+                    32.0f,
+                    "%.1f")) {
+                ctx.postProcess->SetOutlineStrength(outlineStrength);
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
+            float depthThreshold =
+                ctx.postProcess->GetDepthOutlineThreshold(); // 深度差の判定閾値
+            if (ImGui::DragFloat(
+                    "Depth Threshold",
+                    &depthThreshold,
+                    0.001f,
+                    0.0f,
+                    0.2f,
+                    "%.3f")) {
+                ctx.postProcess->SetDepthOutlineThreshold(depthThreshold);
+            }
+
+            float depthSoftness =
+                ctx.postProcess->GetDepthOutlineSoftness(); // 輪郭の立ち上がり幅
+            if (ImGui::DragFloat(
+                    "Depth Softness",
+                    &depthSoftness,
+                    0.001f,
+                    0.001f,
+                    0.2f,
+                    "%.3f")) {
+                ctx.postProcess->SetDepthOutlineSoftness(depthSoftness);
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::RadialBlur) {
+            Math::Vector2 center =
+                ctx.postProcess->GetRadialBlurCenter(); // 現在のブラー中心
+            float centerValues[2] = {
+                center.x,
+                center.y
+            }; // ImGui編集用中心座標
+            if (ImGui::DragFloat2(
+                    "Blur Center",
+                    centerValues,
+                    0.005f,
+                    0.0f,
+                    1.0f,
+                    "%.3f")) {
+                ctx.postProcess->SetRadialBlurCenter(
+                    { centerValues[0], centerValues[1] });
+            }
+
+            float blurWidth =
+                ctx.postProcess->GetRadialBlurWidth(); // 現在のブラー幅
+            if (ImGui::DragFloat(
+                    "Blur Width",
+                    &blurWidth,
+                    0.0005f,
+                    0.0f,
+                    0.1f,
+                    "%.4f")) {
+                ctx.postProcess->SetRadialBlurWidth(blurWidth);
+            }
+
+            int sampleCount =
+                static_cast<int>(ctx.postProcess->GetRadialBlurSampleCount()); // サンプル数
+            if (ImGui::SliderInt(
+                    "Sample Count",
+                    &sampleCount,
+                    1,
+                    32)) {
+                ctx.postProcess->SetRadialBlurSampleCount(
+                    static_cast<uint32_t>(sampleCount));
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::Dissolve) {
+            float threshold =
+                ctx.postProcess->GetDissolveThreshold(); // 現在のDissolve閾値
+            if (ImGui::SliderFloat(
+                    "Threshold",
+                    &threshold,
+                    0.0f,
+                    1.0f,
+                    "%.3f")) {
+                ctx.postProcess->SetDissolveThreshold(threshold);
+            }
+
+            float edgeWidth =
+                ctx.postProcess->GetDissolveEdgeWidth(); // 現在の境界幅
+            if (ImGui::DragFloat(
+                    "Edge Width",
+                    &edgeWidth,
+                    0.001f,
+                    0.001f,
+                    0.25f,
+                    "%.3f")) {
+                ctx.postProcess->SetDissolveEdgeWidth(edgeWidth);
+            }
+
+            Math::Vector3 edgeColor =
+                ctx.postProcess->GetDissolveEdgeColor(); // 現在の境界色
+            float edgeColorValues[3] = {
+                edgeColor.x,
+                edgeColor.y,
+                edgeColor.z
+            }; // ImGui編集用の境界色
+            if (ImGui::ColorEdit3("Edge Color", edgeColorValues)) {
+                ctx.postProcess->SetDissolveEdgeColor(
+                    {
+                        edgeColorValues[0],
+                        edgeColorValues[1],
+                        edgeColorValues[2]
+                    });
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::Random) {
+            float randomStrength =
+                ctx.postProcess->GetRandomStrength(); // 現在のノイズ強度
+            if (ImGui::SliderFloat(
+                    "Noise Strength",
+                    &randomStrength,
+                    0.0f,
+                    1.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetRandomStrength(randomStrength);
+            }
+
+            float randomScale =
+                ctx.postProcess->GetRandomScale(); // 現在のノイズの細かさ
+            if (ImGui::DragFloat(
+                    "Noise Scale",
+                    &randomScale,
+                    1.0f,
+                    1.0f,
+                    2000.0f,
+                    "%.0f")) {
+                ctx.postProcess->SetRandomScale(randomScale);
+            }
+
+            float randomSpeed =
+                ctx.postProcess->GetRandomSpeed(); // 現在の変化速度
+            if (ImGui::DragFloat(
+                    "Noise Speed",
+                    &randomSpeed,
+                    0.05f,
+                    0.0f,
+                    20.0f,
+                    "%.2f")) {
+                ctx.postProcess->SetRandomSpeed(randomSpeed);
+            }
         }
 
         ImGui::SeparatorText("Status");
@@ -245,6 +470,30 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Grayscale PSO: %s",
             ctx.postProcess->IsGrayscaleReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Vignette PSO: %s",
+            ctx.postProcess->IsVignetteReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Box Filter PSO: %s",
+            ctx.postProcess->IsBoxFilterReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Gaussian Filter PSO: %s",
+            ctx.postProcess->IsGaussianFilterReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Luminance Outline PSO: %s",
+            ctx.postProcess->IsLuminanceOutlineReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Depth Outline PSO: %s",
+            ctx.postProcess->IsDepthOutlineReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Radial Blur PSO: %s",
+            ctx.postProcess->IsRadialBlurReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Dissolve PSO: %s",
+            ctx.postProcess->IsDissolveReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Random PSO: %s",
+            ctx.postProcess->IsRandomReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

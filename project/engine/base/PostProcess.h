@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <d3d12.h>
+#include <MathTypes.h>
 #include <wrl.h>
 
 namespace MyEngine {
@@ -14,6 +15,14 @@ class DirectXCommon;
 enum class PostEffectType {
     Copy,      // 元画像をそのまま描画する
     Grayscale, // 元画像をグレイスケール化して描画する
+    Vignette,  // 画面周辺を暗くして描画する
+    BoxFilter, // Box Filterによる平均化処理を適用する
+    GaussianFilter, // 分離型Gaussian Filterを適用する
+    LuminanceOutline, // 輝度差から輪郭を検出する
+    DepthOutline, // 深度差から輪郭を検出する
+    RadialBlur, // 指定した中心から放射状にぼかす
+    Dissolve, // ノイズマスクの閾値で画面を消去する
+    Random, // GPUで生成した乱数を入力画像へ乗算する
 };
 
 /// <summary>
@@ -87,6 +96,224 @@ public:
     bool IsGrayscaleReady() const { return grayscalePipelineState_ != nullptr; }
 
     /// <summary>
+    /// ビネット用PSOが生成済みか確認する
+    /// </summary>
+    bool IsVignetteReady() const { return vignettePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Box Filter用PSOが生成済みか確認する
+    /// </summary>
+    bool IsBoxFilterReady() const { return boxFilterPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Box Filterで使用するカーネルサイズを設定する
+    /// </summary>
+    void SetBoxFilterKernelSize(uint32_t kernelSize);
+
+    /// <summary>
+    /// Box Filterで使用するカーネルサイズを取得する
+    /// </summary>
+    uint32_t GetBoxFilterKernelSize() const { return boxFilterKernelSize_; }
+
+    /// <summary>
+    /// Gaussian Filter用PSOが生成済みか確認する
+    /// </summary>
+    bool IsGaussianFilterReady() const { return gaussianFilterPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Gaussian Filterで使用するカーネルサイズを設定する
+    /// </summary>
+    void SetGaussianKernelSize(uint32_t kernelSize);
+
+    /// <summary>
+    /// Gaussian Filterで使用するカーネルサイズを取得する
+    /// </summary>
+    uint32_t GetGaussianKernelSize() const { return gaussianKernelSize_; }
+
+    /// <summary>
+    /// Gaussian Filterで使用する標準偏差を設定する
+    /// </summary>
+    void SetGaussianSigma(float sigma);
+
+    /// <summary>
+    /// Gaussian Filterで使用する標準偏差を取得する
+    /// </summary>
+    float GetGaussianSigma() const { return gaussianSigma_; }
+
+    /// <summary>
+    /// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
+    /// </summary>
+    void DrawGaussianTexture(
+        uint32_t sourceSrvIndex,
+        int intermediateRenderTargetHandle,
+        uint32_t intermediateSrvIndex);
+
+    /// <summary>
+    /// 深度テクスチャを使用してOutlineを描画する
+    /// </summary>
+    void DrawDepthOutline(
+        uint32_t colorSrvIndex,
+        uint32_t depthSrvIndex,
+        const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// Outlineの強度を設定する
+    /// </summary>
+    void SetOutlineStrength(float strength);
+
+    /// <summary>
+    /// Outlineの強度を取得する
+    /// </summary>
+    float GetOutlineStrength() const { return outlineStrength_; }
+
+    /// <summary>
+    /// Depth Outlineで輪郭と判定する深度差の閾値を設定する
+    /// </summary>
+    void SetDepthOutlineThreshold(float threshold);
+
+    /// <summary>
+    /// Depth Outlineの深度差閾値を取得する
+    /// </summary>
+    float GetDepthOutlineThreshold() const { return depthOutlineThreshold_; }
+
+    /// <summary>
+    /// Depth Outlineの輪郭の立ち上がり幅を設定する
+    /// </summary>
+    void SetDepthOutlineSoftness(float softness);
+
+    /// <summary>
+    /// Depth Outlineの輪郭の立ち上がり幅を取得する
+    /// </summary>
+    float GetDepthOutlineSoftness() const { return depthOutlineSoftness_; }
+
+    /// <summary>
+    /// 輝度ベースOutline用PSOが生成済みか確認する
+    /// </summary>
+    bool IsLuminanceOutlineReady() const { return luminanceOutlinePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// 深度ベースOutline用PSOが生成済みか確認する
+    /// </summary>
+    bool IsDepthOutlineReady() const { return depthOutlinePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Radial Blur用PSOが生成済みか確認する
+    /// </summary>
+    bool IsRadialBlurReady() const { return radialBlurPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Radial Blurの中心座標を設定する
+    /// </summary>
+    void SetRadialBlurCenter(const Math::Vector2& center);
+
+    /// <summary>
+    /// Radial Blurの中心座標を取得する
+    /// </summary>
+    const Math::Vector2& GetRadialBlurCenter() const { return radialBlurCenter_; }
+
+    /// <summary>
+    /// Radial Blurの幅を設定する
+    /// </summary>
+    void SetRadialBlurWidth(float width);
+
+    /// <summary>
+    /// Radial Blurの幅を取得する
+    /// </summary>
+    float GetRadialBlurWidth() const { return radialBlurWidth_; }
+
+    /// <summary>
+    /// Radial Blurのサンプル数を設定する
+    /// </summary>
+    void SetRadialBlurSampleCount(uint32_t sampleCount);
+
+    /// <summary>
+    /// Radial Blurのサンプル数を取得する
+    /// </summary>
+    uint32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
+
+    /// <summary>
+    /// Dissolve用PSOが生成済みか確認する
+    /// </summary>
+    bool IsDissolveReady() const { return dissolvePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Dissolveの閾値を設定する
+    /// </summary>
+    void SetDissolveThreshold(float threshold);
+
+    /// <summary>
+    /// Dissolveの閾値を取得する
+    /// </summary>
+    float GetDissolveThreshold() const { return dissolveThreshold_; }
+
+    /// <summary>
+    /// Dissolve境界の幅を設定する
+    /// </summary>
+    void SetDissolveEdgeWidth(float edgeWidth);
+
+    /// <summary>
+    /// Dissolve境界の幅を取得する
+    /// </summary>
+    float GetDissolveEdgeWidth() const { return dissolveEdgeWidth_; }
+
+    /// <summary>
+    /// Dissolve境界の色を設定する
+    /// </summary>
+    void SetDissolveEdgeColor(const Math::Vector3& color);
+
+    /// <summary>
+    /// Dissolve境界の色を取得する
+    /// </summary>
+    const Math::Vector3& GetDissolveEdgeColor() const { return dissolveEdgeColor_; }
+
+    /// <summary>
+    /// ノイズマスクを使用してDissolveを描画する
+    /// </summary>
+    void DrawDissolveTexture(
+        uint32_t sourceSrvIndex,
+        uint32_t maskSrvIndex);
+
+    /// <summary>
+    /// 時間経過を使用するポストエフェクトを更新する
+    /// </summary>
+    void Update(float deltaTime);
+
+    /// <summary>
+    /// Random用PSOが生成済みか確認する
+    /// </summary>
+    bool IsRandomReady() const { return randomPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Randomのノイズ強度を設定する
+    /// </summary>
+    void SetRandomStrength(float strength);
+
+    /// <summary>
+    /// Randomのノイズ強度を取得する
+    /// </summary>
+    float GetRandomStrength() const { return randomStrength_; }
+
+    /// <summary>
+    /// Randomのノイズの細かさを設定する
+    /// </summary>
+    void SetRandomScale(float scale);
+
+    /// <summary>
+    /// Randomのノイズの細かさを取得する
+    /// </summary>
+    float GetRandomScale() const { return randomScale_; }
+
+    /// <summary>
+    /// Randomの時間変化速度を設定する
+    /// </summary>
+    void SetRandomSpeed(float speed);
+
+    /// <summary>
+    /// Randomの時間変化速度を取得する
+    /// </summary>
+    float GetRandomSpeed() const { return randomSpeed_; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -108,14 +335,43 @@ private:
     /// </summary>
     ID3D12PipelineState* GetPipelineState(PostEffectType effectType) const;
 
+    /// <summary>
+    /// Gaussian Filterの1方向分を描画する
+    /// </summary>
+    void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
+
 private:
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通基盤
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 全画面描画用ルートシグネチャ
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_; // 通常コピー用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレイスケール用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> boxFilterPipelineState_; // Box Filter用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianFilterPipelineState_; // Gaussian Filter用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> luminanceOutlinePipelineState_; // 輝度Outline用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> depthOutlinePipelineState_; // 深度Outline用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_; // Radial Blur用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> dissolvePipelineState_; // Dissolve用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> randomPipelineState_; // Random用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
+    uint32_t boxFilterKernelSize_ = 3; // Box Filterに使用するカーネルサイズ
+    uint32_t gaussianKernelSize_ = 7; // Gaussian Filterに使用するカーネルサイズ
+    float gaussianSigma_ = 2.0f; // Gaussian Filterの標準偏差
+    float outlineStrength_ = 6.0f; // Outlineの輪郭強度
+    float depthOutlineThreshold_ = 0.02f; // 輪郭として扱う相対深度差
+    float depthOutlineSoftness_ = 0.03f; // 輪郭の滑らかな立ち上がり幅
+    Math::Vector2 radialBlurCenter_ = { 0.5f, 0.5f }; // 放射状ブラーの中心
+    float radialBlurWidth_ = 0.01f; // 1サンプルごとのUV移動量
+    uint32_t radialBlurSampleCount_ = 10; // 放射状ブラーのサンプル数
+    float dissolveThreshold_ = 0.0f; // マスクを破棄する閾値
+    float dissolveEdgeWidth_ = 0.03f; // Dissolve境界の幅
+    Math::Vector3 dissolveEdgeColor_ = { 1.0f, 0.4f, 0.3f }; // Dissolve境界の色
+    float randomTime_ = 0.0f; // RandomのSeedに使用する経過時間
+    float randomStrength_ = 1.0f; // 入力画像へ乗算するノイズ強度
+    float randomScale_ = 600.0f; // UVに掛けるノイズの細かさ
+    float randomSpeed_ = 1.0f; // ノイズの時間変化速度
 };
 
 } // namespace MyEngine

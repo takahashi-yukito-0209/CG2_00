@@ -150,6 +150,11 @@ public: // 公開メンバ関数
     void CreateRenderTargetSRV(int handle, uint32_t srvIndex);
 
     /// <summary>
+    /// オフスクリーン深度バッファのSRVを生成する
+    /// </summary>
+    void CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex);
+
+    /// <summary>
     /// 指定したハンドルのレンダーターゲットのRTVのCPUディスクリプタハンドルを取得する
     /// </summary>
     D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetRTV(int handle) const;
