@@ -1,9 +1,9 @@
 #include "ModelManager.h"
+#include "../utility/ResourceResolver.h"
+#include "Logger.h"
 #include "Model.h"
 #include <filesystem>
 #include <vector>
-#include "Logger.h"
-#include "../utility/ResourceResolver.h"
 
 using namespace MyEngine;
 
@@ -79,7 +79,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
             int foundCount = 0;
             // 最初に見つかったものを採用するため、見つかるたびに更新していく
             for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path())) {
-                
+
                 // ファイルのみ対象とする
                 if (!entry.is_regular_file()) {
                     continue;

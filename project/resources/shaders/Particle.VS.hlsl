@@ -25,7 +25,8 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     ParticleForGPU p = gParticle[instanceId];
     float4 pos = input.position;
     float3 nrm = input.normal;
-    if (gBillboardEnable >= 0.5f) {
+    if (gBillboardEnable >= 0.5f)
+    {
         // 入力頂点のxyをカメラRight/Upに展開し、中心はWorldの平行移動へ
         float3 center = float3(p.World._41, p.World._42, p.World._43);
         float3 right = normalize(gCameraRight);
@@ -39,14 +40,16 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
         output.position = mul(pos, gViewProj);
         // ワールド座標は billboard 計算後の位置
         output.worldPosition = billboardPos;
-    } else {
+    }
+    else
+    {
         output.position = mul(pos, p.WVP);
         // 非ビルボード時は通常のワールド変換で座標を出力
         output.worldPosition = mul(pos, p.World).xyz;
     }
     output.texcoord = input.texcoord;
     // 法線はインスタンス毎の行列で変換（逆転置行列を使用）
-    output.normal = normalize(mul(nrm, (float3x3)p.WorldInverseTranspose));
+    output.normal = normalize(mul(nrm, (float3x3) p.WorldInverseTranspose));
     output.color = p.color;
     return output;
 }

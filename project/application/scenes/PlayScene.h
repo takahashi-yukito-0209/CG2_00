@@ -26,7 +26,6 @@ using namespace MyEngine;
 /// </summary>
 class PlayScene : public IScene {
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ
     /// </summary>
@@ -58,7 +57,7 @@ public: // メンバ関数
     void Draw() override;
 
     /// <summary>
-    ///　シーンに入るときの処理
+    /// 　シーンに入るときの処理
     /// </summary>
     void OnEnter() override;
 
@@ -87,8 +86,7 @@ public: // メンバ関数
     /// </summary>
     std::string GetName() const override { return "Play"; }
 
-private://メンバ変数
-
+private: // メンバ変数
     SceneContext ctx_;
     std::vector<std::unique_ptr<Sprite>> sprites_;
     std::vector<std::unique_ptr<Object3d>> objects3d_;

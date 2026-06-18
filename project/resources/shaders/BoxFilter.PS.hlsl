@@ -3,15 +3,18 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-cbuffer BoxFilterSettings : register(b0) {
+cbuffer BoxFilterSettings : register(b0)
+{
     uint gKernelSize;
 };
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     uint textureWidth = 0; // 入力テクスチャの横幅
     uint textureHeight = 0; // 入力テクスチャの縦幅
     gTexture.GetDimensions(textureWidth, textureHeight);
@@ -26,8 +29,10 @@ PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     output.color = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    for (int32_t y = -kernelRadius; y <= kernelRadius; ++y) {
-        for (int32_t x = -kernelRadius; x <= kernelRadius; ++x) {
+    for (int32_t y = -kernelRadius; y <= kernelRadius; ++y)
+    {
+        for (int32_t x = -kernelRadius; x <= kernelRadius; ++x)
+        {
             float2 sampleTexcoord =
                 input.texcoord + float2(x, y) * uvStepSize; // 周辺テクセルのUV
             float3 sampleColor =

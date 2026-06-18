@@ -609,8 +609,7 @@ void Game::Draw()
         sname = impl_->sceneManager->GetCurrentSceneName();
         ctx.currentSceneName = sname.c_str();
         if (impl_->sceneManager->GetCurrent()) {
-            ctx.postProcess =
-                impl_->sceneManager->GetCurrent()->GetPostProcess();
+            ctx.postProcess = impl_->sceneManager->GetCurrent()->GetPostProcess();
         }
     }
     // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う

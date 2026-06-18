@@ -14,9 +14,12 @@ static_assert(true, "ImGui available");
 /// <summary>
 /// 発生させるパーティクルグループの名前を指定してエミッタを作成
 /// </summary>
-void ParticleEmitter::Emit() {
+void ParticleEmitter::Emit()
+{
     // グループ名が空なら発生させない
-    if (groupName.empty()) { return; }
+    if (groupName.empty()) {
+        return;
+    }
 
     if (useCylinderEffect) {
         ParticleManager::GetInstance()->EmitCylinderEffect(groupName, transform.translate, count);
@@ -32,12 +35,15 @@ void ParticleEmitter::Emit() {
 /// <summary>
 ///  経過時間を加算し、発生間隔を超えたら発生させる
 /// </summary>
-void ParticleEmitter::Update(float deltaTime) {
+void ParticleEmitter::Update(float deltaTime)
+{
     // 経過時間を加算
     elapsed += deltaTime;
     // 発生間隔が0以下なら毎フレーム発生
     if (frequency <= 0.0f) {
-        if (count) { Emit(); }
+        if (count) {
+            Emit();
+        }
         elapsed = 0.0f;
         return;
     }
@@ -67,7 +73,8 @@ void ParticleEmitter::DrawImGui()
     // スケールの編集
     int tmpCount = static_cast<int>(count);
     // 1以上1000以下の整数として編集。変更があったらcountを更新
-    if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000)) count = static_cast<uint32_t>(tmpCount);
+    if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000))
+        count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
     ImGui::Checkbox("Use Hit Effect", &useHitEffect);
     ImGui::Checkbox("Use Ring Effect", &useRingEffect);

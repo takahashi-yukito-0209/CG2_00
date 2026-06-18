@@ -7,14 +7,16 @@ namespace MyEngine {
 /// <summary>
 /// デストラクタ: 現在のシーンがあればFinalizeを呼び出してクリーンアップする
 /// </summary>
-SceneManager::~SceneManager() {
+SceneManager::~SceneManager()
+{
     Finalize();
 }
 
 /// <summary>
 /// ウィンドウリサイズをシーンへ伝播する
 /// </summary>
-void SceneManager::OnWindowResize(uint32_t width, uint32_t height) {
+void SceneManager::OnWindowResize(uint32_t width, uint32_t height)
+{
     // 必要ならシーンコンテキスト中の値を更新しておく
     // (SceneContext 自体には幅/高さのフィールドがないため、各シーンがカメラ等を参照している想定)
     if (current_) {
@@ -29,20 +31,23 @@ void SceneManager::OnWindowResize(uint32_t width, uint32_t height) {
 /// <summary>
 /// シーンマネージャの初期化（必要なリソースのセットアップなどを行う）。現状は特に処理なし。
 /// </summary>
-void SceneManager::Initialize() {
+void SceneManager::Initialize()
+{
 }
 
 /// <summary>
 /// シーンコンテキストの設定（シーンに共通のリソースや状態を渡すための関数）
 /// </summary>
-void SceneManager::SetContext(const SceneContext& ctx) {
+void SceneManager::SetContext(const SceneContext& ctx)
+{
     ctx_ = ctx;
 }
 
 /// <summary>
 /// シーンマネージャの終了処理
 /// </summary>
-void SceneManager::Finalize() {
+void SceneManager::Finalize()
+{
     // 現在のシーンがあればFinalizeを呼び出してクリーンアップする
     if (current_) {
         // 現在のシーンから退出処理を行い、Finalizeして破棄する
@@ -64,7 +69,8 @@ void SceneManager::Finalize() {
 /// <summary>
 /// 更新処理（引数は前のフレームからの経過時間）。現在のシーンのUpdateを呼び出す。
 /// </summary>
-void SceneManager::Update(float dt) {
+void SceneManager::Update(float dt)
+{
     // 現在のシーンがあればUpdateを呼び出す
     if (current_) {
         current_->Update(dt);
@@ -74,7 +80,8 @@ void SceneManager::Update(float dt) {
 /// <summary>
 /// 描画処理。現在のシーンのDrawを呼び出す。
 /// </summary>
-void SceneManager::Draw() {
+void SceneManager::Draw()
+{
     // 現在のシーンがあればDrawを呼び出す
     if (current_) {
         current_->Draw();
@@ -84,7 +91,8 @@ void SceneManager::Draw() {
 /// <summary>
 /// 描画モードをシーンコンテキストに設定する
 /// </summary>
-void SceneManager::SetSelectedDrawType(int t) {
+void SceneManager::SetSelectedDrawType(int t)
+{
     ctx_.selectedDrawType = t;
     // 現在のシーンがあれば、描画タイプの更新を通知するためのフックを呼び出す
     if (current_) {
@@ -95,7 +103,8 @@ void SceneManager::SetSelectedDrawType(int t) {
 /// <summary>
 /// シーンの切り替え。現在のシーンがあればFinalizeを呼び出してクリーンアップし、新しいシーンをセットしてInitializeを呼び出す。
 /// </summary>
-void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene) {
+void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene)
+{
     // 防御: 同じシーン名への切替は無視する
     if (current_ && newScene) {
         try {
@@ -130,7 +139,8 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene) {
 /// <summary>
 /// シーンのプッシュ。現在のシーンをスタックに保存して新しいシーンをセットし、Initializeを呼び出す。PopSceneで前のシーンに戻れるようにする。
 /// </summary>
-void SceneManager::PushScene(std::unique_ptr<IScene> newScene) {
+void SceneManager::PushScene(std::unique_ptr<IScene> newScene)
+{
     // 引数チェック: newScene が nullptr なら何もしない
     if (!newScene) {
         return;
@@ -154,7 +164,8 @@ void SceneManager::PushScene(std::unique_ptr<IScene> newScene) {
 /// <summary>
 /// シーンのポップ。スタックから前のシーンを取り出してセットし、Initializeを呼び出す。現在のシーンはFinalizeを呼び出してクリーンアップする。
 /// </summary>
-void SceneManager::PopScene() {
+void SceneManager::PopScene()
+{
     // 現在のシーンが存在すれば終了処理を行って破棄する
     if (current_) {
         current_->OnExit();
@@ -179,15 +190,16 @@ void SceneManager::PopScene() {
 /// <summary>
 /// 現在のシーンを取得する関数。現在のシーンが存在しない場合は nullptr を返す。
 /// </summary>
-IScene* SceneManager::GetCurrent() const {
+IScene* SceneManager::GetCurrent() const
+{
     return current_.get();
 }
-
 
 /// <summary>
 /// 現在のシーンの名前を取得する関数。現在のシーンが存在しない場合は空文字列を返す。
 /// </summary>
-std::string SceneManager::GetCurrentSceneName() const {
+std::string SceneManager::GetCurrentSceneName() const
+{
     // 現在のシーンがあれば名前を取得して返す。存在しない場合は空文字列を返す。
     if (current_) {
         return current_->GetName();

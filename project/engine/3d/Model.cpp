@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "Model.h"
 #include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"

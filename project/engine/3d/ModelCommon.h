@@ -14,7 +14,7 @@ public: // メンバ関数
     /// <summary>
     /// 初期化処理
     /// </summary>
-    void Initialize(DirectXCommon* dxCommon) { dxCommon_ = dxCommon; } 
+    void Initialize(DirectXCommon* dxCommon) { dxCommon_ = dxCommon; }
 
     /// <summary>
     /// DirectXCommonへの参照を取得
@@ -22,7 +22,6 @@ public: // メンバ関数
     DirectXCommon* GetDxCommon() const { return dxCommon_; }
 
 private: // メンバ変数
-
     DirectXCommon* dxCommon_ = nullptr; // DirectXCommonへの参照（外部で管理される）
 };
 

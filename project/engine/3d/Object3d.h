@@ -22,7 +22,6 @@ class Model;
 /// </summary>
 class Object3d {
 public: // メンバ構造体
-
     // 頂点データ構造体
     struct VertexData {
         Math::Vector4 position;
@@ -101,7 +100,6 @@ public: // メンバ構造体
     };
 
 public: // メンバ関数
-
     /// <summary>
     /// 初期化
     /// </summary>
@@ -176,7 +174,7 @@ public: // メンバ関数
     /// 座標変換行列用リソースの取得
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
-    
+
     /// <summary>
     /// モデルデータの取得
     /// </summary>
@@ -188,7 +186,6 @@ public: // メンバ関数
     Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
 
 private: // メンバ変数
-
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
 
     // Objファイルのデータ
@@ -227,7 +224,6 @@ private: // メンバ変数
     bool useAlphaCutoutSampler_ = false;
 
 public: // メンバ関数
-
     /// <summary>
     ///  大きさ設定
     /// </summary>
@@ -269,12 +265,12 @@ public: // メンバ関数
     /// スケール取得
     /// </summary>
     const Math::Vector3 GetScale() const { return transform_.scale; }
-    
+
     /// <summary>
     /// 回転取得
     /// </summary>
     const Math::Vector3 GetRotate() const { return transform_.rotate; }
-    
+
     /// <summary>
     /// 平行移動取得
     /// </summary>
@@ -334,7 +330,6 @@ public: // メンバ関数
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
 private: // 内部関数
-
     // 初期化補助
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化

@@ -12,8 +12,8 @@ struct VertexShaderOutput
 cbuffer CameraVectors : register(b2)
 {
     float3 gCameraRight;
-    float  _pad0;
+    float _pad0;
     float3 gCameraUp;
-    float  gBillboardEnable; // 0 or 1
+    float gBillboardEnable; // 0 or 1
     float4x4 gViewProj;
 }

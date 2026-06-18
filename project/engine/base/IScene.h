@@ -38,11 +38,10 @@ struct SceneContext {
 /// </summary>
 class IScene {
 public: // メンバ関数
-
     /// <summary>
     /// 仮想デストラクタ（インターフェースクラスには必須）
     /// </summary>
-    virtual ~IScene() {}
+    virtual ~IScene() { }
 
     /// <summary>
     /// 初期化処理
@@ -57,22 +56,22 @@ public: // メンバ関数
     /// <summary>
     /// 更新処理（引数は前のフレームからの経過時間）
     /// </summary>
-    virtual void Update(float dt) = 0; 
+    virtual void Update(float dt) = 0;
 
     /// <summary>
     /// 描画処理
     /// </summary>
-    virtual void Draw() = 0; 
+    virtual void Draw() = 0;
 
     /// <summary>
     /// シーンに入るときの処理（オプション、必要に応じてオーバーライド）
     /// </summary>
-    virtual void OnEnter() {}
+    virtual void OnEnter() { }
 
     /// <summary>
     /// シーンから出るときの処理（オプション、必要に応じてオーバーライド）
     /// </summary>
-    virtual void OnExit() {}
+    virtual void OnExit() { }
 
     /// <summary>
     /// シーンの名前を取得（オプション、必要に応じてオーバーライド）
@@ -82,19 +81,19 @@ public: // メンバ関数
     /// <summary>
     /// 外部から描画モードの更新を通知するためのフック（デフォルトは何もしない）
     /// </summary>
-    virtual void SetSelectedDrawType(int) {}
+    virtual void SetSelectedDrawType(int) { }
 
     /// <summary>
     /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
     /// デフォルト実装は何もしない
     /// </summary>
-    virtual void FillObject3dPointers(std::vector<class Object3d*>* out) {}
+    virtual void FillObject3dPointers(std::vector<class Object3d*>* out) { }
 
     /// <summary>
     /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
     /// デフォルト実装は何もしない
     /// </summary>
-    virtual void FillSpritePointers(std::vector<class Sprite*>* out) {}
+    virtual void FillSpritePointers(std::vector<class Sprite*>* out) { }
 
     /// <summary>
     /// シーンが使用しているポストプロセスを取得する
@@ -104,8 +103,7 @@ public: // メンバ関数
     /// <summary>
     /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする
     /// </summary>
-    virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) {}
-
+    virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) { }
 };
 
 } // namespace MyEngine

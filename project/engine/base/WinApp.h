@@ -14,7 +14,6 @@ public:
     static constexpr int kWindowHeight = 720; // ウィンドウの高さ（定数）
 
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ：メンバ変数を初期化
     /// </summary>
@@ -32,7 +31,6 @@ public: // メンバ関数
     WinApp& operator=(WinApp&&) = delete; // ムーブ代入演算子を削除してムーブを禁止
 
 public: // メンバ関数
-
     /// <summary>
     /// アプリケーションの初期化とウィンドウの生成
     /// </summary>
@@ -59,7 +57,6 @@ public: // メンバ関数
     HINSTANCE GetHInstance() const { return hInstance_; }
 
 private: // メンバ関数
-
     /// <summary>
     /// ウィンドウクラスの属性を設定し、システムに登録
     /// </summary>
@@ -71,7 +68,6 @@ private: // メンバ関数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 private: // メンバ変数
-
     // ウィンドウクラス名（定数）
     static constexpr LPCWSTR kWindowClassName = L"MyEngineWindowClass";
 

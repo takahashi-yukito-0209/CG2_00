@@ -77,12 +77,10 @@ public:
     void SetFarClip(float farClip) { farClip_ = farClip; }
 
 private: // メンバ関数
-
     void UpdateViewMatrix(); // ビュー行列の更新
     void UpdateProjectionMatrix(); // プロジェクション行列の更新
 
 private: // メンバ変数
-
     // カメラの変換情報（回転と平行移動）
     Math::Transform transform_;
 
@@ -109,7 +107,6 @@ private: // メンバ変数
 
     // ビュープロジェクション行列
     Math::Matrix4x4 viewProjectionMatrix_;
-
 };
 
 } // namespace MyEngine

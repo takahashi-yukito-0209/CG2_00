@@ -12,7 +12,6 @@ namespace MyEngine {
 /// </summary>
 class InputManager {
 public: // メンバ関数
-
     // インスタンス取得（シングルトン）
     static InputManager* GetInstance();
 
@@ -42,7 +41,6 @@ public: // メンバ関数
     long GetMouseDeltaZ() const; // ホイールの回転量
 
 private: // メンバ関数（内部用）
-
     // シングルトン構成
     InputManager() = default; // デフォルトコンストラクタは private にして外部からのインスタンス化を防止
     ~InputManager() = default; // デストラクタも private にして外部からの破棄を防止
@@ -50,7 +48,6 @@ private: // メンバ関数（内部用）
     InputManager& operator=(const InputManager&) = delete; // コピー代入演算子を削除してコピーを禁止
 
 private: // メンバ変数
-
     static constexpr int KEY_COUNT = 256; // キー数（256固定）
 
     // キーボード入力

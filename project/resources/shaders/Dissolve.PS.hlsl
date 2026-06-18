@@ -4,7 +4,8 @@ Texture2D<float4> gTexture : register(t0);
 Texture2D<float> gMaskTexture : register(t1);
 SamplerState gSampler : register(s0);
 
-cbuffer DissolveSettings : register(b0) {
+cbuffer DissolveSettings : register(b0)
+{
     uint gKernelSize;
     uint gDirection;
     float gSigma;
@@ -19,15 +20,18 @@ cbuffer DissolveSettings : register(b0) {
     float gDissolvePadding2;
 };
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     float maskValue =
         gMaskTexture.Sample(gSampler, input.texcoord); // ノイズマスクの値
 
-    if (maskValue < gThreshold) {
+    if (maskValue < gThreshold)
+    {
         discard;
     }
 

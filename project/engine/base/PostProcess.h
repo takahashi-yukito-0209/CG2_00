@@ -1,8 +1,8 @@
 #pragma once
 
+#include <MathTypes.h>
 #include <cstdint>
 #include <d3d12.h>
-#include <MathTypes.h>
 #include <wrl.h>
 
 namespace MyEngine {
@@ -13,9 +13,9 @@ class DirectXCommon;
 /// ポストエフェクトの種類
 /// </summary>
 enum class PostEffectType {
-    Copy,      // 元画像をそのまま描画する
+    Copy, // 元画像をそのまま描画する
     Grayscale, // 元画像をグレイスケール化して描画する
-    Vignette,  // 画面周辺を暗くして描画する
+    Vignette, // 画面周辺を暗くして描画する
     BoxFilter, // Box Filterによる平均化処理を適用する
     GaussianFilter, // 分離型Gaussian Filterを適用する
     LuminanceOutline, // 輝度差から輪郭を検出する

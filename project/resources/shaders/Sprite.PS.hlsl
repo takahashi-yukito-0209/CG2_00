@@ -17,7 +17,7 @@ struct PixelShaderOutput
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f,1.0f), _gMaterial.uvTransform);
+    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), _gMaterial.uvTransform);
     float4 textureColorLinear = gtexture.Sample(gSampler, transformedUV.xy);
     float4 textureColorPoint = gtexture.Sample(gSamplerPointClamp, transformedUV.xy);
     float4 textureColor = (_gMaterial.useAlphaCutoutSampler != 0) ? textureColorPoint : textureColorLinear;
@@ -28,7 +28,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     output.color = float4(finalRGB, finalA);
 #if !SWAPCHAIN_SRGB
     // Swapchain is UNORM: perform gamma encode here to approximate sRGB output.
-    output.color.rgb = pow(output.color.rgb, 1.0/2.2);
+    output.color.rgb = pow(output.color.rgb, 1.0 / 2.2);
 #endif
     return output;
 }

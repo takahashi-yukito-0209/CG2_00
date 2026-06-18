@@ -1,5 +1,5 @@
 #include "StringUtility.h"
-#include <Windows.h> 
+#include <Windows.h>
 #include <stdexcept>
 #include <string>
 

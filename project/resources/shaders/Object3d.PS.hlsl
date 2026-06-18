@@ -32,7 +32,7 @@ struct PixelShaderOutput
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f,1.0f), gMaterial.uvTransform);
+    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     // Choose sampler based on material flag (useAlphaCutoutSampler).
     // If the material requests alpha-cutout sampler, use point sampling and clamp addressing
     // to avoid bleeding of transparent pixels. Otherwise use linear sampler for smooth filtering.
@@ -44,12 +44,12 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     // Separate lighting for RGB and keep alpha controlled by material/texture
     float3 texRGB = textureColor.rgb;
-    float  texA = textureColor.a;
+    float texA = textureColor.a;
     float3 matRGB = gMaterial.color.rgb;
-    float  matA = gMaterial.color.a;
+    float matA = gMaterial.color.a;
 
     float3 finalRGB = matRGB * texRGB;
-    float  finalA = matA * texA;
+    float finalA = matA * texA;
 
     if (gMaterial.enableLighting != 0)
     {
@@ -85,12 +85,14 @@ PixelShaderOutput main(VertexShaderOutput input)
 
         // Accumulate single point light (if enabled). Reduced loop for single-light config.
         PointLightEntry pl = gPointLights.lights[0];
-        if (pl.enabled != 0) {
+        if (pl.enabled != 0)
+        {
             float3 toLight = pl.position.xyz - input.worldPosition;
             float dist = length(toLight);
             float range = pl.radius; // use explicit radius
             // proceed only if within range and distance is non-zero
-            if (dist <= range && dist > 0.0001f) {
+            if (dist <= range && dist > 0.0001f)
+            {
                 float3 Lp = normalize(toLight);
                 float NdotLp = max(dot(N, Lp), 0.0f);
 
@@ -113,10 +115,12 @@ PixelShaderOutput main(VertexShaderOutput input)
 
         // Spot light contribution (single spot)
         SpotLightEntry sl = gSpotLight.light;
-        if (sl.enabled != 0) {
+        if (sl.enabled != 0)
+        {
             float3 toSpot = sl.position.xyz - input.worldPosition;
             float distS = length(toSpot);
-            if (distS <= sl.distance && distS > 0.0001f) {
+            if (distS <= sl.distance && distS > 0.0001f)
+            {
                 float3 Ls = normalize(toSpot);
                 float angleCos = dot(Ls, normalize(sl.direction));
                 // compute falloff between cosAngle (full) and cosFalloffStart (start fading)
@@ -143,11 +147,13 @@ PixelShaderOutput main(VertexShaderOutput input)
         // Multiply by exposure first
         finalRGB *= gCamera.exposure;
         // If tone mapping is enabled, apply Reinhard tone mapping
-        if (gCamera.toneMapOn != 0) {
+        if (gCamera.toneMapOn != 0)
+        {
             finalRGB = finalRGB / (1.0f + finalRGB);
         }
 
-        if (gMaterial.environmentCoefficient > 0.0f) {
+        if (gMaterial.environmentCoefficient > 0.0f)
+        {
             float3 reflected = reflect(-toEye, N);
             float3 environmentDir = normalize(mul(float4(reflected, 0.0f), gCamera.view).xyz);
             float3 environmentRGB = gEnvironment.Sample(gSampler, environmentDir).rgb;
@@ -158,12 +164,13 @@ PixelShaderOutput main(VertexShaderOutput input)
     output.color = float4(finalRGB, finalA);
 #if !SWAPCHAIN_SRGB
     // If swapchain is not sRGB, encode to approximate sRGB output
-    output.color.rgb = pow(output.color.rgb, 1.0/2.2);
+    output.color.rgb = pow(output.color.rgb, 1.0 / 2.2);
 #endif
     // Binary alpha cutout: discard pixels where the texture's alpha is effectively zero.
     // This implements 2-value (on/off) transparency: fully transparent texels are discarded,
     // opaque texels are rendered normally. Use texture alpha (texA) to decide.
-    if (texA <= 0.001f) {
+    if (texA <= 0.001f)
+    {
         discard;
     }
 

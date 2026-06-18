@@ -3,10 +3,18 @@ cbuffer VP : register(b0)
     row_major float4x4 gVP;
 };
 
-struct VSInput { float3 pos : POSITION; };
-struct VSOutput { float4 pos : SV_POSITION; float3 dir : TEXCOORD0; };
+struct VSInput
+{
+    float3 pos : POSITION;
+};
+struct VSOutput
+{
+    float4 pos : SV_POSITION;
+    float3 dir : TEXCOORD0;
+};
 
-VSOutput main(VSInput input) {
+VSOutput main(VSInput input)
+{
     VSOutput o;
     // direction vector for cubemap sampling (in world/view space)
     o.dir = input.pos;

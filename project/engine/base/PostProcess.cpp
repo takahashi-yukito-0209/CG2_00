@@ -1,11 +1,11 @@
 #include "PostProcess.h"
 
+#include "../utility/mathUtility.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
-#include "../utility/mathUtility.h"
 
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 
 using namespace Microsoft::WRL;
@@ -97,13 +97,11 @@ void PostProcess::CreateRootSignature()
     descriptorRanges[0].BaseShaderRegister = 0;
     descriptorRanges[0].NumDescriptors = 1;
     descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRanges[0].OffsetInDescriptorsFromTableStart =
-        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[1].BaseShaderRegister = 1;
     descriptorRanges[1].NumDescriptors = 1;
     descriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRanges[1].OffsetInDescriptorsFromTableStart =
-        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     D3D12_ROOT_PARAMETER rootParameters[3] = {}; // PixelShaderへ渡すルートパラメータ
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -139,8 +137,7 @@ void PostProcess::CreateRootSignature()
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
     rootSignatureDesc.pStaticSamplers = staticSamplers;
-    rootSignatureDesc.Flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> signatureBlob; // シリアライズ済みルートシグネチャ
     ComPtr<ID3DBlob> errorBlob; // シリアライズ時のエラー情報
@@ -193,8 +190,7 @@ ComPtr<ID3D12PipelineState> PostProcess::CreatePipelineState(
     rasterizerDesc.DepthClipEnable = TRUE;
 
     D3D12_BLEND_DESC blendDesc = {}; // 上書き描画用ブレンド設定
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].BlendEnable = FALSE;
 
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {}; // 深度を使用しない設定
@@ -212,8 +208,7 @@ ComPtr<ID3D12PipelineState> PostProcess::CreatePipelineState(
         pixelShader->GetBufferSize()
     };
     pipelineDesc.InputLayout = inputLayout;
-    pipelineDesc.PrimitiveTopologyType =
-        D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipelineDesc.NumRenderTargets = 1;
     pipelineDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     pipelineDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
@@ -274,16 +269,13 @@ void PostProcess::DrawTexture(
         return;
     }
 
-    ID3D12PipelineState* pipelineState =
-        GetPipelineState(effectType); // 描画に使用するPSO
+    ID3D12PipelineState* pipelineState = GetPipelineState(effectType); // 描画に使用するPSO
     if (!pipelineState) {
         return;
     }
 
-    ID3D12GraphicsCommandList* commandList =
-        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
     ID3D12DescriptorHeap* descriptorHeaps[] = {
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
@@ -384,10 +376,8 @@ void PostProcess::DrawGaussianPass(uint32_t srvIndex, uint32_t direction)
         return;
     }
 
-    ID3D12GraphicsCommandList* commandList =
-        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
     ID3D12DescriptorHeap* descriptorHeaps[] = {
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
@@ -498,8 +488,7 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
 /// </summary>
 void PostProcess::SetDissolveThreshold(float threshold)
 {
-    dissolveThreshold_ =
-        (std::max)(0.0f, (std::min)(1.0f, threshold));
+    dissolveThreshold_ = (std::max)(0.0f, (std::min)(1.0f, threshold));
 }
 
 /// <summary>
@@ -507,8 +496,7 @@ void PostProcess::SetDissolveThreshold(float threshold)
 /// </summary>
 void PostProcess::SetDissolveEdgeWidth(float edgeWidth)
 {
-    dissolveEdgeWidth_ =
-        (std::max)(0.001f, (std::min)(0.25f, edgeWidth));
+    dissolveEdgeWidth_ = (std::max)(0.001f, (std::min)(0.25f, edgeWidth));
 }
 
 /// <summary>
@@ -516,12 +504,9 @@ void PostProcess::SetDissolveEdgeWidth(float edgeWidth)
 /// </summary>
 void PostProcess::SetDissolveEdgeColor(const Math::Vector3& color)
 {
-    dissolveEdgeColor_.x =
-        (std::max)(0.0f, (std::min)(1.0f, color.x));
-    dissolveEdgeColor_.y =
-        (std::max)(0.0f, (std::min)(1.0f, color.y));
-    dissolveEdgeColor_.z =
-        (std::max)(0.0f, (std::min)(1.0f, color.z));
+    dissolveEdgeColor_.x = (std::max)(0.0f, (std::min)(1.0f, color.x));
+    dissolveEdgeColor_.y = (std::max)(0.0f, (std::min)(1.0f, color.y));
+    dissolveEdgeColor_.z = (std::max)(0.0f, (std::min)(1.0f, color.z));
 }
 
 /// <summary>
@@ -540,12 +525,9 @@ void PostProcess::DrawDissolveTexture(
         return;
     }
 
-    ID3D12GraphicsCommandList* commandList =
-        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
-    D3D12_GPU_DESCRIPTOR_HANDLE sourceSrvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(sourceSrvIndex); // 元画像のSRV
-    D3D12_GPU_DESCRIPTOR_HANDLE maskSrvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(maskSrvIndex); // ノイズマスクのSRV
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE sourceSrvHandle = dxCommon_->GetSRVGPUDescriptorHandle(sourceSrvIndex); // 元画像のSRV
+    D3D12_GPU_DESCRIPTOR_HANDLE maskSrvHandle = dxCommon_->GetSRVGPUDescriptorHandle(maskSrvIndex); // ノイズマスクのSRV
     ID3D12DescriptorHeap* descriptorHeaps[] = {
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
@@ -595,8 +577,7 @@ void PostProcess::Update(float deltaTime)
 /// </summary>
 void PostProcess::SetRandomStrength(float strength)
 {
-    randomStrength_ =
-        (std::max)(0.0f, (std::min)(1.0f, strength));
+    randomStrength_ = (std::max)(0.0f, (std::min)(1.0f, strength));
 }
 
 /// <summary>
@@ -604,8 +585,7 @@ void PostProcess::SetRandomStrength(float strength)
 /// </summary>
 void PostProcess::SetRandomScale(float scale)
 {
-    randomScale_ =
-        (std::max)(1.0f, (std::min)(2000.0f, scale));
+    randomScale_ = (std::max)(1.0f, (std::min)(2000.0f, scale));
 }
 
 /// <summary>
@@ -613,8 +593,7 @@ void PostProcess::SetRandomScale(float scale)
 /// </summary>
 void PostProcess::SetRandomSpeed(float speed)
 {
-    randomSpeed_ =
-        (std::max)(0.0f, (std::min)(20.0f, speed));
+    randomSpeed_ = (std::max)(0.0f, (std::min)(20.0f, speed));
 }
 
 /// <summary>
@@ -634,18 +613,14 @@ void PostProcess::DrawDepthOutline(
         return;
     }
 
-    ID3D12GraphicsCommandList* commandList =
-        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
-    D3D12_GPU_DESCRIPTOR_HANDLE colorSrvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(colorSrvIndex); // カラーSRV
-    D3D12_GPU_DESCRIPTOR_HANDLE depthSrvHandle =
-        dxCommon_->GetSRVGPUDescriptorHandle(depthSrvIndex); // 深度SRV
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE colorSrvHandle = dxCommon_->GetSRVGPUDescriptorHandle(colorSrvIndex); // カラーSRV
+    D3D12_GPU_DESCRIPTOR_HANDLE depthSrvHandle = dxCommon_->GetSRVGPUDescriptorHandle(depthSrvIndex); // 深度SRV
     ID3D12DescriptorHeap* descriptorHeaps[] = {
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
 
-    Math::Matrix4x4 projectionInverse =
-        MathUtil::Inverse(projectionMatrix); // View空間復元用の逆射影行列
+    Math::Matrix4x4 projectionInverse = MathUtil::Inverse(projectionMatrix); // View空間復元用の逆射影行列
     uint32_t outlineSettings[20] = {}; // Outline用ルート定数
     std::memcpy(
         &outlineSettings[3],
@@ -685,7 +660,6 @@ void PostProcess::DrawDepthOutline(
 /// </summary>
 void PostProcess::DrawTexture(uint32_t srvIndex)
 {
-    PostEffectType drawEffectType =
-        enabled_ ? effectType_ : PostEffectType::Copy; // 無効時は元画像を表示する
+    PostEffectType drawEffectType = enabled_ ? effectType_ : PostEffectType::Copy; // 無効時は元画像を表示する
     DrawTexture(srvIndex, drawEffectType);
 }

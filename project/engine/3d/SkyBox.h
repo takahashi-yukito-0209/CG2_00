@@ -1,8 +1,8 @@
 #pragma once
 #include "engine/base/DirectXCommon.h"
 #include "engine/base/SrvManager.h"
-#include <wrl.h>
 #include <d3d12.h>
+#include <wrl.h>
 
 namespace MyEngine {
 
@@ -14,7 +14,6 @@ class Camera;
 /// </summary>
 class SkyBox {
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ
     /// </summary>
@@ -29,7 +28,7 @@ public: // メンバ関数
     /// 初期化
     /// </summary>
     void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_t srvIndex);
-    
+
     /// <summary>
     /// 終了
     /// </summary>
@@ -39,14 +38,13 @@ public: // メンバ関数
     /// ビュープロジェクション行列の更新
     /// </summary>
     void UpdateViewProj(const float vp[16]);
-    
+
     /// <summary>
     /// 描画
     /// </summary>
     void Draw(Camera* camera);
 
 private: // メンバ変数
-
     // 初期化時に渡されるDirectXCommonとSrvManagerの参照を保持
     DirectXCommon* dxCommon_ = nullptr;
     SrvManager* srvManager_ = nullptr;
@@ -57,9 +55,9 @@ private: // メンバ変数
 
     // 頂点バッファとインデックスバッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vbView_{};
+    D3D12_VERTEX_BUFFER_VIEW vbView_ {};
     Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_INDEX_BUFFER_VIEW ibView_{};
+    D3D12_INDEX_BUFFER_VIEW ibView_ {};
 
     // 定数バッファ（ビュープロジェクション行列用）
     Microsoft::WRL::ComPtr<ID3D12Resource> constantBuffer_;

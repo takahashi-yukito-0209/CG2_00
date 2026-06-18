@@ -3,7 +3,8 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-cbuffer RandomSettings : register(b0) {
+cbuffer RandomSettings : register(b0)
+{
     uint gKernelSize;
     uint gDirection;
     float gSigma;
@@ -22,18 +23,21 @@ cbuffer RandomSettings : register(b0) {
     float gRandomPadding;
 };
 
-float Random2dTo1(float2 value) {
+float Random2dTo1(float2 value)
+{
     float2 randomVector = float2(12.9898f, 78.233f);
     float randomValue =
         sin(dot(value, randomVector)) * 43758.5453f;
     return frac(randomValue);
 }
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     float2 seed =
         floor(input.texcoord * gRandomScale) +
         float2(gRandomTime, gRandomTime * 1.6180339f); // UVと時間からSeedを作る

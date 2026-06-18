@@ -1,11 +1,11 @@
 #include "TitleScene.h"
 
+#include "../../engine/2d/TextureManager.h"
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/base/DirectXCommon.h"
 #include "../../engine/base/SrvManager.h"
-#include "../../engine/2d/TextureManager.h"
 
 #include <iostream>
 
@@ -36,8 +36,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
         terrain_->SetScale({ 5.0f, 5.0f, 5.0f });
     }
 
-    DirectXCommon* dxCommon =
-        DirectXCommon::GetInstance(); // オフスクリーン描画に使用するDirectX基盤
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance(); // オフスクリーン描画に使用するDirectX基盤
     if (!dxCommon) {
         return;
     }
@@ -62,8 +61,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
     if (ctx_.textureManager) {
         ctx_.textureManager->LoadTexture("noise0.png");
         ctx_.textureManager->ExecuteResourceUpload();
-        dissolveMaskSrvIndex_ =
-            ctx_.textureManager->GetSrvIndex("noise0.png");
+        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
     }
 
     gaussianRtHandle_ = dxCommon->CreateRenderTarget(
@@ -93,8 +91,7 @@ void TitleScene::Finalize()
 
     terrain_.reset();
 
-    DirectXCommon* dxCommon =
-        DirectXCommon::GetInstance(); // レンダーターゲットを管理するDirectX基盤
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance(); // レンダーターゲットを管理するDirectX基盤
     if (dxCommon && rtHandle_ >= 0) {
         dxCommon->DestroyRenderTarget(rtHandle_);
         rtHandle_ = -1;
@@ -136,8 +133,7 @@ void TitleScene::Update(float dt)
 /// </summary>
 void TitleScene::Draw()
 {
-    DirectXCommon* dxCommon =
-        DirectXCommon::GetInstance(); // 描画先を切り替えるDirectX基盤
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance(); // 描画先を切り替えるDirectX基盤
     if (!dxCommon || rtHandle_ < 0) {
         return;
     }

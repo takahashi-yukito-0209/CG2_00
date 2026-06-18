@@ -3,18 +3,21 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-cbuffer GaussianFilterSettings : register(b0) {
+cbuffer GaussianFilterSettings : register(b0)
+{
     uint gKernelSize;
     uint gDirection;
     float gSigma;
     uint gPadding;
 };
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     uint textureWidth = 0; // 入力テクスチャの横幅
     uint textureHeight = 0; // 入力テクスチャの縦幅
     gTexture.GetDimensions(textureWidth, textureHeight);
@@ -31,7 +34,8 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float3 filteredColor = float3(0.0f, 0.0f, 0.0f); // 重み付き色の合計
     float weightTotal = 0.0f; // 有限カーネル内の重み合計
 
-    for (int32_t offset = -kernelRadius; offset <= kernelRadius; ++offset) {
+    for (int32_t offset = -kernelRadius; offset <= kernelRadius; ++offset)
+    {
         float offsetValue = float(offset); // 中心からの距離
         float weight = exp(
             -(offsetValue * offsetValue) /

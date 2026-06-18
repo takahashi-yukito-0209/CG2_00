@@ -1,6 +1,6 @@
 #pragma once
-#include "DirectXCommon.h"
 #include "../RenderState.h"
+#include "DirectXCommon.h"
 
 namespace MyEngine {
 
@@ -9,7 +9,6 @@ namespace MyEngine {
 /// </summary>
 class SpriteCommon {
 public: // メンバ関数
-
     /// <summary>
     /// 初期化処理
     /// </summary>
@@ -46,7 +45,6 @@ public: // メンバ関数
     void DrawImGui();
 
 private: // メンバ関数
-
     /// <summary>
     /// ルートシグネチャを作成（内部処理）
     /// </summary>
@@ -58,7 +56,6 @@ private: // メンバ関数
     void CreateGraphicsPipeline();
 
 private: // メンバ変数
-
     // DirectX 共通ハンドル（外部で管理される参照）
     DirectXCommon* dxCommon_;
 

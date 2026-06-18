@@ -5,7 +5,8 @@ Texture2D<float> gDepthTexture : register(t1);
 SamplerState gSampler : register(s0);
 SamplerState gSamplerPoint : register(s1);
 
-cbuffer OutlineSettings : register(b0) {
+cbuffer OutlineSettings : register(b0)
+{
     float gDepthThreshold;
     float gDepthSoftness;
     float gSigma;
@@ -13,29 +14,34 @@ cbuffer OutlineSettings : register(b0) {
     row_major float4x4 gProjectionInverse;
 };
 
-static const float kPrewittHorizontalKernel[3][3] = {
+static const float kPrewittHorizontalKernel[3][3] =
+{
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f }
 };
 
-static const float kPrewittVerticalKernel[3][3] = {
+static const float kPrewittVerticalKernel[3][3] =
+{
     { -1.0f / 6.0f, -1.0f / 6.0f, -1.0f / 6.0f },
-    {  0.0f,         0.0f,         0.0f },
-    {  1.0f / 6.0f,  1.0f / 6.0f,  1.0f / 6.0f }
+    { 0.0f, 0.0f, 0.0f },
+    { 1.0f / 6.0f, 1.0f / 6.0f, 1.0f / 6.0f }
 };
 
-float ConvertToViewZ(float depth) {
+float ConvertToViewZ(float depth)
+{
     float4 viewPosition =
         mul(float4(0.0f, 0.0f, depth, 1.0f), gProjectionInverse);
     return viewPosition.z / max(abs(viewPosition.w), 0.0001f);
 }
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     uint textureWidth = 0; // 入力テクスチャの横幅
     uint textureHeight = 0; // 入力テクスチャの縦幅
     gDepthTexture.GetDimensions(textureWidth, textureHeight);
@@ -48,7 +54,8 @@ PixelShaderOutput main(VertexShaderOutput input) {
         ConvertToViewZ(centerDepth); // 中心テクセルのView空間深度
 
     // 背景部分では輪郭を生成しない
-    if (centerDepth >= 0.9999f) {
+    if (centerDepth >= 0.9999f)
+    {
         PixelShaderOutput backgroundOutput;
         backgroundOutput.color =
             gTexture.Sample(gSampler, input.texcoord);
@@ -57,8 +64,10 @@ PixelShaderOutput main(VertexShaderOutput input) {
 
     float2 difference = float2(0.0f, 0.0f); // 横と縦の相対深度差
 
-    for (int32_t y = 0; y < 3; ++y) {
-        for (int32_t x = 0; x < 3; ++x) {
+    for (int32_t y = 0; y < 3; ++y)
+    {
+        for (int32_t x = 0; x < 3; ++x)
+        {
             float2 offset =
                 float2(x - 1, y - 1) * uvStepSize; // 周辺テクセルへの差分
             float depth =
@@ -66,10 +75,13 @@ PixelShaderOutput main(VertexShaderOutput input) {
                     gSamplerPoint,
                     input.texcoord + offset); // 補間しない深度値
             float relativeDepthDifference = 0.0f; // 距離に依存しにくい相対深度差
-            if (depth >= 0.9999f) {
+            if (depth >= 0.9999f)
+            {
                 // 地形と背景の境界は明確な輪郭として扱う
                 relativeDepthDifference = 1.0f;
-            } else {
+            }
+            else
+            {
                 float viewZ = ConvertToViewZ(depth); // 周辺のView空間深度
                 relativeDepthDifference =
                     (viewZ - centerViewZ) /

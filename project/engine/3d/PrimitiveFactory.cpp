@@ -15,11 +15,11 @@ std::vector<Object3d::VertexData> PrimitiveFactory::CreatePlane(float width, flo
 
     return {
         { { -halfWidth, -halfHeight, 0.0f, 1.0f }, { 0.0f, 1.0f }, normal },
-        { { -halfWidth,  halfHeight, 0.0f, 1.0f }, { 0.0f, 0.0f }, normal },
-        { {  halfWidth, -halfHeight, 0.0f, 1.0f }, { 1.0f, 1.0f }, normal },
-        { {  halfWidth, -halfHeight, 0.0f, 1.0f }, { 1.0f, 1.0f }, normal },
-        { { -halfWidth,  halfHeight, 0.0f, 1.0f }, { 0.0f, 0.0f }, normal },
-        { {  halfWidth,  halfHeight, 0.0f, 1.0f }, { 1.0f, 0.0f }, normal },
+        { { -halfWidth, halfHeight, 0.0f, 1.0f }, { 0.0f, 0.0f }, normal },
+        { { halfWidth, -halfHeight, 0.0f, 1.0f }, { 1.0f, 1.0f }, normal },
+        { { halfWidth, -halfHeight, 0.0f, 1.0f }, { 1.0f, 1.0f }, normal },
+        { { -halfWidth, halfHeight, 0.0f, 1.0f }, { 0.0f, 0.0f }, normal },
+        { { halfWidth, halfHeight, 0.0f, 1.0f }, { 1.0f, 0.0f }, normal },
     };
 }
 

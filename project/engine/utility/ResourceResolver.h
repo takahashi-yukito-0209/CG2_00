@@ -9,15 +9,18 @@ namespace MyEngine {
 /// </summary>
 class ResourceResolver {
 public: // メンバ関数
-
     // リソースの種類を表す列挙型
-    enum class Type { Any = 0, Texture, Model, Shader, Sound };
+    enum class Type { Any = 0,
+        Texture,
+        Model,
+        Shader,
+        Sound };
 
     /// <summary>
     /// 指定された名前とパスをリソースの検索パスとして登録
     /// </summary>
     static void RegisterSearchPath(const std::string& name, const std::string& path);
-    
+
     /// <summary>
     /// 登録された検索パスをすべてクリア
     /// </summary>

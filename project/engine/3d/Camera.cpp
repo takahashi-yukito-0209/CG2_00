@@ -7,9 +7,15 @@ using namespace MyEngine;
 /// コンストラクタ：カメラの変換情報を初期化し、ワールド・ビュー・プロジェクション行列を計算
 /// </summary>
 Camera::Camera()
-    : transform_{{1.0f,1.0f,1.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f}},
-      fovY_(0.45f), aspectRatio_(16.0f/9.0f), nearClip_(0.1f), farClip_(1000.0f),
-      worldMatrix_{}, viewMatrix_{}, projectionMatrix_{}, viewProjectionMatrix_{}
+    : transform_ { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } }
+    , fovY_(0.45f)
+    , aspectRatio_(16.0f / 9.0f)
+    , nearClip_(0.1f)
+    , farClip_(1000.0f)
+    , worldMatrix_ {}
+    , viewMatrix_ {}
+    , projectionMatrix_ {}
+    , viewProjectionMatrix_ {}
 {
     Update(); // ワールド・ビュー・プロジェクション行列の初期計算
 }
@@ -39,9 +45,9 @@ void Camera::UpdateViewMatrix()
     Matrix4x4 rotZ = MathUtil::MakeRotateZMatrix(transform_.rotate.z); // Z軸回転
     // 回転行列を合成（Z * Y * Xの順で回転）
     Matrix4x4 rotationMatrix = MathUtil::Multiply(rotZ, MathUtil::Multiply(rotY, rotX));
-    
+
     // 平行移動行列の作成（カメラの位置を反転させる）
-    Matrix4x4 translationMatrix = MathUtil::MakeTranslateMatrix(Vector3{-transform_.translate.x, -transform_.translate.y, -transform_.translate.z});
+    Matrix4x4 translationMatrix = MathUtil::MakeTranslateMatrix(Vector3 { -transform_.translate.x, -transform_.translate.y, -transform_.translate.z });
     // ビュー行列の計算（回転と平行移動を合成）
     viewMatrix_ = MathUtil::Multiply(rotationMatrix, translationMatrix);
 }

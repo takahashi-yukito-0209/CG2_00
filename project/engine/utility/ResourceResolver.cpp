@@ -1,7 +1,7 @@
 #include "ResourceResolver.h"
-#include <unordered_map>
-#include <filesystem>
 #include <algorithm>
+#include <filesystem>
+#include <unordered_map>
 
 using namespace MyEngine;
 namespace fs = std::filesystem;
@@ -40,11 +40,11 @@ static const std::vector<std::string>& GetExtList(ResourceResolver::Type type)
 {
     // 拡張子のマップが空の場合は、リソースの種類に応じたデフォルトの拡張子リストを設定する
     if (g_resolverData.extMap.empty()) {
-        g_resolverData.extMap[ResourceResolver::Type::Texture] = {".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds"};
-        g_resolverData.extMap[ResourceResolver::Type::Model] = {".obj", ".gltf", ".glb"};
-        g_resolverData.extMap[ResourceResolver::Type::Shader] = {".hlsl", ".fx"};
-        g_resolverData.extMap[ResourceResolver::Type::Sound] = {".wav", ".ogg", ".mp3"};
-        g_resolverData.extMap[ResourceResolver::Type::Any] = {""};
+        g_resolverData.extMap[ResourceResolver::Type::Texture] = { ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds" };
+        g_resolverData.extMap[ResourceResolver::Type::Model] = { ".obj", ".gltf", ".glb" };
+        g_resolverData.extMap[ResourceResolver::Type::Shader] = { ".hlsl", ".fx" };
+        g_resolverData.extMap[ResourceResolver::Type::Sound] = { ".wav", ".ogg", ".mp3" };
+        g_resolverData.extMap[ResourceResolver::Type::Any] = { "" };
     }
 
     // 指定されたリソースの種類に対応する拡張子のリストを取得
@@ -89,7 +89,8 @@ static std::string tryCandidate(const fs::path& candidate)
         if (fs::exists(candidate) && fs::is_regular_file(candidate)) {
             return fs::canonical(candidate).string();
         }
-    } catch (...) { }
+    } catch (...) {
+    }
 
     // 候補のパスが存在しない場合や、通常のファイルでない場合は、空文字列を返す
     return std::string();
@@ -100,13 +101,14 @@ static std::string tryCandidate(const fs::path& candidate)
 /// </summary>
 std::string ResourceResolver::ResolveRelative(const std::string& inputPath, const std::string& baseDir, Type type)
 {
-    
+
     try {
         // 入力パスが空の場合は、空文字列を返す
         fs::path p(inputPath);
         if (p.is_absolute()) {
             auto r = tryCandidate(p);
-            if (!r.empty()) return r;
+            if (!r.empty())
+                return r;
         }
 
         // 基準ディレクトリに対して相対的に解決を試みる
@@ -121,15 +123,18 @@ std::string ResourceResolver::ResolveRelative(const std::string& inputPath, cons
                 fs::path c2 = candidate;
                 c2 += e;
                 auto r = tryCandidate(c2);
-                if (!r.empty()) return r;
+                if (!r.empty())
+                    return r;
             }
 
         } else {
             auto r = tryCandidate(candidate);
-            if (!r.empty()) return r;
+            if (!r.empty())
+                return r;
         }
 
-    } catch (...) { }
+    } catch (...) {
+    }
     return std::string();
 }
 
@@ -146,26 +151,28 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
             g_resolverData.searchPaths.emplace_back("resources_models", "resources/models");
             g_resolverData.searchPaths.emplace_back("models", "models");
             g_resolverData.searchPaths.emplace_back("shaders", "resources/shaders");
-        } catch (...) { }
+        } catch (...) {
+        }
     }
 
     try {
-        if (inputPath.empty()) return std::string();
+        if (inputPath.empty())
+            return std::string();
         fs::path p(inputPath);
 
-        
         if (p.is_absolute()) {
             auto r = tryCandidate(p);
-            if (!r.empty()) return r;
+            if (!r.empty())
+                return r;
         }
 
         if (p.has_parent_path()) {
-            
+
             auto r = tryCandidate(p);
-            if (!r.empty()) return r;
+            if (!r.empty())
+                return r;
         }
 
-        
         const auto& exts = GetExtList(type);
         for (const auto& sp : g_resolverData.searchPaths) {
             fs::path root = sp.second;
@@ -175,28 +182,32 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
                     fs::path c2 = candidate;
                     c2 += e;
                     auto r = tryCandidate(c2);
-                    if (!r.empty()) return r;
+                    if (!r.empty())
+                        return r;
                 }
             } else {
                 auto r = tryCandidate(candidate);
-                if (!r.empty()) return r;
+                if (!r.empty())
+                    return r;
             }
         }
 
-        
         if (!p.has_parent_path()) {
             std::string filename = p.filename().string();
             int found = 0;
             for (const auto& entry : fs::recursive_directory_iterator(fs::current_path())) {
-                if (!entry.is_regular_file()) continue;
+                if (!entry.is_regular_file())
+                    continue;
                 if (entry.path().filename() == filename) {
                     return fs::canonical(entry.path()).string();
                 }
-                if (++found > 8) break;
+                if (++found > 8)
+                    break;
             }
         }
 
-    } catch (...) { }
+    } catch (...) {
+    }
 
     return std::string();
 }

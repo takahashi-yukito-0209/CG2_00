@@ -1,14 +1,13 @@
 #pragma once
+#include "Framework.h"
 #include <Windows.h>
 #include <memory>
-#include "Framework.h"
 
 /// <summary>
 /// ゲームクラス: Framework を継承してゲーム固有の処理を実装するクラス
 /// </summary>
 class Game : public Framework {
 public: // メンバ関数
-
     // コンストラクタとデストラクタ
     Game(); // デフォルトコンストラクタを使用
     ~Game(); // デストラクタは基底の仮想デストラクタが呼ばれるようにする
@@ -44,7 +43,6 @@ public: // メンバ関数
     bool PollEvents() override;
 
 private: // メンバ変数
-
     struct Impl;
     std::unique_ptr<Impl> impl_ = nullptr; // 実装の隠蔽
 };

@@ -3,8 +3,8 @@
 
 #pragma comment(lib, "winmm.lib")
 
-#include "ImGuiManager.h"
 #include "DirectXCommon.h"
+#include "ImGuiManager.h"
 
 // ImGui のウィンドウプロシージャハンドラの宣言 (存在する場合のみ)
 #ifdef USE_IMGUI
@@ -47,7 +47,7 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
         nullptr, // メニューハンドルなし
         hInstance_, // インスタンスハンドル
         nullptr // 追加パラメータなし
-    ); 
+    );
 
     // ウィンドウ生成に失敗した場合はエラー
     assert(hwnd_ != nullptr);
@@ -55,7 +55,7 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
     // ウィンドウを表示
     ShowWindow(hwnd_, nCmdShow);
 
-    //システムタイマーの分解能を上げる
+    // システムタイマーの分解能を上げる
     timeBeginPeriod(1);
 }
 
@@ -137,24 +137,22 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         }
         return 0;
 
-    case WM_TIMER:
-        {
-            static const UINT_PTR kResizeTimerId = 1;
-            if (wparam == kResizeTimerId) {
-                // タイマーが発火したときに、最新のクライアントサイズを取得してリサイズ処理を呼び出す
-                RECT rc;
-                if (GetClientRect(hwnd, &rc)) {
-                    UINT w = static_cast<UINT>(rc.right - rc.left);
-                    UINT h = static_cast<UINT>(rc.bottom - rc.top);
-                    if (w != 0 && h != 0) {
-                        DirectXCommon::GetInstance()->OnWindowResize(w, h);
-                    }
+    case WM_TIMER: {
+        static const UINT_PTR kResizeTimerId = 1;
+        if (wparam == kResizeTimerId) {
+            // タイマーが発火したときに、最新のクライアントサイズを取得してリサイズ処理を呼び出す
+            RECT rc;
+            if (GetClientRect(hwnd, &rc)) {
+                UINT w = static_cast<UINT>(rc.right - rc.left);
+                UINT h = static_cast<UINT>(rc.bottom - rc.top);
+                if (w != 0 && h != 0) {
+                    DirectXCommon::GetInstance()->OnWindowResize(w, h);
                 }
-                KillTimer(hwnd, kResizeTimerId);
             }
+            KillTimer(hwnd, kResizeTimerId);
         }
+    }
         return 0;
-
     }
 
     // ImGui のハンドラは最後にする（ImGui 有効時のみ）

@@ -64,7 +64,9 @@ Math::Vector3 MathUtil::Transform(const Math::Vector3& vector, const Math::Matri
     result.z = vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] + vector.z * matrix.m[2][2] + matrix.m[3][2];
     float w = vector.x * matrix.m[0][3] + vector.y * matrix.m[1][3] + vector.z * matrix.m[2][3] + matrix.m[3][3];
     assert(w != 0.0f);
-    result.x /= w; result.y /= w; result.z /= w;
+    result.x /= w;
+    result.y /= w;
+    result.z /= w;
     return result;
 }
 
@@ -74,7 +76,8 @@ Math::Matrix4x4 MathUtil::Multiply(const Math::Matrix4x4& m1, const Math::Matrix
     for (int row = 0; row < 4; ++row) {
         for (int col = 0; col < 4; ++col) {
             result.m[row][col] = 0.0f;
-            for (int k = 0; k < 4; ++k) result.m[row][col] += m1.m[row][k] * m2.m[k][col];
+            for (int k = 0; k < 4; ++k)
+                result.m[row][col] += m1.m[row][k] * m2.m[k][col];
         }
     }
     return result;
@@ -85,7 +88,8 @@ Math::Matrix4x4 MathUtil::Inverse(const Math::Matrix4x4& m)
     Math::Matrix4x4 result = {};
 
     float det = m.m[0][0] * m.m[1][1] * m.m[2][2] * m.m[3][3] + m.m[0][0] * m.m[1][2] * m.m[2][3] * m.m[3][1] + m.m[0][0] * m.m[1][3] * m.m[2][1] * m.m[3][2] - m.m[0][0] * m.m[1][3] * m.m[2][2] * m.m[3][1] - m.m[0][0] * m.m[1][2] * m.m[2][1] * m.m[3][3] - m.m[0][0] * m.m[1][1] * m.m[2][3] * m.m[3][2] - m.m[0][1] * m.m[1][0] * m.m[2][2] * m.m[3][3] - m.m[0][2] * m.m[1][0] * m.m[2][3] * m.m[3][1] - m.m[0][3] * m.m[1][0] * m.m[2][1] * m.m[3][2] + m.m[0][3] * m.m[1][0] * m.m[2][2] * m.m[3][1] + m.m[0][2] * m.m[1][0] * m.m[2][1] * m.m[3][3] + m.m[0][1] * m.m[1][0] * m.m[2][3] * m.m[3][2] + m.m[0][1] * m.m[1][2] * m.m[2][0] * m.m[3][3] + m.m[0][2] * m.m[1][3] * m.m[2][0] * m.m[3][1] + m.m[0][3] * m.m[1][1] * m.m[2][0] * m.m[3][2] - m.m[0][3] * m.m[1][2] * m.m[2][0] * m.m[3][1] - m.m[0][2] * m.m[1][1] * m.m[2][0] * m.m[3][3] - m.m[0][1] * m.m[1][3] * m.m[2][0] * m.m[3][2] - m.m[0][1] * m.m[1][2] * m.m[2][3] * m.m[3][0] - m.m[0][2] * m.m[1][3] * m.m[2][1] * m.m[3][0] - m.m[0][3] * m.m[1][1] * m.m[2][2] * m.m[3][0] + m.m[0][3] * m.m[1][2] * m.m[2][1] * m.m[3][0] + m.m[0][2] * m.m[1][1] * m.m[2][3] * m.m[3][0] + m.m[0][1] * m.m[1][3] * m.m[2][2] * m.m[3][0];
-    if (det == 0.0f) return result;
+    if (det == 0.0f)
+        return result;
     float invDet = 1.0f / det;
     result.m[0][0] = invDet * (m.m[1][1] * m.m[2][2] * m.m[3][3] + m.m[1][2] * m.m[2][3] * m.m[3][1] + m.m[1][3] * m.m[2][1] * m.m[3][2] - m.m[1][3] * m.m[2][2] * m.m[3][1] - m.m[1][2] * m.m[2][1] * m.m[3][3] - m.m[1][1] * m.m[2][3] * m.m[3][2]);
     result.m[0][1] = invDet * (-m.m[0][1] * m.m[2][2] * m.m[3][3] - m.m[0][2] * m.m[2][3] * m.m[3][1] - m.m[0][3] * m.m[2][1] * m.m[3][2] + m.m[0][3] * m.m[2][2] * m.m[3][1] + m.m[0][2] * m.m[2][1] * m.m[3][3] + m.m[0][1] * m.m[2][3] * m.m[3][2]);
@@ -104,14 +108,14 @@ Math::Matrix4x4 MathUtil::Inverse(const Math::Matrix4x4& m)
     result.m[3][2] = invDet * (-m.m[0][0] * m.m[1][1] * m.m[3][2] - m.m[0][1] * m.m[1][2] * m.m[3][0] - m.m[0][2] * m.m[1][0] * m.m[3][1] + m.m[0][2] * m.m[1][1] * m.m[3][0] + m.m[0][1] * m.m[1][0] * m.m[3][2] + m.m[0][0] * m.m[1][2] * m.m[3][1]);
     result.m[3][3] = invDet * (m.m[0][0] * m.m[1][1] * m.m[2][2] + m.m[0][1] * m.m[1][2] * m.m[2][0] + m.m[0][2] * m.m[1][0] * m.m[2][1] - m.m[0][2] * m.m[1][1] * m.m[2][0] - m.m[0][1] * m.m[1][0] * m.m[2][2] - m.m[0][0] * m.m[1][2] * m.m[2][1]);
     return result;
-
 }
 
 Math::Matrix4x4 MathUtil::MakeIdentity4x4()
 {
     Math::Matrix4x4 result = {};
     for (int row = 0; row < 4; ++row) {
-        for (int col = 0; col < 4; ++col) result.m[row][col] = (row == col) ? 1.0f : 0.0f;
+        for (int col = 0; col < 4; ++col)
+            result.m[row][col] = (row == col) ? 1.0f : 0.0f;
     }
     return result;
 }
@@ -165,7 +169,6 @@ Math::Matrix4x4 MathUtil::MakePerspectiveFovMatrix(float fovY, float aspectRatio
     result.m[3][3] = 0.0f;
     return result;
 }
-
 
 /// <summary>
 /// 直交投影行列の作成

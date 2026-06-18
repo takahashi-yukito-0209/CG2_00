@@ -3,7 +3,8 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-cbuffer OutlineSettings : register(b0) {
+cbuffer OutlineSettings : register(b0)
+{
     uint gKernelSize;
     uint gDirection;
     float gSigma;
@@ -11,27 +12,32 @@ cbuffer OutlineSettings : register(b0) {
     row_major float4x4 gProjectionInverse;
 };
 
-static const float kPrewittHorizontalKernel[3][3] = {
+static const float kPrewittHorizontalKernel[3][3] =
+{
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f },
     { -1.0f / 6.0f, 0.0f, 1.0f / 6.0f }
 };
 
-static const float kPrewittVerticalKernel[3][3] = {
+static const float kPrewittVerticalKernel[3][3] =
+{
     { -1.0f / 6.0f, -1.0f / 6.0f, -1.0f / 6.0f },
-    {  0.0f,         0.0f,         0.0f },
-    {  1.0f / 6.0f,  1.0f / 6.0f,  1.0f / 6.0f }
+    { 0.0f, 0.0f, 0.0f },
+    { 1.0f / 6.0f, 1.0f / 6.0f, 1.0f / 6.0f }
 };
 
-float Luminance(float3 color) {
+float Luminance(float3 color)
+{
     return dot(color, float3(0.2125f, 0.7154f, 0.0721f));
 }
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     uint textureWidth = 0; // 入力テクスチャの横幅
     uint textureHeight = 0; // 入力テクスチャの縦幅
     gTexture.GetDimensions(textureWidth, textureHeight);
@@ -40,8 +46,10 @@ PixelShaderOutput main(VertexShaderOutput input) {
 
     float2 difference = float2(0.0f, 0.0f); // 横と縦の輝度差
 
-    for (int32_t y = 0; y < 3; ++y) {
-        for (int32_t x = 0; x < 3; ++x) {
+    for (int32_t y = 0; y < 3; ++y)
+    {
+        for (int32_t x = 0; x < 3; ++x)
+        {
             float2 offset =
                 float2(x - 1, y - 1) * uvStepSize; // 周辺テクセルへの差分
             float3 sampleColor =

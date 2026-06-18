@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include "Object3d.h"
 #include <d3d12.h>

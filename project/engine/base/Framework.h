@@ -1,11 +1,11 @@
 #pragma once
-#include <Windows.h>
-#include "engine/base/WinApp.h"
-#include "engine/base/SrvManager.h"
-#include "engine/2d/SpriteCommon.h"
-#include "engine/3d/Object3dCommon.h"
 #include "ImGuiManager.h"
+#include "engine/2d/SpriteCommon.h"
 #include "engine/2d/TextureManager.h"
+#include "engine/3d/Object3dCommon.h"
+#include "engine/base/SrvManager.h"
+#include "engine/base/WinApp.h"
+#include <Windows.h>
 
 using namespace MyEngine;
 /// <summary>
@@ -13,7 +13,6 @@ using namespace MyEngine;
 /// </summary>
 class Framework {
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ: メンバ変数を初期化
     /// </summary>
@@ -24,11 +23,15 @@ public: // メンバ関数
     /// </summary>
     virtual ~Framework() = default;
 
-
     /// <summary>
     /// 初期化処理 (必要なら派生でオーバーライド)
     /// </summary>
-    virtual bool Initialize(HINSTANCE hInstance, int nCmdShow) { (void)hInstance; (void)nCmdShow; return true; }
+    virtual bool Initialize(HINSTANCE hInstance, int nCmdShow)
+    {
+        (void)hInstance;
+        (void)nCmdShow;
+        return true;
+    }
 
     /// <summary>
     /// 終了処理 (必要なら派生でオーバーライド)
@@ -64,9 +67,9 @@ public: // メンバ関数
     /// エンジンの初期化処理をまとめて行うユーティリティ関数
     /// </summary>
     bool InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
-                          std::unique_ptr<SpriteCommon>& spriteCommonOut,
-                          SrvManager& srvManagerOut,
-                          std::unique_ptr<Object3dCommon>& object3dCommonOut);
+        std::unique_ptr<SpriteCommon>& spriteCommonOut,
+        SrvManager& srvManagerOut,
+        std::unique_ptr<Object3dCommon>& object3dCommonOut);
 
     /// <summary>
     /// エンジンの終了処理をまとめて行うユーティリティ関数
@@ -76,7 +79,11 @@ public: // メンバ関数
     /// <summary>
     /// 目標FPSの設定 (必要なら派生でオーバーライド)
     /// </summary>
-    void SetTargetFPS(double fps) { if (fps > 0.0) targetFPS_ = fps; }
+    void SetTargetFPS(double fps)
+    {
+        if (fps > 0.0)
+            targetFPS_ = fps;
+    }
 
 protected: // メンバ変数
     double targetFPS_ = 60.0; // 目標FPS

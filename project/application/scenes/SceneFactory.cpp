@@ -1,6 +1,6 @@
 #include "SceneFactory.h"
-#include "TitleScene.h"
 #include "PlayScene.h"
+#include "TitleScene.h"
 
 using namespace GameApp;
 using namespace MyEngine;
@@ -8,7 +8,8 @@ using namespace MyEngine;
 /// <summary>
 /// シーンの名前からシーンオブジェクトを生成する。ここで新しいシーンを追加していく。
 /// </summary>
-std::unique_ptr<IScene> SceneFactory::Create(const std::string& name) {
+std::unique_ptr<IScene> SceneFactory::Create(const std::string& name)
+{
 
     // シーンの名前に応じて対応するシーンオブジェクトを生成して返す
     if (name == "Title") {

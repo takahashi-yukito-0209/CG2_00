@@ -3,7 +3,8 @@
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-cbuffer RadialBlurSettings : register(b0) {
+cbuffer RadialBlurSettings : register(b0)
+{
     uint gKernelSize;
     uint gDirection;
     float gSigma;
@@ -13,11 +14,13 @@ cbuffer RadialBlurSettings : register(b0) {
     uint gSampleCount;
 };
 
-struct PixelShaderOutput {
+struct PixelShaderOutput
+{
     float4 color : SV_TARGET;
 };
 
-PixelShaderOutput main(VertexShaderOutput input) {
+PixelShaderOutput main(VertexShaderOutput input)
+{
     uint sampleCount =
         clamp(gSampleCount, 1u, 32u); // 安全な範囲へ制限したサンプル数
     float2 direction =
@@ -25,7 +28,8 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float3 accumulatedColor =
         float3(0.0f, 0.0f, 0.0f); // サンプル色の合計
 
-    for (uint sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex) {
+    for (uint sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
+    {
         float2 sampleTexcoord =
             input.texcoord -
             direction * gBlurWidth * float(sampleIndex); // 中心方向へずらしたUV

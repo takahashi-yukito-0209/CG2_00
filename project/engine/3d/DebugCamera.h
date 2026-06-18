@@ -76,7 +76,6 @@ private: // メンバ関数（内部用）
     void UpdateProjectionMatrix();
 
 private: // メンバ変数
-
     // カメラ位置
     Math::Vector3 translation_ = { 0.0f, 0.0f, -50.0f };
 
@@ -95,5 +94,4 @@ private: // メンバ変数
     // 画面サイズ
     float screenWidth_ = 1280.0f;
     float screenHeight_ = 720.0f;
-
 };

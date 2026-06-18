@@ -1,8 +1,8 @@
 #pragma once
-#include <memory>
 #include "IScene.h"
-#include <vector>
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace MyEngine {
 
@@ -11,7 +11,6 @@ namespace MyEngine {
 /// </summary>
 class SceneManager {
 public: // メンバ関数
-
     /// <summary>
     /// コンストラクタ
     /// </summary>
@@ -26,7 +25,7 @@ public: // メンバ関数
     /// シーンマネージャの初期化（必要なリソースのセットアップなどを行う）
     /// </summary>
     void Initialize();
-    
+
     /// <summary>
     /// シーンマネージャの終了処理（現在のシーンのFinalizeを呼び出すなど、クリーンアップを行う）
     /// </summary>
@@ -83,7 +82,6 @@ public: // メンバ関数
     std::string GetCurrentSceneName() const;
 
 private: // メンバ変数
-
     std::unique_ptr<IScene> current_; // 現在のシーン
     // シーンスタック: PushScene したときに以前のシーンを保存する
     std::vector<std::unique_ptr<IScene>> stack_;

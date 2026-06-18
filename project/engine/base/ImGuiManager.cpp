@@ -12,8 +12,8 @@
 #include "engine/3d/Camera.h"
 #include "engine/3d/Object3d.h"
 #include "engine/3d/Object3dCommon.h"
-#include "engine/base/SrvManager.h"
 #include "engine/base/PostProcess.h"
+#include "engine/base/SrvManager.h"
 #include "engine/particle/ParticleEmitter.h"
 #include "engine/particle/ParticleManager.h"
 #include <cmath>
@@ -219,8 +219,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             ctx.postProcess->SetEnabled(enabled);
         }
 
-        int effectIndex =
-            static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
+        int effectIndex = static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
         const char* effectNames[] = {
             "Copy",
             "Grayscale",
@@ -244,8 +243,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::BoxFilter) {
-            int kernelIndex =
-                ctx.postProcess->GetBoxFilterKernelSize() == 5 ? 1 : 0; // 現在のカーネル番号
+            int kernelIndex = ctx.postProcess->GetBoxFilterKernelSize() == 5 ? 1 : 0; // 現在のカーネル番号
             const char* kernelNames[] = {
                 "3x3",
                 "5x5"
@@ -256,17 +254,14 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                     &kernelIndex,
                     kernelNames,
                     IM_ARRAYSIZE(kernelNames))) {
-                uint32_t kernelSize =
-                    kernelIndex == 1 ? 5u : 3u; // 選択されたカーネルサイズ
+                uint32_t kernelSize = kernelIndex == 1 ? 5u : 3u; // 選択されたカーネルサイズ
                 ctx.postProcess->SetBoxFilterKernelSize(kernelSize);
             }
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::GaussianFilter) {
-            uint32_t currentKernelSize =
-                ctx.postProcess->GetGaussianKernelSize(); // 現在のカーネルサイズ
-            int kernelIndex =
-                currentKernelSize == 3 ? 0 : (currentKernelSize == 5 ? 1 : 2);
+            uint32_t currentKernelSize = ctx.postProcess->GetGaussianKernelSize(); // 現在のカーネルサイズ
+            int kernelIndex = currentKernelSize == 3 ? 0 : (currentKernelSize == 5 ? 1 : 2);
             const char* kernelNames[] = {
                 "3x3",
                 "5x5",
@@ -282,8 +277,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetGaussianKernelSize(kernelSizes[kernelIndex]);
             }
 
-            float sigma =
-                ctx.postProcess->GetGaussianSigma(); // 現在の標準偏差
+            float sigma = ctx.postProcess->GetGaussianSigma(); // 現在の標準偏差
             if (ImGui::DragFloat(
                     "Sigma",
                     &sigma,
@@ -294,15 +288,13 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetGaussianSigma(sigma);
             }
 
-            uint32_t sampleCount =
-                ctx.postProcess->GetGaussianKernelSize() * 2; // 分離処理の総サンプル数
+            uint32_t sampleCount = ctx.postProcess->GetGaussianKernelSize() * 2; // 分離処理の総サンプル数
             ImGui::Text("Samples: %u (separable 2-pass)", sampleCount);
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::LuminanceOutline
             || ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
-            float outlineStrength =
-                ctx.postProcess->GetOutlineStrength(); // 現在の輪郭強度
+            float outlineStrength = ctx.postProcess->GetOutlineStrength(); // 現在の輪郭強度
             if (ImGui::DragFloat(
                     "Outline Strength",
                     &outlineStrength,
@@ -315,8 +307,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
-            float depthThreshold =
-                ctx.postProcess->GetDepthOutlineThreshold(); // 深度差の判定閾値
+            float depthThreshold = ctx.postProcess->GetDepthOutlineThreshold(); // 深度差の判定閾値
             if (ImGui::DragFloat(
                     "Depth Threshold",
                     &depthThreshold,
@@ -327,8 +318,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetDepthOutlineThreshold(depthThreshold);
             }
 
-            float depthSoftness =
-                ctx.postProcess->GetDepthOutlineSoftness(); // 輪郭の立ち上がり幅
+            float depthSoftness = ctx.postProcess->GetDepthOutlineSoftness(); // 輪郭の立ち上がり幅
             if (ImGui::DragFloat(
                     "Depth Softness",
                     &depthSoftness,
@@ -341,8 +331,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::RadialBlur) {
-            Math::Vector2 center =
-                ctx.postProcess->GetRadialBlurCenter(); // 現在のブラー中心
+            Math::Vector2 center = ctx.postProcess->GetRadialBlurCenter(); // 現在のブラー中心
             float centerValues[2] = {
                 center.x,
                 center.y
@@ -358,8 +347,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                     { centerValues[0], centerValues[1] });
             }
 
-            float blurWidth =
-                ctx.postProcess->GetRadialBlurWidth(); // 現在のブラー幅
+            float blurWidth = ctx.postProcess->GetRadialBlurWidth(); // 現在のブラー幅
             if (ImGui::DragFloat(
                     "Blur Width",
                     &blurWidth,
@@ -370,8 +358,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetRadialBlurWidth(blurWidth);
             }
 
-            int sampleCount =
-                static_cast<int>(ctx.postProcess->GetRadialBlurSampleCount()); // サンプル数
+            int sampleCount = static_cast<int>(ctx.postProcess->GetRadialBlurSampleCount()); // サンプル数
             if (ImGui::SliderInt(
                     "Sample Count",
                     &sampleCount,
@@ -383,8 +370,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::Dissolve) {
-            float threshold =
-                ctx.postProcess->GetDissolveThreshold(); // 現在のDissolve閾値
+            float threshold = ctx.postProcess->GetDissolveThreshold(); // 現在のDissolve閾値
             if (ImGui::SliderFloat(
                     "Threshold",
                     &threshold,
@@ -394,8 +380,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetDissolveThreshold(threshold);
             }
 
-            float edgeWidth =
-                ctx.postProcess->GetDissolveEdgeWidth(); // 現在の境界幅
+            float edgeWidth = ctx.postProcess->GetDissolveEdgeWidth(); // 現在の境界幅
             if (ImGui::DragFloat(
                     "Edge Width",
                     &edgeWidth,
@@ -406,8 +391,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetDissolveEdgeWidth(edgeWidth);
             }
 
-            Math::Vector3 edgeColor =
-                ctx.postProcess->GetDissolveEdgeColor(); // 現在の境界色
+            Math::Vector3 edgeColor = ctx.postProcess->GetDissolveEdgeColor(); // 現在の境界色
             float edgeColorValues[3] = {
                 edgeColor.x,
                 edgeColor.y,
@@ -415,17 +399,14 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }; // ImGui編集用の境界色
             if (ImGui::ColorEdit3("Edge Color", edgeColorValues)) {
                 ctx.postProcess->SetDissolveEdgeColor(
-                    {
-                        edgeColorValues[0],
+                    { edgeColorValues[0],
                         edgeColorValues[1],
-                        edgeColorValues[2]
-                    });
+                        edgeColorValues[2] });
             }
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::Random) {
-            float randomStrength =
-                ctx.postProcess->GetRandomStrength(); // 現在のノイズ強度
+            float randomStrength = ctx.postProcess->GetRandomStrength(); // 現在のノイズ強度
             if (ImGui::SliderFloat(
                     "Noise Strength",
                     &randomStrength,
@@ -435,8 +416,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetRandomStrength(randomStrength);
             }
 
-            float randomScale =
-                ctx.postProcess->GetRandomScale(); // 現在のノイズの細かさ
+            float randomScale = ctx.postProcess->GetRandomScale(); // 現在のノイズの細かさ
             if (ImGui::DragFloat(
                     "Noise Scale",
                     &randomScale,
@@ -447,8 +427,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                 ctx.postProcess->SetRandomScale(randomScale);
             }
 
-            float randomSpeed =
-                ctx.postProcess->GetRandomSpeed(); // 現在の変化速度
+            float randomSpeed = ctx.postProcess->GetRandomSpeed(); // 現在の変化速度
             if (ImGui::DragFloat(
                     "Noise Speed",
                     &randomSpeed,
@@ -495,8 +474,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Random PSO: %s",
             ctx.postProcess->IsRandomReady() ? "Ready" : "Not Ready");
 
-        uint32_t srvIndex =
-            ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV
+        uint32_t srvIndex = ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV
         if (srvIndex == UINT32_MAX) {
             ImGui::Text("Input SRV: Not Drawn");
         } else {

@@ -563,8 +563,7 @@ void DirectXCommon::CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex)
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Texture2D.MipLevels = 1;
 
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
-        GetSRVCPUDescriptorHandle(srvIndex); // SRVの配置先
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = GetSRVCPUDescriptorHandle(srvIndex); // SRVの配置先
     device_->CreateShaderResourceView(
         rt->depthResource.Get(),
         &srvDesc,
@@ -648,8 +647,7 @@ void DirectXCommon::BeginRenderTo(int handle, bool clear)
         depthBarrier.Transition.pResource = rt->depthResource.Get();
         depthBarrier.Transition.StateBefore = rt->depthCurrentState;
         depthBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-        depthBarrier.Transition.Subresource =
-            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        depthBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmd->ResourceBarrier(1, &depthBarrier);
         rt->depthCurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
@@ -732,13 +730,10 @@ void DirectXCommon::EndRenderTo(int handle)
         depthBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         depthBarrier.Transition.pResource = rt->depthResource.Get();
         depthBarrier.Transition.StateBefore = rt->depthCurrentState;
-        depthBarrier.Transition.StateAfter =
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        depthBarrier.Transition.Subresource =
-            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        depthBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        depthBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmd->ResourceBarrier(1, &depthBarrier);
-        rt->depthCurrentState =
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        rt->depthCurrentState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     }
 
     // スワップチェーンのバックバッファに描画対象を戻す

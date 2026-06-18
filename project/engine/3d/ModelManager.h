@@ -16,7 +16,6 @@ class ModelCommon;
 /// </summary>
 class ModelManager {
 public: // メンバ関数
-
     /// <summary>
     /// シングルトンインスタンス取得
     /// </summary>
@@ -41,7 +40,6 @@ private: // メンバ関数（内部用）
     ModelManager() = default;
 
 private: // メンバ変数
-
     static std::unique_ptr<ModelManager> instance_;
     // ファイルパスをキーにモデルインスタンスを保持するコンテナ
     std::map<std::string, std::unique_ptr<Model>> models_;

@@ -1,9 +1,9 @@
 #include "D3DResourceLeakChecker.h"
+#include "engine/utility/Logger.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
 #include <wrl.h>
-#include "engine/utility/Logger.h"
 
 /// <summary>
 /// デストラクタ：D3Dリソースリークのチェックを行う

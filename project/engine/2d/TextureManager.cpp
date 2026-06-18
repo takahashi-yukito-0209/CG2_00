@@ -1,8 +1,8 @@
 #include "TextureManager.h"
+#include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
 #include "StringUtility.h"
-#include "../utility/ResourceResolver.h"
 #include "engine/base/SrvManager.h"
 #include <algorithm>
 #include <utility>
@@ -59,7 +59,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
     // 解決できない場合は元のパスをキーとして使用
     if (key.empty()) {
         key = filePath;
-    } 
+    }
     // すでにロードされているテクスチャか確認
     if (textureDatas.contains(key)) {
         const auto& td = textureDatas[key];
@@ -92,7 +92,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
     HRESULT hr = S_OK;
     // 小文字化して拡張子判定
     std::string lowerPath = storePath;
-    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char c){ return static_cast<char>(::tolower(c)); });
+    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
     bool isDDS = (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".dds");
 
     if (isDDS) {
@@ -250,7 +250,7 @@ void TextureManager::ExecuteResourceUpload()
 /// </summary>
 uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
 {
-    
+
     // ResourceResolverを使ってファイルパスを解決
     std::string key = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
     // 解決できない場合は元のパスをキーとして使用
@@ -351,7 +351,8 @@ const DirectX::TexMetadata& TextureManager::GetMetaData(const std::string& fileP
     static DirectX::TexMetadata defaultMeta = []() { DirectX::TexMetadata m{}; m.width = 1; m.height = 1; m.mipLevels = 1; m.format = DXGI_FORMAT_R8G8B8A8_UNORM; return m; }();
     // もし filePath キーが見つかればそのメタデータを返す
     std::string key = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
-    if (key.empty()) key = filePath;
+    if (key.empty())
+        key = filePath;
     auto it = textureDatas.find(key);
     // 見つからない場合はデフォルトのメタデータを返す
     if (it == textureDatas.end()) {
@@ -368,7 +369,8 @@ uint32_t TextureManager::GetSrvIndex(const std::string& filePath)
 {
     // filePathキーに対応するSRVインデックスを返す
     std::string key = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
-    if (key.empty()) key = filePath;
+    if (key.empty())
+        key = filePath;
     auto it = textureDatas.find(key);
     // 見つからない場合は UINT32_MAX を返す
     if (it == textureDatas.end()) {
@@ -388,7 +390,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(const std::string& f
     nullHandle.ptr = 0;
     // 見つからない場合は null ハンドルを返す
     std::string key = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
-    if (key.empty()) key = filePath;
+    if (key.empty())
+        key = filePath;
     auto it = textureDatas.find(key);
     // もし見つからない場合は null ハンドルを返す
     if (it == textureDatas.end()) {
