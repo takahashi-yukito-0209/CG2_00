@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <d3d12.h>
+#include <MathTypes.h>
 #include <wrl.h>
 
 namespace MyEngine {
@@ -17,6 +18,8 @@ enum class PostEffectType {
     Vignette,  // 画面周辺を暗くして描画する
     BoxFilter, // Box Filterによる平均化処理を適用する
     GaussianFilter, // 分離型Gaussian Filterを適用する
+    LuminanceOutline, // 輝度差から輪郭を検出する
+    DepthOutline, // 深度差から輪郭を検出する
 };
 
 /// <summary>
@@ -143,6 +146,54 @@ public:
         uint32_t intermediateSrvIndex);
 
     /// <summary>
+    /// 深度テクスチャを使用してOutlineを描画する
+    /// </summary>
+    void DrawDepthOutline(
+        uint32_t colorSrvIndex,
+        uint32_t depthSrvIndex,
+        const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// Outlineの強度を設定する
+    /// </summary>
+    void SetOutlineStrength(float strength);
+
+    /// <summary>
+    /// Outlineの強度を取得する
+    /// </summary>
+    float GetOutlineStrength() const { return outlineStrength_; }
+
+    /// <summary>
+    /// Depth Outlineで輪郭と判定する深度差の閾値を設定する
+    /// </summary>
+    void SetDepthOutlineThreshold(float threshold);
+
+    /// <summary>
+    /// Depth Outlineの深度差閾値を取得する
+    /// </summary>
+    float GetDepthOutlineThreshold() const { return depthOutlineThreshold_; }
+
+    /// <summary>
+    /// Depth Outlineの輪郭の立ち上がり幅を設定する
+    /// </summary>
+    void SetDepthOutlineSoftness(float softness);
+
+    /// <summary>
+    /// Depth Outlineの輪郭の立ち上がり幅を取得する
+    /// </summary>
+    float GetDepthOutlineSoftness() const { return depthOutlineSoftness_; }
+
+    /// <summary>
+    /// 輝度ベースOutline用PSOが生成済みか確認する
+    /// </summary>
+    bool IsLuminanceOutlineReady() const { return luminanceOutlinePipelineState_ != nullptr; }
+
+    /// <summary>
+    /// 深度ベースOutline用PSOが生成済みか確認する
+    /// </summary>
+    bool IsDepthOutlineReady() const { return depthOutlinePipelineState_ != nullptr; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -177,12 +228,17 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> boxFilterPipelineState_; // Box Filter用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianFilterPipelineState_; // Gaussian Filter用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> luminanceOutlinePipelineState_; // 輝度Outline用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> depthOutlinePipelineState_; // 深度Outline用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
     uint32_t boxFilterKernelSize_ = 3; // Box Filterに使用するカーネルサイズ
     uint32_t gaussianKernelSize_ = 7; // Gaussian Filterに使用するカーネルサイズ
     float gaussianSigma_ = 2.0f; // Gaussian Filterの標準偏差
+    float outlineStrength_ = 6.0f; // Outlineの輪郭強度
+    float depthOutlineThreshold_ = 0.02f; // 輪郭として扱う相対深度差
+    float depthOutlineSoftness_ = 0.03f; // 輪郭の滑らかな立ち上がり幅
 };
 
 } // namespace MyEngine

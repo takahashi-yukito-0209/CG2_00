@@ -2,6 +2,7 @@
 
 #include "DirectXCommon.h"
 #include "Logger.h"
+#include "../utility/mathUtility.h"
 
 #include <cassert>
 #include <cstring>
@@ -39,6 +40,10 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/BoxFilter.PS.hlsl");
     gaussianFilterPipelineState_ = CreatePipelineState(
         L"resources/shaders/GaussianFilter.PS.hlsl");
+    luminanceOutlinePipelineState_ = CreatePipelineState(
+        L"resources/shaders/LuminanceBasedOutline.PS.hlsl");
+    depthOutlinePipelineState_ = CreatePipelineState(
+        L"resources/shaders/DepthBasedOutline.PS.hlsl");
 
     return IsReady();
 }
@@ -48,6 +53,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    depthOutlinePipelineState_.Reset();
+    luminanceOutlinePipelineState_.Reset();
     gaussianFilterPipelineState_.Reset();
     boxFilterPipelineState_.Reset();
     vignettePipelineState_.Reset();
@@ -65,7 +72,8 @@ bool PostProcess::IsReady() const
 {
     return dxCommon_ && rootSignature_ && copyPipelineState_
         && grayscalePipelineState_ && vignettePipelineState_
-        && boxFilterPipelineState_ && gaussianFilterPipelineState_;
+        && boxFilterPipelineState_ && gaussianFilterPipelineState_
+        && luminanceOutlinePipelineState_ && depthOutlinePipelineState_;
 }
 
 /// <summary>
@@ -73,37 +81,52 @@ bool PostProcess::IsReady() const
 /// </summary>
 void PostProcess::CreateRootSignature()
 {
-    D3D12_DESCRIPTOR_RANGE descriptorRange = {}; // 入力テクスチャ用SRV範囲
-    descriptorRange.BaseShaderRegister = 0;
-    descriptorRange.NumDescriptors = 1;
-    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRange.OffsetInDescriptorsFromTableStart =
+    D3D12_DESCRIPTOR_RANGE descriptorRanges[2] = {}; // カラーと深度のSRV範囲
+    descriptorRanges[0].BaseShaderRegister = 0;
+    descriptorRanges[0].NumDescriptors = 1;
+    descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRanges[0].OffsetInDescriptorsFromTableStart =
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[1].BaseShaderRegister = 1;
+    descriptorRanges[1].NumDescriptors = 1;
+    descriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRanges[1].OffsetInDescriptorsFromTableStart =
         D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[2] = {}; // PixelShaderへ渡すルートパラメータ
+    D3D12_ROOT_PARAMETER rootParameters[3] = {}; // PixelShaderへ渡すルートパラメータ
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRange;
+    rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRanges[0];
     rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.ShaderRegister = 0;
-    rootParameters[1].Constants.RegisterSpace = 0;
-    rootParameters[1].Constants.Num32BitValues = 4;
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[1];
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[2].Constants.ShaderRegister = 0;
+    rootParameters[2].Constants.RegisterSpace = 0;
+    rootParameters[2].Constants.Num32BitValues = 20;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {}; // 入力テクスチャ用サンプラー
-    staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.ShaderRegister = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {}; // カラー用と深度用サンプラー
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {}; // ルートシグネチャ設定
     rootSignatureDesc.NumParameters = _countof(rootParameters);
     rootSignatureDesc.pParameters = rootParameters;
-    rootSignatureDesc.NumStaticSamplers = 1;
-    rootSignatureDesc.pStaticSamplers = &staticSampler;
+    rootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
     rootSignatureDesc.Flags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -204,6 +227,10 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::DepthOutline:
+        return depthOutlinePipelineState_.Get();
+    case PostEffectType::LuminanceOutline:
+        return luminanceOutlinePipelineState_.Get();
     case PostEffectType::GaussianFilter:
         return gaussianFilterPipelineState_.Get();
     case PostEffectType::BoxFilter:
@@ -249,14 +276,15 @@ void PostProcess::DrawTexture(
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
     uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
     std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
-    uint32_t filterSettings[4] = {
-        boxFilterKernelSize_,
-        0,
-        sigmaBits,
-        0
-    }; // 通常の1パスエフェクト用設定
+    uint32_t filterSettings[20] = {}; // 通常の1パスエフェクト用設定
+    filterSettings[0] = boxFilterKernelSize_;
+    filterSettings[2] = sigmaBits;
+    std::memcpy(
+        &filterSettings[3],
+        &outlineStrength_,
+        sizeof(float));
     commandList->SetGraphicsRoot32BitConstants(
-        1,
+        2,
         _countof(filterSettings),
         filterSettings,
         0);
@@ -315,19 +343,17 @@ void PostProcess::DrawGaussianPass(uint32_t srvIndex, uint32_t direction)
 
     uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
     std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
-    uint32_t filterSettings[4] = {
-        gaussianKernelSize_,
-        direction,
-        sigmaBits,
-        0
-    }; // Gaussian Filter用設定
+    uint32_t filterSettings[20] = {}; // Gaussian Filter用設定
+    filterSettings[0] = gaussianKernelSize_;
+    filterSettings[1] = direction;
+    filterSettings[2] = sigmaBits;
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(gaussianFilterPipelineState_.Get());
     commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
     commandList->SetGraphicsRoot32BitConstants(
-        1,
+        2,
         _countof(filterSettings),
         filterSettings,
         0);
@@ -355,6 +381,99 @@ void PostProcess::DrawGaussianTexture(
     dxCommon_->EndRenderTo(intermediateRenderTargetHandle);
 
     DrawGaussianPass(intermediateSrvIndex, 1); // 縦方向へぼかす
+}
+
+/// <summary>
+/// Outlineの強度を設定する
+/// </summary>
+void PostProcess::SetOutlineStrength(float strength)
+{
+    if (strength >= 0.0f && strength <= 32.0f) {
+        outlineStrength_ = strength;
+    }
+}
+
+/// <summary>
+/// Depth Outlineで輪郭と判定する深度差の閾値を設定する
+/// </summary>
+void PostProcess::SetDepthOutlineThreshold(float threshold)
+{
+    if (threshold >= 0.0f && threshold <= 1.0f) {
+        depthOutlineThreshold_ = threshold;
+    }
+}
+
+/// <summary>
+/// Depth Outlineの輪郭の立ち上がり幅を設定する
+/// </summary>
+void PostProcess::SetDepthOutlineSoftness(float softness)
+{
+    if (softness >= 0.0001f && softness <= 1.0f) {
+        depthOutlineSoftness_ = softness;
+    }
+}
+
+/// <summary>
+/// 深度テクスチャを使用してOutlineを描画する
+/// </summary>
+void PostProcess::DrawDepthOutline(
+    uint32_t colorSrvIndex,
+    uint32_t depthSrvIndex,
+    const Math::Matrix4x4& projectionMatrix)
+{
+    if (!enabled_) {
+        DrawTexture(colorSrvIndex, PostEffectType::Copy);
+        return;
+    }
+
+    if (!IsReady() || !depthOutlinePipelineState_) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList* commandList =
+        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE colorSrvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(colorSrvIndex); // カラーSRV
+    D3D12_GPU_DESCRIPTOR_HANDLE depthSrvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(depthSrvIndex); // 深度SRV
+    ID3D12DescriptorHeap* descriptorHeaps[] = {
+        dxCommon_->GetSrvDescriptorHeap()
+    }; // 描画で使用するSRVヒープ
+
+    Math::Matrix4x4 projectionInverse =
+        MathUtil::Inverse(projectionMatrix); // View空間復元用の逆射影行列
+    uint32_t outlineSettings[20] = {}; // Outline用ルート定数
+    std::memcpy(
+        &outlineSettings[3],
+        &outlineStrength_,
+        sizeof(float));
+    std::memcpy(
+        &outlineSettings[0],
+        &depthOutlineThreshold_,
+        sizeof(float));
+    std::memcpy(
+        &outlineSettings[1],
+        &depthOutlineSoftness_,
+        sizeof(float));
+    std::memcpy(
+        &outlineSettings[4],
+        &projectionInverse,
+        sizeof(Math::Matrix4x4));
+
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(depthOutlinePipelineState_.Get());
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    commandList->SetGraphicsRootDescriptorTable(0, colorSrvHandle);
+    commandList->SetGraphicsRootDescriptorTable(1, depthSrvHandle);
+    commandList->SetGraphicsRoot32BitConstants(
+        2,
+        _countof(outlineSettings),
+        outlineSettings,
+        0);
+    commandList->IASetPrimitiveTopology(
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->DrawInstanced(3, 1, 0, 0);
+    lastSrvIndex_ = colorSrvIndex;
 }
 
 /// <summary>

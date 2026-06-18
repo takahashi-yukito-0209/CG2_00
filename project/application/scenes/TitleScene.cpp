@@ -52,6 +52,10 @@ void TitleScene::Initialize(const SceneContext& ctx)
     if (rtHandle_ >= 0 && ctx_.srvManager) {
         rtSrvIndex_ = ctx_.srvManager->Allocate();
         dxCommon->CreateRenderTargetSRV(rtHandle_, rtSrvIndex_);
+        rtDepthSrvIndex_ = ctx_.srvManager->Allocate();
+        dxCommon->CreateRenderTargetDepthSRV(
+            rtHandle_,
+            rtDepthSrvIndex_);
     }
 
     gaussianRtHandle_ = dxCommon->CreateRenderTarget(
@@ -87,6 +91,7 @@ void TitleScene::Finalize()
         dxCommon->DestroyRenderTarget(rtHandle_);
         rtHandle_ = -1;
         rtSrvIndex_ = UINT32_MAX;
+        rtDepthSrvIndex_ = UINT32_MAX;
     }
 
     if (dxCommon && gaussianRtHandle_ >= 0) {
@@ -145,6 +150,14 @@ void TitleScene::Draw()
                 rtSrvIndex_,
                 gaussianRtHandle_,
                 gaussianSrvIndex_);
+        } else if (
+            postProcess_.GetEffectType() == PostEffectType::DepthOutline
+            && rtDepthSrvIndex_ != UINT32_MAX
+            && ctx_.camera) {
+            postProcess_.DrawDepthOutline(
+                rtSrvIndex_,
+                rtDepthSrvIndex_,
+                ctx_.camera->GetProjectionMatrix());
         } else {
             postProcess_.DrawTexture(rtSrvIndex_);
         }

@@ -40,9 +40,11 @@ struct RenderTargetInternal {
     bool useDepth = false;
     bool resizeWithWindow = false;
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
+    D3D12_RESOURCE_STATES depthCurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     std::array<float, 4> clearColor { 0.0f, 0.0f, 0.0f, 1.0f };
     // SRVヒープ上のインデックス（存在しない場合は UINT32_MAX）
     uint32_t srvIndex = UINT32_MAX;
+    uint32_t depthSrvIndex = UINT32_MAX;
 };
 
 static std::vector<std::unique_ptr<RenderTargetInternal>> g_renderTargets;
@@ -389,7 +391,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
         ddesc.Height = height;
         ddesc.DepthOrArraySize = 1;
         ddesc.MipLevels = 1;
-        ddesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        ddesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
         ddesc.SampleDesc.Count = 1;
         ddesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         ddesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -445,6 +447,10 @@ void DirectXCommon::DestroyRenderTarget(int handle)
             srvManager_->Free(rt->srvIndex);
             rt->srvIndex = UINT32_MAX;
         }
+        if (rt->depthSrvIndex != UINT32_MAX && srvManager_) {
+            srvManager_->Free(rt->depthSrvIndex);
+            rt->depthSrvIndex = UINT32_MAX;
+        }
     }
     g_renderTargets[handle].reset();
 }
@@ -486,6 +492,7 @@ void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t heig
     bool useDepth = rt->useDepth;
     bool resizeWithWindow = rt->resizeWithWindow;
     uint32_t oldSrv = rt->srvIndex;
+    uint32_t oldDepthSrv = rt->depthSrvIndex;
     std::array<float, 4> clearColor = rt->clearColor;
 
     int newIdx = CreateRenderTarget(width, height, fmt, useDepth, clearColor, resizeWithWindow);
@@ -496,6 +503,9 @@ void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t heig
     // 既存のSRV番号を維持し、リサイズ後のカラーバッファへ張り替える
     if (oldSrv != UINT32_MAX) {
         CreateRenderTargetSRV(newIdx, oldSrv);
+    }
+    if (oldDepthSrv != UINT32_MAX) {
+        CreateRenderTargetDepthSRV(newIdx, oldDepthSrv);
     }
 
     // 新しいレンダーターゲットが作成できたら、管理リスト内で入れ替える
@@ -531,6 +541,35 @@ void DirectXCommon::CreateRenderTargetSRV(int handle, uint32_t srvIndex)
     device_->CreateShaderResourceView(rt->colorResource.Get(), &srvDesc, cpu);
     // 保存しておく
     rt->srvIndex = srvIndex;
+}
+
+/// <summary>
+/// オフスクリーン深度バッファのSRVを生成する
+/// </summary>
+void DirectXCommon::CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+        return;
+    }
+
+    auto& rt = g_renderTargets[handle]; // SRVを生成するレンダーターゲット
+    if (!rt || !rt->depthResource) {
+        return;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {}; // 深度読み取り用SRV設定
+    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
+        GetSRVCPUDescriptorHandle(srvIndex); // SRVの配置先
+    device_->CreateShaderResourceView(
+        rt->depthResource.Get(),
+        &srvDesc,
+        cpuHandle);
+    rt->depthSrvIndex = srvIndex;
 }
 
 /// <summary>
@@ -602,6 +641,19 @@ void DirectXCommon::BeginRenderTo(int handle, bool clear)
         rt->currentState = D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
+    if (rt->useDepth
+        && rt->depthCurrentState != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+        D3D12_RESOURCE_BARRIER depthBarrier = {}; // 深度書き込み状態への遷移
+        depthBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        depthBarrier.Transition.pResource = rt->depthResource.Get();
+        depthBarrier.Transition.StateBefore = rt->depthCurrentState;
+        depthBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        depthBarrier.Transition.Subresource =
+            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmd->ResourceBarrier(1, &depthBarrier);
+        rt->depthCurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    }
+
     // レンダーターゲットのRTVとDSVを設定する
     D3D12_CPU_DESCRIPTOR_HANDLE dsv = rt->dsvHandle;
     D3D12_CPU_DESCRIPTOR_HANDLE rtv = rt->rtvHandle;
@@ -671,6 +723,22 @@ void DirectXCommon::EndRenderTo(int handle)
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmd->ResourceBarrier(1, &barrier);
         rt->currentState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
+
+    if (rt->useDepth
+        && rt->depthSrvIndex != UINT32_MAX
+        && rt->depthCurrentState != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        D3D12_RESOURCE_BARRIER depthBarrier = {}; // 深度読み取り状態への遷移
+        depthBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        depthBarrier.Transition.pResource = rt->depthResource.Get();
+        depthBarrier.Transition.StateBefore = rt->depthCurrentState;
+        depthBarrier.Transition.StateAfter =
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        depthBarrier.Transition.Subresource =
+            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmd->ResourceBarrier(1, &depthBarrier);
+        rt->depthCurrentState =
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     }
 
     // スワップチェーンのバックバッファに描画対象を戻す

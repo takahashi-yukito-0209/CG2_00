@@ -226,7 +226,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Grayscale",
             "Vignette",
             "Box Filter",
-            "Gaussian Filter"
+            "Gaussian Filter",
+            "Luminance Outline",
+            "Depth Outline"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -294,6 +296,47 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             ImGui::Text("Samples: %u (separable 2-pass)", sampleCount);
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::LuminanceOutline
+            || ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
+            float outlineStrength =
+                ctx.postProcess->GetOutlineStrength(); // 現在の輪郭強度
+            if (ImGui::DragFloat(
+                    "Outline Strength",
+                    &outlineStrength,
+                    0.1f,
+                    0.0f,
+                    32.0f,
+                    "%.1f")) {
+                ctx.postProcess->SetOutlineStrength(outlineStrength);
+            }
+        }
+
+        if (ctx.postProcess->GetEffectType() == PostEffectType::DepthOutline) {
+            float depthThreshold =
+                ctx.postProcess->GetDepthOutlineThreshold(); // 深度差の判定閾値
+            if (ImGui::DragFloat(
+                    "Depth Threshold",
+                    &depthThreshold,
+                    0.001f,
+                    0.0f,
+                    0.2f,
+                    "%.3f")) {
+                ctx.postProcess->SetDepthOutlineThreshold(depthThreshold);
+            }
+
+            float depthSoftness =
+                ctx.postProcess->GetDepthOutlineSoftness(); // 輪郭の立ち上がり幅
+            if (ImGui::DragFloat(
+                    "Depth Softness",
+                    &depthSoftness,
+                    0.001f,
+                    0.001f,
+                    0.2f,
+                    "%.3f")) {
+                ctx.postProcess->SetDepthOutlineSoftness(depthSoftness);
+            }
+        }
+
         ImGui::SeparatorText("Status");
         ImGui::Text(
             "PostProcess: %s",
@@ -313,6 +356,12 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Gaussian Filter PSO: %s",
             ctx.postProcess->IsGaussianFilterReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Luminance Outline PSO: %s",
+            ctx.postProcess->IsLuminanceOutlineReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Depth Outline PSO: %s",
+            ctx.postProcess->IsDepthOutlineReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

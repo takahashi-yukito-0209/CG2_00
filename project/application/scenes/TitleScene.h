@@ -77,6 +77,7 @@ private:
     std::unique_ptr<Object3d> terrain_; // タイトル画面に表示する地形
     int rtHandle_ = -1; // オフスクリーン用レンダーターゲットハンドル
     uint32_t rtSrvIndex_ = UINT32_MAX; // オフスクリーンテクスチャのSRV番号
+    uint32_t rtDepthSrvIndex_ = UINT32_MAX; // オフスクリーン深度のSRV番号
     int gaussianRtHandle_ = -1; // Gaussian Filterの横方向処理結果
     uint32_t gaussianSrvIndex_ = UINT32_MAX; // Gaussian中間テクスチャのSRV番号
     PostProcess postProcess_; // タイトル画面に適用するポストプロセス
