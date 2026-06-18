@@ -228,7 +228,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             "Box Filter",
             "Gaussian Filter",
             "Luminance Outline",
-            "Depth Outline"
+            "Depth Outline",
+            "Radial Blur"
         }; // 選択可能なエフェクト名
 
         if (ImGui::Combo(
@@ -337,6 +338,48 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::RadialBlur) {
+            Math::Vector2 center =
+                ctx.postProcess->GetRadialBlurCenter(); // 現在のブラー中心
+            float centerValues[2] = {
+                center.x,
+                center.y
+            }; // ImGui編集用中心座標
+            if (ImGui::DragFloat2(
+                    "Blur Center",
+                    centerValues,
+                    0.005f,
+                    0.0f,
+                    1.0f,
+                    "%.3f")) {
+                ctx.postProcess->SetRadialBlurCenter(
+                    { centerValues[0], centerValues[1] });
+            }
+
+            float blurWidth =
+                ctx.postProcess->GetRadialBlurWidth(); // 現在のブラー幅
+            if (ImGui::DragFloat(
+                    "Blur Width",
+                    &blurWidth,
+                    0.0005f,
+                    0.0f,
+                    0.1f,
+                    "%.4f")) {
+                ctx.postProcess->SetRadialBlurWidth(blurWidth);
+            }
+
+            int sampleCount =
+                static_cast<int>(ctx.postProcess->GetRadialBlurSampleCount()); // サンプル数
+            if (ImGui::SliderInt(
+                    "Sample Count",
+                    &sampleCount,
+                    1,
+                    32)) {
+                ctx.postProcess->SetRadialBlurSampleCount(
+                    static_cast<uint32_t>(sampleCount));
+            }
+        }
+
         ImGui::SeparatorText("Status");
         ImGui::Text(
             "PostProcess: %s",
@@ -362,6 +405,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Depth Outline PSO: %s",
             ctx.postProcess->IsDepthOutlineReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Radial Blur PSO: %s",
+            ctx.postProcess->IsRadialBlurReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex =
             ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV

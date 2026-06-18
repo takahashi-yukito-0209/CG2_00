@@ -20,6 +20,7 @@ enum class PostEffectType {
     GaussianFilter, // 分離型Gaussian Filterを適用する
     LuminanceOutline, // 輝度差から輪郭を検出する
     DepthOutline, // 深度差から輪郭を検出する
+    RadialBlur, // 指定した中心から放射状にぼかす
 };
 
 /// <summary>
@@ -194,6 +195,41 @@ public:
     bool IsDepthOutlineReady() const { return depthOutlinePipelineState_ != nullptr; }
 
     /// <summary>
+    /// Radial Blur用PSOが生成済みか確認する
+    /// </summary>
+    bool IsRadialBlurReady() const { return radialBlurPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// Radial Blurの中心座標を設定する
+    /// </summary>
+    void SetRadialBlurCenter(const Math::Vector2& center);
+
+    /// <summary>
+    /// Radial Blurの中心座標を取得する
+    /// </summary>
+    const Math::Vector2& GetRadialBlurCenter() const { return radialBlurCenter_; }
+
+    /// <summary>
+    /// Radial Blurの幅を設定する
+    /// </summary>
+    void SetRadialBlurWidth(float width);
+
+    /// <summary>
+    /// Radial Blurの幅を取得する
+    /// </summary>
+    float GetRadialBlurWidth() const { return radialBlurWidth_; }
+
+    /// <summary>
+    /// Radial Blurのサンプル数を設定する
+    /// </summary>
+    void SetRadialBlurSampleCount(uint32_t sampleCount);
+
+    /// <summary>
+    /// Radial Blurのサンプル数を取得する
+    /// </summary>
+    uint32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
+
+    /// <summary>
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
@@ -230,6 +266,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianFilterPipelineState_; // Gaussian Filter用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> luminanceOutlinePipelineState_; // 輝度Outline用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depthOutlinePipelineState_; // 深度Outline用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_; // Radial Blur用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
@@ -239,6 +276,9 @@ private:
     float outlineStrength_ = 6.0f; // Outlineの輪郭強度
     float depthOutlineThreshold_ = 0.02f; // 輪郭として扱う相対深度差
     float depthOutlineSoftness_ = 0.03f; // 輪郭の滑らかな立ち上がり幅
+    Math::Vector2 radialBlurCenter_ = { 0.5f, 0.5f }; // 放射状ブラーの中心
+    float radialBlurWidth_ = 0.01f; // 1サンプルごとのUV移動量
+    uint32_t radialBlurSampleCount_ = 10; // 放射状ブラーのサンプル数
 };
 
 } // namespace MyEngine

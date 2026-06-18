@@ -5,6 +5,7 @@
 #include "../utility/mathUtility.h"
 
 #include <cassert>
+#include <algorithm>
 #include <cstring>
 
 using namespace Microsoft::WRL;
@@ -44,6 +45,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/LuminanceBasedOutline.PS.hlsl");
     depthOutlinePipelineState_ = CreatePipelineState(
         L"resources/shaders/DepthBasedOutline.PS.hlsl");
+    radialBlurPipelineState_ = CreatePipelineState(
+        L"resources/shaders/RadialBlur.PS.hlsl");
 
     return IsReady();
 }
@@ -53,6 +56,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    radialBlurPipelineState_.Reset();
     depthOutlinePipelineState_.Reset();
     luminanceOutlinePipelineState_.Reset();
     gaussianFilterPipelineState_.Reset();
@@ -73,7 +77,8 @@ bool PostProcess::IsReady() const
     return dxCommon_ && rootSignature_ && copyPipelineState_
         && grayscalePipelineState_ && vignettePipelineState_
         && boxFilterPipelineState_ && gaussianFilterPipelineState_
-        && luminanceOutlinePipelineState_ && depthOutlinePipelineState_;
+        && luminanceOutlinePipelineState_ && depthOutlinePipelineState_
+        && radialBlurPipelineState_;
 }
 
 /// <summary>
@@ -227,6 +232,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::RadialBlur:
+        return radialBlurPipelineState_.Get();
     case PostEffectType::DepthOutline:
         return depthOutlinePipelineState_.Get();
     case PostEffectType::LuminanceOutline:
@@ -283,6 +290,15 @@ void PostProcess::DrawTexture(
         &filterSettings[3],
         &outlineStrength_,
         sizeof(float));
+    std::memcpy(
+        &filterSettings[4],
+        &radialBlurCenter_,
+        sizeof(Math::Vector2));
+    std::memcpy(
+        &filterSettings[6],
+        &radialBlurWidth_,
+        sizeof(float));
+    filterSettings[7] = radialBlurSampleCount_;
     commandList->SetGraphicsRoot32BitConstants(
         2,
         _countof(filterSettings),
@@ -410,6 +426,35 @@ void PostProcess::SetDepthOutlineSoftness(float softness)
 {
     if (softness >= 0.0001f && softness <= 1.0f) {
         depthOutlineSoftness_ = softness;
+    }
+}
+
+/// <summary>
+/// Radial Blurの中心座標を設定する
+/// </summary>
+void PostProcess::SetRadialBlurCenter(const Math::Vector2& center)
+{
+    radialBlurCenter_.x = (std::max)(0.0f, (std::min)(1.0f, center.x));
+    radialBlurCenter_.y = (std::max)(0.0f, (std::min)(1.0f, center.y));
+}
+
+/// <summary>
+/// Radial Blurの幅を設定する
+/// </summary>
+void PostProcess::SetRadialBlurWidth(float width)
+{
+    if (width >= 0.0f && width <= 0.1f) {
+        radialBlurWidth_ = width;
+    }
+}
+
+/// <summary>
+/// Radial Blurのサンプル数を設定する
+/// </summary>
+void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
+{
+    if (sampleCount >= 1 && sampleCount <= 32) {
+        radialBlurSampleCount_ = sampleCount;
     }
 }
 
