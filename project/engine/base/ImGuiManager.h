@@ -19,6 +19,7 @@ namespace MyEngine {
 class Object3dCommon;
 class Object3d;
 class ParticleManager;
+class PostProcess;
 }
 
 #include <vector>
@@ -74,6 +75,7 @@ public: // メンバ関数
         bool* useDebugCameraForRender = nullptr;
         // 現在のシーン名へのポインタ
         const char* currentSceneName = nullptr;
+        PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス
         // シーン変更要求のコールバック関数（引数は新しいシーン名）
     };
 
@@ -102,6 +104,11 @@ private: // メンバ関数
     /// 表示対象の選択UIを描画する
     /// </summary>
     void DrawViewFilterSection(Context& ctx);
+
+    /// <summary>
+    /// ポストエフェクトの設定と状態をImGuiへ表示する
+    /// </summary>
+    void DrawPostProcessSection(Context& ctx);
 
     /// <summary>
     /// 3Dオブジェクト関連のImGuiを描画する

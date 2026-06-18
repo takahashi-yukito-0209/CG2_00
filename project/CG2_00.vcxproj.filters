@@ -374,6 +374,8 @@
     <None Include="resources\shaders\Particle.hlsli">
       <Filter>シェーダーファイル</Filter>
     </None>
-    <None Include="resources\shaders\CopyImage.hlsli" />
+    <None Include="resources\shaders\Fullscreen.hlsli">
+      <Filter>シェーダーファイル</Filter>
+    </None>
   </ItemGroup>
 </Project>

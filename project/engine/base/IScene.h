@@ -15,6 +15,7 @@ class SrvManager;
 class DirectXCommon;
 class Object3d;
 class Sprite;
+class PostProcess;
 
 // シーンコンテキスト構造体（シーンに渡される共通リソースの集約）
 struct SceneContext {
@@ -94,6 +95,11 @@ public: // メンバ関数
     /// デフォルト実装は何もしない
     /// </summary>
     virtual void FillSpritePointers(std::vector<class Sprite*>* out) {}
+
+    /// <summary>
+    /// シーンが使用しているポストプロセスを取得する
+    /// </summary>
+    virtual PostProcess* GetPostProcess() { return nullptr; }
 
     /// <summary>
     /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする

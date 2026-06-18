@@ -1,9 +1,12 @@
 #include "PostProcess.h"
+
 #include "DirectXCommon.h"
 #include "Logger.h"
 
-using namespace MyEngine;
+#include <cassert>
+
 using namespace Microsoft::WRL;
+using namespace MyEngine;
 
 /// <summary>
 /// デストラクタ
@@ -14,54 +17,64 @@ PostProcess::~PostProcess()
 }
 
 /// <summary>
-/// 初期化処理
+/// ポストエフェクトに必要なリソースを初期化する
 /// </summary>
 bool PostProcess::Initialize(DirectXCommon* dxCommon)
 {
     if (!dxCommon) {
         return false;
     }
-    // DirectXCommon のポインタを保存
-    dxCommon_ = dxCommon;
-    // ルートシグネチャとパイプラインステートの生成
-    CreateRootSignature();
-    CreatePipelineState();
 
-    // すべてのリソースが正常に生成されたか確認
+    dxCommon_ = dxCommon; // DirectX共通基盤を保持する
+
+    CreateRootSignature();
+    copyPipelineState_ = CreatePipelineState(
+        L"resources/shaders/CopyImage.PS.hlsl");
+    grayscalePipelineState_ = CreatePipelineState(
+        L"resources/shaders/Grayscale.PS.hlsl");
+
     return IsReady();
 }
 
 /// <summary>
-/// 終了処理
+/// ポストエフェクトが保持するリソースを解放する
 /// </summary>
 void PostProcess::Finalize()
 {
-    pipelineState_.Reset();
+    grayscalePipelineState_.Reset();
+    copyPipelineState_.Reset();
     rootSignature_.Reset();
     dxCommon_ = nullptr;
+    lastSrvIndex_ = UINT32_MAX;
 }
 
 /// <summary>
-/// ルートシグネチャの生成
+/// 描画に必要なリソースが揃っているか確認する
+/// </summary>
+bool PostProcess::IsReady() const
+{
+    return dxCommon_ && rootSignature_ && copyPipelineState_ && grayscalePipelineState_;
+}
+
+/// <summary>
+/// 全画面描画用のルートシグネチャを生成する
 /// </summary>
 void PostProcess::CreateRootSignature()
 {
-    // デスクリプタレンジの定義（SRV 1つ）
-    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
-    descriptorRange[0].NumDescriptors = 1;
-    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    D3D12_DESCRIPTOR_RANGE descriptorRange = {}; // 入力テクスチャ用SRV範囲
+    descriptorRange.BaseShaderRegister = 0;
+    descriptorRange.NumDescriptors = 1;
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.OffsetInDescriptorsFromTableStart =
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    // ルートパラメータの定義
-    D3D12_ROOT_PARAMETER rootParameters[1] = {};
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[0].DescriptorTable.pDescriptorRanges = descriptorRange;
-    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_PARAMETER rootParameter = {}; // SRVを受け取るルートパラメータ
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRange;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // 静的サンプラーの定義
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
+    D3D12_STATIC_SAMPLER_DESC staticSampler = {}; // 入力テクスチャ用サンプラー
     staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -69,116 +82,160 @@ void PostProcess::CreateRootSignature()
     staticSampler.ShaderRegister = 0;
     staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // ルートシグネチャの定義
-    D3D12_ROOT_SIGNATURE_DESC desc = {};
-    desc.NumParameters = _countof(rootParameters);
-    desc.pParameters = rootParameters;
-    desc.pStaticSamplers = &staticSampler;
-    desc.NumStaticSamplers = 1;
-    desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {}; // ルートシグネチャ設定
+    rootSignatureDesc.NumParameters = 1;
+    rootSignatureDesc.pParameters = &rootParameter;
+    rootSignatureDesc.NumStaticSamplers = 1;
+    rootSignatureDesc.pStaticSamplers = &staticSampler;
+    rootSignatureDesc.Flags =
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-    // ルートシグネチャのシリアライズと生成
-    ComPtr<ID3DBlob> signature;
-    ComPtr<ID3DBlob> error;
-    HRESULT hr = D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-    if (FAILED(hr)) {
-        if (error) {
-            Logger::Log(reinterpret_cast<char*>(error->GetBufferPointer()));
+    ComPtr<ID3DBlob> signatureBlob; // シリアライズ済みルートシグネチャ
+    ComPtr<ID3DBlob> errorBlob; // シリアライズ時のエラー情報
+    HRESULT result = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signatureBlob,
+        &errorBlob);
+
+    if (FAILED(result)) {
+        if (errorBlob) {
+            Logger::Log(
+                reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
         }
         assert(false);
-    }
-
-    // シグネチャからルートシグネチャを生成
-    hr = dxCommon_->GetDevice()->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
-    assert(SUCCEEDED(hr));
-}
-
-/// <summary>
-/// パイプラインステートの生成
-/// </summary>
-void PostProcess::CreatePipelineState()
-{
-    // シェーダーのコンパイル
-    auto vs = dxCommon_->CompileShader(L"resources/shaders/CopyImage.VS.hlsl", L"vs_6_0");
-    auto ps = dxCommon_->CompileShader(L"resources/shaders/CopyImage.PS.hlsl", L"ps_6_0");
-
-    // シェーダーのコンパイルに失敗していないか確認
-    if (!vs || !ps) {
         return;
     }
 
-    // 入力レイアウトは頂点シェーダーで頂点IDから位置を生成するため不要
-    D3D12_INPUT_LAYOUT_DESC inputLayout = {};
-    inputLayout.pInputElementDescs = nullptr;
-    inputLayout.NumElements = 0;
-
-    // パイプラインステートの定義
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.pRootSignature = rootSignature_.Get();
-    psoDesc.VS = { vs->GetBufferPointer(), vs->GetBufferSize() };
-    psoDesc.PS = { ps->GetBufferPointer(), ps->GetBufferSize() };
-    psoDesc.InputLayout = inputLayout;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
-    psoDesc.SampleDesc.Count = 1;
-    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-
-    // ラスタライザーステートの設定（カリングなし、ソリッドフィル）
-    D3D12_RASTERIZER_DESC rast = {};
-    rast.FillMode = D3D12_FILL_MODE_SOLID;
-    rast.CullMode = D3D12_CULL_MODE_NONE;
-    rast.FrontCounterClockwise = FALSE;
-    rast.DepthClipEnable = TRUE;
-    psoDesc.RasterizerState = rast;
-
-    // ブレンドステートの設定（ブレンドなし、全てのチャンネルを書き込み）
-    D3D12_BLEND_DESC blend = {};
-    D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blend.RenderTarget[0];
-    rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    rtBlend.BlendEnable = FALSE;
-    psoDesc.BlendState = blend;
-
-    // デプスステンシルステートの設定（デプス・ステンシルテストなし）
-    D3D12_DEPTH_STENCIL_DESC ds = {};
-    ds.DepthEnable = FALSE;
-    ds.StencilEnable = FALSE;
-    // デプスステンシルステートをPSOにセット
-    psoDesc.DepthStencilState = ds;
-    // DSVは使用しないため、フォーマットはUNKNOWNにしておく
-    psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-
-    // パイプラインステートの生成
-    HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
-    assert(SUCCEEDED(hr));
+    result = dxCommon_->GetDevice()->CreateRootSignature(
+        0,
+        signatureBlob->GetBufferPointer(),
+        signatureBlob->GetBufferSize(),
+        IID_PPV_ARGS(&rootSignature_));
+    assert(SUCCEEDED(result));
 }
 
 /// <summary>
-/// 描画処理
+/// 指定したピクセルシェーダーからパイプラインステートを生成する
 /// </summary>
-void PostProcess::DrawTexture(uint32_t srvIndex)
+ComPtr<ID3D12PipelineState> PostProcess::CreatePipelineState(
+    const wchar_t* pixelShaderPath)
 {
-    // 描画に必要なリソースがすべて揃っているか確認
+    auto vertexShader = dxCommon_->CompileShader(
+        L"resources/shaders/Fullscreen.VS.hlsl",
+        L"vs_6_0"); // 全画面描画用頂点シェーダー
+    auto pixelShader = dxCommon_->CompileShader(
+        pixelShaderPath,
+        L"ps_6_0"); // エフェクト固有のピクセルシェーダー
+
+    if (!vertexShader || !pixelShader) {
+        return nullptr;
+    }
+
+    D3D12_INPUT_LAYOUT_DESC inputLayout = {}; // 頂点バッファを使用しない入力設定
+
+    D3D12_RASTERIZER_DESC rasterizerDesc = {}; // 全画面三角形のラスタライザー設定
+    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+    rasterizerDesc.FrontCounterClockwise = FALSE;
+    rasterizerDesc.DepthClipEnable = TRUE;
+
+    D3D12_BLEND_DESC blendDesc = {}; // 上書き描画用ブレンド設定
+    blendDesc.RenderTarget[0].RenderTargetWriteMask =
+        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].BlendEnable = FALSE;
+
+    D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {}; // 深度を使用しない設定
+    depthStencilDesc.DepthEnable = FALSE;
+    depthStencilDesc.StencilEnable = FALSE;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDesc = {}; // PSO全体の設定
+    pipelineDesc.pRootSignature = rootSignature_.Get();
+    pipelineDesc.VS = {
+        vertexShader->GetBufferPointer(),
+        vertexShader->GetBufferSize()
+    };
+    pipelineDesc.PS = {
+        pixelShader->GetBufferPointer(),
+        pixelShader->GetBufferSize()
+    };
+    pipelineDesc.InputLayout = inputLayout;
+    pipelineDesc.PrimitiveTopologyType =
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pipelineDesc.NumRenderTargets = 1;
+    pipelineDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
+    pipelineDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    pipelineDesc.SampleDesc.Count = 1;
+    pipelineDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+    pipelineDesc.RasterizerState = rasterizerDesc;
+    pipelineDesc.BlendState = blendDesc;
+    pipelineDesc.DepthStencilState = depthStencilDesc;
+
+    ComPtr<ID3D12PipelineState> pipelineState; // 生成したポストエフェクト用PSO
+    HRESULT result = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+        &pipelineDesc,
+        IID_PPV_ARGS(&pipelineState));
+    assert(SUCCEEDED(result));
+
+    return pipelineState;
+}
+
+/// <summary>
+/// 指定したポストエフェクトに対応するパイプラインステートを取得する
+/// </summary>
+ID3D12PipelineState* PostProcess::GetPipelineState(
+    PostEffectType effectType) const
+{
+    switch (effectType) {
+    case PostEffectType::Grayscale:
+        return grayscalePipelineState_.Get();
+    case PostEffectType::Copy:
+    default:
+        return copyPipelineState_.Get();
+    }
+}
+
+/// <summary>
+/// 指定したポストエフェクトでテクスチャを描画する
+/// </summary>
+void PostProcess::DrawTexture(
+    uint32_t srvIndex,
+    PostEffectType effectType)
+{
     if (!IsReady()) {
         return;
     }
-    // コマンドリストを取得
-    auto cmd = dxCommon_->GetCommandList();
-    // ルートシグネチャとパイプラインステートをセット
-    cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(pipelineState_.Get());
 
-    // SRVをルートパラメータにセット
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = dxCommon_->GetSRVGPUDescriptorHandle(srvIndex);
-    // SRVヒープをコマンドリストにセット
-    ID3D12DescriptorHeap* pHeaps[1] = { dxCommon_->GetSrvDescriptorHeap() };
+    ID3D12PipelineState* pipelineState =
+        GetPipelineState(effectType); // 描画に使用するPSO
+    if (!pipelineState) {
+        return;
+    }
 
-    // ディスクリプタヒープとSRVをセット
-    cmd->SetDescriptorHeaps(1, pHeaps);
-    cmd->SetGraphicsRootDescriptorTable(0, srvHandle);
+    ID3D12GraphicsCommandList* commandList =
+        dxCommon_->GetCommandList(); // 描画命令を記録するコマンドリスト
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle =
+        dxCommon_->GetSRVGPUDescriptorHandle(srvIndex); // 入力テクスチャのSRV
+    ID3D12DescriptorHeap* descriptorHeaps[] = {
+        dxCommon_->GetSrvDescriptorHeap()
+    }; // 描画で使用するSRVヒープ
 
-    // プリミティブトポロジーを設定して描画コマンドを発行（フルスクリーン三角形）
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    // 頂点バッファは使用せず、頂点IDから位置を生成するため、DrawInstancedで3頂点を描画する
-    cmd->DrawInstanced(3, 1, 0, 0);
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetPipelineState(pipelineState);
+    commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
+    commandList->IASetPrimitiveTopology(
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->DrawInstanced(3, 1, 0, 0);
+    lastSrvIndex_ = srvIndex;
+}
+
+/// <summary>
+/// 現在選択されているポストエフェクトでテクスチャを描画する
+/// </summary>
+void PostProcess::DrawTexture(uint32_t srvIndex)
+{
+    PostEffectType drawEffectType =
+        enabled_ ? effectType_ : PostEffectType::Copy; // 無効時は元画像を表示する
+    DrawTexture(srvIndex, drawEffectType);
 }

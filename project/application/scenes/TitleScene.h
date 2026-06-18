@@ -1,16 +1,24 @@
 #pragma once
+
 #include "../../engine/base/IScene.h"
 #include "../../engine/base/PostProcess.h"
+
+#include <memory>
+#include <vector>
+
+namespace MyEngine {
+class Object3d;
+}
 
 using namespace MyEngine;
 
 /// <summary>
-/// タイトルシーンのクラス。IScene インターフェースを実装して、ゲームのタイトル画面のシーンを表す。
+/// タイトル画面を管理するシーンクラス
 /// </summary>
 class TitleScene : public IScene {
-public: // メンバ関数
+public:
     /// <summary>
-    /// コンストラクタ
+    /// デフォルトコンストラクタ
     /// </summary>
     TitleScene();
 
@@ -20,48 +28,54 @@ public: // メンバ関数
     ~TitleScene();
 
     /// <summary>
-    /// 初期化処理
+    /// タイトルシーンを初期化する
     /// </summary>
     void Initialize(const SceneContext& ctx) override;
 
     /// <summary>
-    /// 終了処理
+    /// タイトルシーンが保持するリソースを解放する
     /// </summary>
     void Finalize() override;
 
     /// <summary>
-    /// 更新処理
+    /// タイトルシーンの状態を更新する
     /// </summary>
     void Update(float dt) override;
 
     /// <summary>
-    /// 描画処理
+    /// タイトルシーンを描画する
     /// </summary>
     void Draw() override;
 
     /// <summary>
-    /// シーンに入るときの処理
+    /// タイトルシーンへ入ったときの処理を行う
     /// </summary>
     void OnEnter() override;
 
     /// <summary>
-    /// シーンから出るときの処理
+    /// タイトルシーンから出るときの処理を行う
     /// </summary>
     void OnExit() override;
 
     /// <summary>
-    /// シーンの名前を取得
+    /// シーン名を取得する
     /// </summary>
     std::string GetName() const override { return "Title"; }
 
-private: // メンバ変数
+    /// <summary>
+    /// タイトルシーンが使用しているポストプロセスを取得する
+    /// </summary>
+    PostProcess* GetPostProcess() override { return &postProcess_; }
 
-    // デモ用のレンダーターゲットハンドルとSRVインデックス
-    int rtHandle_ = -1;
+    /// <summary>
+    /// タイトルシーンが所有する3DオブジェクトをImGuiへ渡す
+    /// </summary>
+    void FillObject3dPointers(std::vector<Object3d*>* out) override;
 
-    // SRVインデックスはUINT32_MAXで初期化して、未割り当て状態を表す
-    uint32_t rtSrvIndex_ = UINT32_MAX;
-
-    // ポストプロセスクラスのインスタンス
-    PostProcess postProcess_;
+private:
+    SceneContext ctx_; // タイトルシーンで使用する共通リソース
+    std::unique_ptr<Object3d> terrain_; // タイトル画面に表示する地形
+    int rtHandle_ = -1; // オフスクリーン用レンダーターゲットハンドル
+    uint32_t rtSrvIndex_ = UINT32_MAX; // オフスクリーンテクスチャのSRV番号
+    PostProcess postProcess_; // タイトル画面に適用するポストプロセス
 };
