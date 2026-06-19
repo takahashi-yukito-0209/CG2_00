@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <random>
 #include <vector>
 
 // 前方宣言
@@ -101,6 +102,14 @@ public: // メンバ関数
 
 private:
     /// <summary>
+    /// ImGuiから選択できるエフェクト種別
+    /// </summary>
+    enum class EffectType {
+        DimensionalShatter,
+        TimeReversal,
+    };
+
+    /// <summary>
     /// 時空破砕エフェクトの進行状態
     /// </summary>
     enum class TemporalRiftPhase {
@@ -110,6 +119,54 @@ private:
         Crack,
         Burst,
         Recover,
+    };
+
+    /// <summary>
+    /// 時間逆流エフェクトの進行状態
+    /// </summary>
+    enum class TimeReversalPhase {
+        Idle,
+        Expanding,
+        Paused,
+        Rewinding,
+        Converging,
+    };
+
+    /// <summary>
+    /// 時間逆流専用パーティクル
+    /// </summary>
+    struct TimeReversalParticle {
+        Math::Vector3 position; // 現在のワールド座標
+        Math::Vector3 velocity; // 拡散時の移動速度
+        Math::Vector3 rewindStartPosition; // 巻き戻し開始時のワールド座標
+        float elapsedTime = 0.0f; // 生成からの経過時間
+        float lifeTime = 1.0f; // 拡散を続ける時間
+    };
+
+    /// <summary>
+    /// 時間逆流エフェクトの調整値
+    /// </summary>
+    struct TimeReversalSettings {
+        int particleCount = 32; // 生成する粒子数
+        float minSpeed = 1.5f; // 最小拡散速度
+        float maxSpeed = 4.0f; // 最大拡散速度
+        float expansionDuration = 0.8f; // 通常拡散を行う時間
+        float pauseDuration = 0.35f; // 拡散後に空中停止する時間
+        float rewindDuration = 0.65f; // 発生地点へ巻き戻す時間
+        int rewindAfterimageCount = 3; // 巻き戻し中に表示する残像数
+        float rewindAfterimageSpacing = 0.18f; // 残像同士の軌道間隔
+        float rewindAfterimageAlpha = 0.35f; // 最も濃い残像の透明度
+        float distortionStrength = -0.035f; // 巻き戻し中の画面歪み強度
+        float distortionRadius = 0.45f; // 時間逆流の画面歪み半径
+        float distortionWaveCount = 4.0f; // 時間逆流の画面歪み波数
+        float convergenceDuration = 0.22f; // 収束演出を表示する時間
+        float convergenceFlashSize = 180.0f; // 収束時のフラッシュ最大サイズ
+        float convergenceFlashAlpha = 0.9f; // 収束時のフラッシュ透明度
+        int convergenceRingCount = 2; // 収束時に生成するリング数
+        float transformHistoryDuration = 2.0f; // 3D対象のTransform履歴保持時間
+        float particleSize = 24.0f; // 粒子スプライトの大きさ
+        Math::Vector4 particleColor { 0.45f, 0.85f, 1.0f, 0.9f }; // 粒子の色
+        Math::Vector3 effectPosition { 0.0f, 1.0f, 0.0f }; // エフェクトの発生位置
     };
 
     /// <summary>
@@ -154,6 +211,56 @@ private:
     /// 時空破砕エフェクトを開始する
     /// </summary>
     void StartTemporalRiftEffect();
+
+    /// <summary>
+    /// 時間逆流エフェクトを開始する
+    /// </summary>
+    void StartTimeReversalEffect();
+
+    /// <summary>
+    /// 時間逆流専用パーティクルを更新する
+    /// </summary>
+    void UpdateTimeReversalEffect(float deltaTime);
+
+    /// <summary>
+    /// 時間逆流専用パーティクルのスプライトを更新する
+    /// </summary>
+    void UpdateTimeReversalSprites();
+
+    /// <summary>
+    /// 時間巻き戻し対象のTransform履歴を更新する
+    /// </summary>
+    void UpdateTimeReversalTransformHistory();
+
+    /// <summary>
+    /// 保存したTransform履歴を対象オブジェクトへ逆順に適用する
+    /// </summary>
+    void ApplyTimeReversalTransform();
+
+    /// <summary>
+    /// 時間巻き戻し完了時の収束演出を開始する
+    /// </summary>
+    void StartTimeReversalConvergence();
+
+    /// <summary>
+    /// 時間逆流専用パーティクルを描画する
+    /// </summary>
+    void DrawTimeReversalParticles();
+
+    /// <summary>
+    /// ImGuiで選択中のエフェクトを開始する
+    /// </summary>
+    void StartSelectedEffect();
+
+    /// <summary>
+    /// 選択中のエフェクトが実装済みか確認する
+    /// </summary>
+    bool IsSelectedEffectReady() const;
+
+    /// <summary>
+    /// いずれかのエフェクトが再生中か確認する
+    /// </summary>
+    bool IsAnyEffectPlaying() const;
 
     /// <summary>
     /// 時空破砕エフェクトの進行状態を更新する
@@ -232,12 +339,22 @@ private: // メンバ変数
     ParticleEmitter cylinderEmitter_;
     std::unique_ptr<SkyBox> skybox_;
     std::vector<std::unique_ptr<Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像
+    std::vector<std::unique_ptr<Sprite>> timeReversalSprites_; // 時間逆流専用パーティクルの表示スプライト
+    std::vector<std::unique_ptr<Sprite>> timeReversalAfterimageSprites_; // 巻き戻し軌道を表示する残像スプライト
+    std::unique_ptr<Sprite> timeReversalConvergenceSprite_; // 収束時のフラッシュ表示スプライト
     PostProcess postProcess_; // 時空演出に使用するポストプロセス
     int sceneRenderTargetHandle_ = -1; // シーン描画用レンダーターゲット
     uint32_t sceneRenderTargetSrvIndex_ = UINT32_MAX; // シーン描画結果のSRV
     int postProcessIntermediateHandle_ = -1; // ポストエフェクト連結用の中間レンダーターゲット
     uint32_t postProcessIntermediateSrvIndex_ = UINT32_MAX; // 中間描画結果のSRV
     TemporalRiftPhase temporalRiftPhase_ = TemporalRiftPhase::Idle; // 現在の演出状態
+    EffectType selectedEffectType_ = EffectType::DimensionalShatter; // ImGuiで選択中のエフェクト
+    TimeReversalPhase timeReversalPhase_ = TimeReversalPhase::Idle; // 時間逆流の現在状態
+    float timeReversalPhaseTime_ = 0.0f; // 時間逆流の現在状態での経過時間
+    TimeReversalSettings timeReversalSettings_; // 時間逆流の調整値
+    std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
+    std::deque<Math::Transform> timeReversalTransformHistory_; // 時間巻き戻し対象のTransform履歴
+    std::mt19937 timeReversalRandom_ { std::random_device {}() }; // 粒子生成に使用する乱数
     float temporalRiftPhaseTime_ = 0.0f; // 現在の演出状態での経過時間
     Math::Vector3 temporalRiftPosition_ { 0.0f, 1.0f, 0.0f }; // 時空破砕の発生位置
     TemporalRiftSettings temporalRiftSettings_; // 時空破砕の調整値

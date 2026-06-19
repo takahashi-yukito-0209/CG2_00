@@ -177,6 +177,50 @@ void PlayScene::Initialize(const SceneContext& ctx)
         temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
+    constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
+    for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
+        auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
+        particleSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        particleSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        particleSprite->SetSize({ 1.0f, 1.0f });
+        particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        particleSprite->Update();
+        timeReversalSprites_.push_back(std::move(particleSprite));
+    }
+
+    constexpr int kMaximumRewindAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+    const int maximumRewindAfterimageSpriteCount =
+        kMaximumTimeReversalParticleCount * kMaximumRewindAfterimageCount; // 確保する残像スプライト総数
+    timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
+    for (int afterimageIndex = 0;
+         afterimageIndex < maximumRewindAfterimageSpriteCount;
+         ++afterimageIndex) {
+        auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
+        afterimageSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetSize({ 1.0f, 1.0f });
+        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->Update();
+        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
+    timeReversalConvergenceSprite_->Initialize(
+        ctx_.spriteCommon,
+        "circle2.png",
+        ctx_.imguiManager);
+    timeReversalConvergenceSprite_->SetAnchorPoint({ 0.5f, 0.5f });
+    timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
+    timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    timeReversalConvergenceSprite_->Update();
+
     DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
     if (directXCommon && ctx_.srvManager) {
         sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
@@ -244,6 +288,11 @@ void PlayScene::Finalize()
     objects3d_.clear();
     temporalAfterimageSprites_.clear();
     temporalTransformHistory_.clear();
+    timeReversalSprites_.clear();
+    timeReversalAfterimageSprites_.clear();
+    timeReversalConvergenceSprite_.reset();
+    timeReversalParticles_.clear();
+    timeReversalTransformHistory_.clear();
 
     // パーティクル描画に使用していたプレーンを ParticleManager から解除
     if (ParticleManager::GetInstance()) {
@@ -272,12 +321,15 @@ void PlayScene::Update(float dt)
     InputManager* inputManager = InputManager::GetInstance(); // 時空破砕の発動入力を取得する入力管理
     if (inputManager
         && inputManager->IsKeyJustPressed(DIK_R)
-        && temporalRiftPhase_ == TemporalRiftPhase::Idle) {
-        StartTemporalRiftEffect();
+        && !IsAnyEffectPlaying()
+        && IsSelectedEffectReady()) {
+        StartSelectedEffect();
     }
 
     const float effectDeltaTime = hitStopRemainingTime_ > 0.0f ? 0.0f : dt; // ヒットストップを反映した演出時間
+    UpdateTimeReversalTransformHistory();
     UpdateTemporalRiftEffect(effectDeltaTime);
+    UpdateTimeReversalEffect(effectDeltaTime);
     UpdateImpactResponse(dt);
     if (hitStopRemainingTime_ <= 0.0f) {
         UpdateTemporalAfterimages();
@@ -289,8 +341,11 @@ void PlayScene::Update(float dt)
         ctx_.camera->Update();
     }
     temporalRiftScreenUv_ = CalculateTemporalRiftScreenUv();
-    postProcess_.SetRadialBlurCenter(temporalRiftScreenUv_);
-    postProcess_.SetDistortionCenter(temporalRiftScreenUv_);
+    const Vector2 postEffectCenter = timeReversalPhase_ != TimeReversalPhase::Idle
+        ? CalculateWorldScreenUv(timeReversalSettings_.effectPosition)
+        : temporalRiftScreenUv_; // 再生中のエフェクトに対応する画面中心
+    postProcess_.SetRadialBlurCenter(postEffectCenter);
+    postProcess_.SetDistortionCenter(postEffectCenter);
 
     // パーティクルエミッターの更新とマネージャーの更新
     const float particleDeltaTime = hitStopRemainingTime_ > 0.0f ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
@@ -317,6 +372,7 @@ void PlayScene::Update(float dt)
     }
 
     UpdateAfterimageSprites();
+    UpdateTimeReversalSprites();
 }
 
 /// <summary>
@@ -353,8 +409,26 @@ void PlayScene::DrawImGui()
         break;
     }
 
-    ImGui::Begin("Temporal Rift");
+    ImGui::Begin("Effect Controller");
+
+    int selectedEffectIndex = static_cast<int>(selectedEffectType_); // ImGuiで編集中のエフェクト番号
+    const char* effectNames[] = {
+        "Dimensional Shatter",
+        "Time Reversal",
+    }; // 選択可能なエフェクト名
+    if (!IsAnyEffectPlaying()
+        && ImGui::Combo(
+            "Effect Type",
+            &selectedEffectIndex,
+            effectNames,
+            IM_ARRAYSIZE(effectNames))) {
+        selectedEffectType_ = static_cast<EffectType>(selectedEffectIndex);
+    }
+
     ImGui::Text("Trigger Key: R");
+    ImGui::Text(
+        "Implementation: %s",
+        IsSelectedEffectReady() ? "Ready" : "Not Implemented");
     ImGui::Text("Phase: %s", phaseName);
     ImGui::Text("Phase Time: %.3f", temporalRiftPhaseTime_);
     ImGui::Text(
@@ -362,9 +436,9 @@ void PlayScene::DrawImGui()
         temporalRiftScreenUv_.x,
         temporalRiftScreenUv_.y);
 
-    if (temporalRiftPhase_ == TemporalRiftPhase::Idle) {
+    if (!IsAnyEffectPlaying() && IsSelectedEffectReady()) {
         if (ImGui::Button("Play Effect")) {
-            StartTemporalRiftEffect();
+            StartSelectedEffect();
         }
     } else {
         ImGui::BeginDisabled();
@@ -373,9 +447,171 @@ void PlayScene::DrawImGui()
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Reset Settings")) {
+    if (selectedEffectType_ == EffectType::DimensionalShatter
+        && ImGui::Button("Reset Settings")) {
         temporalRiftSettings_ = TemporalRiftSettings {};
         temporalRiftPosition_ = { 0.0f, 1.0f, 0.0f };
+    }
+
+    if (selectedEffectType_ != EffectType::DimensionalShatter) {
+        const char* timeReversalPhaseName = "Idle"; // 時間逆流の現在状態
+        switch (timeReversalPhase_) {
+        case TimeReversalPhase::Idle:
+            timeReversalPhaseName = "Idle";
+            break;
+        case TimeReversalPhase::Expanding:
+            timeReversalPhaseName = "Expanding";
+            break;
+        case TimeReversalPhase::Paused:
+            timeReversalPhaseName = "Paused";
+            break;
+        case TimeReversalPhase::Rewinding:
+            timeReversalPhaseName = "Rewinding";
+            break;
+        case TimeReversalPhase::Converging:
+            timeReversalPhaseName = "Converging";
+            break;
+        }
+        ImGui::Text("Time Reversal Phase: %s", timeReversalPhaseName);
+        ImGui::Text("Phase Time: %.3f", timeReversalPhaseTime_);
+
+        if (ImGui::CollapsingHeader(
+                "Time Reversal Settings",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderInt(
+                "Particle Count",
+                &timeReversalSettings_.particleCount,
+                1,
+                128);
+            ImGui::DragFloat(
+                "Min Speed",
+                &timeReversalSettings_.minSpeed,
+                0.1f,
+                0.0f,
+                20.0f,
+                "%.1f");
+            ImGui::DragFloat(
+                "Max Speed",
+                &timeReversalSettings_.maxSpeed,
+                0.1f,
+                0.0f,
+                20.0f,
+                "%.1f");
+            ImGui::DragFloat(
+                "Expansion Duration",
+                &timeReversalSettings_.expansionDuration,
+                0.01f,
+                0.05f,
+                5.0f,
+                "%.2f sec");
+            ImGui::DragFloat(
+                "Pause Duration",
+                &timeReversalSettings_.pauseDuration,
+                0.01f,
+                0.0f,
+                5.0f,
+                "%.2f sec");
+            ImGui::DragFloat(
+                "Rewind Duration",
+                &timeReversalSettings_.rewindDuration,
+                0.01f,
+                0.05f,
+                5.0f,
+                "%.2f sec");
+            ImGui::SliderInt(
+                "Rewind Afterimage Count",
+                &timeReversalSettings_.rewindAfterimageCount,
+                0,
+                3);
+            ImGui::DragFloat(
+                "Rewind Afterimage Spacing",
+                &timeReversalSettings_.rewindAfterimageSpacing,
+                0.01f,
+                0.0f,
+                0.5f,
+                "%.2f");
+            ImGui::DragFloat(
+                "Rewind Afterimage Alpha",
+                &timeReversalSettings_.rewindAfterimageAlpha,
+                0.01f,
+                0.0f,
+                1.0f,
+                "%.2f");
+            ImGui::SeparatorText("Screen Distortion");
+            ImGui::DragFloat(
+                "Rewind Distortion Strength",
+                &timeReversalSettings_.distortionStrength,
+                0.001f,
+                -0.2f,
+                0.2f,
+                "%.3f");
+            ImGui::DragFloat(
+                "Rewind Distortion Radius",
+                &timeReversalSettings_.distortionRadius,
+                0.01f,
+                0.05f,
+                1.0f,
+                "%.2f");
+            ImGui::DragFloat(
+                "Rewind Distortion Waves",
+                &timeReversalSettings_.distortionWaveCount,
+                0.1f,
+                1.0f,
+                12.0f,
+                "%.1f");
+            ImGui::SeparatorText("Convergence");
+            ImGui::DragFloat(
+                "Convergence Duration",
+                &timeReversalSettings_.convergenceDuration,
+                0.01f,
+                0.05f,
+                2.0f,
+                "%.2f sec");
+            ImGui::DragFloat(
+                "Convergence Flash Size",
+                &timeReversalSettings_.convergenceFlashSize,
+                1.0f,
+                8.0f,
+                512.0f,
+                "%.0f");
+            ImGui::DragFloat(
+                "Convergence Flash Alpha",
+                &timeReversalSettings_.convergenceFlashAlpha,
+                0.01f,
+                0.0f,
+                1.0f,
+                "%.2f");
+            ImGui::SliderInt(
+                "Convergence Ring Count",
+                &timeReversalSettings_.convergenceRingCount,
+                0,
+                8);
+            ImGui::SeparatorText("Transform Rewind");
+            ImGui::DragFloat(
+                "Transform History Duration",
+                &timeReversalSettings_.transformHistoryDuration,
+                0.1f,
+                0.1f,
+                10.0f,
+                "%.1f sec");
+            ImGui::DragFloat(
+                "Particle Size",
+                &timeReversalSettings_.particleSize,
+                1.0f,
+                2.0f,
+                128.0f,
+                "%.0f");
+            ImGui::ColorEdit4(
+                "Particle Color",
+                &timeReversalSettings_.particleColor.x);
+            ImGui::DragFloat3(
+                "Effect Position",
+                &timeReversalSettings_.effectPosition.x,
+                0.05f);
+        }
+
+        ImGui::End();
+        return;
     }
 
     if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -515,6 +751,486 @@ void PlayScene::DrawImGui()
 
 /// <summary>
 /// 時空破砕エフェクトを開始する
+/// </summary>
+/// <summary>
+/// ImGuiで選択中のエフェクトを開始する
+/// </summary>
+void PlayScene::StartSelectedEffect()
+{
+    switch (selectedEffectType_) {
+    case EffectType::DimensionalShatter:
+        StartTemporalRiftEffect();
+        break;
+    case EffectType::TimeReversal:
+        StartTimeReversalEffect();
+        break;
+    }
+}
+
+/// <summary>
+/// 選択中のエフェクトが実装済みか確認する
+/// </summary>
+bool PlayScene::IsSelectedEffectReady() const
+{
+    switch (selectedEffectType_) {
+    case EffectType::DimensionalShatter:
+        return true;
+    case EffectType::TimeReversal:
+        return true;
+    }
+    return false;
+}
+
+/// <summary>
+/// いずれかのエフェクトが再生中か確認する
+/// </summary>
+bool PlayScene::IsAnyEffectPlaying() const
+{
+    return temporalRiftPhase_ != TemporalRiftPhase::Idle
+        || timeReversalPhase_ != TimeReversalPhase::Idle;
+}
+
+/// <summary>
+/// 次元破砕エフェクトを開始する
+/// </summary>
+/// <summary>
+/// 時間逆流エフェクトを開始する
+/// </summary>
+void PlayScene::StartTimeReversalEffect()
+{
+    timeReversalPhase_ = TimeReversalPhase::Expanding;
+    timeReversalPhaseTime_ = 0.0f;
+    timeReversalParticles_.clear();
+
+    const int particleCount = (std::clamp)(
+        timeReversalSettings_.particleCount,
+        1,
+        static_cast<int>(timeReversalSprites_.size())); // 実際に生成する粒子数
+    const float minimumSpeed = (std::min)(
+        timeReversalSettings_.minSpeed,
+        timeReversalSettings_.maxSpeed); // 生成速度の最小値
+    const float maximumSpeed = (std::max)(
+        timeReversalSettings_.minSpeed,
+        timeReversalSettings_.maxSpeed); // 生成速度の最大値
+    std::uniform_real_distribution<float> directionDistribution(-1.0f, 1.0f); // 方向成分の乱数
+    std::uniform_real_distribution<float> speedDistribution(
+        minimumSpeed,
+        maximumSpeed); // 拡散速度の乱数
+
+    timeReversalParticles_.reserve(static_cast<size_t>(particleCount));
+    for (int particleIndex = 0; particleIndex < particleCount; ++particleIndex) {
+        Vector3 direction = {
+            directionDistribution(timeReversalRandom_),
+            directionDistribution(timeReversalRandom_),
+            directionDistribution(timeReversalRandom_) * 0.45f,
+        }; // 放射状に飛ばすための仮方向
+        direction = MathUtil::Normalize(direction);
+        const float speed = speedDistribution(timeReversalRandom_); // 現在の粒子へ与える速度
+
+        TimeReversalParticle particle {}; // 生成する時間逆流専用パーティクル
+        particle.position = timeReversalSettings_.effectPosition;
+        particle.velocity = {
+            direction.x * speed,
+            direction.y * speed,
+            direction.z * speed,
+        };
+        particle.rewindStartPosition = particle.position;
+        particle.elapsedTime = 0.0f;
+        particle.lifeTime = timeReversalSettings_.expansionDuration;
+        timeReversalParticles_.push_back(particle);
+    }
+
+    postProcess_.SetEffectType(PostEffectType::Copy);
+    postProcess_.SetDistortionRadius(timeReversalSettings_.distortionRadius);
+    postProcess_.SetDistortionWaveCount(timeReversalSettings_.distortionWaveCount);
+    postProcess_.SetDistortionStrength(0.0f);
+    postProcess_.SetDistortionProgress(0.0f);
+}
+
+/// <summary>
+/// 時間逆流専用パーティクルを更新する
+/// </summary>
+void PlayScene::UpdateTimeReversalEffect(float deltaTime)
+{
+    if (timeReversalPhase_ == TimeReversalPhase::Idle) {
+        return;
+    }
+
+    timeReversalPhaseTime_ += deltaTime;
+
+    if (timeReversalPhase_ == TimeReversalPhase::Paused) {
+        if (timeReversalPhaseTime_ >= timeReversalSettings_.pauseDuration) {
+            timeReversalPhase_ = TimeReversalPhase::Rewinding;
+            timeReversalPhaseTime_ = 0.0f;
+            for (TimeReversalParticle& particle : timeReversalParticles_) {
+                particle.rewindStartPosition = particle.position;
+            }
+        }
+        return;
+    }
+
+    if (timeReversalPhase_ == TimeReversalPhase::Rewinding) {
+        const float rewindDuration = (std::max)(
+            timeReversalSettings_.rewindDuration,
+            0.0001f); // ゼロ除算を防ぐ巻き戻し時間
+        const float rewindRate = (std::clamp)(
+            timeReversalPhaseTime_ / rewindDuration,
+            0.0f,
+            1.0f); // 巻き戻しフェーズの進行率
+
+        for (TimeReversalParticle& particle : timeReversalParticles_) {
+            particle.position = {
+                particle.rewindStartPosition.x
+                    + (timeReversalSettings_.effectPosition.x - particle.rewindStartPosition.x) * rewindRate,
+                particle.rewindStartPosition.y
+                    + (timeReversalSettings_.effectPosition.y - particle.rewindStartPosition.y) * rewindRate,
+                particle.rewindStartPosition.z
+                    + (timeReversalSettings_.effectPosition.z - particle.rewindStartPosition.z) * rewindRate,
+            };
+            particle.elapsedTime = particle.lifeTime * (1.0f - rewindRate);
+        }
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionRadius(timeReversalSettings_.distortionRadius);
+        postProcess_.SetDistortionWaveCount(timeReversalSettings_.distortionWaveCount);
+        postProcess_.SetDistortionStrength(
+            timeReversalSettings_.distortionStrength * (1.0f - rewindRate * 0.35f));
+        postProcess_.SetDistortionProgress(rewindRate);
+        ApplyTimeReversalTransform();
+
+        if (rewindRate >= 1.0f) {
+            timeReversalParticles_.clear();
+            StartTimeReversalConvergence();
+        }
+        return;
+    }
+
+    if (timeReversalPhase_ == TimeReversalPhase::Converging) {
+        const float convergenceDuration = (std::max)(
+            timeReversalSettings_.convergenceDuration,
+            0.0001f); // ゼロ除算を防ぐ収束演出時間
+        const float convergenceRate = (std::clamp)(
+            timeReversalPhaseTime_ / convergenceDuration,
+            0.0f,
+            1.0f); // 収束演出の進行率
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionRadius(timeReversalSettings_.distortionRadius);
+        postProcess_.SetDistortionWaveCount(timeReversalSettings_.distortionWaveCount);
+        postProcess_.SetDistortionStrength(
+            -timeReversalSettings_.distortionStrength * (1.0f - convergenceRate));
+        postProcess_.SetDistortionProgress(convergenceRate);
+
+        if (convergenceRate >= 1.0f) {
+            timeReversalPhase_ = TimeReversalPhase::Idle;
+            timeReversalPhaseTime_ = 0.0f;
+            timeReversalTransformHistory_.clear();
+            postProcess_.SetEffectType(PostEffectType::Copy);
+            postProcess_.SetDistortionStrength(0.0f);
+        }
+        return;
+    }
+
+    bool hasActiveParticle = false; // 拡散中の粒子が残っているか
+    for (TimeReversalParticle& particle : timeReversalParticles_) {
+        particle.position.x += particle.velocity.x * deltaTime;
+        particle.position.y += particle.velocity.y * deltaTime;
+        particle.position.z += particle.velocity.z * deltaTime;
+        particle.elapsedTime += deltaTime;
+        if (particle.elapsedTime < particle.lifeTime) {
+            hasActiveParticle = true;
+        }
+    }
+
+    if (!hasActiveParticle) {
+        timeReversalPhase_ = TimeReversalPhase::Paused;
+        timeReversalPhaseTime_ = 0.0f;
+    }
+}
+
+/// <summary>
+/// 時間逆流専用パーティクルのスプライトを更新する
+/// </summary>
+void PlayScene::UpdateTimeReversalSprites()
+{
+    for (size_t spriteIndex = 0; spriteIndex < timeReversalSprites_.size(); ++spriteIndex) {
+        Sprite* particleSprite = timeReversalSprites_[spriteIndex].get(); // 更新対象の粒子スプライト
+        if (!particleSprite) {
+            continue;
+        }
+
+        if (spriteIndex >= timeReversalParticles_.size()
+            || timeReversalPhase_ == TimeReversalPhase::Idle) {
+            particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+            particleSprite->Update();
+            continue;
+        }
+
+        const TimeReversalParticle& particle = timeReversalParticles_[spriteIndex]; // 表示する専用パーティクル
+        const Vector2 screenUv = CalculateWorldScreenUv(particle.position); // 粒子の画面UV
+        const float lifeRate = particle.lifeTime > 0.0f
+            ? (std::clamp)(particle.elapsedTime / particle.lifeTime, 0.0f, 1.0f)
+            : 1.0f; // 拡散フェーズの進行率
+        const float size = timeReversalSettings_.particleSize
+            * (1.0f - lifeRate * 0.35f); // 時間経過で少し縮小した粒子サイズ
+
+        particleSprite->SetPosition({
+            screenUv.x * static_cast<float>(WinApp::kWindowWidth),
+            screenUv.y * static_cast<float>(WinApp::kWindowHeight),
+        });
+        particleSprite->SetSize({ size, size });
+        particleSprite->SetColor({
+            timeReversalSettings_.particleColor.x,
+            timeReversalSettings_.particleColor.y,
+            timeReversalSettings_.particleColor.z,
+            timeReversalSettings_.particleColor.w * (1.0f - lifeRate * 0.5f),
+        });
+        particleSprite->Update();
+    }
+
+    constexpr size_t kMaximumRewindAfterimageCount = 3; // 1粒子ごとの最大残像数
+    const size_t afterimageCount = static_cast<size_t>((std::clamp)(
+        timeReversalSettings_.rewindAfterimageCount,
+        0,
+        static_cast<int>(kMaximumRewindAfterimageCount))); // 実際に表示する残像数
+    const float rewindDuration = (std::max)(
+        timeReversalSettings_.rewindDuration,
+        0.0001f); // 残像位置の計算に使用する巻き戻し時間
+    const float rewindRate = (std::clamp)(
+        timeReversalPhaseTime_ / rewindDuration,
+        0.0f,
+        1.0f); // 巻き戻しの進行率
+
+    for (size_t spriteIndex = 0;
+         spriteIndex < timeReversalAfterimageSprites_.size();
+         ++spriteIndex) {
+        Sprite* afterimageSprite =
+            timeReversalAfterimageSprites_[spriteIndex].get(); // 更新対象の残像スプライト
+        if (!afterimageSprite) {
+            continue;
+        }
+
+        const size_t particleIndex =
+            spriteIndex / kMaximumRewindAfterimageCount; // 対応する粒子番号
+        const size_t afterimageIndex =
+            spriteIndex % kMaximumRewindAfterimageCount; // 粒子内での残像番号
+        if (timeReversalPhase_ != TimeReversalPhase::Rewinding
+            || particleIndex >= timeReversalParticles_.size()
+            || afterimageIndex >= afterimageCount) {
+            afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+            afterimageSprite->Update();
+            continue;
+        }
+
+        const TimeReversalParticle& particle =
+            timeReversalParticles_[particleIndex]; // 残像元の粒子
+        const float trailOffset = timeReversalSettings_.rewindAfterimageSpacing
+            * static_cast<float>(afterimageIndex + 1)
+            * (1.0f - rewindRate); // 終点で収束する軌道上の遅れ
+        const float afterimageRate = (std::clamp)(
+            rewindRate - trailOffset,
+            0.0f,
+            1.0f); // 残像位置の巻き戻し進行率
+        const Vector3 afterimagePosition = {
+            particle.rewindStartPosition.x
+                + (timeReversalSettings_.effectPosition.x - particle.rewindStartPosition.x)
+                    * afterimageRate,
+            particle.rewindStartPosition.y
+                + (timeReversalSettings_.effectPosition.y - particle.rewindStartPosition.y)
+                    * afterimageRate,
+            particle.rewindStartPosition.z
+                + (timeReversalSettings_.effectPosition.z - particle.rewindStartPosition.z)
+                    * afterimageRate,
+        }; // 軌道上の残像ワールド座標
+        const Vector2 screenUv =
+            CalculateWorldScreenUv(afterimagePosition); // 残像の画面UV
+        const float alphaRate = 1.0f
+            - static_cast<float>(afterimageIndex)
+                / static_cast<float>((std::max)(afterimageCount, size_t { 1 })); // 後方ほど薄くする係数
+        const float sizeRate = 0.85f
+            - static_cast<float>(afterimageIndex) * 0.12f; // 後方ほど小さくする係数
+
+        afterimageSprite->SetPosition({
+            screenUv.x * static_cast<float>(WinApp::kWindowWidth),
+            screenUv.y * static_cast<float>(WinApp::kWindowHeight),
+        });
+        afterimageSprite->SetSize({
+            timeReversalSettings_.particleSize * sizeRate,
+            timeReversalSettings_.particleSize * sizeRate,
+        });
+        afterimageSprite->SetColor({
+            timeReversalSettings_.particleColor.x,
+            timeReversalSettings_.particleColor.y,
+            timeReversalSettings_.particleColor.z,
+            timeReversalSettings_.particleColor.w
+                * timeReversalSettings_.rewindAfterimageAlpha * alphaRate,
+        });
+        afterimageSprite->Update();
+    }
+
+    if (timeReversalConvergenceSprite_) {
+        if (timeReversalPhase_ != TimeReversalPhase::Converging) {
+            timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+            timeReversalConvergenceSprite_->Update();
+        } else {
+            const float convergenceDuration = (std::max)(
+                timeReversalSettings_.convergenceDuration,
+                0.0001f); // フラッシュ計算に使用する収束時間
+            const float convergenceRate = (std::clamp)(
+                timeReversalPhaseTime_ / convergenceDuration,
+                0.0f,
+                1.0f); // 収束フラッシュの進行率
+            const Vector2 screenUv = CalculateWorldScreenUv(
+                timeReversalSettings_.effectPosition); // 収束地点の画面UV
+            const float flashSize = timeReversalSettings_.convergenceFlashSize
+                * (0.25f + convergenceRate * 0.75f); // 中心から広がるフラッシュサイズ
+            const float flashAlpha = timeReversalSettings_.convergenceFlashAlpha
+                * (1.0f - convergenceRate); // 終了へ向けて減衰する透明度
+
+            timeReversalConvergenceSprite_->SetPosition({
+                screenUv.x * static_cast<float>(WinApp::kWindowWidth),
+                screenUv.y * static_cast<float>(WinApp::kWindowHeight),
+            });
+            timeReversalConvergenceSprite_->SetSize({ flashSize, flashSize });
+            timeReversalConvergenceSprite_->SetColor({
+                0.75f,
+                0.92f,
+                1.0f,
+                flashAlpha,
+            });
+            timeReversalConvergenceSprite_->Update();
+        }
+    }
+}
+
+/// <summary>
+/// 時間巻き戻し対象のTransform履歴を更新する
+/// </summary>
+void PlayScene::UpdateTimeReversalTransformHistory()
+{
+    constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
+    constexpr float kHistorySampleRate = 60.0f; // 履歴時間をフレーム数へ変換する基準値
+
+    if (timeReversalPhase_ != TimeReversalPhase::Idle
+        || temporalRiftPhase_ != TemporalRiftPhase::Idle
+        || objects3d_.size() <= kTimeReversalTargetIndex
+        || !objects3d_[kTimeReversalTargetIndex]) {
+        return;
+    }
+
+    Object3d* timeReversalTarget =
+        objects3d_[kTimeReversalTargetIndex].get(); // Transform履歴を保存する対象
+    Transform currentTransform {}; // 現在フレームのTransform
+    currentTransform.scale = timeReversalTarget->GetScale();
+    currentTransform.rotate = timeReversalTarget->GetRotate();
+    currentTransform.translate = timeReversalTarget->GetTranslate();
+    timeReversalTransformHistory_.push_front(currentTransform);
+
+    const size_t maximumHistoryCount = static_cast<size_t>((std::max)(
+        timeReversalSettings_.transformHistoryDuration * kHistorySampleRate,
+        2.0f)); // 保持する最大Transform数
+    while (timeReversalTransformHistory_.size() > maximumHistoryCount) {
+        timeReversalTransformHistory_.pop_back();
+    }
+}
+
+/// <summary>
+/// 保存したTransform履歴を対象オブジェクトへ逆順に適用する
+/// </summary>
+void PlayScene::ApplyTimeReversalTransform()
+{
+    constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
+    if (objects3d_.size() <= kTimeReversalTargetIndex
+        || !objects3d_[kTimeReversalTargetIndex]
+        || timeReversalTransformHistory_.empty()) {
+        return;
+    }
+
+    const float rewindDuration = (std::max)(
+        timeReversalSettings_.rewindDuration,
+        0.0001f); // Transform巻き戻しに使用する時間
+    const float rewindRate = (std::clamp)(
+        timeReversalPhaseTime_ / rewindDuration,
+        0.0f,
+        1.0f); // Transform巻き戻しの進行率
+    const float historyPosition = rewindRate
+        * static_cast<float>(timeReversalTransformHistory_.size() - 1); // 履歴内の参照位置
+    const size_t currentHistoryIndex =
+        static_cast<size_t>(historyPosition); // 補間元の履歴番号
+    const size_t nextHistoryIndex = (std::min)(
+        currentHistoryIndex + 1,
+        timeReversalTransformHistory_.size() - 1); // 補間先の履歴番号
+    const float interpolationRate =
+        historyPosition - static_cast<float>(currentHistoryIndex); // 履歴間の補間率
+    const Transform& currentTransform =
+        timeReversalTransformHistory_[currentHistoryIndex]; // 補間元Transform
+    const Transform& nextTransform =
+        timeReversalTransformHistory_[nextHistoryIndex]; // 補間先Transform
+
+    const auto interpolateVector3 = [interpolationRate](
+                                        const Vector3& start,
+                                        const Vector3& end) {
+        return Vector3 {
+            start.x + (end.x - start.x) * interpolationRate,
+            start.y + (end.y - start.y) * interpolationRate,
+            start.z + (end.z - start.z) * interpolationRate,
+        };
+    }; // Transform要素を線形補間する処理
+
+    Object3d* timeReversalTarget =
+        objects3d_[kTimeReversalTargetIndex].get(); // Transformを適用する対象
+    timeReversalTarget->SetScale(
+        interpolateVector3(currentTransform.scale, nextTransform.scale));
+    timeReversalTarget->SetRotate(
+        interpolateVector3(currentTransform.rotate, nextTransform.rotate));
+    timeReversalTarget->SetTranslate(
+        interpolateVector3(currentTransform.translate, nextTransform.translate));
+}
+
+/// <summary>
+/// 時間巻き戻し完了時の収束演出を開始する
+/// </summary>
+void PlayScene::StartTimeReversalConvergence()
+{
+    timeReversalPhase_ = TimeReversalPhase::Converging;
+    timeReversalPhaseTime_ = 0.0f;
+
+    ParticleManager* particleManager =
+        ParticleManager::GetInstance(); // 収束リングを生成するパーティクル管理
+    if (particleManager && timeReversalSettings_.convergenceRingCount > 0) {
+        particleManager->EmitRingEffect(
+            "Ring",
+            timeReversalSettings_.effectPosition,
+            static_cast<uint32_t>(timeReversalSettings_.convergenceRingCount));
+    }
+}
+
+/// <summary>
+/// 時間逆流専用パーティクルを描画する
+/// </summary>
+void PlayScene::DrawTimeReversalParticles()
+{
+    if (!ctx_.spriteCommon || timeReversalPhase_ == TimeReversalPhase::Idle) {
+        return;
+    }
+
+    ctx_.spriteCommon->SetCommonDrawSetting();
+    for (auto& afterimageSprite : timeReversalAfterimageSprites_) {
+        if (afterimageSprite && afterimageSprite->GetColor().w > 0.0f) {
+            afterimageSprite->Draw();
+        }
+    }
+    for (auto& particleSprite : timeReversalSprites_) {
+        if (particleSprite && particleSprite->GetColor().w > 0.0f) {
+            particleSprite->Draw();
+        }
+    }
+    if (timeReversalConvergenceSprite_
+        && timeReversalConvergenceSprite_->GetColor().w > 0.0f) {
+        timeReversalConvergenceSprite_->Draw();
+    }
+}
+
+/// <summary>
+/// 次元破砕エフェクトを開始する
 /// </summary>
 void PlayScene::StartTemporalRiftEffect()
 {
@@ -1021,6 +1737,7 @@ void PlayScene::Draw()
         directXCommon->BeginRenderTo(sceneRenderTargetHandle_, true);
         DrawWorldAndParticles();
         DrawTemporalAfterimages();
+        DrawTimeReversalParticles();
         directXCommon->EndRenderTo(sceneRenderTargetHandle_);
 
         if (canUseTemporalChain) {
@@ -1045,6 +1762,7 @@ void PlayScene::Draw()
 
     DrawWorldAndParticles();
     DrawTemporalAfterimages();
+    DrawTimeReversalParticles();
     DrawSprites();
 }
 
