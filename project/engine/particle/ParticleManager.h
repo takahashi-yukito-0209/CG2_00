@@ -96,6 +96,18 @@ public:
     void EmitHitEffect(const std::string& name, const Math::Vector3& position, uint32_t count);
 
     /// <summary>
+    /// 指定した形状で空間亀裂用のパーティクルを生成する
+    /// </summary>
+    void EmitSpaceCrack(
+        const std::string& name,
+        const Math::Vector3& position,
+        float rotationZ,
+        float length,
+        float width,
+        const Math::Vector4& color,
+        float lifeTime);
+
+    /// <summary>
     /// Ringエフェクト用のパーティクルを生成する
     /// </summary>
     void EmitRingEffect(const std::string& name, const Math::Vector3& position, uint32_t count);

@@ -221,6 +221,7 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
 
         int effectIndex = static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
         const char* effectNames[] = {
+            "Distortion",
             "Copy",
             "Grayscale",
             "Vignette",
@@ -369,6 +370,54 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             }
         }
 
+        if (ctx.postProcess->GetEffectType() == PostEffectType::Distortion) {
+            Math::Vector2 center = ctx.postProcess->GetDistortionCenter(); // 現在の歪み中心
+            float centerValues[2] = { center.x, center.y }; // ImGui編集用の歪み中心
+            if (ImGui::DragFloat2(
+                    "Distortion Center",
+                    centerValues,
+                    0.005f,
+                    0.0f,
+                    1.0f,
+                    "%.3f")) {
+                ctx.postProcess->SetDistortionCenter(
+                    { centerValues[0], centerValues[1] });
+            }
+
+            float strength = ctx.postProcess->GetDistortionStrength(); // 現在の歪み強度
+            if (ImGui::DragFloat(
+                    "Distortion Strength",
+                    &strength,
+                    0.001f,
+                    -0.1f,
+                    0.1f,
+                    "%.3f")) {
+                ctx.postProcess->SetDistortionStrength(strength);
+            }
+
+            float radius = ctx.postProcess->GetDistortionRadius(); // 現在の歪み半径
+            if (ImGui::DragFloat(
+                    "Distortion Radius",
+                    &radius,
+                    0.01f,
+                    0.01f,
+                    1.5f,
+                    "%.2f")) {
+                ctx.postProcess->SetDistortionRadius(radius);
+            }
+
+            float waveCount = ctx.postProcess->GetDistortionWaveCount(); // 現在の歪み波数
+            if (ImGui::DragFloat(
+                    "Distortion Wave Count",
+                    &waveCount,
+                    0.1f,
+                    0.0f,
+                    12.0f,
+                    "%.1f")) {
+                ctx.postProcess->SetDistortionWaveCount(waveCount);
+            }
+        }
+
         if (ctx.postProcess->GetEffectType() == PostEffectType::Dissolve) {
             float threshold = ctx.postProcess->GetDissolveThreshold(); // 現在のDissolve閾値
             if (ImGui::SliderFloat(
@@ -473,6 +522,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         ImGui::Text(
             "Random PSO: %s",
             ctx.postProcess->IsRandomReady() ? "Ready" : "Not Ready");
+        ImGui::Text(
+            "Distortion PSO: %s",
+            ctx.postProcess->IsDistortionReady() ? "Ready" : "Not Ready");
 
         uint32_t srvIndex = ctx.postProcess->GetLastSrvIndex(); // 最後に描画した入力SRV
         if (srvIndex == UINT32_MAX) {

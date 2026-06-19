@@ -252,6 +252,49 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
 /// <summary>
 /// Ringエフェクト用のパーティクルを生成する
 /// </summary>
+/// <summary>
+/// 指定した形状で空間亀裂用のパーティクルを生成する
+/// </summary>
+void ParticleManager::EmitSpaceCrack(
+    const std::string& name,
+    const Vector3& position,
+    float rotationZ,
+    float length,
+    float width,
+    const Vector4& color,
+    float lifeTime)
+{
+    auto groupIterator = particleGroups_.find(name); // 亀裂を追加するパーティクルグループ
+    if (groupIterator == particleGroups_.end()) {
+        return;
+    }
+
+    const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, 1); // 実際に生成できる亀裂数
+    if (emitCount == 0) {
+        return;
+    }
+
+    PM_CpuParticle particle {}; // 生成する空間亀裂パーティクル
+    particle.startScale = { width * 0.15f, length * 0.2f, 1.0f };
+    particle.endScale = { width, length, 1.0f };
+    particle.transform.scale = particle.startScale;
+    particle.transform.rotate = { 0.0f, 0.0f, rotationZ };
+    particle.transform.translate = position;
+    particle.velocity = { 0.0f, 0.0f, 0.0f };
+    particle.color = color;
+    particle.startColor = color;
+    particle.lifeTime = (std::max)(lifeTime, 0.01f);
+    particle.currentTime = 0.0f;
+    particle.spawnTime = globalTime_;
+    particle.useScaleOverLife = true;
+    particle.useFadeOut = true;
+
+    groupIterator->second.particles.push_back(particle);
+}
+
+/// <summary>
+/// Ringエフェクト用のパーティクルを生成する
+/// </summary>
 void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& position, uint32_t count)
 {
     auto it = particleGroups_.find(name);

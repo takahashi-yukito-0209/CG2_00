@@ -101,6 +101,11 @@ public: // メンバ関数
     virtual PostProcess* GetPostProcess() { return nullptr; }
 
     /// <summary>
+    /// シーン固有のImGuiを描画する
+    /// </summary>
+    virtual void DrawImGui() { }
+
+    /// <summary>
     /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする
     /// </summary>
     virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) { }

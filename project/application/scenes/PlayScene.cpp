@@ -10,9 +10,15 @@
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/3d/PrimitiveFactory.h"
 #include "../../engine/3d/SkyBox.h"
+#include "../../engine/base/DirectXCommon.h"
 #include "../../engine/base/SrvManager.h"
+#include "../../engine/base/WinApp.h"
+#include "../../engine/io/InputManager.h"
 #include "../../engine/particle/ParticleManager.h"
 #include "../../engine/utility/mathUtility.h"
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <iostream>
 
 /// <summary>
@@ -155,6 +161,57 @@ void PlayScene::Initialize(const SceneContext& ctx)
     cylinderEmitter_.frequency = 1.0f;
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
+
+    constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
+    temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
+    for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
+        auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
+        afterimageSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetSize({ 1.0f, 1.0f });
+        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->Update();
+        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
+    if (directXCommon && ctx_.srvManager) {
+        sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
+            WinApp::kWindowWidth,
+            WinApp::kWindowHeight,
+            directXCommon->GetSwapChainFormat(),
+            true,
+            { 0.53f, 0.71f, 0.82f, 1.0f },
+            true);
+
+        if (sceneRenderTargetHandle_ >= 0) {
+            sceneRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetSRV(
+                sceneRenderTargetHandle_,
+                sceneRenderTargetSrvIndex_);
+        }
+
+        postProcessIntermediateHandle_ = directXCommon->CreateRenderTarget(
+            WinApp::kWindowWidth,
+            WinApp::kWindowHeight,
+            directXCommon->GetSwapChainFormat(),
+            false,
+            { 0.0f, 0.0f, 0.0f, 1.0f },
+            true);
+
+        if (postProcessIntermediateHandle_ >= 0) {
+            postProcessIntermediateSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetSRV(
+                postProcessIntermediateHandle_,
+                postProcessIntermediateSrvIndex_);
+        }
+
+        postProcess_.Initialize(directXCommon);
+        postProcess_.SetEffectType(PostEffectType::Copy);
+    }
 }
 
 /// <summary>
@@ -163,6 +220,20 @@ void PlayScene::Initialize(const SceneContext& ctx)
 void PlayScene::Finalize()
 {
     std::cout << "PlayScene Finalize\n";
+    StopCameraShake();
+
+    DirectXCommon* directXCommon = ctx_.directXCommon; // 解放対象を管理するDirectX基盤
+    if (directXCommon && sceneRenderTargetHandle_ >= 0) {
+        directXCommon->DestroyRenderTarget(sceneRenderTargetHandle_);
+        sceneRenderTargetHandle_ = -1;
+        sceneRenderTargetSrvIndex_ = UINT32_MAX;
+    }
+    if (directXCommon && postProcessIntermediateHandle_ >= 0) {
+        directXCommon->DestroyRenderTarget(postProcessIntermediateHandle_);
+        postProcessIntermediateHandle_ = -1;
+        postProcessIntermediateSrvIndex_ = UINT32_MAX;
+    }
+    postProcess_.Finalize();
     // パーティクルマネージャーの終了処理
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Finalize();
@@ -171,6 +242,8 @@ void PlayScene::Finalize()
     // スプライトとオブジェクトの解放
     sprites_.clear();
     objects3d_.clear();
+    temporalAfterimageSprites_.clear();
+    temporalTransformHistory_.clear();
 
     // パーティクル描画に使用していたプレーンを ParticleManager から解除
     if (ParticleManager::GetInstance()) {
@@ -185,6 +258,10 @@ void PlayScene::Finalize()
         skybox_->Finalize();
         skybox_.reset();
     }
+
+    temporalRiftPhase_ = TemporalRiftPhase::Idle;
+    temporalRiftPhaseTime_ = 0.0f;
+    ctx_ = {};
 }
 
 /// <summary>
@@ -192,17 +269,36 @@ void PlayScene::Finalize()
 /// </summary>
 void PlayScene::Update(float dt)
 {
+    InputManager* inputManager = InputManager::GetInstance(); // 時空破砕の発動入力を取得する入力管理
+    if (inputManager
+        && inputManager->IsKeyJustPressed(DIK_R)
+        && temporalRiftPhase_ == TemporalRiftPhase::Idle) {
+        StartTemporalRiftEffect();
+    }
+
+    const float effectDeltaTime = hitStopRemainingTime_ > 0.0f ? 0.0f : dt; // ヒットストップを反映した演出時間
+    UpdateTemporalRiftEffect(effectDeltaTime);
+    UpdateImpactResponse(dt);
+    if (hitStopRemainingTime_ <= 0.0f) {
+        UpdateTemporalAfterimages();
+    }
+    postProcess_.Update(dt);
+
     // カメラの更新
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
+    temporalRiftScreenUv_ = CalculateTemporalRiftScreenUv();
+    postProcess_.SetRadialBlurCenter(temporalRiftScreenUv_);
+    postProcess_.SetDistortionCenter(temporalRiftScreenUv_);
 
     // パーティクルエミッターの更新とマネージャーの更新
-    pmEmitter_.Update(dt);
-    ringEmitter_.Update(dt);
-    cylinderEmitter_.Update(dt);
+    const float particleDeltaTime = hitStopRemainingTime_ > 0.0f ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
+    pmEmitter_.Update(particleDeltaTime);
+    ringEmitter_.Update(particleDeltaTime);
+    cylinderEmitter_.Update(particleDeltaTime);
     if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Update(dt);
+        ParticleManager::GetInstance()->Update(particleDeltaTime);
     }
 
     // オブジェクトの更新
@@ -219,12 +315,743 @@ void PlayScene::Update(float dt)
         if (s)
             s->Update();
     }
+
+    UpdateAfterimageSprites();
 }
 
 /// <summary>
 /// 描画処理
 /// </summary>
+/// <summary>
+/// 時空破砕エフェクトを開始する
+/// </summary>
+/// <summary>
+/// 時空破砕エフェクトの調整UIを描画する
+/// </summary>
+void PlayScene::DrawImGui()
+{
+#ifdef USE_IMGUI
+    const char* phaseName = "Idle"; // 現在の演出状態を表示する文字列
+    switch (temporalRiftPhase_) {
+    case TemporalRiftPhase::Idle:
+        phaseName = "Idle";
+        break;
+    case TemporalRiftPhase::Compress:
+        phaseName = "Compress";
+        break;
+    case TemporalRiftPhase::Freeze:
+        phaseName = "Freeze";
+        break;
+    case TemporalRiftPhase::Crack:
+        phaseName = "Crack";
+        break;
+    case TemporalRiftPhase::Burst:
+        phaseName = "Burst";
+        break;
+    case TemporalRiftPhase::Recover:
+        phaseName = "Recover";
+        break;
+    }
+
+    ImGui::Begin("Temporal Rift");
+    ImGui::Text("Trigger Key: R");
+    ImGui::Text("Phase: %s", phaseName);
+    ImGui::Text("Phase Time: %.3f", temporalRiftPhaseTime_);
+    ImGui::Text(
+        "Blur Center UV: %.3f, %.3f",
+        temporalRiftScreenUv_.x,
+        temporalRiftScreenUv_.y);
+
+    if (temporalRiftPhase_ == TemporalRiftPhase::Idle) {
+        if (ImGui::Button("Play Effect")) {
+            StartTemporalRiftEffect();
+        }
+    } else {
+        ImGui::BeginDisabled();
+        ImGui::Button("Play Effect");
+        ImGui::EndDisabled();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Settings")) {
+        temporalRiftSettings_ = TemporalRiftSettings {};
+        temporalRiftPosition_ = { 0.0f, 1.0f, 0.0f };
+    }
+
+    if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat("Compress Duration", &temporalRiftSettings_.compressDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+        ImGui::DragFloat("Freeze Duration", &temporalRiftSettings_.freezeDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+        ImGui::DragFloat("Crack Duration", &temporalRiftSettings_.crackDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+        ImGui::DragFloat("Burst Duration", &temporalRiftSettings_.burstDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+        ImGui::DragFloat("Recover Duration", &temporalRiftSettings_.recoverDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+    }
+
+    if (ImGui::CollapsingHeader("Radial Blur", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat("Compress Blur Start", &temporalRiftSettings_.compressBlurStart, 0.001f, 0.0f, 0.1f, "%.3f");
+        ImGui::DragFloat("Compress Blur End", &temporalRiftSettings_.compressBlurEnd, 0.001f, 0.0f, 0.1f, "%.3f");
+        ImGui::DragFloat("Burst Blur Strength", &temporalRiftSettings_.burstBlurStrength, 0.001f, 0.0f, 0.1f, "%.3f");
+        ImGui::SliderInt("Blur Sample Count", &temporalRiftSettings_.blurSampleCount, 1, 32);
+    }
+
+    if (ImGui::CollapsingHeader("Distortion", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat(
+            "Distortion Radius",
+            &temporalRiftSettings_.distortionRadius,
+            0.01f,
+            0.01f,
+            1.5f,
+            "%.2f");
+        ImGui::DragFloat(
+            "Compress Distortion",
+            &temporalRiftSettings_.compressDistortionStrength,
+            0.001f,
+            -0.1f,
+            0.0f,
+            "%.3f");
+        ImGui::DragFloat(
+            "Burst Distortion",
+            &temporalRiftSettings_.burstDistortionStrength,
+            0.001f,
+            0.0f,
+            0.1f,
+            "%.3f");
+        ImGui::DragFloat(
+            "Distortion Wave Count",
+            &temporalRiftSettings_.distortionWaveCount,
+            0.1f,
+            0.0f,
+            12.0f,
+            "%.1f");
+    }
+
+    if (ImGui::CollapsingHeader("Afterimage", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderInt(
+            "Afterimage Count",
+            &temporalRiftSettings_.afterimageCount,
+            1,
+            8);
+        ImGui::SliderInt(
+            "History Interval",
+            &temporalRiftSettings_.afterimageFrameInterval,
+            1,
+            12);
+        ImGui::DragFloat(
+            "Afterimage Size",
+            &temporalRiftSettings_.afterimageSize,
+            1.0f,
+            10.0f,
+            300.0f,
+            "%.0f");
+        ImGui::SliderFloat(
+            "Afterimage Alpha",
+            &temporalRiftSettings_.afterimageAlpha,
+            0.0f,
+            1.0f,
+            "%.2f");
+        ImGui::DragFloat(
+            "Temporal Displacement",
+            &temporalRiftSettings_.temporalDisplacement,
+            0.05f,
+            0.0f,
+            5.0f,
+            "%.2f");
+        ImGui::ColorEdit3(
+            "Afterimage Color",
+            &temporalRiftSettings_.afterimageColor.x);
+    }
+
+    if (ImGui::CollapsingHeader("Impact", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat(
+            "Hit Stop Duration",
+            &temporalRiftSettings_.hitStopDuration,
+            0.005f,
+            0.0f,
+            0.5f,
+            "%.3f sec");
+        ImGui::DragFloat(
+            "Camera Shake Duration",
+            &temporalRiftSettings_.cameraShakeDuration,
+            0.01f,
+            0.0f,
+            2.0f,
+            "%.2f sec");
+        ImGui::DragFloat(
+            "Camera Shake Strength",
+            &temporalRiftSettings_.cameraShakeStrength,
+            0.01f,
+            0.0f,
+            2.0f,
+            "%.2f");
+        ImGui::DragFloat(
+            "Camera Shake Frequency",
+            &temporalRiftSettings_.cameraShakeFrequency,
+            1.0f,
+            1.0f,
+            120.0f,
+            "%.0f");
+        ImGui::Text("Hit Stop Remaining: %.3f", hitStopRemainingTime_);
+        ImGui::Text("Shake Remaining: %.3f", cameraShakeRemainingTime_);
+    }
+
+    if (ImGui::CollapsingHeader("Crack", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3("Effect Position", &temporalRiftPosition_.x, 0.05f);
+        ImGui::SliderInt("Crack Count", &temporalRiftSettings_.crackCount, 1, 7);
+        ImGui::DragFloat("Crack Length", &temporalRiftSettings_.crackLength, 0.05f, 0.05f, 10.0f);
+        ImGui::DragFloat("Length Variation", &temporalRiftSettings_.crackLengthVariation, 0.01f, 0.0f, 3.0f);
+        ImGui::DragFloat("Crack Width", &temporalRiftSettings_.crackWidth, 0.005f, 0.005f, 1.0f);
+        ImGui::DragFloat("Width Variation", &temporalRiftSettings_.crackWidthVariation, 0.005f, 0.0f, 1.0f);
+        ImGui::DragFloat("Crack Life Time", &temporalRiftSettings_.crackLifeTime, 0.01f, 0.01f, 5.0f, "%.2f sec");
+        ImGui::ColorEdit4("Crack Color", &temporalRiftSettings_.crackColor.x);
+    }
+
+    if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderInt("Ring Count", &temporalRiftSettings_.ringCount, 0, 8);
+        ImGui::SliderInt("Fragment Count", &temporalRiftSettings_.fragmentCount, 0, 64);
+    }
+
+    ImGui::End();
+#endif
+}
+
+/// <summary>
+/// 時空破砕エフェクトを開始する
+/// </summary>
+void PlayScene::StartTemporalRiftEffect()
+{
+    constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする球体
+    if (objects3d_.size() > kTemporalTargetIndex && objects3d_[kTemporalTargetIndex]) {
+        Object3d* temporalTarget = objects3d_[kTemporalTargetIndex].get(); // 時間ずれ対象の3Dオブジェクト
+        temporalTargetBaseTransform_.scale = temporalTarget->GetScale();
+        temporalTargetBaseTransform_.rotate = temporalTarget->GetRotate();
+        temporalTargetBaseTransform_.translate = temporalTarget->GetTranslate();
+        hasTemporalTargetBaseTransform_ = true;
+        temporalTransformHistory_.clear();
+    }
+
+    temporalRiftPhase_ = TemporalRiftPhase::Compress;
+    temporalRiftPhaseTime_ = 0.0f;
+    postProcess_.SetEffectType(PostEffectType::Distortion);
+    postProcess_.SetRadialBlurCenter(temporalRiftScreenUv_);
+    postProcess_.SetDistortionCenter(temporalRiftScreenUv_);
+    postProcess_.SetDistortionRadius(temporalRiftSettings_.distortionRadius);
+    postProcess_.SetDistortionWaveCount(temporalRiftSettings_.distortionWaveCount);
+    postProcess_.SetDistortionStrength(0.0f);
+    postProcess_.SetDistortionProgress(0.0f);
+    postProcess_.SetRadialBlurWidth(temporalRiftSettings_.compressBlurStart);
+    postProcess_.SetRadialBlurSampleCount(
+        static_cast<uint32_t>(temporalRiftSettings_.blurSampleCount));
+
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 圧縮予兆を生成するパーティクル管理
+    if (particleManager) {
+        particleManager->EmitCylinderEffect("Cylinder", temporalRiftPosition_, 1);
+    }
+}
+
+/// <summary>
+/// 時空破砕エフェクトの進行状態を更新する
+/// </summary>
+void PlayScene::UpdateTemporalRiftEffect(float deltaTime)
+{
+    temporalRiftPhaseTime_ += deltaTime;
+
+    switch (temporalRiftPhase_) {
+    case TemporalRiftPhase::Idle:
+        postProcess_.SetEffectType(PostEffectType::Copy);
+        break;
+
+    case TemporalRiftPhase::Compress: {
+        const float compressDuration = temporalRiftSettings_.compressDuration; // 空間圧縮を見せる時間
+        const float progress = (std::min)(temporalRiftPhaseTime_ / compressDuration, 1.0f); // 圧縮演出の進行率
+        const float blurWidth = temporalRiftSettings_.compressBlurStart
+            + (temporalRiftSettings_.compressBlurEnd - temporalRiftSettings_.compressBlurStart) * progress; // 現在のブラー幅
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionRadius(temporalRiftSettings_.distortionRadius);
+        postProcess_.SetDistortionWaveCount(temporalRiftSettings_.distortionWaveCount);
+        postProcess_.SetDistortionStrength(
+            temporalRiftSettings_.compressDistortionStrength * progress);
+        postProcess_.SetDistortionProgress(progress);
+        postProcess_.SetRadialBlurWidth(blurWidth);
+
+        if (temporalRiftPhaseTime_ >= compressDuration) {
+            temporalRiftPhase_ = TemporalRiftPhase::Freeze;
+            temporalRiftPhaseTime_ = 0.0f;
+        }
+        break;
+    }
+
+    case TemporalRiftPhase::Freeze:
+        postProcess_.SetEffectType(PostEffectType::Grayscale);
+        if (temporalRiftPhaseTime_ >= temporalRiftSettings_.freezeDuration) {
+            temporalRiftPhase_ = TemporalRiftPhase::Crack;
+            temporalRiftPhaseTime_ = 0.0f;
+            EmitSpaceCracks();
+        }
+        break;
+
+    case TemporalRiftPhase::Crack:
+        postProcess_.SetEffectType(PostEffectType::Grayscale);
+        if (temporalRiftPhaseTime_ >= temporalRiftSettings_.crackDuration) {
+            temporalRiftPhase_ = TemporalRiftPhase::Burst;
+            temporalRiftPhaseTime_ = 0.0f;
+            EmitRiftBurst();
+            StartImpactResponse();
+        }
+        break;
+
+    case TemporalRiftPhase::Burst: {
+        const float burstDuration = temporalRiftSettings_.burstDuration; // 破砕の衝撃を見せる時間
+        const float progress = (std::min)(temporalRiftPhaseTime_ / burstDuration, 1.0f); // 破砕演出の進行率
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionRadius(temporalRiftSettings_.distortionRadius);
+        postProcess_.SetDistortionWaveCount(temporalRiftSettings_.distortionWaveCount);
+        postProcess_.SetDistortionStrength(
+            temporalRiftSettings_.burstDistortionStrength * (1.0f - progress));
+        postProcess_.SetDistortionProgress(progress);
+        postProcess_.SetRadialBlurWidth(
+            temporalRiftSettings_.burstBlurStrength * (1.0f - progress));
+
+        if (temporalRiftPhaseTime_ >= burstDuration) {
+            temporalRiftPhase_ = TemporalRiftPhase::Recover;
+            temporalRiftPhaseTime_ = 0.0f;
+        }
+        break;
+    }
+
+    case TemporalRiftPhase::Recover:
+        postProcess_.SetEffectType(PostEffectType::Copy);
+        if (temporalRiftPhaseTime_ >= temporalRiftSettings_.recoverDuration) {
+            temporalRiftPhase_ = TemporalRiftPhase::Idle;
+            temporalRiftPhaseTime_ = 0.0f;
+        }
+        break;
+    }
+}
+
+/// <summary>
+/// 空間亀裂を複数生成する
+/// </summary>
+/// <summary>
+/// 時空破砕のワールド座標を画面UV座標へ変換する
+/// </summary>
+Math::Vector2 PlayScene::CalculateTemporalRiftScreenUv() const
+{
+    constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
+    constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
+
+    if (!ctx_.camera) {
+        return kScreenCenterUv;
+    }
+
+    const Matrix4x4 viewProjection = MathUtil::Multiply(
+        ctx_.camera->GetViewMatrix(),
+        ctx_.camera->GetProjectionMatrix()); // ワールド座標をクリップ座標へ変換する行列
+    const float clipX = temporalRiftPosition_.x * viewProjection.m[0][0]
+        + temporalRiftPosition_.y * viewProjection.m[1][0]
+        + temporalRiftPosition_.z * viewProjection.m[2][0]
+        + viewProjection.m[3][0]; // クリップ座標のX成分
+    const float clipY = temporalRiftPosition_.x * viewProjection.m[0][1]
+        + temporalRiftPosition_.y * viewProjection.m[1][1]
+        + temporalRiftPosition_.z * viewProjection.m[2][1]
+        + viewProjection.m[3][1]; // クリップ座標のY成分
+    const float clipW = temporalRiftPosition_.x * viewProjection.m[0][3]
+        + temporalRiftPosition_.y * viewProjection.m[1][3]
+        + temporalRiftPosition_.z * viewProjection.m[2][3]
+        + viewProjection.m[3][3]; // 透視除算に使用するW成分
+
+    if (clipW <= kMinimumClipW) {
+        return kScreenCenterUv;
+    }
+
+    const float ndcX = clipX / clipW; // 透視除算後のX座標
+    const float ndcY = clipY / clipW; // 透視除算後のY座標
+    Vector2 screenUv = {
+        ndcX * 0.5f + 0.5f,
+        -ndcY * 0.5f + 0.5f,
+    }; // NDC座標を左上原点のUV座標へ変換した結果
+
+    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
+    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
+    return screenUv;
+}
+
+/// <summary>
+/// 空間亀裂を複数生成する
+/// </summary>
+Math::Vector2 PlayScene::CalculateWorldScreenUv(const Math::Vector3& worldPosition) const
+{
+    constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
+    constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
+    if (!ctx_.camera) {
+        return kScreenCenterUv;
+    }
+
+    const Matrix4x4 viewProjection = MathUtil::Multiply(
+        ctx_.camera->GetViewMatrix(),
+        ctx_.camera->GetProjectionMatrix()); // ワールド座標をクリップ座標へ変換する行列
+    const float clipX = worldPosition.x * viewProjection.m[0][0]
+        + worldPosition.y * viewProjection.m[1][0]
+        + worldPosition.z * viewProjection.m[2][0]
+        + viewProjection.m[3][0]; // クリップ座標のX成分
+    const float clipY = worldPosition.x * viewProjection.m[0][1]
+        + worldPosition.y * viewProjection.m[1][1]
+        + worldPosition.z * viewProjection.m[2][1]
+        + viewProjection.m[3][1]; // クリップ座標のY成分
+    const float clipW = worldPosition.x * viewProjection.m[0][3]
+        + worldPosition.y * viewProjection.m[1][3]
+        + worldPosition.z * viewProjection.m[2][3]
+        + viewProjection.m[3][3]; // 透視除算に使用するW成分
+    if (clipW <= kMinimumClipW) {
+        return kScreenCenterUv;
+    }
+
+    Vector2 screenUv = {
+        (clipX / clipW) * 0.5f + 0.5f,
+        -(clipY / clipW) * 0.5f + 0.5f,
+    }; // NDC座標を左上原点のUV座標へ変換した結果
+    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
+    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
+    return screenUv;
+}
+
+/// <summary>
+/// 時間ずれ対象のTransformと履歴を更新する
+/// </summary>
+void PlayScene::UpdateTemporalAfterimages()
+{
+    constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする球体
+    if (objects3d_.size() <= kTemporalTargetIndex || !objects3d_[kTemporalTargetIndex]) {
+        return;
+    }
+
+    Object3d* temporalTarget = objects3d_[kTemporalTargetIndex].get(); // 時間ずれ対象の3Dオブジェクト
+    if (!hasTemporalTargetBaseTransform_) {
+        return;
+    }
+
+    float displacementRate = 0.0f; // 現在フェーズで適用する時間ずれ移動率
+    switch (temporalRiftPhase_) {
+    case TemporalRiftPhase::Compress:
+        displacementRate = (std::min)(
+            temporalRiftPhaseTime_ / temporalRiftSettings_.compressDuration,
+            1.0f);
+        break;
+    case TemporalRiftPhase::Freeze:
+        displacementRate = 1.0f;
+        break;
+    case TemporalRiftPhase::Crack:
+        displacementRate = 1.0f - (std::min)(
+            temporalRiftPhaseTime_ / temporalRiftSettings_.crackDuration,
+            1.0f);
+        break;
+    case TemporalRiftPhase::Burst:
+    case TemporalRiftPhase::Recover:
+        displacementRate = 0.0f;
+        break;
+    case TemporalRiftPhase::Idle:
+        temporalTarget->SetScale(temporalTargetBaseTransform_.scale);
+        temporalTarget->SetRotate(temporalTargetBaseTransform_.rotate);
+        temporalTarget->SetTranslate(temporalTargetBaseTransform_.translate);
+        hasTemporalTargetBaseTransform_ = false;
+        temporalTransformHistory_.clear();
+        return;
+    }
+
+    const float displacement = temporalRiftSettings_.temporalDisplacement * displacementRate; // 現在の時間ずれ移動量
+    Vector3 displacedPosition = temporalTargetBaseTransform_.translate; // 時間ずれ適用後の位置
+    displacedPosition.x += displacement;
+    displacedPosition.y += displacement * 0.25f;
+    temporalTarget->SetTranslate(displacedPosition);
+
+    Transform currentTransform {}; // 履歴へ保存する現在のTransform
+    currentTransform.scale = temporalTarget->GetScale();
+    currentTransform.rotate = temporalTarget->GetRotate();
+    currentTransform.translate = temporalTarget->GetTranslate();
+    temporalTransformHistory_.push_front(currentTransform);
+
+    const size_t maximumHistoryCount = static_cast<size_t>(
+        temporalRiftSettings_.afterimageCount
+        * temporalRiftSettings_.afterimageFrameInterval
+        + 1); // 残像表示に必要な最大履歴数
+    while (temporalTransformHistory_.size() > maximumHistoryCount) {
+        temporalTransformHistory_.pop_back();
+    }
+}
+
+/// <summary>
+/// Transform履歴から残像スプライトを更新する
+/// </summary>
+void PlayScene::UpdateAfterimageSprites()
+{
+    const int visibleAfterimageCount = temporalRiftPhase_ == TemporalRiftPhase::Idle
+        ? 0
+        : (std::min)(
+              temporalRiftSettings_.afterimageCount,
+              static_cast<int>(temporalAfterimageSprites_.size())); // 実際に表示する残像数
+
+    for (size_t spriteIndex = 0; spriteIndex < temporalAfterimageSprites_.size(); ++spriteIndex) {
+        Sprite* afterimageSprite = temporalAfterimageSprites_[spriteIndex].get(); // 更新対象の残像スプライト
+        if (!afterimageSprite) {
+            continue;
+        }
+
+        const size_t historyIndex = spriteIndex
+            * static_cast<size_t>(temporalRiftSettings_.afterimageFrameInterval); // 残像が参照する履歴番号
+        if (static_cast<int>(spriteIndex) >= visibleAfterimageCount
+            || historyIndex >= temporalTransformHistory_.size()) {
+            afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+            afterimageSprite->Update();
+            continue;
+        }
+
+        const Transform& historyTransform = temporalTransformHistory_[historyIndex]; // 表示する過去Transform
+        const Vector2 screenUv = CalculateWorldScreenUv(historyTransform.translate); // 過去位置の画面UV
+        const float lifeRate = 1.0f
+            - static_cast<float>(spriteIndex)
+                / static_cast<float>((std::max)(visibleAfterimageCount, 1)); // 残像の新しさ
+        const float scaleAverage = (
+            historyTransform.scale.x
+            + historyTransform.scale.y
+            + historyTransform.scale.z)
+            / 3.0f; // Transformのスケール平均
+        const float spriteSize = temporalRiftSettings_.afterimageSize
+            * (std::max)(scaleAverage, 0.1f)
+            * (0.75f + lifeRate * 0.25f); // 過去Transformに応じた表示サイズ
+
+        afterimageSprite->SetPosition({
+            screenUv.x * static_cast<float>(WinApp::kWindowWidth),
+            screenUv.y * static_cast<float>(WinApp::kWindowHeight),
+        });
+        afterimageSprite->SetRotation(historyTransform.rotate.z);
+        afterimageSprite->SetSize({ spriteSize, spriteSize });
+        afterimageSprite->SetColor({
+            temporalRiftSettings_.afterimageColor.x,
+            temporalRiftSettings_.afterimageColor.y,
+            temporalRiftSettings_.afterimageColor.z,
+            temporalRiftSettings_.afterimageAlpha * lifeRate,
+        });
+        afterimageSprite->Update();
+    }
+}
+
+/// <summary>
+/// Transform履歴による残像を描画する
+/// </summary>
+void PlayScene::DrawTemporalAfterimages()
+{
+    if (!ctx_.spriteCommon || temporalRiftPhase_ == TemporalRiftPhase::Idle) {
+        return;
+    }
+
+    ctx_.spriteCommon->SetCommonDrawSetting();
+    for (auto& afterimageSprite : temporalAfterimageSprites_) {
+        if (afterimageSprite && afterimageSprite->GetColor().w > 0.0f) {
+            afterimageSprite->Draw();
+        }
+    }
+}
+
+/// <summary>
+/// 空間亀裂を複数生成する
+/// </summary>
+/// <summary>
+/// 破砕時のヒットストップとカメラシェイクを開始する
+/// </summary>
+void PlayScene::StartImpactResponse()
+{
+    hitStopRemainingTime_ = temporalRiftSettings_.hitStopDuration;
+    cameraShakeRemainingTime_ = temporalRiftSettings_.cameraShakeDuration;
+    cameraShakeElapsedTime_ = 0.0f;
+
+    if (ctx_.camera) {
+        cameraShakeBasePosition_ = ctx_.camera->GetTranslate();
+        isCameraShakeActive_ = cameraShakeRemainingTime_ > 0.0f;
+    }
+}
+
+/// <summary>
+/// ヒットストップとカメラシェイクを更新する
+/// </summary>
+void PlayScene::UpdateImpactResponse(float deltaTime)
+{
+    hitStopRemainingTime_ = (std::max)(
+        hitStopRemainingTime_ - deltaTime,
+        0.0f);
+
+    if (!isCameraShakeActive_ || !ctx_.camera) {
+        return;
+    }
+
+    cameraShakeRemainingTime_ = (std::max)(
+        cameraShakeRemainingTime_ - deltaTime,
+        0.0f);
+    cameraShakeElapsedTime_ += deltaTime;
+
+    if (cameraShakeRemainingTime_ <= 0.0f
+        || temporalRiftSettings_.cameraShakeDuration <= 0.0f) {
+        StopCameraShake();
+        return;
+    }
+
+    const float shakeRate = cameraShakeRemainingTime_
+        / temporalRiftSettings_.cameraShakeDuration; // 揺れの残り割合
+    const float phase = cameraShakeElapsedTime_
+        * temporalRiftSettings_.cameraShakeFrequency; // 現在の振動位相
+    const float strength = temporalRiftSettings_.cameraShakeStrength
+        * shakeRate; // 減衰を反映した現在の揺れ幅
+    const Vector3 shakeOffset = {
+        std::sin(phase * 1.37f) * strength,
+        std::sin(phase * 1.91f + 1.2f) * strength * 0.65f,
+        std::sin(phase * 1.13f + 2.4f) * strength * 0.35f,
+    }; // 軸ごとに周期をずらしたカメラ移動量
+    ctx_.camera->SetTranslate({
+        cameraShakeBasePosition_.x + shakeOffset.x,
+        cameraShakeBasePosition_.y + shakeOffset.y,
+        cameraShakeBasePosition_.z + shakeOffset.z,
+    });
+}
+
+/// <summary>
+/// カメラシェイクを終了してカメラ位置を復元する
+/// </summary>
+void PlayScene::StopCameraShake()
+{
+    if (isCameraShakeActive_ && ctx_.camera) {
+        ctx_.camera->SetTranslate(cameraShakeBasePosition_);
+        ctx_.camera->Update();
+    }
+
+    isCameraShakeActive_ = false;
+    cameraShakeRemainingTime_ = 0.0f;
+    cameraShakeElapsedTime_ = 0.0f;
+}
+
+/// <summary>
+/// 空間亀裂を複数生成する
+/// </summary>
+void PlayScene::EmitSpaceCracks()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 亀裂を生成するパーティクル管理
+    if (!particleManager) {
+        return;
+    }
+
+    constexpr std::array<float, 7> kCrackAngles = {
+        -1.15f,
+        -0.72f,
+        -0.28f,
+        0.12f,
+        0.55f,
+        0.95f,
+        1.34f,
+    }; // 各亀裂のZ軸回転
+    constexpr std::array<Vector3, 7> kCrackOffsets = {
+        Vector3 { -0.55f, 0.20f, 0.00f },
+        Vector3 { -0.30f, -0.15f, 0.01f },
+        Vector3 { -0.10f, 0.32f, 0.02f },
+        Vector3 { 0.08f, -0.25f, 0.03f },
+        Vector3 { 0.28f, 0.18f, 0.04f },
+        Vector3 { 0.46f, -0.08f, 0.05f },
+        Vector3 { 0.62f, 0.28f, 0.06f },
+    }; // 亀裂中心からの位置補正
+
+    const size_t crackCount = static_cast<size_t>(
+        (std::clamp)(temporalRiftSettings_.crackCount, 1, static_cast<int>(kCrackAngles.size()))); // 実際に生成する亀裂数
+    for (size_t crackIndex = 0; crackIndex < crackCount; ++crackIndex) {
+        const Vector3& offset = kCrackOffsets[crackIndex]; // 現在生成する亀裂の位置補正
+        const Vector3 crackPosition = {
+            temporalRiftPosition_.x + offset.x,
+            temporalRiftPosition_.y + offset.y,
+            temporalRiftPosition_.z + offset.z,
+        }; // 現在生成する亀裂のワールド座標
+        const float crackLength = temporalRiftSettings_.crackLength
+            + static_cast<float>(crackIndex % 3) * temporalRiftSettings_.crackLengthVariation; // 亀裂ごとの長さ
+        const float crackWidth = temporalRiftSettings_.crackWidth
+            + static_cast<float>(crackIndex % 2) * temporalRiftSettings_.crackWidthVariation; // 亀裂ごとの太さ
+
+        particleManager->EmitSpaceCrack(
+            "Hit",
+            crackPosition,
+            kCrackAngles[crackIndex],
+            crackLength,
+            crackWidth,
+            temporalRiftSettings_.crackColor,
+            temporalRiftSettings_.crackLifeTime);
+    }
+}
+
+/// <summary>
+/// 空間破砕時の衝撃波と破片を生成する
+/// </summary>
+void PlayScene::EmitRiftBurst()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 破砕表現を生成するパーティクル管理
+    if (!particleManager) {
+        return;
+    }
+
+    particleManager->EmitRingEffect(
+        "Ring",
+        temporalRiftPosition_,
+        static_cast<uint32_t>(temporalRiftSettings_.ringCount));
+    particleManager->EmitHitEffect(
+        "Hit",
+        temporalRiftPosition_,
+        static_cast<uint32_t>(temporalRiftSettings_.fragmentCount));
+}
+
+/// <summary>
+/// プレイシーンを描画する
+/// </summary>
 void PlayScene::Draw()
+{
+    DirectXCommon* directXCommon = ctx_.directXCommon; // 描画先を切り替えるDirectX基盤
+    const bool canUsePostProcess = directXCommon
+        && sceneRenderTargetHandle_ >= 0
+        && sceneRenderTargetSrvIndex_ != UINT32_MAX
+        && postProcess_.IsReady(); // ポストプロセスを実行できる状態か
+    const bool isTemporalChainPhase =
+        temporalRiftPhase_ == TemporalRiftPhase::Compress
+        || temporalRiftPhase_ == TemporalRiftPhase::Burst; // 歪みとブラーを連結するフェーズか
+    const bool canUseTemporalChain = canUsePostProcess
+        && isTemporalChainPhase
+        && postProcessIntermediateHandle_ >= 0
+        && postProcessIntermediateSrvIndex_ != UINT32_MAX; // 2パス連結を実行できる状態か
+
+    if (canUsePostProcess) {
+        directXCommon->BeginRenderTo(sceneRenderTargetHandle_, true);
+        DrawWorldAndParticles();
+        DrawTemporalAfterimages();
+        directXCommon->EndRenderTo(sceneRenderTargetHandle_);
+
+        if (canUseTemporalChain) {
+            // 1パス目で空間歪みを中間レンダーターゲットへ描画する
+            directXCommon->BeginRenderTo(postProcessIntermediateHandle_, true);
+            postProcess_.DrawTexture(
+                sceneRenderTargetSrvIndex_,
+                PostEffectType::Distortion);
+            directXCommon->EndRenderTo(postProcessIntermediateHandle_);
+
+            // 2パス目で歪み結果へラジアルブラーを適用する
+            postProcess_.DrawTexture(
+                postProcessIntermediateSrvIndex_,
+                PostEffectType::RadialBlur);
+        } else {
+            postProcess_.DrawTexture(sceneRenderTargetSrvIndex_);
+        }
+
+        DrawSprites();
+        return;
+    }
+
+    DrawWorldAndParticles();
+    DrawTemporalAfterimages();
+    DrawSprites();
+}
+
+/// <summary>
+/// 3Dオブジェクトとパーティクルを描画する
+/// </summary>
+void PlayScene::DrawWorldAndParticles()
 {
     // シーン側でも Game の選択モードに応じて個別描画できるようにする
     int sel = ctx_.selectedDrawType;
@@ -296,12 +1123,23 @@ void PlayScene::Draw()
     }
 
     // スプライト描画は Sprite モードまたは All のときに行う
-    if (ctx_.spriteCommon) {
-        if (sel == -1 || sel == 2 || sel == 7) {
-            ctx_.spriteCommon->SetCommonDrawSetting();
-            for (auto& s : sprites_) {
-                if (s)
-                    s->Draw();
+}
+
+/// <summary>
+/// ポストプロセスの影響を受けないスプライトを描画する
+/// </summary>
+void PlayScene::DrawSprites()
+{
+    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
+    if (!ctx_.spriteCommon) {
+        return;
+    }
+
+    if (selectedDrawType == -1 || selectedDrawType == 2 || selectedDrawType == 7) {
+        ctx_.spriteCommon->SetCommonDrawSetting();
+        for (auto& sprite : sprites_) {
+            if (sprite) {
+                sprite->Draw();
             }
         }
     }

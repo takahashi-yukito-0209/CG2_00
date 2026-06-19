@@ -13,6 +13,7 @@ class DirectXCommon;
 /// ポストエフェクトの種類
 /// </summary>
 enum class PostEffectType {
+    Distortion, // 指定した中心から画面を円形に歪ませる
     Copy, // 元画像をそのまま描画する
     Grayscale, // 元画像をグレイスケール化して描画する
     Vignette, // 画面周辺を暗くして描画する
@@ -232,6 +233,61 @@ public:
     uint32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
 
     /// <summary>
+    /// Distortion用PSOが生成済みか確認する
+    /// </summary>
+    bool IsDistortionReady() const { return distortionPipelineState_ != nullptr; }
+
+    /// <summary>
+    /// 画面歪みの中心UV座標を設定する
+    /// </summary>
+    void SetDistortionCenter(const Math::Vector2& center);
+
+    /// <summary>
+    /// 画面歪みの中心UV座標を取得する
+    /// </summary>
+    const Math::Vector2& GetDistortionCenter() const { return distortionCenter_; }
+
+    /// <summary>
+    /// 画面歪みの強度を設定する
+    /// </summary>
+    void SetDistortionStrength(float strength);
+
+    /// <summary>
+    /// 画面歪みの強度を取得する
+    /// </summary>
+    float GetDistortionStrength() const { return distortionStrength_; }
+
+    /// <summary>
+    /// 画面歪みの影響半径を設定する
+    /// </summary>
+    void SetDistortionRadius(float radius);
+
+    /// <summary>
+    /// 画面歪みの影響半径を取得する
+    /// </summary>
+    float GetDistortionRadius() const { return distortionRadius_; }
+
+    /// <summary>
+    /// 画面歪みの波数を設定する
+    /// </summary>
+    void SetDistortionWaveCount(float waveCount);
+
+    /// <summary>
+    /// 画面歪みの波数を取得する
+    /// </summary>
+    float GetDistortionWaveCount() const { return distortionWaveCount_; }
+
+    /// <summary>
+    /// 画面歪みの進行率を設定する
+    /// </summary>
+    void SetDistortionProgress(float progress);
+
+    /// <summary>
+    /// 画面歪みの進行率を取得する
+    /// </summary>
+    float GetDistortionProgress() const { return distortionProgress_; }
+
+    /// <summary>
     /// Dissolve用PSOが生成済みか確認する
     /// </summary>
     bool IsDissolveReady() const { return dissolvePipelineState_ != nullptr; }
@@ -372,6 +428,13 @@ private:
     float randomStrength_ = 1.0f; // 入力画像へ乗算するノイズ強度
     float randomScale_ = 600.0f; // UVに掛けるノイズの細かさ
     float randomSpeed_ = 1.0f; // ノイズの時間変化速度
+private:
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> distortionPipelineState_; // 画面歪み用PSO
+    Math::Vector2 distortionCenter_ = { 0.5f, 0.5f }; // 画面歪みの中心UV座標
+    float distortionStrength_ = 0.02f; // 画面歪みの強度
+    float distortionRadius_ = 0.35f; // 画面歪みの影響半径
+    float distortionWaveCount_ = 3.0f; // 画面歪みの波数
+    float distortionProgress_ = 0.0f; // 画面歪みの進行率
 };
 
 } // namespace MyEngine

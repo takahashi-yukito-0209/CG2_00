@@ -614,6 +614,9 @@ void Game::Draw()
     }
     // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
     impl_->imguiManager.BuildUI(ctx);
+    if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+        impl_->sceneManager->GetCurrent()->DrawImGui();
+    }
 
     // 入力処理などでシーン切替要求がある場合は、ここで安全に反映する
     if (impl_->pendingSceneName.size() > 0) {
