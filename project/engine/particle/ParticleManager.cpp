@@ -252,6 +252,49 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
 /// <summary>
 /// Ringエフェクト用のパーティクルを生成する
 /// </summary>
+/// <summary>
+/// 指定した形状で空間亀裂用のパーティクルを生成する
+/// </summary>
+void ParticleManager::EmitSpaceCrack(
+    const std::string& name,
+    const Vector3& position,
+    float rotationZ,
+    float length,
+    float width,
+    const Vector4& color,
+    float lifeTime)
+{
+    auto groupIterator = particleGroups_.find(name); // 亀裂を追加するパーティクルグループ
+    if (groupIterator == particleGroups_.end()) {
+        return;
+    }
+
+    const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, 1); // 実際に生成できる亀裂数
+    if (emitCount == 0) {
+        return;
+    }
+
+    PM_CpuParticle particle {}; // 生成する空間亀裂パーティクル
+    particle.startScale = { width * 0.15f, length * 0.2f, 1.0f };
+    particle.endScale = { width, length, 1.0f };
+    particle.transform.scale = particle.startScale;
+    particle.transform.rotate = { 0.0f, 0.0f, rotationZ };
+    particle.transform.translate = position;
+    particle.velocity = { 0.0f, 0.0f, 0.0f };
+    particle.color = color;
+    particle.startColor = color;
+    particle.lifeTime = (std::max)(lifeTime, 0.01f);
+    particle.currentTime = 0.0f;
+    particle.spawnTime = globalTime_;
+    particle.useScaleOverLife = true;
+    particle.useFadeOut = true;
+
+    groupIterator->second.particles.push_back(particle);
+}
+
+/// <summary>
+/// Ringエフェクト用のパーティクルを生成する
+/// </summary>
 void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& position, uint32_t count)
 {
     auto it = particleGroups_.find(name);
@@ -321,6 +364,87 @@ void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3&
     }
 }
 
+/// <summary>
+/// 次元破砕用の色付きリングを生成する
+/// </summary>
+void ParticleManager::EmitRiftRing(
+    const std::string& name,
+    const Vector3& position,
+    uint32_t count,
+    const Vector4& color,
+    float startScale,
+    float endScale,
+    float lifeTime)
+{
+    auto groupIterator = particleGroups_.find(name); // リングを追加するパーティクルグループ
+    if (groupIterator == particleGroups_.end()) {
+        return;
+    }
+
+    auto& particles = groupIterator->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, count); // 実際に生成するリング数
+    for (uint32_t ringIndex = 0; ringIndex < emitCount; ++ringIndex) {
+        const float scaleOffset = static_cast<float>(ringIndex) * 0.08f; // 同時生成リングの大きさ差
+        PM_CpuParticle particle {}; // 生成するリングパーティクル
+        particle.startScale = { startScale + scaleOffset, startScale + scaleOffset, 1.0f };
+        particle.endScale = { endScale + scaleOffset, endScale + scaleOffset, 1.0f };
+        particle.transform.scale = particle.startScale;
+        particle.transform.translate = position;
+        particle.color = color;
+        particle.startColor = color;
+        particle.lifeTime = (std::max)(lifeTime + static_cast<float>(ringIndex) * 0.04f, 0.01f);
+        particle.spawnTime = globalTime_ + static_cast<float>(ringIndex) * 0.001f;
+        particle.useScaleOverLife = true;
+        particle.useFadeOut = true;
+        particles.push_back(particle);
+    }
+}
+
+/// <summary>
+/// 次元破砕用の放射状破片を生成する
+/// </summary>
+void ParticleManager::EmitRiftFragments(
+    const std::string& name,
+    const Vector3& position,
+    uint32_t count,
+    const Vector4& color,
+    float minimumSpeed,
+    float maximumSpeed,
+    float lifeTime)
+{
+    auto groupIterator = particleGroups_.find(name); // 破片を追加するパーティクルグループ
+    if (groupIterator == particleGroups_.end()) {
+        return;
+    }
+
+    auto& particles = groupIterator->second.particles; // 生成先のパーティクルリスト
+    const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, count); // 実際に生成する破片数
+    const float minSpeed = (std::min)(minimumSpeed, maximumSpeed); // 破片の最低速度
+    const float maxSpeed = (std::max)(minimumSpeed, maximumSpeed); // 破片の最高速度
+    std::uniform_real_distribution<float> angleDistribution(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // 放射方向
+    std::uniform_real_distribution<float> speedDistribution(minSpeed, maxSpeed); // 放出速度
+    std::uniform_real_distribution<float> lengthDistribution(0.45f, 1.15f); // 破片の長さ
+
+    for (uint32_t fragmentIndex = 0; fragmentIndex < emitCount; ++fragmentIndex) {
+        const float angle = angleDistribution(rng_); // 現在の破片方向
+        const float speed = speedDistribution(rng_); // 現在の破片速度
+        const float length = lengthDistribution(rng_); // 現在の破片長さ
+        PM_CpuParticle particle {}; // 生成する破片パーティクル
+        particle.startScale = { 0.025f, length, 1.0f };
+        particle.endScale = { 0.01f, length * 0.35f, 1.0f };
+        particle.transform.scale = particle.startScale;
+        particle.transform.rotate = { 0.0f, 0.0f, angle - std::numbers::pi_v<float> * 0.5f };
+        particle.transform.translate = position;
+        particle.velocity = { std::cos(angle) * speed, std::sin(angle) * speed, 0.0f };
+        particle.color = color;
+        particle.startColor = color;
+        particle.lifeTime = (std::max)(lifeTime, 0.01f);
+        particle.spawnTime = globalTime_;
+        particle.useScaleOverLife = true;
+        particle.useFadeOut = true;
+        particles.push_back(particle);
+    }
+}
 /// <summary>
 /// パーティクルを更新する
 /// </summary>

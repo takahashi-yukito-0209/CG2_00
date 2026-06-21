@@ -51,6 +51,8 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
         L"resources/shaders/Dissolve.PS.hlsl");
     randomPipelineState_ = CreatePipelineState(
         L"resources/shaders/Random.PS.hlsl");
+    distortionPipelineState_ = CreatePipelineState(
+        L"resources/shaders/Distortion.PS.hlsl");
 
     return IsReady();
 }
@@ -60,6 +62,7 @@ bool PostProcess::Initialize(DirectXCommon* dxCommon)
 /// </summary>
 void PostProcess::Finalize()
 {
+    distortionPipelineState_.Reset();
     randomPipelineState_.Reset();
     dissolvePipelineState_.Reset();
     radialBlurPipelineState_.Reset();
@@ -85,7 +88,7 @@ bool PostProcess::IsReady() const
         && boxFilterPipelineState_ && gaussianFilterPipelineState_
         && luminanceOutlinePipelineState_ && depthOutlinePipelineState_
         && radialBlurPipelineState_ && dissolvePipelineState_
-        && randomPipelineState_;
+        && randomPipelineState_ && distortionPipelineState_;
 }
 
 /// <summary>
@@ -234,6 +237,8 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
     PostEffectType effectType) const
 {
     switch (effectType) {
+    case PostEffectType::Distortion:
+        return distortionPipelineState_.Get();
     case PostEffectType::Random:
         return randomPipelineState_.Get();
     case PostEffectType::Dissolve:
@@ -326,6 +331,28 @@ void PostProcess::DrawTexture(
         &filterSettings[18],
         &randomScale_,
         sizeof(float));
+    if (effectType == PostEffectType::Distortion) {
+        std::memcpy(
+            &filterSettings[4],
+            &distortionCenter_,
+            sizeof(Math::Vector2));
+        std::memcpy(
+            &filterSettings[6],
+            &distortionStrength_,
+            sizeof(float));
+        std::memcpy(
+            &filterSettings[8],
+            &distortionRadius_,
+            sizeof(float));
+        std::memcpy(
+            &filterSettings[9],
+            &distortionWaveCount_,
+            sizeof(float));
+        std::memcpy(
+            &filterSettings[10],
+            &distortionProgress_,
+            sizeof(float));
+    }
     commandList->SetGraphicsRoot32BitConstants(
         2,
         _countof(filterSettings),
@@ -481,6 +508,50 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
     if (sampleCount >= 1 && sampleCount <= 32) {
         radialBlurSampleCount_ = sampleCount;
     }
+}
+
+/// <summary>
+/// Dissolveの閾値を設定する
+/// </summary>
+/// <summary>
+/// 画面歪みの中心UV座標を設定する
+/// </summary>
+void PostProcess::SetDistortionCenter(const Math::Vector2& center)
+{
+    distortionCenter_.x = (std::clamp)(center.x, 0.0f, 1.0f);
+    distortionCenter_.y = (std::clamp)(center.y, 0.0f, 1.0f);
+}
+
+/// <summary>
+/// 画面歪みの強度を設定する
+/// </summary>
+void PostProcess::SetDistortionStrength(float strength)
+{
+    distortionStrength_ = (std::clamp)(strength, -0.1f, 0.1f);
+}
+
+/// <summary>
+/// 画面歪みの影響半径を設定する
+/// </summary>
+void PostProcess::SetDistortionRadius(float radius)
+{
+    distortionRadius_ = (std::clamp)(radius, 0.01f, 1.5f);
+}
+
+/// <summary>
+/// 画面歪みの波数を設定する
+/// </summary>
+void PostProcess::SetDistortionWaveCount(float waveCount)
+{
+    distortionWaveCount_ = (std::clamp)(waveCount, 0.0f, 12.0f);
+}
+
+/// <summary>
+/// 画面歪みの進行率を設定する
+/// </summary>
+void PostProcess::SetDistortionProgress(float progress)
+{
+    distortionProgress_ = (std::clamp)(progress, 0.0f, 1.0f);
 }
 
 /// <summary>
