@@ -107,6 +107,7 @@ private:
     enum class EffectType {
         DimensionalShatter,
         TimeReversal,
+        TimeStop,
     };
 
     /// <summary>
@@ -135,6 +136,32 @@ private:
     /// <summary>
     /// 時間逆流専用パーティクル
     /// </summary>
+
+    /// <summary>
+    /// 時間停止エフェクトの進行状態
+    /// </summary>
+    enum class TimeStopPhase {
+        Idle,
+        Entering,
+        Stopped,
+        Releasing,
+    };
+
+    /// <summary>
+    /// 時間停止エフェクトの調整値
+    /// </summary>
+    struct TimeStopSettings {
+        float enterDuration = 0.20f; // 時間停止へ移行する時間
+        float stopDuration = 1.50f; // 時間を停止する時間
+        float releaseDuration = 0.30f; // 時間再開の演出時間
+        float distortionStrength = 0.045f; // 開始と終了に使用する歪み強度
+        float distortionRadius = 0.65f; // 歪みの影響半径
+        float distortionWaveCount = 5.0f; // 歪みの波数
+        int startRingCount = 3; // 停止開始時に生成するリング数
+        int releaseRingCount = 4; // 時間再開時に生成するリング数
+        int releaseFragmentCount = 16; // 時間再開時に生成する破片数
+        Math::Vector3 effectPosition { 0.0f, 1.0f, 0.0f }; // エフェクトの発生位置
+    };
     struct TimeReversalParticle {
         Math::Vector3 position; // 現在のワールド座標
         Math::Vector3 velocity; // 拡散時の移動速度
@@ -205,6 +232,12 @@ private:
         Math::Vector4 crackColor { 0.55f, 0.80f, 1.0f, 1.0f }; // 亀裂の色
         int ringCount = 2; // 破砕時のリング数
         int fragmentCount = 12; // 破砕時の破片数
+        Math::Vector4 innerRingColor { 0.35f, 0.85f, 1.0f, 0.85f }; // 内側リングの色
+        Math::Vector4 outerRingColor { 0.65f, 0.35f, 1.0f, 0.70f }; // 外側リングの色
+        Math::Vector4 fragmentColor { 0.55f, 0.85f, 1.0f, 1.0f }; // 放射破片の色
+        float fragmentMinSpeed = 2.5f; // 放射破片の最低速度
+        float fragmentMaxSpeed = 6.0f; // 放射破片の最高速度
+        float fragmentLifeTime = 0.55f; // 放射破片の表示時間
     };
 
     /// <summary>
@@ -216,6 +249,21 @@ private:
     /// 時間逆流エフェクトを開始する
     /// </summary>
     void StartTimeReversalEffect();
+
+    /// <summary>
+    /// 時間停止エフェクトを開始する
+    /// </summary>
+    void StartTimeStopEffect();
+
+    /// <summary>
+    /// 時間停止エフェクトの状態を更新する
+    /// </summary>
+    void UpdateTimeStopEffect(float deltaTime);
+
+    /// <summary>
+    /// 時間停止中か確認する
+    /// </summary>
+    bool IsTimeStopped() const;
 
     /// <summary>
     /// 時間逆流専用パーティクルを更新する
@@ -352,12 +400,17 @@ private: // メンバ変数
     TimeReversalPhase timeReversalPhase_ = TimeReversalPhase::Idle; // 時間逆流の現在状態
     float timeReversalPhaseTime_ = 0.0f; // 時間逆流の現在状態での経過時間
     TimeReversalSettings timeReversalSettings_; // 時間逆流の調整値
-    std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
+    TimeStopPhase timeStopPhase_ = TimeStopPhase::Idle; // 現在の時間停止状態
+    float timeStopPhaseTime_ = 0.0f; // 現在フェーズでの経過時間
+    TimeStopSettings timeStopSettings_; // 時間停止の調整値
+    PostEffectType timeStopPreviousPostEffect_ = PostEffectType::Copy; // 再生前のポストエフェクト 
+   std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
     std::deque<Math::Transform> timeReversalTransformHistory_; // 時間巻き戻し対象のTransform履歴
     std::mt19937 timeReversalRandom_ { std::random_device {}() }; // 粒子生成に使用する乱数
     float temporalRiftPhaseTime_ = 0.0f; // 現在の演出状態での経過時間
     Math::Vector3 temporalRiftPosition_ { 0.0f, 1.0f, 0.0f }; // 時空破砕の発生位置
     TemporalRiftSettings temporalRiftSettings_; // 時空破砕の調整値
+    int temporalCracksEmitted_ = 0; // 現在までに生成した亀裂数
     Math::Vector2 temporalRiftScreenUv_ { 0.5f, 0.5f }; // 時空破砕の画面UV座標
     std::deque<Math::Transform> temporalTransformHistory_; // 時間ずれ対象のTransform履歴
     Math::Transform temporalTargetBaseTransform_ {}; // 演出開始前の対象Transform

@@ -232,8 +232,8 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 
     // カメラの生成と初期設定
     impl_->camera = std::make_unique<Camera>();
-    impl_->camera->SetRotate({ -0.1f, 0.0f, 0.0f });
-    impl_->camera->SetTranslate({ 0.0f, 1.0f, -20.0f });
+    impl_->camera->SetRotate({ 5.9f, -7.43f, 0.0f });
+    impl_->camera->SetTranslate({ 0.0f, 1.0f, -188.0f });
     impl_->camera->Update();
     // Object3dCommon にデフォルトカメラをセット
     impl_->object3dCommon->SetDefaultCamera(impl_->camera.get());
@@ -436,19 +436,6 @@ void Game::Update()
     // スペースキーが押された瞬間にサウンドを再生する。スペースキーが離された瞬間は再生しないようにする
     if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !InputManager::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
         impl_->soundSystem.Play(impl_->soundData1); // サウンドシステムを使用してサウンドデータを再生する
-
-        // タイトル画面にいるときはスペースでプレイシーンへ切り替える
-        if (impl_->sceneManager) {
-            try {
-                const std::string cur = impl_->sceneManager->GetCurrentSceneName();
-                if (cur == "Title") {
-                    // pending にセットして後続の処理で安全に切り替える
-                    impl_->pendingSceneName = "Play";
-                }
-            } catch (...) {
-                // 念のため例外は握り潰す（GetCurrentSceneName が例外を投げる想定は低いが安全措置）
-            }
-        }
     }
 
     // 固定タイムステップで更新（ここでは 1/60 秒固定）

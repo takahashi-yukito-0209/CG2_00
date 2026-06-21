@@ -118,25 +118,17 @@ void ImGuiManager::Shutdown()
 /// </summary>
 void ImGuiManager::BuildUI(Context& ctx)
 {
+    ImGui::Begin("Effect Settings");
 
-    ImGui::Begin("Settings");
-
-    DrawSceneSection(ctx);
-    DrawViewFilterSection(ctx);
     DrawPostProcessSection(ctx);
 
-    int selectedDrawType = ctx.selectedDrawType ? *ctx.selectedDrawType : -1; // 現在選択されている表示対象
-
-    DrawObjectSection(ctx, selectedDrawType);
+    const int selectedDrawType = -1; // エフェクト関連の項目を常に表示する
     DrawParticleSection(ctx, selectedDrawType);
-    DrawSpriteSection(ctx, selectedDrawType);
-    DrawCommonSection(ctx);
 
     ImGui::End();
 
     DrawCameraWindow(ctx);
 }
-
 /// <summary>
 /// ImGui の描画コマンドを発行する。ImGui::Render とバックエンドの Render を呼び出す
 /// </summary>

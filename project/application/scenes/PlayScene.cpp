@@ -310,6 +310,8 @@ void PlayScene::Finalize()
 
     temporalRiftPhase_ = TemporalRiftPhase::Idle;
     temporalRiftPhaseTime_ = 0.0f;
+    timeStopPhase_ = TimeStopPhase::Idle;
+    timeStopPhaseTime_ = 0.0f;
     ctx_ = {};
 }
 
@@ -330,6 +332,7 @@ void PlayScene::Update(float dt)
     UpdateTimeReversalTransformHistory();
     UpdateTemporalRiftEffect(effectDeltaTime);
     UpdateTimeReversalEffect(effectDeltaTime);
+    UpdateTimeStopEffect(dt);
     UpdateImpactResponse(dt);
     if (hitStopRemainingTime_ <= 0.0f) {
         UpdateTemporalAfterimages();
@@ -341,14 +344,16 @@ void PlayScene::Update(float dt)
         ctx_.camera->Update();
     }
     temporalRiftScreenUv_ = CalculateTemporalRiftScreenUv();
-    const Vector2 postEffectCenter = timeReversalPhase_ != TimeReversalPhase::Idle
-        ? CalculateWorldScreenUv(timeReversalSettings_.effectPosition)
-        : temporalRiftScreenUv_; // 再生中のエフェクトに対応する画面中心
+    const Vector2 postEffectCenter = timeStopPhase_ != TimeStopPhase::Idle
+        ? CalculateWorldScreenUv(timeStopSettings_.effectPosition)
+        : (timeReversalPhase_ != TimeReversalPhase::Idle
+                ? CalculateWorldScreenUv(timeReversalSettings_.effectPosition)
+                : temporalRiftScreenUv_); // 再生中のエフェクトに対応する画面中心
     postProcess_.SetRadialBlurCenter(postEffectCenter);
     postProcess_.SetDistortionCenter(postEffectCenter);
 
     // パーティクルエミッターの更新とマネージャーの更新
-    const float particleDeltaTime = hitStopRemainingTime_ > 0.0f ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
+    const float particleDeltaTime = (hitStopRemainingTime_ > 0.0f || IsTimeStopped()) ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
     pmEmitter_.Update(particleDeltaTime);
     ringEmitter_.Update(particleDeltaTime);
     cylinderEmitter_.Update(particleDeltaTime);
@@ -415,6 +420,7 @@ void PlayScene::DrawImGui()
     const char* effectNames[] = {
         "Dimensional Shatter",
         "Time Reversal",
+        "Time Stop",
     }; // 選択可能なエフェクト名
     if (!IsAnyEffectPlaying()
         && ImGui::Combo(
@@ -453,7 +459,101 @@ void PlayScene::DrawImGui()
         temporalRiftPosition_ = { 0.0f, 1.0f, 0.0f };
     }
 
-    if (selectedEffectType_ != EffectType::DimensionalShatter) {
+    if (selectedEffectType_ == EffectType::TimeStop) {
+        const char* timeStopPhaseName = "Idle"; // 現在の時間停止状態
+        switch (timeStopPhase_) {
+        case TimeStopPhase::Idle:
+            timeStopPhaseName = "Idle";
+            break;
+        case TimeStopPhase::Entering:
+            timeStopPhaseName = "Entering";
+            break;
+        case TimeStopPhase::Stopped:
+            timeStopPhaseName = "Stopped";
+            break;
+        case TimeStopPhase::Releasing:
+            timeStopPhaseName = "Releasing";
+            break;
+        }
+
+        ImGui::Text("Time Stop Phase: %s", timeStopPhaseName);
+        ImGui::Text("Phase Time: %.3f", timeStopPhaseTime_);
+        if (ImGui::Button("Reset Time Stop Settings")) {
+            timeStopSettings_ = TimeStopSettings {};
+        }
+
+        if (ImGui::CollapsingHeader(
+                "Time Stop Settings",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat(
+                "Enter Duration",
+                &timeStopSettings_.enterDuration,
+                0.01f,
+                0.01f,
+                3.0f,
+                "%.2f sec");
+            ImGui::DragFloat(
+                "Stop Duration",
+                &timeStopSettings_.stopDuration,
+                0.05f,
+                0.05f,
+                10.0f,
+                "%.2f sec");
+            ImGui::DragFloat(
+                "Release Duration",
+                &timeStopSettings_.releaseDuration,
+                0.01f,
+                0.01f,
+                3.0f,
+                "%.2f sec");
+            ImGui::SeparatorText("Distortion");
+            ImGui::DragFloat(
+                "Stop Distortion Strength",
+                &timeStopSettings_.distortionStrength,
+                0.001f,
+                0.0f,
+                0.2f,
+                "%.3f");
+            ImGui::DragFloat(
+                "Stop Distortion Radius",
+                &timeStopSettings_.distortionRadius,
+                0.01f,
+                0.05f,
+                1.5f,
+                "%.2f");
+            ImGui::DragFloat(
+                "Stop Distortion Waves",
+                &timeStopSettings_.distortionWaveCount,
+                0.1f,
+                1.0f,
+                12.0f,
+                "%.1f");
+            ImGui::SeparatorText("Particles");
+            ImGui::SliderInt(
+                "Start Ring Count",
+                &timeStopSettings_.startRingCount,
+                0,
+                8);
+            ImGui::SliderInt(
+                "Release Ring Count",
+                &timeStopSettings_.releaseRingCount,
+                0,
+                8);
+            ImGui::SliderInt(
+                "Release Fragment Count",
+                &timeStopSettings_.releaseFragmentCount,
+                0,
+                64);
+            ImGui::DragFloat3(
+                "Time Stop Position",
+                &timeStopSettings_.effectPosition.x,
+                0.05f);
+        }
+
+        ImGui::End();
+        return;
+    }
+    if (selectedEffectType_ == EffectType::TimeReversal) {
         const char* timeReversalPhaseName = "Idle"; // 時間逆流の現在状態
         switch (timeReversalPhase_) {
         case TimeReversalPhase::Idle:
@@ -743,6 +843,12 @@ void PlayScene::DrawImGui()
     if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::SliderInt("Ring Count", &temporalRiftSettings_.ringCount, 0, 8);
         ImGui::SliderInt("Fragment Count", &temporalRiftSettings_.fragmentCount, 0, 64);
+        ImGui::ColorEdit4("Inner Ring Color", &temporalRiftSettings_.innerRingColor.x);
+        ImGui::ColorEdit4("Outer Ring Color", &temporalRiftSettings_.outerRingColor.x);
+        ImGui::ColorEdit4("Fragment Color", &temporalRiftSettings_.fragmentColor.x);
+        ImGui::DragFloat("Fragment Min Speed", &temporalRiftSettings_.fragmentMinSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
+        ImGui::DragFloat("Fragment Max Speed", &temporalRiftSettings_.fragmentMaxSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
+        ImGui::DragFloat("Fragment Life Time", &temporalRiftSettings_.fragmentLifeTime, 0.01f, 0.05f, 3.0f, "%.2f sec");
     }
 
     ImGui::End();
@@ -764,6 +870,9 @@ void PlayScene::StartSelectedEffect()
     case EffectType::TimeReversal:
         StartTimeReversalEffect();
         break;
+    case EffectType::TimeStop:
+        StartTimeStopEffect();
+        break;
     }
 }
 
@@ -777,6 +886,8 @@ bool PlayScene::IsSelectedEffectReady() const
         return true;
     case EffectType::TimeReversal:
         return true;
+    case EffectType::TimeStop:
+        return true;
     }
     return false;
 }
@@ -787,12 +898,109 @@ bool PlayScene::IsSelectedEffectReady() const
 bool PlayScene::IsAnyEffectPlaying() const
 {
     return temporalRiftPhase_ != TemporalRiftPhase::Idle
-        || timeReversalPhase_ != TimeReversalPhase::Idle;
+        || timeReversalPhase_ != TimeReversalPhase::Idle
+        || timeStopPhase_ != TimeStopPhase::Idle;
 }
 
 /// <summary>
 /// 次元破砕エフェクトを開始する
 /// </summary>
+/// <summary>
+/// 時間停止エフェクトを開始する
+/// </summary>
+void PlayScene::StartTimeStopEffect()
+{
+    timeStopPreviousPostEffect_ = postProcess_.GetEffectType(); // 再生前のポストエフェクト
+    timeStopPhase_ = TimeStopPhase::Entering;
+    timeStopPhaseTime_ = 0.0f;
+
+    const Vector2 effectCenter = CalculateWorldScreenUv(timeStopSettings_.effectPosition); // 時間停止の画面中心
+    postProcess_.SetDistortionCenter(effectCenter);
+    postProcess_.SetRadialBlurCenter(effectCenter);
+    postProcess_.SetDistortionRadius(timeStopSettings_.distortionRadius);
+    postProcess_.SetDistortionWaveCount(timeStopSettings_.distortionWaveCount);
+    postProcess_.SetDistortionStrength(0.0f);
+    postProcess_.SetDistortionProgress(0.0f);
+    postProcess_.SetEffectType(PostEffectType::Distortion);
+
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 開始演出を生成するパーティクル管理
+    if (particleManager) {
+        particleManager->EmitCylinderEffect("Cylinder", timeStopSettings_.effectPosition, 1);
+    }
+}
+
+/// <summary>
+/// 時間停止エフェクトの状態を更新する
+/// </summary>
+void PlayScene::UpdateTimeStopEffect(float deltaTime)
+{
+    if (timeStopPhase_ == TimeStopPhase::Idle) {
+        return;
+    }
+
+    timeStopPhaseTime_ += deltaTime;
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 時間停止演出を生成するパーティクル管理
+
+    switch (timeStopPhase_) {
+    case TimeStopPhase::Idle:
+        break;
+
+    case TimeStopPhase::Entering: {
+        const float duration = (std::max)(timeStopSettings_.enterDuration, 0.0001f); // 開始演出時間
+        const float progress = (std::clamp)(timeStopPhaseTime_ / duration, 0.0f, 1.0f); // 開始演出の進行率
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionStrength(-timeStopSettings_.distortionStrength * progress);
+        postProcess_.SetDistortionProgress(progress);
+
+        if (progress >= 1.0f) {
+            timeStopPhase_ = TimeStopPhase::Stopped;
+            timeStopPhaseTime_ = 0.0f;
+            postProcess_.SetEffectType(PostEffectType::Grayscale);
+            postProcess_.SetDistortionStrength(0.0f);
+            if (particleManager) {
+                particleManager->EmitRingEffect("Ring", timeStopSettings_.effectPosition, static_cast<uint32_t>((std::max)(timeStopSettings_.startRingCount, 0)));
+            }
+        }
+        break;
+    }
+
+    case TimeStopPhase::Stopped:
+        postProcess_.SetEffectType(PostEffectType::Grayscale);
+        if (timeStopPhaseTime_ >= timeStopSettings_.stopDuration) {
+            timeStopPhase_ = TimeStopPhase::Releasing;
+            timeStopPhaseTime_ = 0.0f;
+            if (particleManager) {
+                particleManager->EmitRingEffect("Ring", timeStopSettings_.effectPosition, static_cast<uint32_t>((std::max)(timeStopSettings_.releaseRingCount, 0)));
+                particleManager->EmitHitEffect("Hit", timeStopSettings_.effectPosition, static_cast<uint32_t>((std::max)(timeStopSettings_.releaseFragmentCount, 0)));
+            }
+        }
+        break;
+
+    case TimeStopPhase::Releasing: {
+        const float duration = (std::max)(timeStopSettings_.releaseDuration, 0.0001f); // 再開演出時間
+        const float progress = (std::clamp)(timeStopPhaseTime_ / duration, 0.0f, 1.0f); // 再開演出の進行率
+        postProcess_.SetEffectType(PostEffectType::Distortion);
+        postProcess_.SetDistortionStrength(timeStopSettings_.distortionStrength * (1.0f - progress));
+        postProcess_.SetDistortionProgress(progress);
+
+        if (progress >= 1.0f) {
+            timeStopPhase_ = TimeStopPhase::Idle;
+            timeStopPhaseTime_ = 0.0f;
+            postProcess_.SetDistortionStrength(0.0f);
+            postProcess_.SetEffectType(timeStopPreviousPostEffect_);
+        }
+        break;
+    }
+    }
+}
+
+/// <summary>
+/// 時間停止中か確認する
+/// </summary>
+bool PlayScene::IsTimeStopped() const
+{
+    return timeStopPhase_ == TimeStopPhase::Stopped;
+}
 /// <summary>
 /// 時間逆流エフェクトを開始する
 /// </summary>
@@ -1246,6 +1454,7 @@ void PlayScene::StartTemporalRiftEffect()
 
     temporalRiftPhase_ = TemporalRiftPhase::Compress;
     temporalRiftPhaseTime_ = 0.0f;
+    temporalCracksEmitted_ = 0;
     postProcess_.SetEffectType(PostEffectType::Distortion);
     postProcess_.SetRadialBlurCenter(temporalRiftScreenUv_);
     postProcess_.SetDistortionCenter(temporalRiftScreenUv_);
@@ -1300,12 +1509,12 @@ void PlayScene::UpdateTemporalRiftEffect(float deltaTime)
         if (temporalRiftPhaseTime_ >= temporalRiftSettings_.freezeDuration) {
             temporalRiftPhase_ = TemporalRiftPhase::Crack;
             temporalRiftPhaseTime_ = 0.0f;
-            EmitSpaceCracks();
         }
         break;
 
     case TemporalRiftPhase::Crack:
         postProcess_.SetEffectType(PostEffectType::Grayscale);
+        EmitSpaceCracks();
         if (temporalRiftPhaseTime_ >= temporalRiftSettings_.crackDuration) {
             temporalRiftPhase_ = TemporalRiftPhase::Burst;
             temporalRiftPhaseTime_ = 0.0f;
@@ -1642,7 +1851,7 @@ void PlayScene::StopCameraShake()
 }
 
 /// <summary>
-/// 空間亀裂を複数生成する
+/// 空間亀裂を進行率に合わせて段階的に生成する
 /// </summary>
 void PlayScene::EmitSpaceCracks()
 {
@@ -1652,37 +1861,44 @@ void PlayScene::EmitSpaceCracks()
     }
 
     constexpr std::array<float, 7> kCrackAngles = {
-        -1.15f,
-        -0.72f,
-        -0.28f,
-        0.12f,
-        0.55f,
-        0.95f,
-        1.34f,
+        -1.15f, -0.72f, -0.28f, 0.12f, 0.55f, 0.95f, 1.34f,
     }; // 各亀裂のZ軸回転
     constexpr std::array<Vector3, 7> kCrackOffsets = {
-        Vector3 { -0.55f, 0.20f, 0.00f },
-        Vector3 { -0.30f, -0.15f, 0.01f },
-        Vector3 { -0.10f, 0.32f, 0.02f },
-        Vector3 { 0.08f, -0.25f, 0.03f },
-        Vector3 { 0.28f, 0.18f, 0.04f },
-        Vector3 { 0.46f, -0.08f, 0.05f },
-        Vector3 { 0.62f, 0.28f, 0.06f },
-    }; // 亀裂中心からの位置補正
+        Vector3 { -0.20f, 0.08f, 0.00f },
+        Vector3 { -0.38f, -0.12f, 0.01f },
+        Vector3 { -0.12f, 0.30f, 0.02f },
+        Vector3 { 0.10f, -0.28f, 0.03f },
+        Vector3 { 0.30f, 0.16f, 0.04f },
+        Vector3 { 0.48f, -0.06f, 0.05f },
+        Vector3 { 0.62f, 0.30f, 0.06f },
+    }; // 中心から枝分かれして見える位置補正
 
-    const size_t crackCount = static_cast<size_t>(
-        (std::clamp)(temporalRiftSettings_.crackCount, 1, static_cast<int>(kCrackAngles.size()))); // 実際に生成する亀裂数
-    for (size_t crackIndex = 0; crackIndex < crackCount; ++crackIndex) {
-        const Vector3& offset = kCrackOffsets[crackIndex]; // 現在生成する亀裂の位置補正
+    const int crackCount = (std::clamp)(
+        temporalRiftSettings_.crackCount,
+        1,
+        static_cast<int>(kCrackAngles.size())); // 生成する亀裂総数
+    const float crackDuration = (std::max)(temporalRiftSettings_.crackDuration, 0.0001f); // 亀裂展開時間
+    const float progress = (std::clamp)(temporalRiftPhaseTime_ / crackDuration, 0.0f, 1.0f); // 亀裂展開の進行率
+    const int targetCrackCount = (std::min)(
+        crackCount,
+        static_cast<int>(progress * static_cast<float>(crackCount)) + 1); // 現在までに表示する亀裂数
+
+    while (temporalCracksEmitted_ < targetCrackCount) {
+        const size_t crackIndex = static_cast<size_t>(temporalCracksEmitted_); // 今回生成する亀裂番号
+        const Vector3& offset = kCrackOffsets[crackIndex]; // 亀裂の位置補正
         const Vector3 crackPosition = {
             temporalRiftPosition_.x + offset.x,
             temporalRiftPosition_.y + offset.y,
             temporalRiftPosition_.z + offset.z,
-        }; // 現在生成する亀裂のワールド座標
+        }; // 亀裂のワールド座標
+        const float branchRate = static_cast<float>(crackIndex) / static_cast<float>((std::max)(crackCount - 1, 1)); // 枝先への進行率
         const float crackLength = temporalRiftSettings_.crackLength
-            + static_cast<float>(crackIndex % 3) * temporalRiftSettings_.crackLengthVariation; // 亀裂ごとの長さ
+            + branchRate * temporalRiftSettings_.crackLengthVariation; // 枝ごとの長さ
         const float crackWidth = temporalRiftSettings_.crackWidth
-            + static_cast<float>(crackIndex % 2) * temporalRiftSettings_.crackWidthVariation; // 亀裂ごとの太さ
+            + static_cast<float>(crackIndex % 2) * temporalRiftSettings_.crackWidthVariation; // 枝ごとの太さ
+        Vector4 crackColor = temporalRiftSettings_.crackColor; // 亀裂の発光色
+        crackColor.x = (std::min)(crackColor.x + branchRate * 0.18f, 1.0f);
+        crackColor.z = (std::min)(crackColor.z + branchRate * 0.12f, 1.0f);
 
         particleManager->EmitSpaceCrack(
             "Hit",
@@ -1690,31 +1906,49 @@ void PlayScene::EmitSpaceCracks()
             kCrackAngles[crackIndex],
             crackLength,
             crackWidth,
-            temporalRiftSettings_.crackColor,
+            crackColor,
             temporalRiftSettings_.crackLifeTime);
+        ++temporalCracksEmitted_;
     }
 }
-
 /// <summary>
-/// 空間破砕時の衝撃波と破片を生成する
+/// 空間崩壊時の多重リングと放射破片を生成する
 /// </summary>
 void PlayScene::EmitRiftBurst()
 {
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // 破砕表現を生成するパーティクル管理
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 破裂表現を生成するパーティクル管理
     if (!particleManager) {
         return;
     }
 
-    particleManager->EmitRingEffect(
+    const uint32_t totalRingCount = static_cast<uint32_t>((std::max)(temporalRiftSettings_.ringCount, 0)); // 生成するリング総数
+    const uint32_t innerRingCount = (totalRingCount + 1u) / 2u; // 青白い内側リング数
+    const uint32_t outerRingCount = totalRingCount / 2u; // 紫色の外側リング数
+    particleManager->EmitRiftRing(
         "Ring",
         temporalRiftPosition_,
-        static_cast<uint32_t>(temporalRiftSettings_.ringCount));
-    particleManager->EmitHitEffect(
+        innerRingCount,
+        temporalRiftSettings_.innerRingColor,
+        0.12f,
+        1.8f,
+        0.55f);
+    particleManager->EmitRiftRing(
+        "Ring",
+        temporalRiftPosition_,
+        outerRingCount,
+        temporalRiftSettings_.outerRingColor,
+        0.28f,
+        2.5f,
+        0.85f);
+    particleManager->EmitRiftFragments(
         "Hit",
         temporalRiftPosition_,
-        static_cast<uint32_t>(temporalRiftSettings_.fragmentCount));
+        static_cast<uint32_t>((std::max)(temporalRiftSettings_.fragmentCount, 0)),
+        temporalRiftSettings_.fragmentColor,
+        temporalRiftSettings_.fragmentMinSpeed,
+        temporalRiftSettings_.fragmentMaxSpeed,
+        temporalRiftSettings_.fragmentLifeTime);
 }
-
 /// <summary>
 /// プレイシーンを描画する
 /// </summary>

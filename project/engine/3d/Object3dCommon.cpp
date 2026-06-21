@@ -923,14 +923,29 @@ void Object3dCommon::CreateGraphicsPipeline()
         instDesc.InputLayout = inputLayoutDesc; // InputLayoutも共通
         instDesc.VS = { instVS->GetBufferPointer(), instVS->GetBufferSize() }; // インスタンシング用VS
         instDesc.PS = { instPS->GetBufferPointer(), instPS->GetBufferSize() }; // インスタンシング用PS
-        instDesc.BlendState = blendDesc; // ブレンドステートは共通
+        D3D12_BLEND_DESC particleBlendDesc {}; // パーティクル専用の加算ブレンド設定
+        D3D12_RENDER_TARGET_BLEND_DESC& particleRenderTargetBlend =
+            particleBlendDesc.RenderTarget[0]; // パーティクル用のレンダーターゲット設定
+        particleRenderTargetBlend.BlendEnable = TRUE;
+        particleRenderTargetBlend.LogicOpEnable = FALSE;
+        particleRenderTargetBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        particleRenderTargetBlend.DestBlend = D3D12_BLEND_ONE;
+        particleRenderTargetBlend.BlendOp = D3D12_BLEND_OP_ADD;
+        particleRenderTargetBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        particleRenderTargetBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+        particleRenderTargetBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        particleRenderTargetBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
+        particleRenderTargetBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        instDesc.BlendState = particleBlendDesc;
         instDesc.RasterizerState = rasterizerDesc; // ラスタライザーステートも共通
         instDesc.NumRenderTargets = 1; // 書き込むRTVの情報
         instDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat(); // 書き込むRTVの情報
         instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; // 利用するトポロジ（形状）のタイプ。三角形
         instDesc.SampleDesc.Count = 1; // どのように画面に色を打ち込むかの設定（気にしなくて良い）
         instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK; // ここまでは共通の設定
-        instDesc.DepthStencilState = depthStencilDesc; // DepthStencilの設定も共通
+        D3D12_DEPTH_STENCIL_DESC particleDepthStencilDesc = depthStencilDesc; // パーティクル専用の深度設定
+        particleDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        instDesc.DepthStencilState = particleDepthStencilDesc;
         instDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; // DepthStencilのフォーマットも共通
         // インスタンシング用PSOを生成し、メンバ変数に保持する
         HRESULT r = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&instDesc, IID_PPV_ARGS(&instancingPipelineState_));

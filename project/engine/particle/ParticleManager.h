@@ -118,6 +118,29 @@ public:
     void EmitCylinderEffect(const std::string& name, const Math::Vector3& position, uint32_t count);
 
     /// <summary>
+    /// 次元破砕用の色付きリングを生成する
+    /// </summary>
+    void EmitRiftRing(
+        const std::string& name,
+        const Math::Vector3& position,
+        uint32_t count,
+        const Math::Vector4& color,
+        float startScale,
+        float endScale,
+        float lifeTime);
+
+    /// <summary>
+    /// 次元破砕用の放射状破片を生成する
+    /// </summary>
+    void EmitRiftFragments(
+        const std::string& name,
+        const Math::Vector3& position,
+        uint32_t count,
+        const Math::Vector4& color,
+        float minimumSpeed,
+        float maximumSpeed,
+        float lifeTime);
+    /// <summary>
     /// パーティクルを更新する
     /// </summary>
     void Update(float dt);
