@@ -32,11 +32,26 @@ TextureManager* TextureManager::GetInstance()
 /// </summary>
 void TextureManager::Finalize()
 {
-    // インスタンスが存在する場合は削除する
-    if (instance_ != nullptr) {
-        delete instance_;
-        instance_ = nullptr;
+    if (instance_ == nullptr) {
+        return;
     }
+
+    // TextureManagerが確保したSRVを管理元へ返却する
+    if (instance_->srvManager_ != nullptr) {
+        for (auto& texturePair : instance_->textureDatas) {
+            TextureData& textureData = texturePair.second; // 解放対象のテクスチャ情報
+            if (textureData.srvIndex != UINT32_MAX) {
+                instance_->srvManager_->Free(textureData.srvIndex);
+                textureData.srvIndex = UINT32_MAX;
+            }
+        }
+    }
+
+    instance_->textureDatas.clear();
+    instance_->srvManager_ = nullptr;
+    instance_->dxCommon_ = nullptr;
+    delete instance_;
+    instance_ = nullptr;
 }
 
 /// <summary>

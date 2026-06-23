@@ -119,7 +119,7 @@ private: // メンバ変数
 private: // 内部構造体: テクスチャデータ
     // テクスチャ1枚分のデータ
     struct TextureData {
-        uint32_t srvIndex = 0; // SRVインデックス
+        uint32_t srvIndex = UINT32_MAX; // 未割り当て時は無効値
         DirectX::TexMetadata metadata; // メタデータ
         Microsoft::WRL::ComPtr<ID3D12Resource> Resource; // リソース
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU; // SRVハンドル(CPU)
