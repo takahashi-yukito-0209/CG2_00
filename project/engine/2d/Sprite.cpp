@@ -34,39 +34,28 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
     this->uvTransform_.rotate = { 0.0f, 0.0f, 0.0f };
     this->uvTransform_.translate = { 0.0f, 0.0f, 0.0f };
 
-    // Sprite用の頂点リソースを作る
-    // ローカル変数 -> メンバ変数への代入
-    vertexResource_ = dxCommon->CreateBufferResource(sizeof(VertexData) * 4);
-
-    // 頂点バッファビューを作成し、メンバ変数に代入
-    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vertexBufferView_.SizeInBytes = sizeof(VertexData) * 4;
-    vertexBufferView_.StrideInBytes = sizeof(VertexData);
-
-    // 頂点データ書き込み用ポインタを取得し、メンバ変数に代入
-    hr = vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vertexData_));
-    if (FAILED(hr)) {
-        Logger::Log("Warning: Sprite::Initialize vertexResource_->Map failed. Vertex data will be unavailable\n");
-        vertexData_ = nullptr;
-    } else {
-        // 頂点データの内容を書き込む
-        vertexData_[0].position = { 0.0f, 360.0f, 0.0f, 1.0f }; // 左下
-        vertexData_[0].texcoord = { 0.0f, 1.0f };
-        vertexData_[0].normal = { 0.0f, 0.0f, -1.0f };
-
-        vertexData_[1].position = { 0.0f, 0.0f, 0.0f, 1.0f }; // 左上
-        vertexData_[1].texcoord = { 0.0f, 0.0f };
-        vertexData_[1].normal = { 0.0f, 0.0f, -1.0f };
-
-        vertexData_[2].position = { 640.0f, 360.0f, 0.0f, 1.0f }; // 右下
-        vertexData_[2].texcoord = { 1.0f, 1.0f };
-        vertexData_[2].normal = { 0.0f, 0.0f, -1.0f };
-
-        vertexData_[3].position = { 640.0f, 0.0f, 0.0f, 1.0f }; // 右上
-        vertexData_[3].texcoord = { 1.0f, 0.0f };
-        vertexData_[3].normal = { 0.0f, 0.0f, -1.0f };
+    // フレームごとの頂点リソースを作成する
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        vertexResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(VertexData) * vertexState_.size());
+        hr = vertexResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData_[frameIndex]));
+        if (FAILED(hr)) {
+            Logger::Log("Warning: Sprite::Initialize vertex resource map failed\n");
+            mappedVertexData_[frameIndex] = nullptr;
+        }
     }
 
+    vertexData_[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[0].texcoord = { 0.0f, 1.0f };
+    vertexData_[0].normal = { 0.0f, 0.0f, -1.0f };
+    vertexData_[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
+    vertexData_[1].texcoord = { 0.0f, 0.0f };
+    vertexData_[1].normal = { 0.0f, 0.0f, -1.0f };
+    vertexData_[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[2].texcoord = { 1.0f, 1.0f };
+    vertexData_[2].normal = { 0.0f, 0.0f, -1.0f };
+    vertexData_[3].position = { 640.0f, 0.0f, 0.0f, 1.0f };
+    vertexData_[3].texcoord = { 1.0f, 0.0f };
+    vertexData_[3].normal = { 0.0f, 0.0f, -1.0f };
     // IndexResourceSpriteの生成
     // ローカル変数 -> メンバ変数への代入
     indexResource_ = dxCommon->CreateBufferResource(sizeof(uint32_t) * 6);
@@ -91,38 +80,22 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         indexData_[5] = 2;
     }
 
-    // Sprite用のマテリアルリソースを作る
-    materialResource_ = dxCommon->CreateBufferResource(sizeof(Material));
-
-    // マテリアルにデータを書き込むポインタを取得し、メンバ変数に代入
-    hr = materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
-    if (FAILED(hr)) {
-        Logger::Log("Warning: Sprite::Initialize materialResource_->Map failed. Material data will be unavailable\n");
-        materialData_ = nullptr;
-    } else {
-        // マテリアルデータの内容を書き込む
-        materialData_->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-        materialData_->enableLighting = false; // SpriteはLightingしない
-        materialData_->uvTransform = MathUtil::MakeIdentity4x4();
-        materialData_->lightingMode = 0;
-        materialData_->useAlphaCutoutSampler = 0;
-        materialData_->shininess = 1.0f;
+    // フレームごとのマテリアルと変換行列リソースを作成する
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        materialResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(Material));
+        materialResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterialData_[frameIndex]));
+        transformationMatrixResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
+        transformationMatrixResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransformationMatrixData_[frameIndex]));
     }
 
-    // Sprite用のTransformationMatrix用のリソースを作る
-    transformationMatrixResource_ = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
-
-    // データを書き込むポインタを取得し、メンバ変数に代入
-    hr = transformationMatrixResource_->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData_));
-    if (FAILED(hr)) {
-        Logger::Log("Warning: Sprite::Initialize transformationMatrixResource_->Map failed. Transformation data will be unavailable\n");
-        transformationMatrixData_ = nullptr;
-    } else {
-        // 変換行列データの内容を書き込む（初期値）
-        transformationMatrixData_->WVP = MathUtil::MakeIdentity4x4();
-        transformationMatrixData_->World = MathUtil::MakeIdentity4x4();
-    }
-
+    materialData_->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    materialData_->enableLighting = false;
+    materialData_->uvTransform = MathUtil::MakeIdentity4x4();
+    materialData_->lightingMode = 0;
+    materialData_->useAlphaCutoutSampler = 0;
+    materialData_->shininess = 1.0f;
+    transformationMatrixData_->WVP = MathUtil::MakeIdentity4x4();
+    transformationMatrixData_->World = MathUtil::MakeIdentity4x4();
     // パス指定されたテクスチャをリソースリゾルバで解決してみる
     std::string resolvedTex = ResourceResolver::Resolve(textureFilePath, ResourceResolver::Type::Texture);
     // 無かったらそのままのパスにする
@@ -326,6 +299,7 @@ void Sprite::Update()
 /// </summary>
 void Sprite::Draw()
 {
+    UpdateFrameResources();
     // DirectXCommonとコマンドリストの存在確認
     if (!spriteCommon_) {
         Logger::Log("Warning: Sprite::Draw skipped: spriteCommon_ is null\n");
@@ -351,29 +325,33 @@ void Sprite::Draw()
         return;
     }
 
-    if (!materialResource_) {
+    if (!materialResources_[dxCommon->GetCurrentFrameIndex()]) {
         // マテリアルリソースが利用できない場合は警告を出して描画をスキップする（マテリアル定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: materialResource_ is null\n");
         return;
     }
 
-    if (!transformationMatrixResource_) {
+    if (!transformationMatrixResources_[dxCommon->GetCurrentFrameIndex()]) {
         // 変換行列リソースが利用できない場合は警告を出して描画をスキップする（変換行列定数バッファがないと描画できないため）
         Logger::Log("Warning: Sprite::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
 
     // VBVを設定
+    const uint32_t frameIndex = dxCommon->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    vertexBufferView_.BufferLocation = vertexResources_[frameIndex]->GetGPUVirtualAddress();
+    vertexBufferView_.SizeInBytes = sizeof(VertexData) * static_cast<UINT>(vertexState_.size());
+    vertexBufferView_.StrideInBytes = sizeof(VertexData);
     dxCommon->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
     // IBVを設定
     dxCommon->GetCommandList()->IASetIndexBuffer(&indexBufferView_);
 
     // マテリアルCBufferの場所を指定
-    dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+    dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResources_[frameIndex]->GetGPUVirtualAddress());
 
     // TransformationMatrixBufferの箇所を設定
-    dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
+    dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResources_[frameIndex]->GetGPUVirtualAddress());
 
     // SRVのDescriptorTableの先頭を指定（有効なtextureIndex_のときのみ）
     if (textureIndex_ != UINT32_MAX) {
@@ -426,4 +404,25 @@ void Sprite::SetTexture(const std::string& filePath)
     // テクスチャと表示サイズを更新する
     textureIndex_ = idx;
     AdjustTextureSize();
+}
+
+/// <summary>
+/// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+/// </summary>
+void Sprite::UpdateFrameResources()
+{
+    if (!spriteCommon_ || !spriteCommon_->GetDxCommon()) {
+        return;
+    }
+
+    const uint32_t frameIndex = spriteCommon_->GetDxCommon()->GetCurrentFrameIndex(); // 転送先フレーム番号
+    if (mappedVertexData_[frameIndex]) {
+        memcpy(mappedVertexData_[frameIndex], vertexState_.data(), sizeof(VertexData) * vertexState_.size());
+    }
+    if (mappedMaterialData_[frameIndex]) {
+        *mappedMaterialData_[frameIndex] = materialState_;
+    }
+    if (mappedTransformationMatrixData_[frameIndex]) {
+        *mappedTransformationMatrixData_[frameIndex] = transformationMatrixState_;
+    }
 }

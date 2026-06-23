@@ -131,8 +131,8 @@ void DirectXCommon::Finalize()
         commandList_.Reset();
     }
 
-    if (commandAllocator_) {
-        commandAllocator_.Reset();
+    for (auto& commandAllocator : commandAllocators_) {
+        commandAllocator.Reset();
     }
 
     if (commandQueue_) {
@@ -255,9 +255,11 @@ void DirectXCommon::WaitForCommandExecution()
 /// </summary>
 void DirectXCommon::ResetCommandList()
 {
+    const uint32_t frameIndex = GetCurrentFrameIndex(); // リセット対象のフレーム番号
+
 
     // コマンドアロケータをリセット
-    HRESULT hr = commandAllocator_->Reset();
+    HRESULT hr = commandAllocators_[frameIndex]->Reset();
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::ResetCommandList: commandAllocator_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
@@ -272,7 +274,7 @@ void DirectXCommon::ResetCommandList()
 
     // コマンドリストをリセット（アロケータを再設定）
     // 第二引数（PipelineStateObject）はnullでOK
-    hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
+    hr = commandList_->Reset(commandAllocators_[frameIndex].Get(), nullptr);
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::ResetCommandList: commandList_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
@@ -873,8 +875,26 @@ void DirectXCommon::PostDraw()
             Logger::Log(std::string(buf));
         }
     }
-    // GPUコマンドの完了を待機
-    WaitForCommandExecution();
+    // このフレームが使用するGPU処理の完了値を記録する
+    fenceValue_++;
+    HRESULT hrSignal = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    if (FAILED(hrSignal)) {
+        Logger::Log("DirectXCommon::PostDraw: failed to signal frame fence\n");
+        return;
+    }
+    frameFenceValues_[bbIndex] = fenceValue_;
+
+    const uint32_t nextFrameIndex = GetCurrentFrameIndex(); // 次に記録するフレーム番号
+    const UINT64 nextFrameFenceValue = frameFenceValues_[nextFrameIndex]; // 次フレームが使用中のFence値
+    if (nextFrameFenceValue != 0 && fence_->GetCompletedValue() < nextFrameFenceValue) {
+        HRESULT hrWait = fence_->SetEventOnCompletion(nextFrameFenceValue, fenceEvent_);
+        if (FAILED(hrWait)) {
+            Logger::Log("DirectXCommon::PostDraw: failed to set frame fence event\n");
+            return;
+        }
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+
     // allocator と commandList をリセット
     ResetCommandList();
 
@@ -1202,16 +1222,25 @@ void DirectXCommon::InitCommandRelated()
     hr = device_->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&commandQueue_));
     assert(SUCCEEDED(hr));
 
-    hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator_));
-    assert(SUCCEEDED(hr));
+    for (auto& commandAllocator : commandAllocators_) {
+        hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator));
+        assert(SUCCEEDED(hr));
+    }
 
-    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
+    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocators_[0].Get(), nullptr, IID_PPV_ARGS(&commandList_));
     assert(SUCCEEDED(hr));
 }
 
 /// <summary>
 /// スワップチェーンの生成とバックバッファの取得
 /// </summary>
+/// <summary>
+/// 現在描画対象になっているフレーム番号を取得する
+/// </summary>
+uint32_t DirectXCommon::GetCurrentFrameIndex() const
+{
+    return swapChain_ ? swapChain_->GetCurrentBackBufferIndex() : 0;
+}
 void DirectXCommon::CreateSwapChain()
 {
     HRESULT hr;

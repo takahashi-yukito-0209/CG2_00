@@ -29,6 +29,7 @@ class SrvManager;
 class DirectXCommon {
 public:
     DirectXCommon() = default;
+    static constexpr uint32_t kFrameCount = 2;
 
 public: // 公開メンバ関数
     /// <summary>
@@ -86,6 +87,11 @@ public: // 公開メンバ関数
     /// コマンドキューの取得
     /// </summary>
     ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); }
+
+    /// <summary>
+    /// 現在描画対象になっているフレーム番号を取得する
+    /// </summary>
+    uint32_t GetCurrentFrameIndex() const;
 
     /// <summary>
     /// SRV用CPUディスクリプタハンドルの取得
@@ -218,12 +224,12 @@ private: // Private メンバ変数
 
     // コマンド関連
     // コマンドアロケータ/コマンドリスト/コマンドキュー
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kFrameCount> commandAllocators_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
 
     // スワップチェーン
-    static const uint32_t kBackBufferCount = 2; // バックバッファ数
+    static const uint32_t kBackBufferCount = kFrameCount; // バックバッファ数
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     // バックバッファリソース配列
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_;
@@ -251,6 +257,7 @@ private: // Private メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
+    std::array<UINT64, kFrameCount> frameFenceValues_ {};
 
     // リサイズ処理中フラグ（再入防止）
     std::atomic<bool> resizingInProgress_ { false };

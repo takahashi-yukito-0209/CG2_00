@@ -1,6 +1,7 @@
 #pragma once
 #include "Logger.h"
 #include <MathTypes.h>
+#include <array>
 #include <cmath>
 #include <d3d12.h>
 #include <memory>
@@ -10,6 +11,7 @@
 #include <wrl.h>
 
 #include "ModelCommon.h"
+#include "DirectXCommon.h"
 
 namespace MyEngine {
 
@@ -168,12 +170,12 @@ public: // メンバ関数
     /// <summary>
     /// マテリアル用リソースの取得
     /// </summary>
-    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const { return materialResource_; }
+    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const;
 
     /// <summary>
     /// 座標変換行列用リソースの取得
     /// </summary>
-    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const { return transformationMatrixResource_; }
+    Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const;
 
     /// <summary>
     /// モデルデータの取得
@@ -192,13 +194,17 @@ private: // メンバ変数
     ModelData modelData_;
 
     // マテリアル用リソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> materialResources_;
+    std::array<Material*, DirectXCommon::kFrameCount> mappedMaterialData_ {};
     // マテリアル用定数バッファリソース
-    Material* materialData_ = nullptr;
+    Material materialState_ {}; // CPU側で保持するマテリアル状態
+    Material* materialData_ = &materialState_;
     // 座標変換行列用リソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> transformationMatrixResources_;
+    std::array<TransformationMatrix*, DirectXCommon::kFrameCount> mappedTransformationMatrixData_ {};
     // 行列データ用定数バッファリソース
-    TransformationMatrix* transformationMatrixData_ = nullptr;
+    TransformationMatrix transformationMatrixState_ {}; // CPU側で保持する変換行列
+    TransformationMatrix* transformationMatrixData_ = &transformationMatrixState_;
 
     // 平行光源用リソース
     // 注: 平行光源は現在 `Object3dCommon` が所有する共有リソースとなっている
@@ -333,7 +339,12 @@ private: // 内部関数
     // 初期化補助
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
-    void AssignTexture(); // モデルデータ割り当て
+    void AssignTexture();
+
+    /// <summary>
+    /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+    /// </summary>
+    void UpdateFrameResources(); // モデルデータ割り当て
 };
 
 } // namespace MyEngine

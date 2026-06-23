@@ -259,32 +259,24 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
 /// </summary>
 void Object3d::CreateMaterialResource()
 {
-    // マテリアル用リソース作成
-    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon();
-    // マテリアル用バッファリソースを作成
-    materialResource_ = dxCommon->CreateBufferResource(sizeof(Material));
-    // マップしてデータを書き込む
-    materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
-    // デフォルト値
+    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon(); // GPUリソース生成元
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        materialResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(Material));
+        materialResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterialData_[frameIndex]));
+    }
+
     materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    // ライティングを有効化(3Dオブジェクトはライティング対象)
     materialData_->enableLighting = 1;
-    // 初期UV変換は単位行列にする
     materialData_->uvTransform = MathUtil::MakeIdentity4x4();
-    // ライティングモードは通常のものにする
     materialData_->lightingMode = 2;
-    // 既定: アルファカットアウト用サンプラーを強制しない
-    // フェンスモデルは初期化後にこれを true に設定する場合がある
     useAlphaCutoutSampler_ = false;
-    // GPU可視フラグを0で初期化
     materialData_->useAlphaCutoutSampler = 0;
-    // 光沢（shininess）の既定値
     materialData_->shininess = 32.0f;
     materialData_->environmentCoefficient = 0.0f;
 }
 
 /// <summary>
-/// ライティングの有効/無効を取得する関数
+/// ライティングの有効状態を取得する
 /// </summary>
 bool Object3d::GetEnableLighting() const { return materialData_ ? materialData_->enableLighting != 0 : false; }
 
@@ -342,16 +334,15 @@ void Object3d::SetUVTransform(const Math::Matrix4x4& uvTransform)
 /// </summary>
 void Object3d::CreateTransformationMatrixResource()
 {
-    // 座標変換行列用リソース作成
-    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon();
-    // 変換行列用バッファリソースを作成
-    transformationMatrixResource_ = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
-    // マップしてデータを書き込む
-    transformationMatrixResource_->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData_));
+    DirectXCommon* dxCommon = object3dCommon_->GetDxCommon(); // GPUリソース生成元
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        transformationMatrixResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
+        transformationMatrixResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransformationMatrixData_[frameIndex]));
+    }
 }
 
 /// <summary>
-/// テクスチャマネージャを使用してモデルのテクスチャを割り当てる関数
+/// モデルへテクスチャを割り当てる
 /// </summary>
 void Object3d::AssignTexture()
 {
@@ -441,6 +432,7 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
 /// </summary>
 void Object3d::Draw()
 {
+    UpdateFrameResources();
     // Object3dCommon がセットされていない場合は描画できないのでログを出して終了する
     if (!object3dCommon_) {
         Logger::Log("Object3d::Draw skipped: object3dCommon_ is null\n");
@@ -478,23 +470,23 @@ void Object3d::Draw()
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
     // マテリアルCBV (必須)
-    if (!materialResource_) {
+    if (!GetMaterialResource()) {
         Logger::Log("Object3d::Draw skipped: materialResource_ is null\n");
         return;
     }
     // GPU仮想アドレスを取得してルートパラメータ0にセット
-    auto matAddr = materialResource_->GetGPUVirtualAddress();
+    auto matAddr = GetMaterialResource()->GetGPUVirtualAddress();
     // ルートパラメータ0にマテリアルCBVをセット
     cmdList->SetGraphicsRootConstantBufferView(0, matAddr);
 
     // 座標変換行列CBV (必須)
-    if (!transformationMatrixResource_) {
+    if (!GetTransformationMatrixResource()) {
         Logger::Log("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
 
     // GPU仮想アドレスを取得してルートパラメータ1にセット
-    auto wvpAddr = transformationMatrixResource_->GetGPUVirtualAddress();
+    auto wvpAddr = GetTransformationMatrixResource()->GetGPUVirtualAddress();
     // ルートパラメータ1に座標変換行列CBVをセット
     cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
@@ -550,6 +542,7 @@ void Object3d::Draw()
 /// </summary>
 void Object3d::DrawInstanced(uint32_t instanceCount)
 {
+    UpdateFrameResources();
     if (instanceCount == 0 || !object3dCommon_ || !object3dCommon_->GetDxCommon()) {
         return;
     }
@@ -570,14 +563,14 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    if (materialResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+    if (GetMaterialResource()) {
+        cmdList->SetGraphicsRootConstantBufferView(0, GetMaterialResource()->GetGPUVirtualAddress());
     } else {
         return;
     }
 
-    if (transformationMatrixResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
+    if (GetTransformationMatrixResource()) {
+        cmdList->SetGraphicsRootConstantBufferView(1, GetTransformationMatrixResource()->GetGPUVirtualAddress());
     }
 
     D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源のGPUアドレス
@@ -773,4 +766,46 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
 
     // 読み込んだモデルデータを返す
     return modelData;
+}
+
+/// <summary>
+/// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+/// </summary>
+void Object3d::UpdateFrameResources()
+{
+    if (!object3dCommon_ || !object3dCommon_->GetDxCommon()) {
+        return;
+    }
+
+    const uint32_t frameIndex = object3dCommon_->GetDxCommon()->GetCurrentFrameIndex(); // 転送先フレーム番号
+    if (mappedMaterialData_[frameIndex]) {
+        *mappedMaterialData_[frameIndex] = materialState_;
+    }
+    if (mappedTransformationMatrixData_[frameIndex]) {
+        *mappedTransformationMatrixData_[frameIndex] = transformationMatrixState_;
+    }
+}
+
+/// <summary>
+/// 現在のフレームで使用するマテリアルリソースを取得する
+/// </summary>
+Microsoft::WRL::ComPtr<ID3D12Resource> const& Object3d::GetMaterialResource() const
+{
+    static const Microsoft::WRL::ComPtr<ID3D12Resource> emptyResource;
+    if (!object3dCommon_ || !object3dCommon_->GetDxCommon()) {
+        return emptyResource;
+    }
+    return materialResources_[object3dCommon_->GetDxCommon()->GetCurrentFrameIndex()];
+}
+
+/// <summary>
+/// 現在のフレームで使用する変換行列リソースを取得する
+/// </summary>
+Microsoft::WRL::ComPtr<ID3D12Resource> const& Object3d::GetTransformationMatrixResource() const
+{
+    static const Microsoft::WRL::ComPtr<ID3D12Resource> emptyResource;
+    if (!object3dCommon_ || !object3dCommon_->GetDxCommon()) {
+        return emptyResource;
+    }
+    return transformationMatrixResources_[object3dCommon_->GetDxCommon()->GetCurrentFrameIndex()];
 }
