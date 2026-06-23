@@ -5,10 +5,12 @@
 #include "engine/3d/Object3dCommon.h"
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
+#include <cstddef>
 #include <list>
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 // CPU側のパーティクルデータ
 struct PM_CpuParticle {
@@ -173,9 +175,14 @@ private:
     ParticleManager() = default;
 
     /// <summary>
-    /// 1グループで保持できるパーティクル数の上限を取得する
+    /// 保持できるパーティクル数の上限を取得する
     /// </summary>
     uint32_t GetParticleLimit() const;
+
+    /// <summary>
+    /// 全グループで保持しているパーティクル数を取得する
+    /// </summary>
+    size_t GetTotalParticleCount() const;
 
     /// <summary>
     /// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
@@ -184,6 +191,7 @@ private:
 
 private:
     std::unordered_map<std::string, ParticleGroup> particleGroups_; // グループ一覧
+    std::unordered_set<std::string> instancingLimitWarnedGroups_; // インスタンシング上限警告済みグループ
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通処理
     Object3dCommon* object3dCommon_ = nullptr; // 3D共通処理
     SrvManager* srvManager_ = nullptr; // SRV管理

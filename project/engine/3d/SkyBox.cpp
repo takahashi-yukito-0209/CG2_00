@@ -217,6 +217,14 @@ void SkyBox::Finalize()
     // バッファのリセット
     vertexBuffer_.Reset();
     indexBuffer_.Reset();
+
+    // パイプライン関連リソースのリセット
+    pipelineState_.Reset();
+    rootSignature_.Reset();
+
+    vbView_ = {};
+    ibView_ = {};
+    indexCount_ = 0;
 }
 
 /// <summary>

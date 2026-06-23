@@ -7,58 +7,83 @@
 using namespace MyEngine;
 
 /// <summary>
-/// シングルトンインスタンスの取得
+/// シングルトンインスタンスを取得する
 /// </summary>
 InputManager* InputManager::GetInstance()
 {
-    static InputManager instance; // 静的ローカル変数でシングルトンインスタンスを生成
-    return &instance; // 以降、GetInstance() を呼ぶたびに同じインスタンスが返される
+    static InputManager instance; // 共有する入力管理インスタンス
+    return &instance;
 }
 
 /// <summary>
-/// DirectInput デバイスの初期化（キーボード・マウス）
+/// DirectInput デバイスを初期化する
 /// </summary>
 bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
 {
-    HRESULT hr; // 結果コード格納用変数
+    Finalize();
 
-    // --- キーボードの初期化 ---
-    // DirectInput デバイスを生成（GUID_SysKeyboard を指定してキーボードデバイスを作成）
-    hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr);
-    if (FAILED(hr)) {
-        return false; // デバイスの生成に失敗した場合は false を返す
-    }
-
-    // データフォーマットの設定と協調レベルの設定
-    keyboard_->SetDataFormat(&c_dfDIKeyboard); // キーボードのデータフォーマットを指定
-    keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // フォアグラウンドで非排他モード
-    keyboard_->Acquire(); // 入力開始
-
-    // キー状態の初期化
     std::memset(keys_, 0, KEY_COUNT); // 現在のキー状態を初期化
-    std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態も初期化
+    std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態を初期化
+    std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を初期化
+    std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を初期化
 
-    // --- マウスの初期化 ---
-    // DirectInput デバイスを生成（GUID_SysMouse を指定してマウスデバイスを作成）
-    hr = directInput->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr);
-    if (FAILED(hr)) {
-        return false; // デバイスの生成に失敗した場合は false を返す
+    if (!directInput || !hwnd) {
+        return false;
     }
 
-    // データフォーマットの設定と協調レベルの設定
-    mouse_->SetDataFormat(&c_dfDIMouse2); // 拡張マウス情報（ホイール含む）
-    mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // フォアグラウンドで非排他モード
-    mouse_->Acquire(); // 入力開始
+    HRESULT hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr); // キーボードデバイスを生成
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
 
-    // マウス状態の初期化
-    std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を初期化
-    std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態も初期化
+    hr = keyboard_->SetDataFormat(&c_dfDIKeyboard); // キーボードのデータ形式を設定
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
 
-    return true; // すべての初期化が成功した場合は true を返す
+    hr = keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // キーボードの協調レベルを設定
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    hr = keyboard_->Acquire(); // キーボード入力を取得開始
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    hr = directInput->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr); // マウスデバイスを生成
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    hr = mouse_->SetDataFormat(&c_dfDIMouse2); // マウスのデータ形式を設定
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    hr = mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // マウスの協調レベルを設定
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    hr = mouse_->Acquire(); // マウス入力を取得開始
+    if (FAILED(hr)) {
+        Finalize();
+        return false;
+    }
+
+    return true;
 }
 
 /// <summary>
-/// デバイスの解放（終了処理）
+/// デバイスの解放・終了処理
 /// </summary>
 void InputManager::Finalize()
 {
@@ -80,6 +105,14 @@ void InputManager::Finalize()
 /// </summary>
 void InputManager::Update()
 {
+    if (!keyboard_ || !mouse_) {
+        std::memset(keys_, 0, KEY_COUNT); // 現在のキー状態を初期化
+        std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態を初期化
+        std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を初期化
+        std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を初期化
+        return;
+    }
+
     // --- キーボードの状態更新 ---
     // 前フレームのキー状態を保存
     std::memcpy(preKeys_, keys_, KEY_COUNT); // 現在のキー状態を前フレームの状態にコピー

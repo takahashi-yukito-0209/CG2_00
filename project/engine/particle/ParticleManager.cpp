@@ -8,9 +8,7 @@
 #include "engine/utility/Logger.h"
 #include <algorithm>
 #include <cmath>
-#include <functional>
 #include <numbers>
-#include <vector>
 
 using namespace Math;
 using namespace MyEngine;
@@ -37,10 +35,11 @@ void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, S
 void ParticleManager::Finalize()
 {
     particleGroups_.clear();
+    instancingLimitWarnedGroups_.clear();
 }
 
 /// <summary>
-/// 1グループで保持できるパーティクル数の上限を取得する
+/// 保持できるパーティクル数の上限を取得する
 /// </summary>
 uint32_t ParticleManager::GetParticleLimit() const
 {
@@ -55,19 +54,34 @@ uint32_t ParticleManager::GetParticleLimit() const
 }
 
 /// <summary>
+/// 全グループで保持しているパーティクル数を取得する
+/// </summary>
+size_t ParticleManager::GetTotalParticleCount() const
+{
+    size_t totalCount = 0; // 全グループ合計のパーティクル数
+    for (const auto& groupPair : particleGroups_) {
+        totalCount += groupPair.second.particles.size();
+    }
+
+    return totalCount;
+}
+
+/// <summary>
 /// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
 /// </summary>
 uint32_t ParticleManager::GetEmitCountWithinLimit(const ParticleGroup& group, uint32_t requestCount) const
 {
-    const uint32_t particleLimit = GetParticleLimit(); // 1グループで保持する最大数
-    const size_t currentCount = group.particles.size(); // 現在保持しているパーティクル数
+    const uint32_t particleLimit = GetParticleLimit(); // 全体と1グループで保持する最大数
+    const size_t currentGroupCount = group.particles.size(); // 対象グループで保持しているパーティクル数
+    const size_t currentTotalCount = GetTotalParticleCount(); // 全グループで保持しているパーティクル数
 
-    if (currentCount >= static_cast<size_t>(particleLimit)) {
+    if (currentGroupCount >= static_cast<size_t>(particleLimit) || currentTotalCount >= static_cast<size_t>(particleLimit)) {
         return 0;
     }
 
-    const uint32_t remainingCount = particleLimit - static_cast<uint32_t>(currentCount); // 追加で生成できる残り数
-    return std::min<uint32_t>(requestCount, remainingCount);
+    const uint32_t groupRemainingCount = particleLimit - static_cast<uint32_t>(currentGroupCount); // 対象グループで追加生成できる残り数
+    const uint32_t totalRemainingCount = particleLimit - static_cast<uint32_t>(currentTotalCount); // 全体で追加生成できる残り数
+    return std::min<uint32_t>(requestCount, std::min<uint32_t>(groupRemainingCount, totalRemainingCount));
 }
 
 /// <summary>
@@ -530,21 +544,20 @@ void ParticleManager::Draw()
 
     for (auto& kv : particleGroups_) {
         ParticleGroup& group = kv.second; // 描画対象グループ
-        uint32_t count = static_cast<uint32_t>(group.particles.size());
-        if (count == 0) {
+        const uint32_t particleCount = static_cast<uint32_t>(group.particles.size()); // グループ内の保持数
+        if (particleCount == 0) {
             continue;
         }
-        count = std::min<uint32_t>(count, instancingSlots);
 
-        std::vector<std::reference_wrapper<const PM_CpuParticle>> sortedParticles; // 生成順に並べる参照配列
-        sortedParticles.reserve(group.particles.size());
-        for (const auto& particle : group.particles) {
-            sortedParticles.emplace_back(std::cref(particle));
+        uint32_t count = particleCount; // 実際に描画へ渡すインスタンス数
+        if (particleCount > instancingSlots) {
+            count = instancingSlots;
+            if (instancingLimitWarnedGroups_.insert(kv.first).second) {
+                Logger::Warn("Particle group '" + kv.first + "' exceeds instancing slots. particles=" + std::to_string(particleCount) + ", slots=" + std::to_string(instancingSlots));
+            }
+        } else {
+            instancingLimitWarnedGroups_.erase(kv.first);
         }
-        std::stable_sort(sortedParticles.begin(), sortedParticles.end(), [](const auto& a, const auto& b) {
-            return a.get().spawnTime < b.get().spawnTime;
-        });
-
         Object3d* renderObject = group.renderObject ? group.renderObject : particlePlane_; // グループ用Primitive
         if (!renderObject) {
             continue;
@@ -552,20 +565,24 @@ void ParticleManager::Draw()
 
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
 
-        for (uint32_t i = 0; i < count; ++i) {
-            const PM_CpuParticle& particle = sortedParticles[i].get(); // 転送するパーティクル
+        uint32_t instanceIndex = 0; // インスタンスバッファへ書き込む位置
+        for (const PM_CpuParticle& particle : group.particles) {
+            if (instanceIndex >= count) {
+                break;
+            }
             Transform transform = particle.transform;
-            transform.translate.z += static_cast<float>(i) * 1e-3f;
+            transform.translate.z += static_cast<float>(instanceIndex) * 1e-3f;
 
             Matrix4x4 world = MathUtil::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, projection));
             Matrix4x4 worldInverse = MathUtil::Inverse(world);
             Matrix4x4 worldInverseTranspose = MathUtil::Transpose(worldInverse);
 
-            instancingData[i].World = world;
-            instancingData[i].WVP = wvp;
-            instancingData[i].WorldInverseTranspose = worldInverseTranspose;
-            instancingData[i].color = particle.color;
+            instancingData[instanceIndex].World = world;
+            instancingData[instanceIndex].WVP = wvp;
+            instancingData[instanceIndex].WorldInverseTranspose = worldInverseTranspose;
+            instancingData[instanceIndex].color = particle.color;
+            ++instanceIndex;
         }
 
         if (auto* model = renderObject->GetModel()) {

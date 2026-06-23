@@ -208,7 +208,11 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     }
 
     // InputManagerの初期化
-    InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd);
+    if (!InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd)) {
+        Logger::Log("Error: InputManager::Initialize failed.\n");
+        impl_->winApp.Finalize();
+        return false;
+    }
 
     // スプライト共通管理の一時的なユニークポインタ
     std::unique_ptr<SpriteCommon> spriteCommonTmp;
