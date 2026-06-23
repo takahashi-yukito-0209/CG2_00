@@ -15,7 +15,8 @@ struct Material
     float4x4 uvTransform;
     int lightingMode;
     int useAlphaCutoutSampler;
-    float2 _pad1;
+    int useAlphaDiscard;
+    float _pad1;
     float shininess; // specular power
     float environmentCoefficient;
     float2 _pad2; // pad to 16-byte
@@ -28,7 +29,7 @@ struct Camera
     float3 worldPosition;
     float exposure; // exposure multiplier applied before tone mapping
     int toneMapOn; // 0 = off, non-zero = apply tone mapping
-    float pad0;
+    int hasEnvironmentMap; // 0 = environment SRV is not bound
     float2 pad1;
     float4x4 view;
 };

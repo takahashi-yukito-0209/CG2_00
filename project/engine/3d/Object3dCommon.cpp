@@ -114,7 +114,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
         cameraData_->worldPosition = { 0.0f, 0.0f, 0.0f };
         cameraData_->exposure = 1.0f; // デフォルトの露出値
         cameraData_->toneMapOn = 1; // デフォルトでトーンマッピング有効
-        cameraData_->pad0 = 0.0f;
+        cameraData_->hasEnvironmentMap = 0;
         cameraData_->pad1[0] = 0.0f;
         cameraData_->pad1[1] = 0.0f;
         cameraData_->view = MathUtil::MakeIdentity4x4();
@@ -429,6 +429,7 @@ void Object3dCommon::SetInstancingDrawSetting()
     if (mappedSpotLightData_[frameIndex]) {
         *mappedSpotLightData_[frameIndex] = spotLightState_;
     }
+    cameraState_.hasEnvironmentMap = environmentMapSrvHandleGPU_.ptr != 0 ? 1 : 0;
     if (mappedCameraData_[frameIndex]) {
         *mappedCameraData_[frameIndex] = cameraState_;
     }
@@ -507,6 +508,7 @@ void Object3dCommon::SetCommonDrawSetting()
     if (mappedSpotLightData_[frameIndex]) {
         *mappedSpotLightData_[frameIndex] = spotLightState_;
     }
+    cameraState_.hasEnvironmentMap = environmentMapSrvHandleGPU_.ptr != 0 ? 1 : 0;
     if (mappedCameraData_[frameIndex]) {
         *mappedCameraData_[frameIndex] = cameraState_;
     }

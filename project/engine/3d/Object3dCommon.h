@@ -98,7 +98,7 @@ public: // メンバ関数
         Math::Vector3 worldPosition;
         float exposure;
         int toneMapOn;
-        float pad0;
+        int hasEnvironmentMap;
         float pad1[2];
         Math::Matrix4x4 view;
     };

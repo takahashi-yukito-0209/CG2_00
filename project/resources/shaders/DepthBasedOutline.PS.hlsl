@@ -11,7 +11,7 @@ cbuffer OutlineSettings : register(b0)
     float gDepthSoftness;
     float gSigma;
     float gOutlineStrength;
-    row_major float4x4 gProjectionInverse;
+    float4x4 gProjectionInverse;
 };
 
 static const float kPrewittHorizontalKernel[3][3] =

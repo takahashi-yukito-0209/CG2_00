@@ -105,6 +105,8 @@ void Object3d::DrawImGui(int index)
     if (materialData_) {
         ImGui::Checkbox("Use Alpha Cutout Sampler", &useAlphaCutoutSampler_);
         materialData_->useAlphaCutoutSampler = useAlphaCutoutSampler_ ? 1 : 0;
+        ImGui::Checkbox("Use Alpha Discard", &useAlphaDiscard_);
+        materialData_->useAlphaDiscard = useAlphaDiscard_ ? 1 : 0;
         // Color control for material
         float col[4] = { materialData_->color.x, materialData_->color.y, materialData_->color.z, materialData_->color.w };
         if (ImGui::ColorEdit4("Color", col)) {
@@ -119,6 +121,7 @@ void Object3d::DrawImGui(int index)
     (void)index;
     (void)materialData_;
     (void)useAlphaCutoutSampler_;
+    (void)useAlphaDiscard_;
 #endif
 }
 
@@ -271,6 +274,8 @@ void Object3d::CreateMaterialResource()
     materialData_->lightingMode = 2;
     useAlphaCutoutSampler_ = false;
     materialData_->useAlphaCutoutSampler = 0;
+    useAlphaDiscard_ = true;
+    materialData_->useAlphaDiscard = 1;
     materialData_->shininess = 32.0f;
     materialData_->environmentCoefficient = 0.0f;
 }

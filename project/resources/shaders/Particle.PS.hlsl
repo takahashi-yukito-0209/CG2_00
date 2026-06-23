@@ -12,7 +12,8 @@ struct Material
     float4x4 uvTransform;
     int lightingMode;
     int useAlphaCutoutSampler;
-    float2 _pad1;
+    int useAlphaDiscard;
+    float _pad1;
     float shininess; // align with Object3d material layout
     float3 _pad2;
 };
@@ -74,7 +75,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     // Encode to sRGB if swapchain doesn't do it for us
     output.color.rgb = pow(output.color.rgb, 1.0 / 2.2);
 #endif
-    if (texA <= 0.001f)
+    if (gMaterial.useAlphaDiscard != 0 && texA <= 0.001f)
     {
         discard;
     }

@@ -244,16 +244,42 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
         }
 
         if (!p.has_parent_path()) {
-            std::string filename = p.filename().string();
-            int found = 0;
-            for (const auto& entry : fs::recursive_directory_iterator(fs::current_path())) {
-                if (!entry.is_regular_file())
-                    continue;
-                if (entry.path().filename() == filename) {
-                    return fs::canonical(entry.path()).string();
+            std::vector<fs::path> candidateFilenames; // 再帰探索で比較する候補ファイル名
+            if (!p.has_extension()) {
+                for (const auto& e : exts) {
+                    fs::path candidateFilename = p; // 拡張子を補完した候補ファイル名
+                    candidateFilename += e;
+                    candidateFilenames.push_back(candidateFilename.filename());
                 }
-                if (++found > 8)
-                    break;
+            } else {
+                candidateFilenames.push_back(p.filename());
+            }
+
+            constexpr size_t kMaxRecursiveCheckCount = 4096; // フォールバック探索で確認する通常ファイル数の上限
+            size_t checkedFileCount = 0; // 再帰探索で確認済みの通常ファイル数
+            std::error_code iteratorError; // ディレクトリ走査時のエラー保持
+            fs::recursive_directory_iterator iterator(
+                fs::current_path(),
+                fs::directory_options::skip_permission_denied,
+                iteratorError);
+            fs::recursive_directory_iterator end;
+            while (!iteratorError && iterator != end && checkedFileCount < kMaxRecursiveCheckCount) {
+                const fs::directory_entry& entry = *iterator; // 現在確認しているディレクトリエントリ
+                std::error_code entryError; // エントリ種別確認時のエラー保持
+                const bool isRegularFile = entry.is_regular_file(entryError); // 通常ファイルかどうか
+                if (!entryError && isRegularFile) {
+                    ++checkedFileCount;
+                    const fs::path entryFilename = entry.path().filename(); // 比較対象のファイル名
+                    for (const fs::path& candidateFilename : candidateFilenames) {
+                        if (entryFilename == candidateFilename) {
+                            auto r = tryCandidate(entry.path());
+                            if (!r.empty())
+                                return r;
+                        }
+                    }
+                }
+
+                iterator.increment(iteratorError);
             }
         }
 

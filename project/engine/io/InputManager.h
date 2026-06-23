@@ -47,6 +47,11 @@ private: // メンバ関数（内部用）
     InputManager(const InputManager&) = delete; // コピーコンストラクタを削除してコピーを禁止
     InputManager& operator=(const InputManager&) = delete; // コピー代入演算子を削除してコピーを禁止
 
+    /// <summary>
+    /// マウスボタン番号が有効範囲内か確認する
+    /// </summary>
+    bool IsValidMouseButton(int button) const;
+
 private: // メンバ変数
     static constexpr int KEY_COUNT = 256; // キー数（256固定）
 

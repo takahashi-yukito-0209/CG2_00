@@ -80,6 +80,7 @@ private: // メンバ変数
 
     HINSTANCE hInstance_ = nullptr; // アプリケーションインスタンスハンドル
     HWND hwnd_ = nullptr; // ウィンドウハンドル
+    bool timerResolutionRaised_ = false; // タイマー分解能を上げているか
     std::wstring windowTitle_; // ウィンドウタイトル（オプションで指定されたものを保存）
     std::function<void(uint32_t, uint32_t)> resizeCallback_; // サイズ変更通知先
 };

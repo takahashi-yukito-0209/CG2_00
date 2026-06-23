@@ -55,7 +55,7 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
     ShowWindow(hwnd_, nCmdShow);
 
     // システムタイマーの分解能を上げる
-    timeBeginPeriod(1);
+    timerResolutionRaised_ = timeBeginPeriod(1) == TIMERR_NOERROR;
 }
 
 /// <summary>
@@ -98,6 +98,10 @@ bool WinApp::ProcessMessage()
 void WinApp::Finalize()
 {
     resizeCallback_ = {};
+    if (timerResolutionRaised_) {
+        timeEndPeriod(1);
+        timerResolutionRaised_ = false;
+    }
     // システムタイマーの分解能を元に戻す
     if (hwnd_) {
         DestroyWindow(hwnd_);

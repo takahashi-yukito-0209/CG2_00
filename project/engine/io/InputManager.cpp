@@ -1,4 +1,5 @@
 #include "InputManager.h"
+#include <cstddef>
 #include <cstring>
 
 #pragma comment(lib, "dinput8.lib")
@@ -173,12 +174,21 @@ bool InputManager::IsKeyJustReleased(uint8_t key) const
 // ------------------------
 
 /// <summary>
+/// マウスボタン番号が有効範囲内か確認する
+/// </summary>
+bool InputManager::IsValidMouseButton(int button) const
+{
+    constexpr int kMouseButtonCount = static_cast<int>(sizeof(mouseState_.rgbButtons) / sizeof(mouseState_.rgbButtons[0])); // DirectInputで取得できるマウスボタン数
+    return button >= 0 && button < kMouseButtonCount;
+}
+
+/// <summary>
 /// 指定ボタン（0～7）が押されているか
 /// </summary>
 bool InputManager::IsMouseButtonPressed(int button) const
 {
     // 指定されたボタンの状態をチェック。最上位ビット（0x80）がセットされている場合は押されている
-    return mouseState_.rgbButtons[button] & 0x80;
+    return IsValidMouseButton(button) && (mouseState_.rgbButtons[button] & 0x80);
 }
 
 /// <summary>
@@ -187,7 +197,7 @@ bool InputManager::IsMouseButtonPressed(int button) const
 bool InputManager::IsMouseButtonReleased(int button) const
 {
     // 指定されたボタンの状態をチェック。最上位ビット（0x80）がセットされていない場合は離されている
-    return !(mouseState_.rgbButtons[button] & 0x80);
+    return !IsValidMouseButton(button) || !(mouseState_.rgbButtons[button] & 0x80);
 }
 
 /// <summary>
@@ -196,7 +206,7 @@ bool InputManager::IsMouseButtonReleased(int button) const
 bool InputManager::IsMouseButtonJustPressed(int button) const
 {
     // 前フレームの状態と現在の状態を比較して、前フレームでは押されていなくて、現在は押されている場合に true を返す
-    return !(preMouseState_.rgbButtons[button] & 0x80) && (mouseState_.rgbButtons[button] & 0x80);
+    return IsValidMouseButton(button) && !(preMouseState_.rgbButtons[button] & 0x80) && (mouseState_.rgbButtons[button] & 0x80);
 }
 
 /// <summary>
@@ -205,7 +215,7 @@ bool InputManager::IsMouseButtonJustPressed(int button) const
 bool InputManager::IsMouseButtonJustReleased(int button) const
 {
     // 前フレームの状態と現在の状態を比較して、前フレームでは押されていて、現在は離されている場合に true を返す
-    return (preMouseState_.rgbButtons[button] & 0x80) && !(mouseState_.rgbButtons[button] & 0x80);
+    return IsValidMouseButton(button) && (preMouseState_.rgbButtons[button] & 0x80) && !(mouseState_.rgbButtons[button] & 0x80);
 }
 
 /// <summary>

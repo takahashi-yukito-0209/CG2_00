@@ -39,7 +39,8 @@ public: // メンバ構造体
         Math::Matrix4x4 uvTransform;
         int lightingMode;
         int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
-        float padding2[2];
+        int32_t useAlphaDiscard; // 0でない場合、透明テクセルをdiscardする
+        float padding2[1];
         float shininess; // 反射の鋭さ（スペキュラー強度の指数）
         float environmentCoefficient; // 環境マップ反射の強さ
         float pad3[2];
@@ -228,6 +229,7 @@ private: // メンバ変数
 
     // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
     bool useAlphaCutoutSampler_ = false;
+    bool useAlphaDiscard_ = true;
 
 public: // メンバ関数
     /// <summary>
@@ -334,6 +336,22 @@ public: // メンバ関数
     /// アルファカットアウト用サンプラーの使用設定の取得
     /// </summary>
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
+
+    /// <summary>
+    /// 透明テクセルをdiscardするか設定する
+    /// </summary>
+    void SetUseAlphaDiscard(bool use)
+    {
+        useAlphaDiscard_ = use;
+        if (materialData_) {
+            materialData_->useAlphaDiscard = use ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// 透明テクセルをdiscardするか取得する
+    /// </summary>
+    bool GetUseAlphaDiscard() const { return useAlphaDiscard_; }
 
 private: // 内部関数
     // 初期化補助
