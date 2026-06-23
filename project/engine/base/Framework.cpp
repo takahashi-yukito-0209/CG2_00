@@ -2,6 +2,7 @@
 #include "engine/2d/TextureManager.h"
 #include "engine/base/DirectXCommon.h"
 #include "engine/base/WinApp.h"
+#include "engine/utility/ResourceResolver.h"
 #include <atomic>
 #include <chrono>
 #include <objbase.h>
@@ -70,6 +71,7 @@ void Framework::FinalizeEngine()
 /// </summary>
 int Framework::Run(HINSTANCE hInstance, int nCmdShow)
 {
+    ResourceResolver::SetWorkingDirectoryToExecutable();
     // COMの初期化: マルチスレッド環境での利用を想定して COINIT_MULTITHREADED を指定
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool comInitialized = SUCCEEDED(hr);

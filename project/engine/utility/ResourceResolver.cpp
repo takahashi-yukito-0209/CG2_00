@@ -1,4 +1,5 @@
 #include "ResourceResolver.h"
+#include <Windows.h>
 #include <algorithm>
 #include <filesystem>
 #include <unordered_map>
@@ -14,6 +15,40 @@ struct ResolverData {
 
 // グローバルなリゾルバーデータのインスタンス
 static ResolverData g_resolverData;
+
+/// <summary>
+/// 実行ファイルが配置されているフォルダを作業フォルダに設定する
+/// </summary>
+bool ResourceResolver::SetWorkingDirectoryToExecutable()
+{
+    wchar_t executablePath[MAX_PATH] = {}; // 実行ファイルの絶対パス
+    const DWORD pathLength = GetModuleFileNameW(
+        nullptr,
+        executablePath,
+        static_cast<DWORD>(std::size(executablePath))); // 取得したパスの文字数
+    if (pathLength == 0 || pathLength >= std::size(executablePath)) {
+        return false;
+    }
+
+    wchar_t* lastSeparator = wcsrchr(executablePath, L'\\'); // ファイル名直前の区切り位置
+    if (!lastSeparator) {
+        return false;
+    }
+
+    *lastSeparator = L'\0';
+
+    wchar_t shortDirectoryPath[MAX_PATH] = {}; // ANSI APIでも扱える短縮フォルダパス
+    const DWORD shortPathLength = GetShortPathNameW(
+        executablePath,
+        shortDirectoryPath,
+        static_cast<DWORD>(std::size(shortDirectoryPath))); // 取得した短縮パスの文字数
+    if (shortPathLength > 0 && shortPathLength < std::size(shortDirectoryPath)) {
+        return SetCurrentDirectoryW(shortDirectoryPath) != FALSE;
+    }
+
+    // 短縮パスを取得できない環境では通常パスを使用する
+    return SetCurrentDirectoryW(executablePath) != FALSE;
+}
 
 /// <summary>
 /// 指定された名前とパスをリソースの検索パスとして登録
@@ -85,8 +120,24 @@ std::string ResourceResolver::Normalize(const std::string& path)
 static std::string tryCandidate(const fs::path& candidate)
 {
     try {
-        // 候補のパスが存在し、かつ通常のファイルである場合は、そのパスを正規化して文字列として返す
+        // 候補が実行フォルダ内にある場合は、日本語を含む絶対パスへ変換せず相対パスで返す
         if (fs::exists(candidate) && fs::is_regular_file(candidate)) {
+            if (candidate.is_relative()) {
+                return candidate.lexically_normal().generic_string();
+            }
+
+            std::error_code relativePathError; // 実行フォルダからの相対化エラー
+            const fs::path relativePath = fs::relative(
+                candidate,
+                fs::current_path(),
+                relativePathError); // 実行フォルダを基準にした候補パス
+            if (!relativePathError && !relativePath.empty()) {
+                const std::string relativePathText = relativePath.generic_string(); // 返却する相対パス
+                if (relativePathText != ".." && !relativePathText.starts_with("../")) {
+                    return relativePathText;
+                }
+            }
+
             return fs::canonical(candidate).string();
         }
     } catch (...) {

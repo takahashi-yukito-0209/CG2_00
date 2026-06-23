@@ -112,6 +112,19 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     }
 
     // 解決された filePath をキャッシュキーとして使用
+    // 実行フォルダ配下は相対パスへ戻し、日本語を含む絶対パスをAssimpへ渡さない
+    std::error_code relativePathError; // 相対パス変換時のエラー情報
+    const std::filesystem::path relativeModelPath = std::filesystem::relative(
+        std::filesystem::path(filePath),
+        std::filesystem::current_path(),
+        relativePathError); // 実行フォルダを基準にしたモデルパス
+    if (!relativePathError && !relativeModelPath.empty()) {
+        const std::string relativePathText = relativeModelPath.generic_string(); // Assimpへ渡す相対パス
+        if (relativePathText != ".." && !relativePathText.starts_with("../")) {
+            filePath = relativePathText;
+        }
+    }
+
     std::string cacheKey = filePath;
 
     // すでに読み込まれているかチェック（早期リターン）

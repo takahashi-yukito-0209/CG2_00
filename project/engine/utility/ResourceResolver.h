@@ -10,11 +10,18 @@ namespace MyEngine {
 class ResourceResolver {
 public: // メンバ関数
     // リソースの種類を表す列挙型
-    enum class Type { Any = 0,
+    enum class Type {
+        Any = 0,
         Texture,
         Model,
         Shader,
-        Sound };
+        Sound
+    };
+
+    /// <summary>
+    /// 実行ファイルが配置されているフォルダを作業フォルダに設定する
+    /// </summary>
+    static bool SetWorkingDirectoryToExecutable();
 
     /// <summary>
     /// 指定された名前とパスをリソースの検索パスとして登録
