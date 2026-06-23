@@ -122,8 +122,7 @@ void ImGuiManager::BuildUI(Context& ctx)
 
     DrawPostProcessSection(ctx);
 
-    const int selectedDrawType = -1; // エフェクト関連の項目を常に表示する
-    DrawParticleSection(ctx, selectedDrawType);
+    DrawParticleSection(ctx);
 
     ImGui::End();
 
@@ -160,35 +159,6 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
         if (ctx.currentSceneName) {
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
         }
-    }
-#else
-    (void)ctx;
-#endif
-}
-
-/// <summary>
-/// 表示対象の選択UIを描画する
-/// </summary>
-void ImGuiManager::DrawViewFilterSection(Context& ctx)
-{
-#ifdef USE_IMGUI
-    if (!ctx.selectedDrawType) {
-        return;
-    }
-
-    if (ImGui::CollapsingHeader("View Filter", ImGuiTreeNodeFlags_DefaultOpen)) {
-        const char* drawOptions[] = {
-            "Model",
-            "Particle",
-            "Sprite",
-            "Bunny",
-            "Fence",
-            "Checker",
-            "Sphere",
-            "All"
-        };
-
-        ImGui::Combo("Draw Type", ctx.selectedDrawType, drawOptions, IM_ARRAYSIZE(drawOptions));
     }
 #else
     (void)ctx;
@@ -535,13 +505,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
 /// <summary>
 /// パーティクル関連のImGuiを描画する
 /// </summary>
-void ImGuiManager::DrawParticleSection(Context& ctx, int selectedDrawType)
+void ImGuiManager::DrawParticleSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (selectedDrawType != 1 && selectedDrawType != 7) {
-        return;
-    }
-
     if (!ctx.particleEmitter && !ctx.particleManager) {
         return;
     }
@@ -561,52 +527,16 @@ void ImGuiManager::DrawParticleSection(Context& ctx, int selectedDrawType)
     }
 #else
     (void)ctx;
-    (void)selectedDrawType;
 #endif
 }
 
 /// <summary>
 /// 3Dオブジェクト関連のImGuiを描画する
 /// </summary>
-void ImGuiManager::DrawObjectSection(Context& ctx, int selectedDrawType)
+void ImGuiManager::DrawObjectSection(Context& ctx)
 {
 #ifdef USE_IMGUI
     if (!ctx.objects3d) {
-        return;
-    }
-
-    auto IsVisibleObject = [](int selectedDrawType, int objectIndex) -> bool {
-        // 未選択またはAllの場合はすべて表示
-        if (selectedDrawType == -1 || selectedDrawType == 7) {
-            return true;
-        }
-
-        switch (selectedDrawType) {
-        case 0:
-            return objectIndex == 0; // Model
-        case 3:
-            return objectIndex == 1; // Bunny
-        case 4:
-            return objectIndex == 3; // Fence
-        case 5:
-            return objectIndex == 2; // Checker
-        case 6:
-            return objectIndex == 4 || objectIndex == 6; // Sphere / reflected cube
-        default:
-            return false;
-        }
-    };
-
-    bool hasVisibleObject = false; // 表示対象のオブジェクトがあるか
-    for (int objectIndex = 0; objectIndex < static_cast<int>(ctx.objects3d->size()); ++objectIndex) {
-        Object3d* object = (*ctx.objects3d)[objectIndex]; // 確認対象の3Dオブジェクト
-        if (object && IsVisibleObject(selectedDrawType, objectIndex)) {
-            hasVisibleObject = true;
-            break;
-        }
-    }
-
-    if (!hasVisibleObject) {
         return;
     }
 
@@ -617,38 +547,25 @@ void ImGuiManager::DrawObjectSection(Context& ctx, int selectedDrawType)
                 continue;
             }
 
-            if (!IsVisibleObject(selectedDrawType, objectIndex)) {
-                continue;
-            }
-
             ImGui::PushID(objectIndex);
-
-            char header[64] = {};
+            char header[64] = {}; // オブジェクト表示名
             sprintf_s(header, "Object %d", objectIndex);
-
             if (ImGui::CollapsingHeader(header)) {
                 object->DrawImGui(objectIndex);
             }
-
             ImGui::PopID();
         }
     }
 #else
     (void)ctx;
-    (void)selectedDrawType;
 #endif
 }
-
 /// <summary>
 /// スプライト関連のImGuiを描画する
 /// </summary>
-void ImGuiManager::DrawSpriteSection(Context& ctx, int selectedDrawType)
+void ImGuiManager::DrawSpriteSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (selectedDrawType != 2 && selectedDrawType != 7) {
-        return;
-    }
-
     if (!ctx.sprites) {
         return;
     }
@@ -677,7 +594,6 @@ void ImGuiManager::DrawSpriteSection(Context& ctx, int selectedDrawType)
     }
 #else
     (void)ctx;
-    (void)selectedDrawType;
 #endif
 }
 

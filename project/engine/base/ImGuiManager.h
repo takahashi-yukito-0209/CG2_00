@@ -63,8 +63,6 @@ public: // メンバ関数
         std::vector<class Sprite*>* sprites = nullptr;
         // SpriteCommon へのポインタ
         class SpriteCommon* spriteCommon = nullptr;
-        // 描画タイプ選択用の整数へのポインタ（例: 0=通常、1=ワイヤーフレーム、2=ビルボードなど）
-        int* selectedDrawType = nullptr;
         // ビルボード描画の有効フラグへのポインタ
         bool* useBillboard = nullptr;
         // ParticleManager へのポインタ
@@ -101,11 +99,6 @@ private: // メンバ関数
     void DrawSceneSection(Context& ctx);
 
     /// <summary>
-    /// 表示対象の選択UIを描画する
-    /// </summary>
-    void DrawViewFilterSection(Context& ctx);
-
-    /// <summary>
     /// ポストエフェクトの設定と状態をImGuiへ表示する
     /// </summary>
     void DrawPostProcessSection(Context& ctx);
@@ -113,17 +106,17 @@ private: // メンバ関数
     /// <summary>
     /// 3Dオブジェクト関連のImGuiを描画する
     /// </summary>
-    void DrawObjectSection(Context& ctx, int selectedDrawType);
+    void DrawObjectSection(Context& ctx);
 
     /// <summary>
     /// パーティクル関連のImGuiを描画する
     /// </summary>
-    void DrawParticleSection(Context& ctx, int selectedDrawType);
+    void DrawParticleSection(Context& ctx);
 
     /// <summary>
     /// スプライト関連のImGuiを描画する
     /// </summary>
-    void DrawSpriteSection(Context& ctx, int selectedDrawType);
+    void DrawSpriteSection(Context& ctx);
 
     /// <summary>
     /// 共通設定のImGuiを描画する

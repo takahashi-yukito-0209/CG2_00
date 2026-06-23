@@ -3,7 +3,6 @@
 
 #pragma comment(lib, "winmm.lib")
 
-#include "DirectXCommon.h"
 #include "ImGuiManager.h"
 
 // ImGui のウィンドウプロシージャハンドラの宣言 (存在する場合のみ)
@@ -46,7 +45,7 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, const std::wstring& t
         nullptr, // 親ウィンドウなし
         nullptr, // メニューハンドルなし
         hInstance_, // インスタンスハンドル
-        nullptr // 追加パラメータなし
+        this // WindowProcからWinAppインスタンスを参照する
     );
 
     // ウィンドウ生成に失敗した場合はエラー
@@ -98,6 +97,7 @@ bool WinApp::ProcessMessage()
 /// </summary>
 void WinApp::Finalize()
 {
+    resizeCallback_ = {};
     // システムタイマーの分解能を元に戻す
     if (hwnd_) {
         DestroyWindow(hwnd_);
@@ -110,10 +110,24 @@ void WinApp::Finalize()
 }
 
 /// <summary>
+/// クライアント領域のサイズ変更通知先を設定する
+/// </summary>
+void WinApp::SetResizeCallback(const std::function<void(uint32_t, uint32_t)>& callback)
+{
+    resizeCallback_ = callback;
+}
+/// <summary>
 /// ウィンドウプロシージャ
 /// </summary>
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+    WinApp* winApp = reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd, GWLP_USERDATA)); // 対象ウィンドウの管理インスタンス
+    if (msg == WM_NCCREATE) {
+        const CREATESTRUCT* createStruct = reinterpret_cast<const CREATESTRUCT*>(lparam); // ウィンドウ生成情報
+        winApp = static_cast<WinApp*>(createStruct->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(winApp));
+    }
+
     // アプリ側のメッセージ処理を先に行う
     switch (msg) {
         // ウィンドウが破棄されたときの処理
@@ -146,7 +160,9 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
                 UINT w = static_cast<UINT>(rc.right - rc.left);
                 UINT h = static_cast<UINT>(rc.bottom - rc.top);
                 if (w != 0 && h != 0) {
-                    DirectXCommon::GetInstance()->OnWindowResize(w, h);
+                    if (winApp && winApp->resizeCallback_) {
+                        winApp->resizeCallback_(w, h);
+                    }
                 }
             }
             KillTimer(hwnd, kResizeTimerId);
