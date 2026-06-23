@@ -33,88 +33,96 @@ public:
 
 public: // 公開メンバ関数
     /// <summary>
-    /// 初期化処理の全体フロー
+    /// 初期化処理
     /// </summary>
     void Initialize(WinApp* winApp);
 
     /// <summary>
-    /// 描画前処理（リソースバリア、RTV/DSV設定、クリア処理など）
+    /// 描画前処理
     /// </summary>
     void PreDraw();
 
     /// <summary>
-    /// 描画後処理（リソースバリア、コマンド実行、Present、GPU同期など）
+    /// 描画後処理
     /// </summary>
     void PostDraw();
 
     /// <summary>
-    /// バッファリソース（頂点、定数など）の生成
+    /// バッファリソースを作成する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
 
     /// <summary>
-    /// テクスチャリソースの生成
+    /// テクスチャリソースを作成する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(const DirectX::TexMetadata& metadata);
 
     /// <summary>
-    /// テクスチャデータのアップロード
+    /// テクスチャデータをアップロードする
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(
         Microsoft::WRL::ComPtr<ID3D12Resource>& texture,
         const DirectX::ScratchImage& mipImages);
 
     /// <summary>
-    /// シェーダーのコンパイル
+    /// シェーダーをコンパイルする
     /// </summary>
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
         const std::wstring& filePath,
         const wchar_t* profile);
 
-    // --- Getter ---
-
     /// <summary>
-    /// デバイスの取得
+    /// デバイスを取得する
     /// </summary>
     ID3D12Device* GetDevice() const { return device_.Get(); }
 
     /// <summary>
-    /// コマンドリストの取得
+    /// コマンドリストを取得する
     /// </summary>
     ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
 
     /// <summary>
-    /// コマンドキューの取得
+    /// コマンドキューを取得する
     /// </summary>
     ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); }
 
     /// <summary>
-    /// 現在描画対象になっているフレーム番号を取得する
+    /// 現在のフレーム番号を取得する
     /// </summary>
     uint32_t GetCurrentFrameIndex() const;
 
     /// <summary>
-    /// SRV用CPUディスクリプタハンドルの取得
+    /// SRV用CPUディスクリプタハンドルを取得する
     /// </summary>
     D3D12_CPU_DESCRIPTOR_HANDLE GetSRVCPUDescriptorHandle(uint32_t index) const;
 
     /// <summary>
-    /// SRV用GPUディスクリプタハンドルの取得
+    /// SRV用GPUディスクリプタハンドルを取得する
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUDescriptorHandle(uint32_t index) const;
 
     /// <summary>
-    /// SRV用ディスクリプタヒープの生ポインタを取得（コマンドリストへのバインド用）
+    /// SRVディスクリプタヒープを取得する
     /// </summary>
     ID3D12DescriptorHeap* GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
 
     /// <summary>
-    /// スワップチェーンが実際に使っているフォーマットを取得
+    /// スワップチェーンのフォーマットを取得する
     /// </summary>
     DXGI_FORMAT GetSwapChainFormat() const { return swapChainFormat_; }
 
     /// <summary>
-    /// DSVヒープの先頭CPUディスクリプタハンドルを取得（外部でDSVを使ってOMSetRenderTargetsする場合に使用）
+    /// 現在の描画幅を取得する
+    /// </summary>
+    float GetRenderWidth() const { return viewport_.Width; }
+
+    /// <summary>
+    /// 現在の描画高さを取得する
+    /// </summary>
+    float GetRenderHeight() const { return viewport_.Height; }
+
+    /// <summary>
+    /// DSVハンドルを取得する
     /// </summary>
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const;
 

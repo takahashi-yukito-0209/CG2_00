@@ -6,7 +6,6 @@
 #include "../utility/ResourceResolver.h"
 #include "Logger.h"
 #include "TextureManager.h"
-#include "WinApp.h"
 #include "mathUtility.h"
 #include <cstdio>
 
@@ -264,9 +263,21 @@ void Sprite::Update()
     // ここで this->transform_ の値が外部から更新されている必要がある
     Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(this->transform_.scale, this->transform_.rotate, this->transform_.translate);
 
-    // View/Projection行列の作成 (2Dスプライト用)
+    // View/Projection行列の作成（2Dスプライト用）
     Matrix4x4 viewMatrix = MathUtil::MakeIdentity4x4();
-    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, WinApp::kWindowWidth, WinApp::kWindowHeight, 0.0f, 100.0f);
+    float renderWidth = 1.0f; // 現在の描画幅
+    float renderHeight = 1.0f; // 現在の描画高さ
+    if (spriteCommon_ && spriteCommon_->GetDxCommon()) {
+        renderWidth = spriteCommon_->GetDxCommon()->GetRenderWidth();
+        renderHeight = spriteCommon_->GetDxCommon()->GetRenderHeight();
+    }
+    if (renderWidth <= 0.0f) {
+        renderWidth = 1.0f;
+    }
+    if (renderHeight <= 0.0f) {
+        renderHeight = 1.0f;
+    }
+    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, renderWidth, renderHeight, 0.0f, 100.0f);
 
     // WVP行列の計算と定数バッファへの書き込み
     Matrix4x4 wvpMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
