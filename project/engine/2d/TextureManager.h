@@ -42,9 +42,9 @@ public: // メンバ関数
     void LoadTexture(const std::string& filePath);
 
     /// <summary>
-    /// ロードしたテクスチャデータをGPUに転送
+    /// アップロード後に不要になった中間リソースを解放
     /// </summary>
-    void ExecuteResourceUpload();
+    void ReleaseIntermediateResources();
 
     /// <summary>
     /// 指定されたファイルパスのテクスチャがすでにロードされているか確認し、ロードされていればSRVインデックスを返す。ロードされていなければ UINT32_MAX を返す。

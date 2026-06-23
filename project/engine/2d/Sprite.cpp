@@ -111,7 +111,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         // まだチェッカーテクスチャがロードされていない場合はロードしてSRVを確保
         if (srvIdx == UINT32_MAX) {
             TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
-            TextureManager::GetInstance()->ExecuteResourceUpload();
+            TextureManager::GetInstance()->ReleaseIntermediateResources();
             srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
         }
 

@@ -250,9 +250,9 @@ void TextureManager::LoadTexture(const std::string& filePath)
 }
 
 /// <summary>
-/// 転送コマンドを実行して、GPUにテクスチャデータを転送する
+/// アップロード後に不要になった中間リソースを解放する
 /// </summary>
-void TextureManager::ExecuteResourceUpload()
+void TextureManager::ReleaseIntermediateResources()
 {
     // すべての中間リソースを解放する
     for (auto& kv : textureDatas) {

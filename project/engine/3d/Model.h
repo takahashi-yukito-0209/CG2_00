@@ -55,11 +55,7 @@ private: // メンバ変数
     // DirectX12 用の頂点バッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
-    // マテリアル用定数バッファリソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
-    // マテリアルデータへの CPU 側ポインタ
-    Object3d::Material* materialData_ = nullptr;
-    // 使用するテクスチャのインデックス番号
+    // モデルファイル由来の既定テクスチャSRVインデックス
     uint32_t textureIndex_ = UINT32_MAX;
 };
 

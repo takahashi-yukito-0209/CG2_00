@@ -47,7 +47,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
         // 環境マップ用DDSを読み込む（確認用）
         ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
         // 読み込んだテクスチャをGPUに転送
-        ctx_.textureManager->ExecuteResourceUpload();
+        ctx_.textureManager->ReleaseIntermediateResources();
     }
 
     // SkyBox 初期化（ロード済みの cubemap を使用）

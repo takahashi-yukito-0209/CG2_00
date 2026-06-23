@@ -137,7 +137,7 @@ void Object3d::SetTexture(const std::string& filePath)
     if (idx == UINT32_MAX) {
         texMgr->LoadTexture(filePath);
         // 転送を実行して SRV を作成する
-        texMgr->ExecuteResourceUpload();
+        texMgr->ReleaseIntermediateResources();
         idx = texMgr->GetTextureIndexByFilePath(filePath);
     }
 
@@ -354,7 +354,7 @@ void Object3d::AssignTexture()
             // ロードされていないテクスチャが指定されている場合はロードを依頼してからインデックスを取得する
             texMgr->LoadTexture(modelData_.material.textureFilePath);
             // 転送を実行して SRV を作成する
-            texMgr->ExecuteResourceUpload();
+            texMgr->ReleaseIntermediateResources();
             // 再度インデックスを取得する
             idx = texMgr->GetSrvIndex(modelData_.material.textureFilePath);
         }
@@ -379,7 +379,7 @@ void Object3d::AssignTexture()
             // 未ロードならロードして割り当て
             texMgr->LoadTexture("resources/uvChecker.png");
             // 転送を実行して SRV を作成する
-            texMgr->ExecuteResourceUpload();
+            texMgr->ReleaseIntermediateResources();
             // 再度インデックスを取得する
             srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
         }

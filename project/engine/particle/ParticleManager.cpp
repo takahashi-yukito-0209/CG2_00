@@ -85,7 +85,7 @@ void ParticleManager::SetGroupTexture(const std::string& name, const std::string
         uint32_t index = texManager_->GetTextureIndexByFilePath(textureFilePath); // テクスチャ番号
         if (index == UINT32_MAX) {
             texManager_->LoadTexture(textureFilePath);
-            texManager_->ExecuteResourceUpload();
+            texManager_->ReleaseIntermediateResources();
             index = texManager_->GetTextureIndexByFilePath(textureFilePath);
         }
         it->second.srvIndex = (index == UINT32_MAX) ? 0u : index;
@@ -150,7 +150,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name, const std::st
         uint32_t index = texManager_->GetTextureIndexByFilePath(textureFilePath); // テクスチャ番号
         if (index == UINT32_MAX) {
             texManager_->LoadTexture(textureFilePath);
-            texManager_->ExecuteResourceUpload();
+            texManager_->ReleaseIntermediateResources();
             index = texManager_->GetTextureIndexByFilePath(textureFilePath);
         }
         group.srvIndex = (index == UINT32_MAX) ? 0u : index;

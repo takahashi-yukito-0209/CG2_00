@@ -56,43 +56,20 @@ void Model::Draw(Object3d* owner)
     D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
-    // マテリアル定数バッファのCBV設定 (モデルまたはオーナーから)
-    if (materialResource_) {
-        // モデルがマテリアルリソースを持っている場合はそれを優先して使用
-        auto addr = materialResource_->GetGPUVirtualAddress();
-        // アドレスが0の場合は描画できない
-        if (addr == 0) {
-            Logger::Log("Model::Draw: materialResource_ GPU address is 0 - skipping\n");
-            return;
-        }
-        // ルートパラメータ0にマテリアルCBVをバインド
-        cmdList->SetGraphicsRootConstantBufferView(0, addr);
-
-    } else if (owner->GetMaterialResource()) {
-        // モデルがマテリアルリソースを持っていない場合はオーナーのマテリアルリソースを使用
-        auto res = owner->GetMaterialResource();
-        // オーナーのマテリアルリソースが有効でない場合は描画できない
-        if (!res) {
-            Logger::Log("Model::Draw: owner material resource null - skipping\n");
-            return;
-        }
-
-        // オーナーのマテリアルリソースのGPUアドレスが0の場合は描画できない
-        auto addr = res->GetGPUVirtualAddress();
-        // アドレスが0の場合は描画できない
-        if (addr == 0) {
-            Logger::Log("Model::Draw: owner material GPU address is 0 - skipping\n");
-            return;
-        }
-
-        // ルートパラメータ0にオーナーのマテリアルCBVをバインド
-        cmdList->SetGraphicsRootConstantBufferView(0, addr);
-
-    } else {
-        // モデルもオーナーもマテリアルリソースを持っていない場合は描画できない
-        Logger::Log("Model::Draw skipped: material CBV missing\n");
+    // Material CBV は Object3d が持つものを使用する
+    auto materialResource = owner->GetMaterialResource();
+    if (!materialResource) {
+        Logger::Log("Model::Draw skipped: owner material resource missing\n");
         return;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        Logger::Log("Model::Draw skipped: owner material GPU address is 0\n");
+        return;
+    }
+    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
+
 
     // 座標変換行列CBV設定 (オーナーから)
     if (owner->GetTransformationMatrixResource()) {
@@ -234,19 +211,18 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
     // モデル側の頂点バッファが有効であればそれを使用、無ければオーナー側の頂点バッファを使用
     cmdList->IASetVertexBuffers(0, 1, &vbv);
-
-    if (materialResource_) {
-        // モデル側のマテリアルリソースが有効であればそれを優先して使用
-        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-
-    } else if (owner->GetMaterialResource()) {
-        // モデル側のマテリアルリソースが無ければオーナー側のマテリアルリソースを使用
-        cmdList->SetGraphicsRootConstantBufferView(0, owner->GetMaterialResource()->GetGPUVirtualAddress());
-
-    } else {
-        // オーナーのマテリアルリソースが有効でない場合は描画できない
+    // Material CBV は Object3d が持つものを使用する
+    auto materialResource = owner->GetMaterialResource();
+    if (!materialResource) {
         return;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        return;
+    }
+    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
+
 
     // 変換行列（インスタンシング使用時はオーナーのCBVは未使用）
     if (owner->GetTransformationMatrixResource()) {
@@ -368,7 +344,7 @@ void Model::Initialize(ModelCommon* modelCommon)
     uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
     if (fallbackIdx == UINT32_MAX) {
         texMgr->LoadTexture(kFallbackModelTexturePath);
-        texMgr->ExecuteResourceUpload();
+        texMgr->ReleaseIntermediateResources();
     }
 
     DirectXCommon* dx = modelCommon_->GetDxCommon();
@@ -392,7 +368,7 @@ void Model::Initialize(ModelCommon* modelCommon)
         if (idx == UINT32_MAX) {
             // テクスチャがまだロードされていなければ読み込んでアップロードする
             texMgr->LoadTexture(modelData_.material.textureFilePath);
-            texMgr->ExecuteResourceUpload();
+            texMgr->ReleaseIntermediateResources();
             idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
         }
 
