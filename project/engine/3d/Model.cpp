@@ -40,7 +40,7 @@ void Model::Draw(Object3d* owner)
 
     // DirectXCommon が取得できない場合は描画できない
     if (!dxCommon) {
-        Logger::Log("Model::Draw skipped: DirectXCommon unavailable\n");
+        Logger::Debug("Model::Draw skipped: DirectXCommon unavailable\n");
         return;
     }
 
@@ -48,7 +48,7 @@ void Model::Draw(Object3d* owner)
     auto cmdList = dxCommon->GetCommandList();
     // コマンドリストが取得できない場合は描画できない
     if (!cmdList) {
-        Logger::Log("Model::Draw skipped: command list is null\n");
+        Logger::Debug("Model::Draw skipped: command list is null\n");
         return;
     }
 
@@ -59,13 +59,13 @@ void Model::Draw(Object3d* owner)
     // Material CBV は Object3d が持つものを使用する
     auto materialResource = owner->GetMaterialResource();
     if (!materialResource) {
-        Logger::Log("Model::Draw skipped: owner material resource missing\n");
+        Logger::Debug("Model::Draw skipped: owner material resource missing\n");
         return;
     }
 
     D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
     if (materialAddress == 0) {
-        Logger::Log("Model::Draw skipped: owner material GPU address is 0\n");
+        Logger::Debug("Model::Draw skipped: owner material GPU address is 0\n");
         return;
     }
     cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
@@ -77,7 +77,7 @@ void Model::Draw(Object3d* owner)
         cmdList->SetGraphicsRootConstantBufferView(1, owner->GetTransformationMatrixResource()->GetGPUVirtualAddress());
     } else {
         // オーナーが座標変換行列リソースを持っていない場合は描画できない
-        Logger::Log("Model::Draw skipped: transformation matrix CBV missing\n");
+        Logger::Debug("Model::Draw skipped: transformation matrix CBV missing\n");
         return;
     }
 
@@ -85,7 +85,7 @@ void Model::Draw(Object3d* owner)
     Object3dCommon* common = owner->GetObject3dCommon();
     // Object3dCommonが有効でない場合は描画できない
     if (!common) {
-        Logger::Log("Model::Draw skipped: missing Object3dCommon\n");
+        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
         return;
     }
 
@@ -93,7 +93,7 @@ void Model::Draw(Object3d* owner)
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = common->GetDirectionalLightGPUAddress();
     // 平行光源のGPUアドレスが0の場合は描画できない
     if (lightAddr == 0) {
-        Logger::Log("Model::Draw skipped: directional light CBV missing\n");
+        Logger::Debug("Model::Draw skipped: directional light CBV missing\n");
         return;
     }
     // ルートパラメータ3に平行光源CBVをバインド
@@ -142,7 +142,7 @@ void Model::Draw(Object3d* owner)
         if (srvHandle.ptr == 0) {
             char buf[256];
             sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
-            Logger::Log(buf);
+            Logger::Debug(buf);
         } else {
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
@@ -152,14 +152,14 @@ void Model::Draw(Object3d* owner)
         uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
         // フォールバックのチェッカーテクスチャのSRVインデックスを取得
         if (fallbackIdx == UINT32_MAX) {
-            Logger::Log("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
+            Logger::Debug("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
             return;
         }
 
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
         // フォールバックのSRVハンドルを取得
         if (srvHandle.ptr == 0) {
-            Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
+            Logger::Debug("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
         } else {
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
@@ -169,7 +169,7 @@ void Model::Draw(Object3d* owner)
     const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
     // 頂点データはモデル側が空の場合はオーナー側の頂点データを使用
     if (verts.empty()) {
-        Logger::Log("Model::Draw skipped: no vertices available\n");
+        Logger::Debug("Model::Draw skipped: no vertices available\n");
         return;
     }
     cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
@@ -282,7 +282,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
             // フォールバック
             uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
             if (fb == UINT32_MAX) {
-                Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+                Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
                 return;
             }
 
@@ -294,7 +294,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     } else {
         uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
         if (fb == UINT32_MAX) {
-            Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+            Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
             return;
         }
 
@@ -344,7 +344,6 @@ void Model::Initialize(ModelCommon* modelCommon)
     uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
     if (fallbackIdx == UINT32_MAX) {
         texMgr->LoadTexture(kFallbackModelTexturePath);
-        texMgr->ReleaseIntermediateResources();
     }
 
     DirectXCommon* dx = modelCommon_->GetDxCommon();
@@ -368,7 +367,6 @@ void Model::Initialize(ModelCommon* modelCommon)
         if (idx == UINT32_MAX) {
             // テクスチャがまだロードされていなければ読み込んでアップロードする
             texMgr->LoadTexture(modelData_.material.textureFilePath);
-            texMgr->ReleaseIntermediateResources();
             idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
         }
 

@@ -65,6 +65,11 @@ public: // 公開メンバ関数
         const DirectX::ScratchImage& mipImages);
 
     /// <summary>
+    /// 保留中のテクスチャアップロードコマンドを実行し、完了まで待機する
+    /// </summary>
+    void FlushTextureUploads();
+
+    /// <summary>
     /// シェーダーをコンパイルする
     /// </summary>
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
@@ -260,6 +265,10 @@ private: // Private メンバ変数
 
     // SrvManager の参照（存在すればレンダーターゲットの SRV 解放に使用）
     class SrvManager* srvManager_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> textureUploadAllocator_; // テクスチャアップロード専用アロケータ
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> textureUploadCommandList_; // テクスチャアップロード専用コマンドリスト
+    bool hasPendingTextureUploads_ = false; // 未実行のテクスチャアップロードがあるか
 
     // フェンスと同期イベント
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

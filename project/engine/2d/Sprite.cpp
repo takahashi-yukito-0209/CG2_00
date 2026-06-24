@@ -38,7 +38,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         vertexResources_[frameIndex] = dxCommon->CreateBufferResource(sizeof(VertexData) * vertexState_.size());
         hr = vertexResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData_[frameIndex]));
         if (FAILED(hr)) {
-            Logger::Log("Warning: Sprite::Initialize vertex resource map failed\n");
+            Logger::Warn("Warning: Sprite::Initialize vertex resource map failed\n");
             mappedVertexData_[frameIndex] = nullptr;
         }
     }
@@ -67,7 +67,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
     // インデックスリソースにデータを書き込むポインタを取得し、メンバ変数に代入
     hr = indexResource_->Map(0, nullptr, reinterpret_cast<void**>(&indexData_));
     if (FAILED(hr)) {
-        Logger::Log("Warning: Sprite::Initialize indexResource_->Map failed. Index data will be unavailable\n");
+        Logger::Warn("Warning: Sprite::Initialize indexResource_->Map failed. Index data will be unavailable\n");
         indexData_ = nullptr;
     } else {
         // インデックスデータの内容を書き込む
@@ -110,7 +110,6 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         // まだチェッカーテクスチャがロードされていない場合はロードしてSRVを確保
         if (srvIdx == UINT32_MAX) {
             TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
-            TextureManager::GetInstance()->ReleaseIntermediateResources();
             srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
         }
 
@@ -118,7 +117,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         textureIndex_ = srvIdx;
         char buf[256];
         sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to uvChecker srvIndex=%u\n", textureFilePath.c_str(), srvIdx);
-        Logger::Log(buf);
+        Logger::Warn(buf);
 
     } else {
         // 指定されたテクスチャがロードされている場合はそのSRVインデックスを使用
@@ -288,7 +287,7 @@ void Sprite::Update()
         transformationMatrixData_->World = worldMatrix; // World行列も忘れずに更新
     } else {
         // 変換行列データが利用できない場合は警告を出す（描画は続行するが、スプライトは正しく表示されない可能性がある）
-        Logger::Log("Warning: Sprite::Update transformationMatrixData_ is null, skipping matrix update\n");
+        Logger::Debug("Warning: Sprite::Update transformationMatrixData_ is null, skipping matrix update\n");
     }
 
     //  UV変換行列の計算と定数バッファへの書き込み
@@ -301,7 +300,7 @@ void Sprite::Update()
         materialData_->uvTransform = uvTransformMatrix;
     } else {
         // UV変換行列データが利用できない場合は警告を出す（描画は続行するが、UV変換が反映されない可能性がある）
-        Logger::Log("Warning: Sprite::Update materialData_ is null, skipping uvTransform update\n");
+        Logger::Debug("Warning: Sprite::Update materialData_ is null, skipping uvTransform update\n");
     }
 }
 
@@ -313,38 +312,38 @@ void Sprite::Draw()
     UpdateFrameResources();
     // DirectXCommonとコマンドリストの存在確認
     if (!spriteCommon_) {
-        Logger::Log("Warning: Sprite::Draw skipped: spriteCommon_ is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: spriteCommon_ is null\n");
         return;
     }
 
     DirectXCommon* dxCommon = spriteCommon_->GetDxCommon();
     if (!dxCommon || !dxCommon->GetCommandList()) {
-        Logger::Log("Warning: Sprite::Draw skipped: DirectXCommon or command list is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: DirectXCommon or command list is null\n");
         return;
     }
 
     // 必要なバッファ/リソースの存在確認
     if (!vertexData_) {
         // 頂点データが利用できない場合は警告を出して描画をスキップする（頂点データがないと描画できないため）
-        Logger::Log("Warning: Sprite::Draw skipped: vertexData_ is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: vertexData_ is null\n");
         return;
     }
 
     if (!indexData_) {
         // インデックスデータが利用できない場合は警告を出して描画をスキップする（インデックスデータがないと描画できないため）
-        Logger::Log("Warning: Sprite::Draw skipped: indexData_ is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: indexData_ is null\n");
         return;
     }
 
     if (!materialResources_[dxCommon->GetCurrentFrameIndex()]) {
         // マテリアルリソースが利用できない場合は警告を出して描画をスキップする（マテリアル定数バッファがないと描画できないため）
-        Logger::Log("Warning: Sprite::Draw skipped: materialResource_ is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: materialResource_ is null\n");
         return;
     }
 
     if (!transformationMatrixResources_[dxCommon->GetCurrentFrameIndex()]) {
         // 変換行列リソースが利用できない場合は警告を出して描画をスキップする（変換行列定数バッファがないと描画できないため）
-        Logger::Log("Warning: Sprite::Draw skipped: transformationMatrixResource_ is null\n");
+        Logger::Debug("Warning: Sprite::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
 
@@ -371,11 +370,11 @@ void Sprite::Draw()
         if (srv.ptr != 0) {
             dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(2, srv);
         } else {
-            Logger::Log("Warning: Sprite::Draw texture SRV handle is null, skipping SRV bind\n");
+            Logger::Debug("Warning: Sprite::Draw texture SRV handle is null, skipping SRV bind\n");
         }
 
     } else {
-        Logger::Log("Warning: Sprite::Draw has invalid textureIndex_, skipping SRV bind\n");
+        Logger::Debug("Warning: Sprite::Draw has invalid textureIndex_, skipping SRV bind\n");
     }
 
     // 描画！(インデックス数6)
@@ -408,7 +407,7 @@ void Sprite::SetTexture(const std::string& filePath)
     uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
     // 未ロードの場合は現在のテクスチャを維持する
     if (idx == UINT32_MAX) {
-        Logger::Log(std::string("Sprite::SetTexture: texture is not loaded: ") + filePath + "\n");
+        Logger::Warn(std::string("Sprite::SetTexture: texture is not loaded: ") + filePath + "\n");
         return;
     }
 

@@ -147,7 +147,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         hr = D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sig, &err);
         if (FAILED(hr)) {
             if (err)
-                Logger::Log(reinterpret_cast<const char*>(err->GetBufferPointer()));
+                Logger::Error(reinterpret_cast<const char*>(err->GetBufferPointer()));
         }
         hr = dxCommon_->GetDevice()->CreateRootSignature(0, sig->GetBufferPointer(), sig->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
         assert(SUCCEEDED(hr));
@@ -194,7 +194,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "ERROR SkyBox::Initialize: CreateGraphicsPipelineState failed hr=0x%08X\n", static_cast<unsigned int>(hr));
-            Logger::Log(buf);
+            Logger::Error(buf);
         }
         assert(SUCCEEDED(hr));
     }
@@ -251,15 +251,15 @@ void SkyBox::Draw(Camera* camera)
 
     // エラーチェックとログ出力
     if (!pipelineState_) {
-        Logger::Log("ERROR SkyBox::Draw: pipelineState_ is null\n");
+        Logger::Error("ERROR SkyBox::Draw: pipelineState_ is null\n");
         return;
     }
     if (!rootSignature_) {
-        Logger::Log("ERROR SkyBox::Draw: rootSignature_ is null\n");
+        Logger::Error("ERROR SkyBox::Draw: rootSignature_ is null\n");
         return;
     }
     if (vbView_.BufferLocation == 0) {
-        Logger::Log("ERROR SkyBox::Draw: vertex buffer GPU address is null\n");
+        Logger::Error("ERROR SkyBox::Draw: vertex buffer GPU address is null\n");
         return;
     }
     // SRVヒープを設定する

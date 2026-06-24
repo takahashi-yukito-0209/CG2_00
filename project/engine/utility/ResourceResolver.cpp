@@ -11,10 +11,30 @@ namespace fs = std::filesystem;
 struct ResolverData {
     std::vector<std::pair<std::string, std::string>> searchPaths; // name, path
     std::unordered_map<ResourceResolver::Type, std::vector<std::string>> extMap;
+    std::unordered_map<std::string, std::string> resolveCache; // Resolveで見つかったパスのキャッシュ
+    std::unordered_map<std::string, std::string> relativeResolveCache; // ResolveRelativeで見つかったパスのキャッシュ
 };
 
 // グローバルなリゾルバーデータのインスタンス
 static ResolverData g_resolverData;
+
+/// <summary>
+/// Resolve用キャッシュのキーを作成する
+/// </summary>
+static std::string MakeResolveCacheKey(const std::string& inputPath, ResourceResolver::Type type)
+{
+    const std::string currentDirectory = fs::current_path().generic_string(); // 現在の作業ディレクトリ
+    return currentDirectory + "|" + std::to_string(static_cast<int>(type)) + "|" + inputPath;
+}
+
+/// <summary>
+/// ResolveRelative用キャッシュのキーを作成する
+/// </summary>
+static std::string MakeRelativeResolveCacheKey(const std::string& inputPath, const std::string& baseDir, ResourceResolver::Type type)
+{
+    const std::string currentDirectory = fs::current_path().generic_string(); // 現在の作業ディレクトリ
+    return currentDirectory + "|" + baseDir + "|" + std::to_string(static_cast<int>(type)) + "|" + inputPath;
+}
 
 /// <summary>
 /// 実行ファイルが配置されているフォルダを作業フォルダに設定する
@@ -57,6 +77,8 @@ void ResourceResolver::RegisterSearchPath(const std::string& name, const std::st
 {
     // 登録された検索パスのリストに、指定された名前とパスのペアを追加
     g_resolverData.searchPaths.emplace_back(name, path);
+    g_resolverData.resolveCache.clear();
+    g_resolverData.relativeResolveCache.clear();
 }
 
 /// <summary>
@@ -66,6 +88,8 @@ void ResourceResolver::ClearSearchPaths()
 {
     // 登録された検索パスのリストをクリアして、すべての検索パスを削除
     g_resolverData.searchPaths.clear();
+    g_resolverData.resolveCache.clear();
+    g_resolverData.relativeResolveCache.clear();
 }
 
 /// <summary>
@@ -154,12 +178,27 @@ std::string ResourceResolver::ResolveRelative(const std::string& inputPath, cons
 {
 
     try {
+        if (inputPath.empty()) {
+            return std::string();
+        }
+
+        const std::string cacheKey = MakeRelativeResolveCacheKey(inputPath, baseDir, type); // 相対解決用キャッシュキー
+        auto cacheIt = g_resolverData.relativeResolveCache.find(cacheKey); // 解決済みパスのキャッシュ位置
+        if (cacheIt != g_resolverData.relativeResolveCache.end()) {
+            return cacheIt->second;
+        }
+
+        auto cacheResolvedPath = [&](const std::string& resolvedPath) -> std::string {
+            g_resolverData.relativeResolveCache[cacheKey] = resolvedPath;
+            return resolvedPath;
+        };
+
         // 入力パスが空の場合は、空文字列を返す
         fs::path p(inputPath);
         if (p.is_absolute()) {
             auto r = tryCandidate(p);
             if (!r.empty())
-                return r;
+                return cacheResolvedPath(r);
         }
 
         // 基準ディレクトリに対して相対的に解決を試みる
@@ -175,13 +214,13 @@ std::string ResourceResolver::ResolveRelative(const std::string& inputPath, cons
                 c2 += e;
                 auto r = tryCandidate(c2);
                 if (!r.empty())
-                    return r;
+                    return cacheResolvedPath(r);
             }
 
         } else {
             auto r = tryCandidate(candidate);
             if (!r.empty())
-                return r;
+                return cacheResolvedPath(r);
         }
 
     } catch (...) {
@@ -207,21 +246,34 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
     }
 
     try {
-        if (inputPath.empty())
+        if (inputPath.empty()) {
             return std::string();
+        }
+
+        const std::string cacheKey = MakeResolveCacheKey(inputPath, type); // 通常解決用キャッシュキー
+        auto cacheIt = g_resolverData.resolveCache.find(cacheKey); // 解決済みパスのキャッシュ位置
+        if (cacheIt != g_resolverData.resolveCache.end()) {
+            return cacheIt->second;
+        }
+
+        auto cacheResolvedPath = [&](const std::string& resolvedPath) -> std::string {
+            g_resolverData.resolveCache[cacheKey] = resolvedPath;
+            return resolvedPath;
+        };
+
         fs::path p(inputPath);
 
         if (p.is_absolute()) {
             auto r = tryCandidate(p);
             if (!r.empty())
-                return r;
+                return cacheResolvedPath(r);
         }
 
         if (p.has_parent_path()) {
 
             auto r = tryCandidate(p);
             if (!r.empty())
-                return r;
+                return cacheResolvedPath(r);
         }
 
         const auto& exts = GetExtList(type);
@@ -234,12 +286,12 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
                     c2 += e;
                     auto r = tryCandidate(c2);
                     if (!r.empty())
-                        return r;
+                        return cacheResolvedPath(r);
                 }
             } else {
                 auto r = tryCandidate(candidate);
                 if (!r.empty())
-                    return r;
+                    return cacheResolvedPath(r);
             }
         }
 
@@ -274,7 +326,7 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
                         if (entryFilename == candidateFilename) {
                             auto r = tryCandidate(entry.path());
                             if (!r.empty())
-                                return r;
+                                return cacheResolvedPath(r);
                         }
                     }
                 }

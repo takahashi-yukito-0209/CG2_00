@@ -2,20 +2,47 @@
 #include "../utility/ResourceResolver.h"
 #include "Logger.h"
 #include "Model.h"
+#include "TextureManager.h"
 #include <filesystem>
 #include <vector>
 
 using namespace MyEngine;
 
-// シングルトンインスタンスの初期化
 std::unique_ptr<ModelManager> ModelManager::instance_ = nullptr;
 
+namespace {
+
 /// <summary>
-/// シングルトンインスタンスの取得
+/// モデルキャッシュで使うファイルパスキーを作成する。
+/// </summary>
+std::string MakeModelCacheKey(const std::string& filePath)
+{
+    std::filesystem::path modelPath(filePath); // キャッシュ対象のモデルパス
+    std::error_code error; // パス正規化時のエラー情報
+
+    if (std::filesystem::exists(modelPath, error)) {
+        std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(modelPath, error); // 表記ゆれを吸収したパス
+        if (!error && !canonicalPath.empty()) {
+            return canonicalPath.generic_string();
+        }
+    }
+
+    error.clear();
+    std::filesystem::path absolutePath = std::filesystem::absolute(modelPath, error); // 存在しない場合の代替キー
+    if (!error && !absolutePath.empty()) {
+        return absolutePath.lexically_normal().generic_string();
+    }
+
+    return modelPath.lexically_normal().generic_string();
+}
+
+} // namespace
+
+/// <summary>
+/// シングルトンインスタンスを取得する。
 /// </summary>
 ModelManager* ModelManager::GetInstance()
 {
-    // インスタンスがまだ存在しない場合は生成する
     if (!instance_) {
         instance_.reset(new ModelManager());
     }
@@ -24,47 +51,37 @@ ModelManager* ModelManager::GetInstance()
 }
 
 /// <summary>
-/// 終了処理
+/// モデルマネージャーを終了し、保持しているモデルを解放する。
 /// </summary>
 void ModelManager::Finalize()
 {
-    // すべてのモデルを解放
     models_.clear();
-    // シングルトン自身を破棄
     instance_.reset();
 }
 
 /// <summary>
-/// モデルの読み込みと取得
+/// モデルを読み込み、読み込み済みの場合はキャッシュ済みモデルを返す。
 /// </summary>
 Model* ModelManager::LoadModel(const std::string& directory, const std::string& filename, ModelCommon* modelCommon)
 {
-    // ファイルパスをキーとして結合
-    std::string requestedDir = directory;
-    std::string requestedFilename = filename;
-    std::string filePath = requestedDir + "/" + requestedFilename;
+    std::string requestedDir = directory; // 呼び出し側が指定したモデルディレクトリ
+    std::string requestedFilename = filename; // 呼び出し側が指定したモデルファイル名
+    std::string filePath = requestedDir + "/" + requestedFilename; // 解決前のモデルパス
 
-    // まずは ResourceResolver を使って直接解決を試みる
-    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model);
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model); // Resolverで解決したモデルパス
     if (resolved.empty()) {
-        // 直接の結合パスで見つからない場合、ファイル名だけで再度解決を試みる（リソース登録がディレクトリ無しの場合に対応）
         resolved = ResourceResolver::Resolve(requestedFilename, ResourceResolver::Type::Model);
     }
 
-    // 解決されたパスが存在する場合はそれを使用する
     if (!resolved.empty()) {
         filePath = resolved;
     }
 
-    // ファイルが存在しない場合、いくつかの代替ディレクトリを試し、限定的な探索を行う
     if (!std::filesystem::exists(filePath)) {
-        // よく使われる代替ディレクトリを試す
-        std::vector<std::string> tryDirs = { requestedDir, requestedDir + "s", "resources", "resource", requestedDir + "/models", "models" };
-        // 代替ディレクトリで見つかったかどうかのフラグ
-        bool found = false;
-        // 代替ディレクトリを順番に試す
+        std::vector<std::string> tryDirs = { requestedDir, requestedDir + "s", "resources", "resource", requestedDir + "/models", "models" }; // 互換用の探索先
+        bool found = false; // 代替パスでモデルが見つかったか
         for (const auto& d : tryDirs) {
-            std::string tryPath = d + "/" + requestedFilename;
+            std::string tryPath = d + "/" + requestedFilename; // 代替探索用のモデルパス
             if (std::filesystem::exists(tryPath)) {
                 requestedDir = d;
                 filePath = tryPath;
@@ -73,46 +90,19 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
             }
         }
 
-        // それでも見つからない場合、プロジェクトルート（現在のパス）から短い再帰検索を行う
-        if (!found) {
-            const int maxSearchResults = 4;
-            int foundCount = 0;
-            // 最初に見つかったものを採用するため、見つかるたびに更新していく
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path())) {
-
-                // ファイルのみ対象とする
-                if (!entry.is_regular_file()) {
-                    continue;
-                }
-
-                // ファイル名が一致するかをチェック
-                if (entry.path().filename() == requestedFilename) {
-                    // 見つかった場合は requestedDir と filePath を更新してループを抜ける
-                    requestedDir = entry.path().parent_path().string();
-                    requestedFilename = entry.path().filename().string();
-                    filePath = entry.path().string();
-                    found = true;
-                    ++foundCount;
-                    break; // 最初に見つかったものを採用
-                }
-
-                // 見つかった数が上限に達したら探索を打ち切る
-                if (foundCount >= maxSearchResults) {
-                    break;
-                }
-            }
-        }
-
-        // それでも見つからない場合は警告ログを出す
         if (!found) {
             char buf[256];
             sprintf_s(buf, "Warning: ModelManager::LoadModel could not find model file: %s/%s\n", directory.c_str(), filename.c_str());
-            Logger::Log(buf);
+            Logger::Warn(buf);
         }
     }
 
-    // 解決された filePath をキャッシュキーとして使用
-    // 実行フォルダ配下は相対パスへ戻し、日本語を含む絶対パスをAssimpへ渡さない
+    const std::string cacheKey = MakeModelCacheKey(filePath); // 同一モデル判定用の正規化済みキャッシュキー
+    auto modelIt = models_.find(cacheKey); // キャッシュ済みモデルの検索位置
+    if (modelIt != models_.end()) {
+        return modelIt->second.get();
+    }
+
     std::error_code relativePathError; // 相対パス変換時のエラー情報
     const std::filesystem::path relativeModelPath = std::filesystem::relative(
         std::filesystem::path(filePath),
@@ -125,46 +115,39 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
         }
     }
 
-    std::string cacheKey = filePath;
-
-    // すでに読み込まれているかチェック（早期リターン）
-    if (models_.find(cacheKey) != models_.end()) {
-        // 既にある場合はそのポインタを返す
-        return models_[cacheKey].get();
-    }
-
-    // 新規モデルを生成して読み込む
-    auto model = std::make_unique<Model>();
-    // 実際の filePath が確定している場合、ローダー用にディレクトリとファイル名に分割
-    std::filesystem::path p(filePath);
-    std::string useDir = p.parent_path().string();
-    std::string useFile = p.filename().string();
+    auto model = std::make_unique<Model>(); // 新規に読み込むモデルインスタンス
+    std::filesystem::path modelFilePath(filePath); // 読み込みに使うモデルパス
+    std::string useDir = modelFilePath.parent_path().string(); // Modelへ渡すディレクトリ
+    std::string useFile = modelFilePath.filename().string(); // Modelへ渡すファイル名
     if (model->LoadFromFile(useDir, useFile)) {
-        // モデルの初期化
         model->Initialize(modelCommon);
-        Model* ptr = model.get();
-        // コンテナに格納（所有権を移す）
+        Model* loadedModel = model.get(); // 呼び出し側へ返すモデルポインタ
         models_.insert(std::make_pair(cacheKey, std::move(model)));
-        return ptr;
+        return loadedModel;
     }
 
-    // 手続き的フォールバックは無し。失敗時は nullptr を返す
-
-    // 読み込み失敗時はnullptrを返す
     return nullptr;
 }
 
 /// <summary>
-/// ファイルパスに対応するモデルを検索して返す（見つからない場合は nullptr を返す）
+/// ファイルパスに対応する読み込み済みモデルを検索して返す。
 /// </summary>
 Model* ModelManager::FindModel(const std::string& filePath)
 {
-    auto it = models_.find(filePath); // ファイルパスをキーにしてモデルを検索
-    // 見つかった場合は生ポインタを返す
+    const std::string cacheKey = MakeModelCacheKey(filePath); // 検索用の正規化済みキャッシュキー
+    auto it = models_.find(cacheKey); // キャッシュ済みモデルの検索位置
     if (it != models_.end()) {
         return it->second.get();
     }
 
-    // 見つからない場合は nullptr を返す
+    const std::string resolvedPath = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model); // Resolverで解決したモデルパス
+    if (!resolvedPath.empty()) {
+        const std::string resolvedCacheKey = MakeModelCacheKey(resolvedPath); // 解決後パスのキャッシュキー
+        it = models_.find(resolvedCacheKey);
+        if (it != models_.end()) {
+            return it->second.get();
+        }
+    }
+
     return nullptr;
 }

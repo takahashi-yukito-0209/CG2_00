@@ -136,12 +136,12 @@ void Object3d::SetTexture(const std::string& filePath)
     if (!resolved.empty())
         texToUse = resolved;
     // 既にロード済みでなければロードを依頼
-    uint32_t idx = texMgr->GetTextureIndexByFilePath(filePath);
+    uint32_t idx = texMgr->GetTextureIndexByFilePath(texToUse);
     if (idx == UINT32_MAX) {
-        texMgr->LoadTexture(filePath);
-        // 転送を実行して SRV を作成する
+        texMgr->LoadTexture(texToUse);
+        // 実行中の差し替えでも次の描画前に確実に使えるように転送を完了させる
         texMgr->ReleaseIntermediateResources();
-        idx = texMgr->GetTextureIndexByFilePath(filePath);
+        idx = texMgr->GetTextureIndexByFilePath(texToUse);
     }
 
     // マテリアルデータにファイルパスとインデックスを設定
@@ -228,7 +228,7 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
     if (!file.is_open()) {
         char buf[256];
         sprintf_s(buf, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
-        Logger::Log(buf);
+        Logger::Warn(buf);
         return materialData;
     }
 
@@ -248,7 +248,7 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
             {
                 char buf[256];
                 sprintf_s(buf, "LoadMaterialTemplateFile: map_Kd -> %s\n", materialData.textureFilePath.c_str());
-                Logger::Log(buf);
+                Logger::Debug(buf);
             }
         }
     }
@@ -354,14 +354,18 @@ void Object3d::AssignTexture()
     // テクスチャマネージャからインデックスを取得してモデルデータに格納
     auto texMgr = TextureManager::GetInstance();
     if (!modelData_.material.textureFilePath.empty()) {
-        uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
+        std::string texturePath = modelData_.material.textureFilePath; // 割り当て対象のテクスチャパス
+        std::string resolved = ResourceResolver::Resolve(texturePath, ResourceResolver::Type::Texture); // 解決済みテクスチャパス
+        if (!resolved.empty()) {
+            texturePath = resolved;
+            modelData_.material.textureFilePath = texturePath;
+        }
+
+        uint32_t idx = texMgr->GetTextureIndexByFilePath(texturePath);
         if (idx == UINT32_MAX) {
-            // ロードされていないテクスチャが指定されている場合はロードを依頼してからインデックスを取得する
-            texMgr->LoadTexture(modelData_.material.textureFilePath);
-            // 転送を実行して SRV を作成する
-            texMgr->ReleaseIntermediateResources();
-            // 再度インデックスを取得する
-            idx = texMgr->GetSrvIndex(modelData_.material.textureFilePath);
+            // ロードされていないテクスチャが指定されている場合はロードしてからインデックスを取得する
+            texMgr->LoadTexture(texturePath);
+            idx = texMgr->GetSrvIndex(texturePath);
         }
 
         // 取得したインデックスをモデルデータに格納する
@@ -370,7 +374,7 @@ void Object3d::AssignTexture()
         // ログ出力: テクスチャ割り当て結果
         char buf[256];
         sprintf_s(buf, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), idx);
-        Logger::Log(buf);
+        Logger::Debug(buf);
 
         return;
     }
@@ -383,8 +387,6 @@ void Object3d::AssignTexture()
         if (srvIdx == UINT32_MAX) {
             // 未ロードならロードして割り当て
             texMgr->LoadTexture("resources/uvChecker.png");
-            // 転送を実行して SRV を作成する
-            texMgr->ReleaseIntermediateResources();
             // 再度インデックスを取得する
             srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
         }
@@ -395,12 +397,12 @@ void Object3d::AssignTexture()
         // ログ出力: デフォルトテクスチャ割り当て
         char buf[256];
         sprintf_s(buf, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", srvIdx);
-        Logger::Log(buf);
+        Logger::Debug(buf);
 
     } else {
         // ロードされたテクスチャが1枚もない場合は、インデックスを無効値のままにしておく
         modelData_.material.textureIndex = UINT32_MAX;
-        Logger::Log("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");
+        Logger::Debug("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");
     }
 }
 
@@ -440,13 +442,13 @@ void Object3d::Draw()
     UpdateFrameResources();
     // Object3dCommon がセットされていない場合は描画できないのでログを出して終了する
     if (!object3dCommon_) {
-        Logger::Log("Object3d::Draw skipped: object3dCommon_ is null\n");
+        Logger::Debug("Object3d::Draw skipped: object3dCommon_ is null\n");
         return;
     }
 
     // DirectXCommon が Object3dCommon から取得できない場合は描画できないのでログを出して終了する
     if (!object3dCommon_->GetDxCommon()) {
-        Logger::Log("Object3d::Draw skipped: DxCommon is null\n");
+        Logger::Debug("Object3d::Draw skipped: DxCommon is null\n");
         return;
     }
 
@@ -455,7 +457,7 @@ void Object3d::Draw()
 
     // コマンドリストが取得できない場合は描画できないのでログを出して終了する
     if (!cmdList) {
-        Logger::Log("Object3d::Draw skipped: command list is null\n");
+        Logger::Debug("Object3d::Draw skipped: command list is null\n");
         return;
     }
 
@@ -467,7 +469,7 @@ void Object3d::Draw()
 
     // モデルがセットされていない場合は頂点バッファから直接描画する
     if (vertexBufferView_.SizeInBytes == 0) {
-        Logger::Log("Object3d::Draw skipped: no vertex buffer for non-model draw\n");
+        Logger::Debug("Object3d::Draw skipped: no vertex buffer for non-model draw\n");
         return;
     }
 
@@ -476,7 +478,7 @@ void Object3d::Draw()
 
     // マテリアルCBV (必須)
     if (!GetMaterialResource()) {
-        Logger::Log("Object3d::Draw skipped: materialResource_ is null\n");
+        Logger::Debug("Object3d::Draw skipped: materialResource_ is null\n");
         return;
     }
     // GPU仮想アドレスを取得してルートパラメータ0にセット
@@ -486,7 +488,7 @@ void Object3d::Draw()
 
     // 座標変換行列CBV (必須)
     if (!GetTransformationMatrixResource()) {
-        Logger::Log("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
+        Logger::Debug("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
         return;
     }
 
@@ -499,7 +501,7 @@ void Object3d::Draw()
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
     // 光源CBVが利用できない場合は描画をスキップしてログを出す
     if (lightAddr == 0) {
-        Logger::Log("Object3d::Draw skipped: directional light GPU address is null\n");
+        Logger::Debug("Object3d::Draw skipped: directional light GPU address is null\n");
         return;
     }
     // ルートパラメータ3に光源CBVをセット
@@ -531,12 +533,12 @@ void Object3d::Draw()
         } else {
             char buf[128];
             sprintf_s(buf, "Object3d::Draw: SRV handle for index %u is null - skipping SRV bind\n", texIndex);
-            Logger::Log(buf);
+            Logger::Debug(buf);
         }
     } else {
         char buf[128];
         sprintf_s(buf, "Object3d::Draw: no valid texture assigned (index=%u) - skipping SRV\n", texIndex);
-        Logger::Log(buf);
+        Logger::Debug(buf);
     }
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
@@ -632,7 +634,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     if (!scene) {
         char buf[256];
         sprintf_s(buf, "Warning: Assimp failed to load %s\n", fullPath.c_str());
-        Logger::Log(buf);
+        Logger::Warn(buf);
         return modelData;
     }
 
@@ -640,7 +642,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     if (!scene->HasMeshes()) {
         char buf[256];
         sprintf_s(buf, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
-        Logger::Log(buf);
+        Logger::Warn(buf);
         return modelData;
     }
 
@@ -668,7 +670,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
         if (!mesh->HasNormals()) {
             char buf[256];
             sprintf_s(buf, "Warning: mesh %u has no normals - skipping\n", meshIndex);
-            Logger::Log(buf);
+            Logger::Warn(buf);
             continue;
         }
 
@@ -727,7 +729,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
                 // ログ出力: ベース名から見つかったテクスチャファイル
                 char buf[256];
                 sprintf_s(buf, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", tryPath.c_str());
-                Logger::Log(buf);
+                Logger::Debug(buf);
                 break;
             }
         }
@@ -749,7 +751,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
                     // ログ出力: ディレクトリ内で見つかったテクスチャファイル
                     char buf[256];
                     sprintf_s(buf, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", modelData.material.textureFilePath.c_str());
-                    Logger::Log(buf);
+                    Logger::Debug(buf);
                     break;
                 }
             }
@@ -759,14 +761,14 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     // フォールバック: resources のチェッカーテクスチャ
     if (modelData.material.textureFilePath.empty()) {
         modelData.material.textureFilePath = "resources/uvChecker.png";
-        Logger::Log(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
+        Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     }
 
     // 最終的に選択されたテクスチャをログ出力
     {
         char buf[256];
         sprintf_s(buf, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
-        Logger::Log(buf);
+        Logger::Debug(buf);
     }
 
     // 読み込んだモデルデータを返す

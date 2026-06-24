@@ -69,12 +69,12 @@ void TextureManager::LoadTexture(const std::string& filePath)
         const TextureData& textureData = it->second; // 既にロード済みのテクスチャデータ
         char buf[256];
         sprintf_s(buf, "DEBUG LoadTexture: Already loaded texture: %s (SRV Index: %u)\n", filePath.c_str(), textureData.srvIndex);
-        Logger::Log(buf);
+        Logger::Debug(buf);
         return;
     }
 
     if (srvManager_ ? !srvManager_->CanAllocate() : !CanAllocateMore()) {
-        Logger::Log("ERROR LoadTexture: Exceeded maximum SRV count.\n");
+        Logger::Error("ERROR LoadTexture: Exceeded maximum SRV count.\n");
         return;
     }
 
@@ -92,7 +92,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
             tmp = storePath;
         }
         sprintf_s(buf, "DEBUG wfilePath = %s\n", tmp.c_str());
-        Logger::Log(buf);
+        Logger::Debug(buf);
     }
 
     // テクスチャファイルを読み込む
@@ -107,7 +107,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "ERROR LoadTexture: Failed to load DDS texture: %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
-            Logger::Log(buf);
+            Logger::Error(buf);
             return;
         }
     } else {
@@ -115,7 +115,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "ERROR LoadTexture: Failed to load texture: %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
-            Logger::Log(buf);
+            Logger::Error(buf);
             return;
         }
     }
@@ -129,14 +129,14 @@ void TextureManager::LoadTexture(const std::string& filePath)
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "ERROR LoadTexture: GenerateMipMaps failed for %s hr=0x%08X\n", filePath.c_str(), static_cast<unsigned int>(hr));
-            Logger::Log(buf);
+            Logger::Error(buf);
             return;
         }
     }
 
     uint32_t nextIndex = srvManager_ ? srvManager_->Allocate() : (static_cast<uint32_t>(textureDatas.size()) + kSRVIndexTop_); // 割り当てたSRVインデックス
     if (nextIndex >= DirectXCommon::kMaxSRVCount) {
-        Logger::Log("ERROR LoadTexture: SRV allocation exceeded heap size.\n");
+        Logger::Error("ERROR LoadTexture: SRV allocation exceeded heap size.\n");
         return;
     }
 
@@ -176,7 +176,7 @@ void TextureManager::LoadTexture(const std::string& filePath)
                 static_cast<unsigned int>(textureData.metadata.arraySize),
                 static_cast<unsigned int>(textureData.metadata.mipLevels),
                 static_cast<unsigned int>(textureData.metadata.format));
-            Logger::Log(buf);
+            Logger::Debug(buf);
         }
     } else if (textureData.metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -201,19 +201,19 @@ void TextureManager::LoadTexture(const std::string& filePath)
             static_cast<unsigned long long>(textureData.srvHandleCPU.ptr),
             static_cast<unsigned long long>(textureData.srvHandleGPU.ptr),
             textureData.srvIndex);
-        Logger::Log(buf);
+        Logger::Debug(buf);
     }
 
     if (textureData.srvHandleGPU.ptr == 0) {
         char buf[256];
         sprintf_s(buf, "ERROR LoadTexture: SRV GPU handle is null for %s\n", filePath.c_str());
-        Logger::Log(buf);
+        Logger::Error(buf);
     }
 
     {
         char buf[256];
         sprintf_s(buf, "DEBUG LoadTexture: Loaded new texture: %s (SRV Index: %u)\n", storePath.c_str(), textureData.srvIndex);
-        Logger::Log(buf);
+        Logger::Debug(buf);
     }
 }
 
@@ -222,6 +222,10 @@ void TextureManager::LoadTexture(const std::string& filePath)
 /// </summary>
 void TextureManager::ReleaseIntermediateResources()
 {
+    if (dxCommon_) {
+        dxCommon_->FlushTextureUploads();
+    }
+
     // すべての中間リソースを解放する
     for (auto& kv : textureDatas) {
         kv.second.IntermediateResource.Reset();
@@ -248,22 +252,11 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath)
     }
 
     // デバッグ用: 現在の登録一覧を出力
-    {
-        char buf[512];
-        sprintf_s(buf, "GetTextureIndexByFilePath: lookup failed for '%s'. Registered count=%zu\n", filePath.c_str(), textureDatas.size());
-        Logger::Log(buf);
-        uint32_t i = 0;
-        for (const auto& kv : textureDatas) {
-            char buf2[512];
-            sprintf_s(buf2, "  idx=%u path=%s\n", i++, kv.first.c_str());
-            Logger::Log(buf2);
-        }
-    }
+    char buf[256];
+    sprintf_s(buf, "DEBUG GetTextureIndexByFilePath: texture is not loaded: %s\n", filePath.c_str());
+    Logger::Debug(buf);
 
     // 見つからない場合は UINT32_MAX を返す
-    char buf[256];
-    sprintf_s(buf, "ERROR GetTextureIndexByFilePath: Texture not found: %s\n", filePath.c_str());
-    Logger::Log(buf);
     return UINT32_MAX;
 }
 
@@ -287,7 +280,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureInde
             if (td.srvHandleGPU.ptr == 0) {
                 char buf[128];
                 sprintf_s(buf, "Warning: SRV GPU handle is null for srvIndex %u\n", textureIndex);
-                Logger::Log(buf);
+                Logger::Warn(buf);
             }
             return td.srvHandleGPU;
         }
@@ -295,7 +288,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(uint32_t textureInde
     // 見つからない場合は null ハンドルを返す
     char buf[128];
     sprintf_s(buf, "Warning: SRV index %u not found in textureDatas\n", textureIndex);
-    Logger::Log(buf);
+    Logger::Warn(buf);
     return nullHandle;
 }
 
@@ -321,7 +314,7 @@ const DirectX::TexMetadata& TextureManager::GetMetadata(uint32_t textureIndex)
     // 見つからない場合はデフォルトのメタデータを返す
     char buf[128];
     sprintf_s(buf, "Warning: GetMetadata srvIndex %u not found, returning default\n", textureIndex);
-    Logger::Log(buf);
+    Logger::Warn(buf);
     return defaultMeta;
 }
 
