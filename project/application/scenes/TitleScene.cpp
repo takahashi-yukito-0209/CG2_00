@@ -42,8 +42,6 @@ void TitleScene::Initialize(const SceneContext& ctx)
     if (ctx_.textureManager) {
         ctx_.textureManager->LoadTexture("circle.png");
         ctx_.textureManager->LoadTexture("gradationLine.png");
-        // 読み込んだテクスチャをGPUに転送
-        ctx_.textureManager->ExecuteResourceUpload();
     }
 
     if (ctx_.object3dCommon) {

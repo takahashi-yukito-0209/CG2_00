@@ -27,29 +27,28 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
     float3 nrm = input.normal;
     if (gBillboardEnable >= 0.5f)
     {
-        // 入力頂点のxyをカメラRight/Upに展開し、中心はWorldの平行移動へ
+        // Worldの移動とスケールだけを使い、回転はカメラRight/Upで置き換える
         float3 center = float3(p.World._41, p.World._42, p.World._43);
         float3 right = normalize(gCameraRight);
         float3 up = normalize(gCameraUp);
-        float2 localOffset = mul(float4(input.position.xyz, 0.0f), p.World).xy;
+        float2 localScale = float2(
+            length(float3(p.World._11, p.World._12, p.World._13)),
+            length(float3(p.World._21, p.World._22, p.World._23)));
+        float2 localOffset = input.position.xy * localScale;
         float3 billboardPos = center + right * localOffset.x + up * localOffset.y;
         pos = float4(billboardPos, 1.0f);
-        // 法線はカメラ方向に向ける（簡易）
         nrm = normalize(cross(right, up));
-        // ViewProj を使用してスクリーンへ投影
         output.position = mul(pos, gViewProj);
-        // ワールド座標は billboard 計算後の位置
         output.worldPosition = billboardPos;
+        output.normal = nrm;
     }
     else
     {
         output.position = mul(pos, p.WVP);
-        // 非ビルボード時は通常のワールド変換で座標を出力
         output.worldPosition = mul(pos, p.World).xyz;
+        output.normal = normalize(mul(nrm, (float3x3) p.WorldInverseTranspose));
     }
     output.texcoord = input.texcoord;
-    // 法線はインスタンス毎の行列で変換（逆転置行列を使用）
-    output.normal = normalize(mul(nrm, (float3x3) p.WorldInverseTranspose));
     output.color = p.color;
     return output;
 }

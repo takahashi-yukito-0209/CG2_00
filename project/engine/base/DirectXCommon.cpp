@@ -110,7 +110,7 @@ void DirectXCommon::Finalize()
 
     // GPU上のコマンドが完了するのを待ってからリソースを破棄する
     // これによりドライバ側のバックグラウンドスレッドが終了するまで待機し
-    // DXGIのReportLiveObjectsで未解放オブジェクトが残る問題を軽減する
+    // DXGIのReportoiveObjectsで未解放オブジェクトが残る問題を軽減する
     if (commandQueue_ && fence_ && fenceEvent_) {
         // シグナル値をインクリメントしてGPUにシグナル
         fenceValue_++;
@@ -131,8 +131,8 @@ void DirectXCommon::Finalize()
         commandList_.Reset();
     }
 
-    if (commandAllocator_) {
-        commandAllocator_.Reset();
+    for (auto& commandAllocator : commandAllocators_) {
+        commandAllocator.Reset();
     }
 
     if (commandQueue_) {
@@ -221,11 +221,11 @@ void DirectXCommon::WaitForCommandExecution()
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: Signal failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
         return;
     }
@@ -237,11 +237,11 @@ void DirectXCommon::WaitForCommandExecution()
         if (FAILED(hr2)) {
             char buf[256];
             sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: SetEventOnCompletion failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr2));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
             if (device_) {
                 HRESULT reason = device_->GetDeviceRemovedReason();
                 sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-                Logger::Log(std::string(buf));
+                Logger::Error(std::string(buf));
             }
             return;
         }
@@ -255,32 +255,34 @@ void DirectXCommon::WaitForCommandExecution()
 /// </summary>
 void DirectXCommon::ResetCommandList()
 {
+    const uint32_t frameIndex = GetCurrentFrameIndex(); // リセット対象のフレーム番号
+
 
     // コマンドアロケータをリセット
-    HRESULT hr = commandAllocator_->Reset();
+    HRESULT hr = commandAllocators_[frameIndex]->Reset();
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::ResetCommandList: commandAllocator_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
         return;
     }
 
     // コマンドリストをリセット（アロケータを再設定）
     // 第二引数（PipelineStateObject）はnullでOK
-    hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
+    hr = commandList_->Reset(commandAllocators_[frameIndex].Get(), nullptr);
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::ResetCommandList: commandList_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
         return;
     }
@@ -790,10 +792,11 @@ void DirectXCommon::Initialize(WinApp* winApp)
 /// </summary>
 void DirectXCommon::PreDraw()
 {
+    FlushTextureUploads();
 
     // スワップチェーンが未作成の場合は前処理をスキップ
     if (!swapChain_) {
-        Logger::Log("DirectXCommon::PreDraw: swapChain_ is null\n");
+        Logger::Warn("DirectXCommon::PreDraw: swapChain_ is null\n");
         return;
     }
 
@@ -821,7 +824,7 @@ void DirectXCommon::PreDraw()
     ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
     // SRVヒープがない場合は異常として記録する
     if (!srvDescriptorHeap_) {
-        Logger::Log("DirectXCommon::PreDraw: srvDescriptorHeap_ is null\n");
+        Logger::Warn("DirectXCommon::PreDraw: srvDescriptorHeap_ is null\n");
         return;
     }
     commandList_->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
@@ -839,7 +842,7 @@ void DirectXCommon::PostDraw()
 
     // スワップチェーンが未作成の場合は後処理をスキップ
     if (!swapChain_) {
-        Logger::Log("DirectXCommon::PostDraw: swapChain_ is null\n");
+        Logger::Warn("DirectXCommon::PostDraw: swapChain_ is null\n");
         return;
     }
 
@@ -865,16 +868,34 @@ void DirectXCommon::PostDraw()
     if (FAILED(hrPresent)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::PostDraw: swapChain_->Present failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hrPresent));
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         // ローカル的にデバイス削除理由もログ出力しておく
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::PostDraw: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
     }
-    // GPUコマンドの完了を待機
-    WaitForCommandExecution();
+    // このフレームが使用するGPU処理の完了値を記録する
+    fenceValue_++;
+    HRESULT hrSignal = commandQueue_->Signal(fence_.Get(), fenceValue_);
+    if (FAILED(hrSignal)) {
+        Logger::Error("DirectXCommon::PostDraw: failed to signal frame fence\n");
+        return;
+    }
+    frameFenceValues_[bbIndex] = fenceValue_;
+
+    const uint32_t nextFrameIndex = GetCurrentFrameIndex(); // 次に記録するフレーム番号
+    const UINT64 nextFrameFenceValue = frameFenceValues_[nextFrameIndex]; // 次フレームが使用中のFence値
+    if (nextFrameFenceValue != 0 && fence_->GetCompletedValue() < nextFrameFenceValue) {
+        HRESULT hrWait = fence_->SetEventOnCompletion(nextFrameFenceValue, fenceEvent_);
+        if (FAILED(hrWait)) {
+            Logger::Error("DirectXCommon::PostDraw: failed to set frame fence event\n");
+            return;
+        }
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+
     // allocator と commandList をリセット
     ResetCommandList();
 
@@ -942,63 +963,76 @@ ComPtr<ID3D12Resource> DirectXCommon::CreateTextureResource(const DirectX::TexMe
 }
 
 /// <summary>
-/// テクスチャデータをGPUにアップロードするための関数
+/// テクスチャデータをアップロード用コマンドリストへ記録する
 /// </summary>
 ComPtr<ID3D12Resource> DirectXCommon::UploadTextureData(ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages)
 {
     HRESULT hr;
-    const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
+    const DirectX::TexMetadata& metadata = mipImages.GetMetadata(); // アップロードする画像メタデータ
 
-    // アップロードバッファのサイズ計算とリソース生成
-    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources; // GPUへ転送するサブリソース情報
     hr = DirectX::PrepareUpload(device_.Get(), mipImages.GetImages(), mipImages.GetImageCount(), metadata, subresources);
     assert(SUCCEEDED(hr));
 
-    UINT64 uploadBufferSize = GetRequiredIntermediateSize(texture.Get(), 0, (UINT)subresources.size());
-
-    // アップロード用バッファリソース (UPLOADヒープ) を生成
+    UINT64 uploadBufferSize = GetRequiredIntermediateSize(texture.Get(), 0, static_cast<UINT>(subresources.size())); // 中間バッファサイズ
     ComPtr<ID3D12Resource> uploadBuffer = CreateBufferResource(uploadBufferSize);
 
-    // アップロード専用コマンドアロケータを作成して記録・実行・同期する
-    ComPtr<ID3D12CommandAllocator> uploadAllocator;
-    hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&uploadAllocator));
-    assert(SUCCEEDED(hr));
+    if (!textureUploadAllocator_) {
+        hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&textureUploadAllocator_));
+        assert(SUCCEEDED(hr));
+    }
 
-    // アップロード専用コマンドリストを作成して記録・実行・同期する
-    ComPtr<ID3D12GraphicsCommandList> uploadCmdList;
-    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator.Get(), nullptr, IID_PPV_ARGS(&uploadCmdList));
-    assert(SUCCEEDED(hr));
+    if (!textureUploadCommandList_) {
+        hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, textureUploadAllocator_.Get(), nullptr, IID_PPV_ARGS(&textureUploadCommandList_));
+        assert(SUCCEEDED(hr));
+    } else if (!hasPendingTextureUploads_) {
+        hr = textureUploadAllocator_->Reset();
+        assert(SUCCEEDED(hr));
+        hr = textureUploadCommandList_->Reset(textureUploadAllocator_.Get(), nullptr);
+        assert(SUCCEEDED(hr));
+    }
 
-    // データ転送を記録
-    UpdateSubresources(uploadCmdList.Get(), texture.Get(), uploadBuffer.Get(), 0, 0, (UINT)subresources.size(), subresources.data());
+    UpdateSubresources(
+        textureUploadCommandList_.Get(),
+        texture.Get(),
+        uploadBuffer.Get(),
+        0,
+        0,
+        static_cast<UINT>(subresources.size()),
+        subresources.data());
 
-    // テクスチャをシェーダー読み取り可能状態へ遷移
-    D3D12_RESOURCE_BARRIER barrier {};
+    D3D12_RESOURCE_BARRIER barrier {}; // コピー先からシェーダー参照へ遷移するバリア
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barrier.Transition.pResource = texture.Get();
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    uploadCmdList->ResourceBarrier(1, &barrier);
+    textureUploadCommandList_->ResourceBarrier(1, &barrier);
 
-    // クローズして実行
-    hr = uploadCmdList->Close();
-    assert(SUCCEEDED(hr));
+    hasPendingTextureUploads_ = true;
+    return uploadBuffer;
+}
 
-    ID3D12CommandList* lists[] = { uploadCmdList.Get() };
-    commandQueue_->ExecuteCommandLists(_countof(lists), lists);
-
-    // GPU に対してシグナルして待機（同期）
-    fenceValue_++;
-    hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
-    assert(SUCCEEDED(hr));
-    if (fence_->GetCompletedValue() < fenceValue_) {
-        fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
-        WaitForSingleObject(fenceEvent_, INFINITE);
+/// <summary>
+/// 保留中のテクスチャアップロードコマンドを実行し、完了まで待機する
+/// </summary>
+void DirectXCommon::FlushTextureUploads()
+{
+    if (!hasPendingTextureUploads_ || !textureUploadCommandList_) {
+        return;
     }
 
-    return uploadBuffer;
+    HRESULT hr = textureUploadCommandList_->Close();
+    assert(SUCCEEDED(hr));
+
+    ID3D12CommandList* commandLists[] = { textureUploadCommandList_.Get() };
+    commandQueue_->ExecuteCommandLists(_countof(commandLists), commandLists);
+    WaitForCommandExecution();
+
+    textureUploadCommandList_.Reset();
+    textureUploadAllocator_.Reset();
+    hasPendingTextureUploads_ = false;
 }
 
 /// <summary>
@@ -1014,7 +1048,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
     if (FAILED(hr)) {
         std::string msg = std::string("Error: Failed to load shader file: ") + StringUtility::ConvertString(filePath) + "\n";
-        Logger::Log(msg);
+        Logger::Warn(msg);
         assert(false);
         return nullptr;
     }
@@ -1072,7 +1106,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     if (errorBlob && errorBlob->GetStringLength() > 0) {
         // エラーが存在する場合、ログ出力してアサート
         std::string msg = std::string("Shader Compile Error (") + StringUtility::ConvertString(filePath) + "):\n" + errorBlob->GetStringPointer() + "\n";
-        Logger::Log(msg);
+        Logger::Error(msg);
         assert(false);
         return nullptr;
     }
@@ -1123,7 +1157,7 @@ void DirectXCommon::CreateDevice()
         if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) {
             std::wstring descW(adapterDesc.Description);
             std::string desc = StringUtility::ConvertString(descW);
-            Logger::Log(std::string("Use Adapter: ") + desc + "\n");
+            Logger::Debug(std::string("Use Adapter: ") + desc + "\n");
             hr = D3D12CreateDevice(useAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
             if (SUCCEEDED(hr)) {
                 // 選択されたアダプタのベンダーIDを記録しておく
@@ -1136,7 +1170,7 @@ void DirectXCommon::CreateDevice()
 
     // 2. 適切なアダプターが見つからない場合のフォールバック (WARPアダプター)
     if (!device_) {
-        Logger::Log("Warning: No suitable hardware adapter found. Using WARP adapter.\n");
+        Logger::Warn("Warning: No suitable hardware adapter found. Using WARP adapter.\n");
         ComPtr<IDXGIAdapter4> warpAdapter;
         hr = dxgiFactory_->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter));
         assert(SUCCEEDED(hr));
@@ -1202,16 +1236,25 @@ void DirectXCommon::InitCommandRelated()
     hr = device_->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&commandQueue_));
     assert(SUCCEEDED(hr));
 
-    hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator_));
-    assert(SUCCEEDED(hr));
+    for (auto& commandAllocator : commandAllocators_) {
+        hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator));
+        assert(SUCCEEDED(hr));
+    }
 
-    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
+    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocators_[0].Get(), nullptr, IID_PPV_ARGS(&commandList_));
     assert(SUCCEEDED(hr));
 }
 
 /// <summary>
 /// スワップチェーンの生成とバックバッファの取得
 /// </summary>
+/// <summary>
+/// 現在描画対象になっているフレーム番号を取得する
+/// </summary>
+uint32_t DirectXCommon::GetCurrentFrameIndex() const
+{
+    return swapChain_ ? swapChain_->GetCurrentBackBufferIndex() : 0;
+}
 void DirectXCommon::CreateSwapChain()
 {
     HRESULT hr;
@@ -1241,7 +1284,7 @@ void DirectXCommon::CreateSwapChain()
     if (adapterVendorId_ == 0x8086) {
         formatsToTry = formatsToTryIntelOnly;
         formatsCount = _countof(formatsToTryIntelOnly);
-        Logger::Log("DirectXCommon::CreateSwapChain: Intel adapter detected — skipping SRGB swapchain attempt.\n");
+        Logger::Debug("DirectXCommon::CreateSwapChain: Intel adapter detected — skipping SRGB swapchain attempt.\n");
     }
 
     // フォーマットの候補を順に試すループ
@@ -1266,9 +1309,9 @@ void DirectXCommon::CreateSwapChain()
 
                 // ログ出力
                 if (fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
-                    Logger::Log("SwapChain created with SRGB format.\n");
+                    Logger::Debug("SwapChain created with SRGB format.\n");
                 } else {
-                    Logger::Log("SwapChain created with UNORM format (fallback).\n");
+                    Logger::Debug("SwapChain created with UNORM format (fallback).\n");
                 }
                 break;
             }
@@ -1280,23 +1323,23 @@ void DirectXCommon::CreateSwapChain()
         char buf[256];
         sprintf_s(buf, "CreateSwapChainForHwnd for format %u failed. hr=0x%08X\n", static_cast<unsigned int>(fmt), static_cast<unsigned int>(hr));
         OutputDebugStringA(buf);
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         // デバイスが削除された場合やその他のデバイス関連のエラーが発生した場合、理由をログに出力
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "CreateSwapChainForHwnd: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
     }
 
     // 最終的にスワップチェーンが作成できなかった場合はエラーをログに出力してアサート
     if (!swapChainCreated) {
-        Logger::Log("Failed to create swap chain with both SRGB and UNORM formats.\n");
+        Logger::Error("Failed to create swap chain with both SRGB and UNORM formats.\n");
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             char buf[256];
             sprintf_s(buf, "CreateSwapChain: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
         }
         assert(false);
         return;
@@ -1427,9 +1470,9 @@ void DirectXCommon::CreateDescriptorHeaps()
             char buf[256];
             sprintf_s(buf, "DEBUG CreateDescriptorHeaps: SRV heap created. num=%u descSize=%u CPU=0x%016llX GPU=0x%016llX\n",
                 kMaxSRVCount, descriptorSizeSRV_, static_cast<unsigned long long>(cpuStart.ptr), static_cast<unsigned long long>(gpuStart.ptr));
-            Logger::Log(buf);
+            Logger::Debug(buf);
         } else {
-            Logger::Log("DEBUG CreateDescriptorHeaps: srvDescriptorHeap_ is null after CreateDescriptorHeap\n");
+            Logger::Warn("DEBUG CreateDescriptorHeaps: srvDescriptorHeap_ is null after CreateDescriptorHeap\n");
         }
     }
 
@@ -1472,7 +1515,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
     // 再入防止
     bool expected = false;
     if (!resizingInProgress_.compare_exchange_strong(expected, true)) {
-        Logger::Log("DirectXCommon::OnWindowResize: resize already in progress\n");
+        Logger::Warn("DirectXCommon::OnWindowResize: resize already in progress\n");
         return;
     }
 
@@ -1501,7 +1544,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
     if (FAILED(hr)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::OnWindowResize: ResizeBuffers failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Log(std::string(buf));
+        Logger::Error(std::string(buf));
         // 失敗時はフラグを戻して終了
         resizingInProgress_ = false;
         return;
@@ -1513,7 +1556,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "DirectXCommon::OnWindowResize: GetBuffer[%d] failed. HRESULT=0x%08X\n", i, static_cast<unsigned int>(hr));
-            Logger::Log(std::string(buf));
+            Logger::Error(std::string(buf));
             resizingInProgress_ = false;
             return;
         }
@@ -1527,7 +1570,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rtvDescriptorHeap_));
         if (FAILED(hr)) {
-            Logger::Log("DirectXCommon::OnWindowResize: CreateDescriptorHeap(RTV) failed\n");
+            Logger::Error("DirectXCommon::OnWindowResize: CreateDescriptorHeap(RTV) failed\n");
             resizingInProgress_ = false;
             return;
         }

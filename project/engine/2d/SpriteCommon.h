@@ -1,6 +1,7 @@
 #pragma once
 #include "../RenderState.h"
 #include "DirectXCommon.h"
+#include <array>
 
 namespace MyEngine {
 
@@ -53,7 +54,7 @@ private: // メンバ関数
     /// <summary>
     /// グラフィクスパイプライン（PSO）を生成（内部処理）
     /// </summary>
-    void CreateGraphicsPipeline();
+    void CreateGraphicsPipeline(BlendMode mode);
 
 private: // メンバ変数
     // DirectX 共通ハンドル（外部で管理される参照）
@@ -62,7 +63,7 @@ private: // メンバ変数
     // ルートシグネチャを保持
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     // パイプラインステートを保持
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, static_cast<size_t>(BlendMode::Count)> graphicsPipelineStates_ {};
     // ブレンドモード（デフォルトはアルファブレンド）
     BlendMode blendMode_ = BlendMode::Alpha;
 };

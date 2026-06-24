@@ -1,5 +1,7 @@
 #pragma once
 #include <MathTypes.h>
+#include <array>
+#include "DirectXCommon.h"
 #include <cstdint>
 #include <d3d12.h>
 #include <string>
@@ -170,24 +172,35 @@ private: // メンバ関数
     /// </summary>
     void AdjustTextureSize();
 
+    /// <summary>
+    /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+    /// </summary>
+    void UpdateFrameResources();
+
 private: // メンバ変数
     SpriteCommon* spriteCommon_ = nullptr; // スプライト描画の共通設定を管理するクラスへの参照
 
     // 頂点バッファリソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> vertexResources_;
+    std::array<VertexData*, DirectXCommon::kFrameCount> mappedVertexData_ {};
     // インデックスバッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_ = nullptr;
     // マテリアル用の定数バッファ
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> materialResources_;
+    std::array<Material*, DirectXCommon::kFrameCount> mappedMaterialData_ {};
     // 行列用の定数バッファ
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> transformationMatrixResources_;
+    std::array<TransformationMatrix*, DirectXCommon::kFrameCount> mappedTransformationMatrixData_ {};
 
     // 定数バッファリソース
     // これらは GPU 上のリソースで、描画に必要な頂点データやインデックスデータ、マテリアル情報、変換行列を格納する。
-    VertexData* vertexData_ = nullptr;
+    std::array<VertexData, 4> vertexState_ {}; // CPU側で保持する頂点状態
+    VertexData* vertexData_ = vertexState_.data();
     uint32_t* indexData_ = nullptr;
-    Material* materialData_ = nullptr;
-    TransformationMatrix* transformationMatrixData_ = nullptr;
+    Material materialState_ {}; // CPU側で保持するマテリアル状態
+    Material* materialData_ = &materialState_;
+    TransformationMatrix transformationMatrixState_ {}; // CPU側で保持する変換行列
+    TransformationMatrix* transformationMatrixData_ = &transformationMatrixState_;
 
     // 頂点バッファをコマンドリストにバインドするためのビュー情報
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ = {};

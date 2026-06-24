@@ -56,10 +56,9 @@ void SceneManager::Finalize()
         current_.reset();
     }
 
-    // スタックに残っているシーンもすべてFinalizeして破棄する
+    // 退避時にOnExit済みのため、スタック内シーンはFinalizeのみ行う
     for (auto& sc : stack_) {
         if (sc) {
-            sc->OnExit();
             sc->Finalize();
         }
     }
@@ -137,7 +136,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene)
 }
 
 /// <summary>
-/// シーンのプッシュ。現在のシーンをスタックに保存して新しいシーンをセットし、Initializeを呼び出す。PopSceneで前のシーンに戻れるようにする。
+/// 現在のシーンを初期化済みのままスタックへ退避し、新しいシーンを初期化して切り替える
 /// </summary>
 void SceneManager::PushScene(std::unique_ptr<IScene> newScene)
 {
@@ -162,31 +161,30 @@ void SceneManager::PushScene(std::unique_ptr<IScene> newScene)
 }
 
 /// <summary>
-/// シーンのポップ。スタックから前のシーンを取り出してセットし、Initializeを呼び出す。現在のシーンはFinalizeを呼び出してクリーンアップする。
+/// 現在のシーンを終了し、スタックから初期化済みのシーンを復帰させる
 /// </summary>
 void SceneManager::PopScene()
 {
-    // 現在のシーンが存在すれば終了処理を行って破棄する
+    // 復帰対象がない場合は現在のシーンを維持する
+    if (stack_.empty()) {
+        return;
+    }
+
+    // 現在のシーンを終了して破棄する
     if (current_) {
         current_->OnExit();
         current_->Finalize();
         current_.reset();
     }
 
-    // スタックが空でなければ、最後にプッシュしたシーンを復帰させる
-    if (!stack_.empty()) {
-        // スタックからムーブして現在のシーンに戻す
-        current_ = std::move(stack_.back());
-        stack_.pop_back();
+    // 初期化済みのシーンをスタックから復帰させる
+    current_ = std::move(stack_.back());
+    stack_.pop_back();
 
-        // 復帰したシーンを初期化して入場処理を行う
-        if (current_) {
-            current_->Initialize(ctx_);
-            current_->OnEnter();
-        }
+    if (current_) {
+        current_->OnEnter();
     }
 }
-
 /// <summary>
 /// 現在のシーンを取得する関数。現在のシーンが存在しない場合は nullptr を返す。
 /// </summary>

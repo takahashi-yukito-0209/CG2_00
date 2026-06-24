@@ -237,7 +237,8 @@ private:
         Math::Vector4 fragmentColor { 0.55f, 0.85f, 1.0f, 1.0f }; // 放射破片の色
         float fragmentMinSpeed = 2.5f; // 放射破片の最低速度
         float fragmentMaxSpeed = 6.0f; // 放射破片の最高速度
-        float fragmentLifeTime = 0.55f; // 放射破片の表示時間
+        float fragmentLifeTime = 0.55f; // 放射破片の表示時間
+
     };
 
     /// <summary>

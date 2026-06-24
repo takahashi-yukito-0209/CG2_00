@@ -40,7 +40,7 @@ void Model::Draw(Object3d* owner)
 
     // DirectXCommon が取得できない場合は描画できない
     if (!dxCommon) {
-        Logger::Log("Model::Draw skipped: DirectXCommon unavailable\n");
+        Logger::Debug("Model::Draw skipped: DirectXCommon unavailable\n");
         return;
     }
 
@@ -48,7 +48,7 @@ void Model::Draw(Object3d* owner)
     auto cmdList = dxCommon->GetCommandList();
     // コマンドリストが取得できない場合は描画できない
     if (!cmdList) {
-        Logger::Log("Model::Draw skipped: command list is null\n");
+        Logger::Debug("Model::Draw skipped: command list is null\n");
         return;
     }
 
@@ -56,43 +56,20 @@ void Model::Draw(Object3d* owner)
     D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
-    // マテリアル定数バッファのCBV設定 (モデルまたはオーナーから)
-    if (materialResource_) {
-        // モデルがマテリアルリソースを持っている場合はそれを優先して使用
-        auto addr = materialResource_->GetGPUVirtualAddress();
-        // アドレスが0の場合は描画できない
-        if (addr == 0) {
-            Logger::Log("Model::Draw: materialResource_ GPU address is 0 - skipping\n");
-            return;
-        }
-        // ルートパラメータ0にマテリアルCBVをバインド
-        cmdList->SetGraphicsRootConstantBufferView(0, addr);
-
-    } else if (owner->GetMaterialResource()) {
-        // モデルがマテリアルリソースを持っていない場合はオーナーのマテリアルリソースを使用
-        auto res = owner->GetMaterialResource();
-        // オーナーのマテリアルリソースが有効でない場合は描画できない
-        if (!res) {
-            Logger::Log("Model::Draw: owner material resource null - skipping\n");
-            return;
-        }
-
-        // オーナーのマテリアルリソースのGPUアドレスが0の場合は描画できない
-        auto addr = res->GetGPUVirtualAddress();
-        // アドレスが0の場合は描画できない
-        if (addr == 0) {
-            Logger::Log("Model::Draw: owner material GPU address is 0 - skipping\n");
-            return;
-        }
-
-        // ルートパラメータ0にオーナーのマテリアルCBVをバインド
-        cmdList->SetGraphicsRootConstantBufferView(0, addr);
-
-    } else {
-        // モデルもオーナーもマテリアルリソースを持っていない場合は描画できない
-        Logger::Log("Model::Draw skipped: material CBV missing\n");
+    // Material CBV は Object3d が持つものを使用する
+    auto materialResource = owner->GetMaterialResource();
+    if (!materialResource) {
+        Logger::Debug("Model::Draw skipped: owner material resource missing\n");
         return;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        Logger::Debug("Model::Draw skipped: owner material GPU address is 0\n");
+        return;
+    }
+    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
+
 
     // 座標変換行列CBV設定 (オーナーから)
     if (owner->GetTransformationMatrixResource()) {
@@ -100,7 +77,7 @@ void Model::Draw(Object3d* owner)
         cmdList->SetGraphicsRootConstantBufferView(1, owner->GetTransformationMatrixResource()->GetGPUVirtualAddress());
     } else {
         // オーナーが座標変換行列リソースを持っていない場合は描画できない
-        Logger::Log("Model::Draw skipped: transformation matrix CBV missing\n");
+        Logger::Debug("Model::Draw skipped: transformation matrix CBV missing\n");
         return;
     }
 
@@ -108,7 +85,7 @@ void Model::Draw(Object3d* owner)
     Object3dCommon* common = owner->GetObject3dCommon();
     // Object3dCommonが有効でない場合は描画できない
     if (!common) {
-        Logger::Log("Model::Draw skipped: missing Object3dCommon\n");
+        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
         return;
     }
 
@@ -116,7 +93,7 @@ void Model::Draw(Object3d* owner)
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = common->GetDirectionalLightGPUAddress();
     // 平行光源のGPUアドレスが0の場合は描画できない
     if (lightAddr == 0) {
-        Logger::Log("Model::Draw skipped: directional light CBV missing\n");
+        Logger::Debug("Model::Draw skipped: directional light CBV missing\n");
         return;
     }
     // ルートパラメータ3に平行光源CBVをバインド
@@ -165,7 +142,7 @@ void Model::Draw(Object3d* owner)
         if (srvHandle.ptr == 0) {
             char buf[256];
             sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
-            Logger::Log(buf);
+            Logger::Debug(buf);
         } else {
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
@@ -175,14 +152,14 @@ void Model::Draw(Object3d* owner)
         uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
         // フォールバックのチェッカーテクスチャのSRVインデックスを取得
         if (fallbackIdx == UINT32_MAX) {
-            Logger::Log("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
+            Logger::Debug("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
             return;
         }
 
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
         // フォールバックのSRVハンドルを取得
         if (srvHandle.ptr == 0) {
-            Logger::Log("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
+            Logger::Debug("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
         } else {
             cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
         }
@@ -192,7 +169,7 @@ void Model::Draw(Object3d* owner)
     const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
     // 頂点データはモデル側が空の場合はオーナー側の頂点データを使用
     if (verts.empty()) {
-        Logger::Log("Model::Draw skipped: no vertices available\n");
+        Logger::Debug("Model::Draw skipped: no vertices available\n");
         return;
     }
     cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
@@ -234,19 +211,18 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
     // モデル側の頂点バッファが有効であればそれを使用、無ければオーナー側の頂点バッファを使用
     cmdList->IASetVertexBuffers(0, 1, &vbv);
-
-    if (materialResource_) {
-        // モデル側のマテリアルリソースが有効であればそれを優先して使用
-        cmdList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-
-    } else if (owner->GetMaterialResource()) {
-        // モデル側のマテリアルリソースが無ければオーナー側のマテリアルリソースを使用
-        cmdList->SetGraphicsRootConstantBufferView(0, owner->GetMaterialResource()->GetGPUVirtualAddress());
-
-    } else {
-        // オーナーのマテリアルリソースが有効でない場合は描画できない
+    // Material CBV は Object3d が持つものを使用する
+    auto materialResource = owner->GetMaterialResource();
+    if (!materialResource) {
         return;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        return;
+    }
+    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
+
 
     // 変換行列（インスタンシング使用時はオーナーのCBVは未使用）
     if (owner->GetTransformationMatrixResource()) {
@@ -306,7 +282,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
             // フォールバック
             uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
             if (fb == UINT32_MAX) {
-                Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+                Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
                 return;
             }
 
@@ -318,7 +294,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     } else {
         uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
         if (fb == UINT32_MAX) {
-            Logger::Log("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
+            Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
             return;
         }
 
@@ -368,7 +344,6 @@ void Model::Initialize(ModelCommon* modelCommon)
     uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
     if (fallbackIdx == UINT32_MAX) {
         texMgr->LoadTexture(kFallbackModelTexturePath);
-        texMgr->ExecuteResourceUpload();
     }
 
     DirectXCommon* dx = modelCommon_->GetDxCommon();
@@ -392,7 +367,6 @@ void Model::Initialize(ModelCommon* modelCommon)
         if (idx == UINT32_MAX) {
             // テクスチャがまだロードされていなければ読み込んでアップロードする
             texMgr->LoadTexture(modelData_.material.textureFilePath);
-            texMgr->ExecuteResourceUpload();
             idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
         }
 

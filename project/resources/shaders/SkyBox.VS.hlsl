@@ -1,6 +1,6 @@
 cbuffer VP : register(b0)
 {
-    row_major float4x4 gVP;
+    float4x4 gVP;
 };
 
 struct VSInput

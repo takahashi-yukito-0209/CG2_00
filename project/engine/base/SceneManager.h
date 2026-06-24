@@ -62,12 +62,12 @@ public: // メンバ関数
     void ChangeScene(std::unique_ptr<IScene> newScene);
 
     /// <summary>
-    /// シーンのプッシュ。現在のシーンをスタックに保存して新しいシーンをセットし、Initializeを呼び出す。PopSceneで前のシーンに戻れるようにする。
+    /// 現在のシーンを初期化済みのままスタックへ退避し、新しいシーンを初期化して切り替える
     /// </summary>
     void PushScene(std::unique_ptr<IScene> newScene);
 
     /// <summary>
-    /// シーンのポップ。スタックから前のシーンを取り出してセットし、Initializeを呼び出す。現在のシーンはFinalizeを呼び出してクリーンアップする。
+    /// 現在のシーンを終了し、スタックから初期化済みのシーンを復帰させる
     /// </summary>
     void PopScene();
 
@@ -83,7 +83,7 @@ public: // メンバ関数
 
 private: // メンバ変数
     std::unique_ptr<IScene> current_; // 現在のシーン
-    // シーンスタック: PushScene したときに以前のシーンを保存する
+    // PushSceneで退避した初期化済み・非アクティブ状態のシーン
     std::vector<std::unique_ptr<IScene>> stack_;
     SceneContext ctx_; // シーンコンテキスト
 };

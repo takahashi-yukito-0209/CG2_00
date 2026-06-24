@@ -42,9 +42,9 @@ public: // メンバ関数
     void LoadTexture(const std::string& filePath);
 
     /// <summary>
-    /// ロードしたテクスチャデータをGPUに転送
+    /// アップロード後に不要になった中間リソースを解放
     /// </summary>
-    void ExecuteResourceUpload();
+    void ReleaseIntermediateResources();
 
     /// <summary>
     /// 指定されたファイルパスのテクスチャがすでにロードされているか確認し、ロードされていればSRVインデックスを返す。ロードされていなければ UINT32_MAX を返す。
@@ -119,7 +119,7 @@ private: // メンバ変数
 private: // 内部構造体: テクスチャデータ
     // テクスチャ1枚分のデータ
     struct TextureData {
-        uint32_t srvIndex = 0; // SRVインデックス
+        uint32_t srvIndex = UINT32_MAX; // 未割り当て時は無効値
         DirectX::TexMetadata metadata; // メタデータ
         Microsoft::WRL::ComPtr<ID3D12Resource> Resource; // リソース
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU; // SRVハンドル(CPU)

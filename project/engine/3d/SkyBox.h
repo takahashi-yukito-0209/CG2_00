@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/base/DirectXCommon.h"
 #include "engine/base/SrvManager.h"
+#include <array>
 #include <d3d12.h>
 #include <wrl.h>
 
@@ -60,8 +61,9 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW ibView_ {};
 
     // 定数バッファ（ビュープロジェクション行列用）
-    Microsoft::WRL::ComPtr<ID3D12Resource> constantBuffer_;
-    uint8_t* mappedCB_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> constantBuffers_;
+    std::array<uint8_t*, DirectXCommon::kFrameCount> mappedConstantBuffers_ {};
+    std::array<float, 16> viewProjectionState_ {}; // CPU側で保持するビュー射影行列
 
     // 描画に使用するSRVのインデックス
     uint32_t indexCount_ = 0;

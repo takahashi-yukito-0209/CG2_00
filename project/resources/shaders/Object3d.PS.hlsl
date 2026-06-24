@@ -152,7 +152,7 @@ PixelShaderOutput main(VertexShaderOutput input)
             finalRGB = finalRGB / (1.0f + finalRGB);
         }
 
-        if (gMaterial.environmentCoefficient > 0.0f)
+        if (gMaterial.environmentCoefficient > 0.0f && gCamera.hasEnvironmentMap != 0)
         {
             float3 reflected = reflect(-toEye, N);
             float3 environmentDir = normalize(mul(float4(reflected, 0.0f), gCamera.view).xyz);
@@ -169,7 +169,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     // Binary alpha cutout: discard pixels where the texture's alpha is effectively zero.
     // This implements 2-value (on/off) transparency: fully transparent texels are discarded,
     // opaque texels are rendered normally. Use texture alpha (texA) to decide.
-    if (texA <= 0.001f)
+    if (gMaterial.useAlphaDiscard != 0 && texA <= 0.001f)
     {
         discard;
     }

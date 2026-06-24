@@ -2,6 +2,8 @@
 #include "engine/2d/TextureManager.h"
 #include "engine/base/DirectXCommon.h"
 #include "engine/base/WinApp.h"
+#include "engine/utility/Logger.h"
+#include "engine/utility/ResourceResolver.h"
 #include <atomic>
 #include <chrono>
 #include <objbase.h>
@@ -70,14 +72,19 @@ void Framework::FinalizeEngine()
 /// </summary>
 int Framework::Run(HINSTANCE hInstance, int nCmdShow)
 {
-    // COMの初期化: マルチスレッド環境での利用を想定して COINIT_MULTITHREADED を指定
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    bool comInitialized = SUCCEEDED(hr);
+    ResourceResolver::SetWorkingDirectoryToExecutable();
+    // このスレッドでCOMを初期化し、成功した場合だけ終了責務を持つ
+    const HRESULT comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED); // COM初期化結果
+    const bool ownsComInitialization = SUCCEEDED(comResult); // CoUninitializeを呼ぶ責務の有無
+    if (FAILED(comResult) && comResult != RPC_E_CHANGED_MODE) {
+        Logger::Error("Framework::Run: CoInitializeEx failed.\n");
+        return 1;
+    }
 
     // 派生クラスの初期化を呼び出す
     if (!Initialize(hInstance, nCmdShow)) {
         // 初期化失敗: 終了処理を行ってからアプリケーションを終了する
-        if (comInitialized) {
+        if (ownsComInitialization) {
             CoUninitialize();
         }
         return 1; // 終了コード 1 を返して異常終了を示す
@@ -147,7 +154,7 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
     Finalize(); // 派生クラスの終了処理を呼び出す
 
     // COMの終了処理
-    if (comInitialized) {
+    if (ownsComInitialization) {
         CoUninitialize();
     }
 

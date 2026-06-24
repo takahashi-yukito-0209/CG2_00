@@ -208,7 +208,11 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     }
 
     // InputManagerの初期化
-    InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd);
+    if (!InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd)) {
+        Logger::Log("Error: InputManager::Initialize failed.\n");
+        impl_->winApp.Finalize();
+        return false;
+    }
 
     // スプライト共通管理の一時的なユニークポインタ
     std::unique_ptr<SpriteCommon> spriteCommonTmp;
@@ -320,6 +324,10 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         if (impl_->sceneManager) {
             impl_->sceneManager->OnWindowResize(w, h);
         }
+    });
+    // WinAppは描画基盤を直接参照せず、登録された通知先へサイズ変更を伝える
+    impl_->winApp.SetResizeCallback([](uint32_t width, uint32_t height) {
+        DirectXCommon::GetInstance()->OnWindowResize(width, height);
     });
 
     // SceneContext を構築して SceneManager に渡す
@@ -581,8 +589,6 @@ void Game::Draw()
     }
     ctx.sprites = &spritePtrs;
     ctx.spriteCommon = impl_->spriteCommon.get();
-    // 描画する内容の種類を選択するための変数へのポインタをセットして、UIで描画内容の切り替えができるようにする
-    ctx.selectedDrawType = reinterpret_cast<int*>(&impl_->selectedDrawType);
     // ビルボードの使用フラグへのポインタをセットして、UIでビルボードのオンオフができるようにする
     ctx.useBillboard = &impl_->useBillboard;
     // ParticleManager のポインタをセットして、UIでパーティクルの情報や設定にアクセスできるようにする

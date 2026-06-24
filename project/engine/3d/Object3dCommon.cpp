@@ -23,11 +23,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     srvManager_ = srvManager;
     // 共有の平行光源用定数バッファを作成
     // これにより main/ImGui からすべての Object3d インスタンスで使用する単一のライトを編集できる
-    directionalLightResource_ = dxCommon_->GetDevice() ? dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight)) : nullptr;
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        directionalLightResources_[frameIndex] = dxCommon_->CreateBufferResource(sizeof(Object3d::DirectionalLight));
+        directionalLightResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedDirectionalLightData_[frameIndex]));
+    }
 
     // バッファが作成できた場合はマッピングして初期値を設定する
-    if (directionalLightResource_) {
-        directionalLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
+    if (directionalLightData_) {
         // 既定値の設定
         directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
@@ -47,11 +49,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     const uint32_t kMaxPointLights = Object3dCommon::kMaxPointLights;
     // CPU側の構造体レイアウトに合わせて、GPU側のバッファも同じレイアウトで作成する必要がある
     size_t pointLightsBufferSize = sizeof(Object3d::PointLight) * static_cast<size_t>(kMaxPointLights);
-    pointLightsResource_ = dxCommon_->CreateBufferResource(pointLightsBufferSize);
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        pointLightsResources_[frameIndex] = dxCommon_->CreateBufferResource(pointLightsBufferSize);
+        pointLightsResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedPointLightsData_[frameIndex]));
+    }
 
     // バッファが作成できた場合はマッピングして初期値を設定する
-    if (pointLightsResource_) {
-        pointLightsResource_->Map(0, nullptr, reinterpret_cast<void**>(&pointLightsData_));
+    if (pointLightsData_) {
         // デフォルトで無効化しておく
         for (uint32_t i = 0; i < kMaxPointLights; ++i) {
             // 無効化のため、位置を原点、色を白、半径と減衰を適当な値に設定し、enabled を 0 にする
@@ -67,10 +71,12 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     // スポットライト用バッファを作成 (単一スポットライトを想定)
     size_t spotLightBufferSize = sizeof(Object3d::SpotLight);
     // CPU側の構造体レイアウトに合わせて、GPU側のバッファも同じレイアウトで作成する必要がある
-    spotLightResource_ = dxCommon_->CreateBufferResource(spotLightBufferSize);
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        spotLightResources_[frameIndex] = dxCommon_->CreateBufferResource(spotLightBufferSize);
+        spotLightResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedSpotLightData_[frameIndex]));
+    }
     // バッファが作成できた場合はマッピングして初期値を設定する
-    if (spotLightResource_) {
-        spotLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&spotLightData_));
+    if (spotLightData_) {
         // デフォルトで無効化しておく
         spotLightData_->position = { 0.0f, 0.0f, 0.0f, 0.0f };
         spotLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -84,11 +90,13 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
 
     // ビルボード用のカメラ定数バッファ（b2）を作成
-    cameraCBResource_ = dxCommon_->CreateBufferResource(sizeof(CameraCB));
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        cameraCBResources_[frameIndex] = dxCommon_->CreateBufferResource(sizeof(CameraCB));
+        cameraCBResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedCameraCBData_[frameIndex]));
+    }
     // バッファが作成できた場合はマッピングして初期値を設定する
-    if (cameraCBResource_) {
-        // カメラ定数バッファをマップして、初期値を設定する
-        cameraCBResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraCBData_));
+    if (cameraCBData_) {
+        // CPU側のカメラ状態へ初期値を設定する
         cameraCBData_->right = { 1.0f, 0.0f, 0.0f };
         cameraCBData_->up = { 0.0f, 1.0f, 0.0f };
         cameraCBData_->enable = 0.0f;
@@ -98,13 +106,15 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
 
     // カメラ用定数バッファ
-    cameraResource_ = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
-    if (cameraResource_) {
-        cameraResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraData_));
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        cameraResources_[frameIndex] = dxCommon_->CreateBufferResource(sizeof(CameraForGPU));
+        cameraResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedCameraData_[frameIndex]));
+    }
+    if (cameraData_) {
         cameraData_->worldPosition = { 0.0f, 0.0f, 0.0f };
         cameraData_->exposure = 1.0f; // デフォルトの露出値
         cameraData_->toneMapOn = 1; // デフォルトでトーンマッピング有効
-        cameraData_->pad0 = 0.0f;
+        cameraData_->hasEnvironmentMap = 0;
         cameraData_->pad1[0] = 0.0f;
         cameraData_->pad1[1] = 0.0f;
         cameraData_->view = MathUtil::MakeIdentity4x4();
@@ -129,38 +139,33 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 
     // インスタンスデータを格納するため、UPLOADヒープに既定サイズのバッファリソースを作成
     size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kNumInstance;
-    instancingResource_ = dxCommon_->CreateBufferResource(instancingBufferSize);
-    // CPUからの書き込みのためにマップ
-    if (instancingResource_) {
-        instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
-        // 単位行列で初期化
-        for (uint32_t i = 0; i < kNumInstance; ++i) {
-            instancingData_[i].WVP = MathUtil::MakeIdentity4x4();
-            instancingData_[i].World = MathUtil::MakeIdentity4x4();
-            instancingData_[i].color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        instancingResources_[frameIndex] = dxCommon_->CreateBufferResource(instancingBufferSize);
+        instancingResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_[frameIndex]));
+        for (uint32_t instanceIndex = 0; instanceIndex < kNumInstance; ++instanceIndex) {
+            instancingData_[frameIndex][instanceIndex].WVP = MathUtil::MakeIdentity4x4();
+            instancingData_[frameIndex][instanceIndex].World = MathUtil::MakeIdentity4x4();
+            instancingData_[frameIndex][instanceIndex].color = { 1.0f, 1.0f, 1.0f, 1.0f };
         }
     }
-
     // グローバルSRVヒープにSRVディスクリプタを作成
     // TextureManagerと競合しにくいディスクリプタスロットとして、ヒープの最後のスロットを使用
-    if (!srvManager_ || !srvManager_->CanAllocate()) {
-        Logger::Log("Object3dCommon::Initialize: failed to allocate instancing SRV.\n");
-        instancingResource_.Reset();
-        instancingData_ = nullptr;
-        kNumInstance_ = 0;
-        return;
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (!srvManager_ || !srvManager_->CanAllocate()) {
+            Logger::Log("Object3dCommon::Initialize: failed to allocate instancing SRV.\n");
+            kNumInstance_ = 0;
+            return;
+        }
+        instancingSrvIndices_[frameIndex] = srvManager_->Allocate();
+        instancingSrvHandlesCPU_[frameIndex] = srvManager_->GetCPUDescriptorHandle(instancingSrvIndices_[frameIndex]);
+        instancingSrvHandlesGPU_[frameIndex] = srvManager_->GetGPUDescriptorHandle(instancingSrvIndices_[frameIndex]);
+        dxCommon_->GetDevice()->CreateShaderResourceView(instancingResources_[frameIndex].Get(), &instancingSrvDesc, instancingSrvHandlesCPU_[frameIndex]);
     }
-
-    instancingSrvIndex_ = srvManager_->Allocate(); // インスタンシング用SRVの管理番号
-    instancingSrvHandleCPU_ = srvManager_->GetCPUDescriptorHandle(instancingSrvIndex_);
-    instancingSrvHandleGPU_ = srvManager_->GetGPUDescriptorHandle(instancingSrvIndex_);
-    dxCommon_->GetDevice()->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
-
     // デバッグログ
     {
         char buf[256];
         sprintf_s(buf, "Object3dCommon::Initialize: created instancingResource size=%zu srvIndex=%u srvGPU=0x%016llX\n",
-            instancingBufferSize, instancingSrvIndex_, static_cast<unsigned long long>(instancingSrvHandleGPU_.ptr));
+            instancingBufferSize, instancingSrvIndices_[0], static_cast<unsigned long long>(instancingSrvHandlesGPU_[0].ptr));
         Logger::Log(buf);
     }
 }
@@ -170,15 +175,16 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 /// </summary>
 void Object3dCommon::Finalize()
 {
-    if (srvManager_ && instancingSrvIndex_ != UINT32_MAX) {
-        srvManager_->Free(instancingSrvIndex_);
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (srvManager_ && instancingSrvIndices_[frameIndex] != UINT32_MAX) {
+            srvManager_->Free(instancingSrvIndices_[frameIndex]);
+        }
+        instancingSrvIndices_[frameIndex] = UINT32_MAX;
+        instancingSrvHandlesCPU_[frameIndex] = {};
+        instancingSrvHandlesGPU_[frameIndex] = {};
+        instancingData_[frameIndex] = nullptr;
+        instancingResources_[frameIndex].Reset();
     }
-
-    instancingSrvIndex_ = UINT32_MAX;
-    instancingSrvHandleCPU_ = {};
-    instancingSrvHandleGPU_ = {};
-    instancingData_ = nullptr;
-    instancingResource_.Reset();
     kNumInstance_ = 0;
     srvManager_ = nullptr;
 }
@@ -413,6 +419,24 @@ void Object3dCommon::SetBlendMode(BlendMode mode)
 /// </summary>
 void Object3dCommon::SetInstancingDrawSetting()
 {
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    if (mappedDirectionalLightData_[frameIndex]) {
+        *mappedDirectionalLightData_[frameIndex] = directionalLightState_;
+    }
+    if (mappedPointLightsData_[frameIndex]) {
+        memcpy(mappedPointLightsData_[frameIndex], pointLightsState_.data(), sizeof(Object3d::PointLight) * pointLightsState_.size());
+    }
+    if (mappedSpotLightData_[frameIndex]) {
+        *mappedSpotLightData_[frameIndex] = spotLightState_;
+    }
+    cameraState_.hasEnvironmentMap = environmentMapSrvHandleGPU_.ptr != 0 ? 1 : 0;
+    if (mappedCameraData_[frameIndex]) {
+        *mappedCameraData_[frameIndex] = cameraState_;
+    }
+    if (mappedCameraCBData_[frameIndex]) {
+        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+    }
+
     // 実行時のヌル参照を回避するための防御チェック
     auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
 
@@ -445,23 +469,23 @@ void Object3dCommon::SetInstancingDrawSetting()
     // プリミティブトポロジーをセットするコマンド
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     // 使用可能ならビルボード用カメラCB（VSのb2 -> ルートインデックス5）をバインド
-    if (cameraCBResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResource_->GetGPUVirtualAddress());
+    if (cameraCBResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // スポットライトCBVをルートにバインド (ルートインデックス8 -> PS b5)
-    if (spotLightResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResource_->GetGPUVirtualAddress());
+    if (spotLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // 平行光源（ディレクショナルライト）CBVをルートにバインド (ルートインデックス3 -> PS b1)
-    if (directionalLightResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+    if (directionalLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // カメラCBVをピクセルシェーダー側にもバインドしておく (ルートインデックス6 -> PS b3)
-    if (cameraResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
+    if (cameraResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     if (environmentMapSrvHandleGPU_.ptr != 0) {
@@ -474,6 +498,24 @@ void Object3dCommon::SetInstancingDrawSetting()
 /// </summary>
 void Object3dCommon::SetCommonDrawSetting()
 {
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    if (mappedDirectionalLightData_[frameIndex]) {
+        *mappedDirectionalLightData_[frameIndex] = directionalLightState_;
+    }
+    if (mappedPointLightsData_[frameIndex]) {
+        memcpy(mappedPointLightsData_[frameIndex], pointLightsState_.data(), sizeof(Object3d::PointLight) * pointLightsState_.size());
+    }
+    if (mappedSpotLightData_[frameIndex]) {
+        *mappedSpotLightData_[frameIndex] = spotLightState_;
+    }
+    cameraState_.hasEnvironmentMap = environmentMapSrvHandleGPU_.ptr != 0 ? 1 : 0;
+    if (mappedCameraData_[frameIndex]) {
+        *mappedCameraData_[frameIndex] = cameraState_;
+    }
+    if (mappedCameraCBData_[frameIndex]) {
+        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+    }
+
     // 実行時のヌル参照を回避するための防御チェック
     auto cmdList = dxCommon_ ? dxCommon_->GetCommandList() : nullptr;
 
@@ -503,18 +545,18 @@ void Object3dCommon::SetCommonDrawSetting()
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 
     // Spot light CBV を全ての通常描画パスでもバインドする（シェーダー b5 / ルートパラメータ 8）
-    if (spotLightResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResource_->GetGPUVirtualAddress());
+    if (spotLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // 平行光源（ディレクショナルライト）CBVをルートにバインド (ルートインデックス3 -> PS b1)
-    if (directionalLightResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+    if (directionalLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // カメラCBVをピクセルシェーダー側にもバインドしておく (ルートインデックス6 -> PS b3)
-    if (cameraResource_) {
-        cmdList->SetGraphicsRootConstantBufferView(6, cameraResource_->GetGPUVirtualAddress());
+    if (cameraResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResources_[frameIndex]->GetGPUVirtualAddress());
     }
 
     if (environmentMapSrvHandleGPU_.ptr != 0) {
@@ -960,4 +1002,58 @@ void Object3dCommon::CreateGraphicsPipeline()
         // インスタンシング用のシェーダーが見つからなかった場合は、エラーログを出力して、インスタンシング用PSOをリセットする
         Logger::Log("Object3dCommon::CreateGraphicsPipeline: Particleシェーダーが見つからなかったため、インスタンシング用PSOは作成されませんでした\n");
     }
+}
+
+/// <summary>
+/// 現在のフレームで使用する平行光源のGPUアドレスを取得する
+/// </summary>
+D3D12_GPU_VIRTUAL_ADDRESS Object3dCommon::GetDirectionalLightGPUAddress() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return directionalLightResources_[frameIndex] ? directionalLightResources_[frameIndex]->GetGPUVirtualAddress() : 0;
+}
+
+/// <summary>
+/// 現在のフレームで使用する点光源のGPUアドレスを取得する
+/// </summary>
+D3D12_GPU_VIRTUAL_ADDRESS Object3dCommon::GetPointLightsGPUAddress() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return pointLightsResources_[frameIndex] ? pointLightsResources_[frameIndex]->GetGPUVirtualAddress() : 0;
+}
+
+/// <summary>
+/// 現在のフレームで使用するスポットライトのGPUアドレスを取得する
+/// </summary>
+D3D12_GPU_VIRTUAL_ADDRESS Object3dCommon::GetSpotLightGPUAddress() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return spotLightResources_[frameIndex] ? spotLightResources_[frameIndex]->GetGPUVirtualAddress() : 0;
+}
+
+/// <summary>
+/// 現在のフレームで使用するカメラのGPUアドレスを取得する
+/// </summary>
+D3D12_GPU_VIRTUAL_ADDRESS Object3dCommon::GetCameraGPUAddress() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return cameraResources_[frameIndex] ? cameraResources_[frameIndex]->GetGPUVirtualAddress() : 0;
+}
+
+/// <summary>
+/// 現在のフレームで使用するインスタンシングデータを取得する
+/// </summary>
+Object3d::TransformationMatrix* Object3dCommon::GetInstancingData() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return instancingData_[frameIndex];
+}
+
+/// <summary>
+/// 現在のフレームで使用するインスタンシングSRVを取得する
+/// </summary>
+D3D12_GPU_DESCRIPTOR_HANDLE Object3dCommon::GetInstancingSrvGPUHandle() const
+{
+    const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
+    return instancingSrvHandlesGPU_[frameIndex];
 }

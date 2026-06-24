@@ -7,16 +7,41 @@
 
 using namespace MyEngine;
 
+namespace {
+/// <summary>
+/// ブレンドモードがPSO配列の範囲内か確認する
+/// </summary>
+bool IsValidSpriteBlendMode(BlendMode mode)
+{
+    const int modeIndex = static_cast<int>(mode); // 確認対象のブレンドモード番号
+    return 0 <= modeIndex && modeIndex < static_cast<int>(BlendMode::Count);
+}
+
+/// <summary>
+/// ブレンドモードをPSO配列の添字に変換する
+/// </summary>
+size_t ToSpriteBlendModeIndex(BlendMode mode)
+{
+    return static_cast<size_t>(mode);
+}
+} // namespace
+
 /// <summary>
 /// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成
 /// </summary>
 void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 {
-    // 引数で受け取ってメンバ変数に記録する
+    // 引数で受け取ったDirectXCommonを保持する
     dxCommon_ = dxCommon;
 
-    // グラフィクスパイプラインの生成
-    CreateGraphicsPipeline();
+    // RootSignatureはBlendModeに依存しないため一度だけ生成する
+    CreateRootSignature();
+
+    // ブレンドモードごとのPSOを初期化時に作成してキャッシュする
+    for (int modeIndex = 0; modeIndex < static_cast<int>(BlendMode::Count); ++modeIndex) {
+        BlendMode mode = static_cast<BlendMode>(modeIndex); // 作成対象のブレンドモード
+        CreateGraphicsPipeline(mode);
+    }
 }
 
 #ifdef USE_IMGUI
@@ -54,10 +79,20 @@ void SpriteCommon::DrawImGui() { (void)0; }
 /// </summary>
 void SpriteCommon::SetBlendMode(BlendMode mode)
 {
-    // ブレンドモードを更新
+    // 範囲外の値でPSO配列を参照しないようにする
+    if (!IsValidSpriteBlendMode(mode)) {
+        Logger::Log("SpriteCommon::SetBlendMode: invalid blend mode\n");
+        return;
+    }
+
+    const size_t modeIndex = ToSpriteBlendModeIndex(mode); // 参照するPSO配列の添字
+    if (!graphicsPipelineStates_[modeIndex]) {
+        Logger::Log("SpriteCommon::SetBlendMode: pipeline state for blend mode is not ready\n");
+        return;
+    }
+
+    // PSOは初期化時に作成済みなので、現在の選択だけを切り替える
     blendMode_ = mode;
-    // ブレンドモードの変更に伴い、グラフィクスパイプラインを再生成する
-    CreateGraphicsPipeline();
 }
 
 /// <summary>
@@ -65,37 +100,37 @@ void SpriteCommon::SetBlendMode(BlendMode mode)
 /// </summary>
 void SpriteCommon::SetCommonDrawSetting()
 {
-    // 実行時のヌル参照を回避するための防御チェック
-    // もしDirectXCommonへの参照がない場合は、ログに警告を出して処理を抜ける
+    // 実行時のnull参照を避ける
     if (!dxCommon_) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: dxCommon_ is null\n");
         return;
     }
 
-    // コマンドリストを取得
-    auto cmdList = dxCommon_->GetCommandList();
-
-    // コマンドリストがない場合警告を出して処理を抜ける
+    auto cmdList = dxCommon_->GetCommandList(); // 描画コマンドリスト
     if (!cmdList) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: command list is null\n");
         return;
     }
 
-    // ルートシグネチャがない場合警告を出して処理を抜ける
     if (!rootSignature_) {
         Logger::Log("SpriteCommon::SetCommonDrawSetting: rootSignature_ is null\n");
         return;
     }
 
-    // PSOがない場合警告を出して処理を抜ける
-    if (!graphicsPipelineState_) {
-        Logger::Log("SpriteCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
+    if (!IsValidSpriteBlendMode(blendMode_)) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: invalid blendMode_\n");
         return;
     }
 
-    // ルートシグネチャとPSOをコマンドリストに設定
+    const size_t modeIndex = ToSpriteBlendModeIndex(blendMode_); // 現在使用するPSO配列の添字
+    auto& pipelineState = graphicsPipelineStates_[modeIndex]; // 現在のブレンドモード用PSO
+    if (!pipelineState) {
+        Logger::Log("SpriteCommon::SetCommonDrawSetting: graphicsPipelineState is null\n");
+        return;
+    }
+
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
+    cmdList->SetPipelineState(pipelineState.Get()); // PSOを設定
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 }
 
@@ -104,8 +139,13 @@ void SpriteCommon::SetCommonDrawSetting()
 /// </summary>
 bool SpriteCommon::IsReady() const
 {
-    // ルートシグネチャとPSOが両方とも存在していれば描画可能とみなす
-    return dxCommon_ && rootSignature_ && graphicsPipelineState_;
+    // 現在選択中のブレンドモード用PSOがあれば描画可能とみなす
+    if (!dxCommon_ || !rootSignature_ || !IsValidSpriteBlendMode(blendMode_)) {
+        return false;
+    }
+
+    const size_t modeIndex = ToSpriteBlendModeIndex(blendMode_); // 現在使用するPSO配列の添字
+    return graphicsPipelineStates_[modeIndex] != nullptr;
 }
 
 /// <summary>
@@ -196,13 +236,10 @@ void SpriteCommon::CreateRootSignature()
 /// <summary>
 /// グラフィクスパイプライン（PSO）を生成（内部処理）
 /// </summary>
-void SpriteCommon::CreateGraphicsPipeline()
+void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
 {
     // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
     HRESULT hr;
-
-    // ルートシグネチャの作成を先に実行する
-    CreateRootSignature();
 
     // InputLayout
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
@@ -231,7 +268,7 @@ void SpriteCommon::CreateGraphicsPipeline()
     rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD; // アルファチャンネルのブレンドの演算も加算
 
     // ブレンドモードに応じて、BlendEnableやSrcBlend/DestBlendなどの設定を切り替える
-    switch (blendMode_) {
+    switch (mode) {
     case BlendMode::None: // ブレンドなし
 
         rtBlend.BlendEnable = FALSE; // ブレンドを無効にする
@@ -257,6 +294,16 @@ void SpriteCommon::CreateGraphicsPipeline()
         rtBlend.DestBlend = D3D12_BLEND_ONE; // destの色を全て使う
         rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE; // srcのアルファをそのまま使う
         rtBlend.DestBlendAlpha = D3D12_BLEND_ONE; // destのアルファを全て使う
+        break;
+
+    case BlendMode::Subtract: // 減算
+
+        rtBlend.BlendEnable = TRUE;
+        rtBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rtBlend.DestBlend = D3D12_BLEND_ONE;
+        rtBlend.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
         break;
 
     case BlendMode::Multiply: // 乗算
@@ -323,7 +370,7 @@ void SpriteCommon::CreateGraphicsPipeline()
     // Depthの機能を有効化する
     depthStencilDesc.DepthEnable = true;
     // 書き込みします
-    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     // 比較関数はLessEqual。つまり、近ければ描画される
     depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
@@ -345,9 +392,10 @@ void SpriteCommon::CreateGraphicsPipeline()
     }
 
     // 実際に生成し、メンバ変数に保持する
-    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
+    const size_t modeIndex = ToSpriteBlendModeIndex(mode); // 作成したPSOを格納する添字
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates_[modeIndex]));
     // PSO生成後のデバッグ情報
-    if (FAILED(hr) || !graphicsPipelineState_) {
+    if (FAILED(hr) || !graphicsPipelineStates_[modeIndex]) {
         char buf[512];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
         Logger::Log(buf);
@@ -361,8 +409,7 @@ void SpriteCommon::CreateGraphicsPipeline()
         }
 
         // PSOの生成に失敗した場合は、ルートシグネチャとPSOを両方とも破棄して、描画できない状態にする
-        graphicsPipelineState_.Reset();
-        rootSignature_.Reset();
+        graphicsPipelineStates_[modeIndex].Reset();
         return;
     }
 }

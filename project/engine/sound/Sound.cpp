@@ -1,9 +1,11 @@
 #include "Sound.h"
 #include "engine/utility/Logger.h"
+#include "engine/utility/ResourceResolver.h"
 #include <Windows.h>
 #include <atomic>
 #include <cassert>
 #include <comdef.h>
+#include <filesystem>
 #include <fstream>
 #include <initguid.h>
 #include <mfapi.h>
@@ -105,22 +107,31 @@ void SoundSystem::Finalize()
 /// </summary>
 std::shared_ptr<SoundClip> SoundSystem::LoadFromFile(const std::string& path)
 {
-    // 拡張子判定
-    auto pos = path.find_last_of('.');
-    // 拡張子が .wav の場合は LoadWav を利用して読み込む
-    if (pos != std::string::npos) {
-        std::string ext = path.substr(pos + 1);
-        for (auto& c : ext)
-            c = static_cast<char>(tolower(c));
-        // WAV 形式は LoadWav を利用して読み込む
-        if (ext == "wav") {
-            return LoadWav(path);
+    std::string resolvedPath = ResourceResolver::Resolve(path, ResourceResolver::Type::Sound); // Resolverで解決した音声ファイルパス
+    if (resolvedPath.empty()) {
+        const std::filesystem::path inputPath(path); // 呼び出し側から渡された元のパス
+        const std::string filename = inputPath.filename().string(); // 再探索に使うファイル名
+        if (!filename.empty() && filename != path) {
+            resolvedPath = ResourceResolver::Resolve(filename, ResourceResolver::Type::Sound);
         }
     }
-    // それ以外は Media Foundation を利用して読み込む
-    std::wstring wpath(path.begin(), path.end());
+    if (resolvedPath.empty()) {
+        resolvedPath = path;
+    }
 
-    // Media Foundation を利用して読み込む
+    auto pos = resolvedPath.find_last_of('.'); // 拡張子区切り位置
+    if (pos != std::string::npos) {
+        std::string ext = resolvedPath.substr(pos + 1); // 小文字化して比較する拡張子
+        for (auto& c : ext) {
+            c = static_cast<char>(tolower(c));
+        }
+
+        if (ext == "wav") {
+            return LoadWav(resolvedPath);
+        }
+    }
+
+    std::wstring wpath(resolvedPath.begin(), resolvedPath.end()); // Media Foundationへ渡すワイド文字パス
     return LoadViaMediaFoundation(wpath);
 }
 

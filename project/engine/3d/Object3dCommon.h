@@ -38,7 +38,7 @@ public: // メンバ関数
     /// <summary>
     /// 点光源のデータ構造体のポインタを取得
     /// </summary>
-    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const;
 
     /// <summary>
     /// 共通描画設定をコマンドリストに設定
@@ -98,7 +98,7 @@ public: // メンバ関数
         Math::Vector3 worldPosition;
         float exposure;
         int toneMapOn;
-        float pad0;
+        int hasEnvironmentMap;
         float pad1[2];
         Math::Matrix4x4 view;
     };
@@ -111,7 +111,7 @@ public: // メンバ関数
     /// <summary>
     /// カメラのワールド位置を格納する定数バッファのGPU仮想アドレスを取得
     /// </summary>
-    D3D12_GPU_VIRTUAL_ADDRESS GetCameraGPUAddress() const { return cameraResource_ ? cameraResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetCameraGPUAddress() const;
 
     /// <summary>
     /// デフォルトカメラのセット
@@ -170,12 +170,12 @@ public: // メンバ関数
     /// <summary>
     /// インスタンシング用構造化バッファのマップ済みCPUポインタを取得
     /// </summary>
-    Object3d::TransformationMatrix* GetInstancingData() const { return instancingData_; }
+    Object3d::TransformationMatrix* GetInstancingData() const;
 
     /// <summary>
     /// インスタンシング用SRVのCPUディスクリプタハンドルを取得
     /// </summary>
-    D3D12_GPU_DESCRIPTOR_HANDLE GetInstancingSrvGPUHandle() const { return instancingSrvHandleGPU_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetInstancingSrvGPUHandle() const;
 
     /// <summary>
     /// スロット数（インスタンシングで同時に描画できる最大インスタンス数）を取得
@@ -202,29 +202,37 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancingPipelineState_;
 
     // すべての Object3d インスタンスで共有される平行光源リソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
-    Object3d::DirectionalLight* directionalLightData_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> directionalLightResources_;
+    std::array<Object3d::DirectionalLight*, DirectXCommon::kFrameCount> mappedDirectionalLightData_ {};
+    Object3d::DirectionalLight directionalLightState_ {};
+    Object3d::DirectionalLight* directionalLightData_ = &directionalLightState_;
 
     // 複数の点光源を管理するためのリソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightsResource_;
-    Object3d::PointLight* pointLightsData_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> pointLightsResources_;
+    std::array<Object3d::PointLight*, DirectXCommon::kFrameCount> mappedPointLightsData_ {};
+    std::array<Object3d::PointLight, kMaxPointLights> pointLightsState_ {};
+    Object3d::PointLight* pointLightsData_ = pointLightsState_.data();
 
     // スポットライト用リソース (単一スポットライトを想定)
-    Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
-    Object3d::SpotLight* spotLightData_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> spotLightResources_;
+    std::array<Object3d::SpotLight*, DirectXCommon::kFrameCount> mappedSpotLightData_ {};
+    Object3d::SpotLight spotLightState_ {};
+    Object3d::SpotLight* spotLightData_ = &spotLightState_;
     BlendMode blendMode_ = BlendMode::None;
 
     // カメラ定数バッファ（ワールド位置）
-    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
-    CameraForGPU* cameraData_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> cameraResources_;
+    std::array<CameraForGPU*, DirectXCommon::kFrameCount> mappedCameraData_ {};
+    CameraForGPU cameraState_ {};
+    CameraForGPU* cameraData_ = &cameraState_;
 
     // インスタンシング用リソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_ = nullptr; // 変換を格納するアップロードバッファ
-    Object3d::TransformationMatrix* instancingData_ = nullptr; // マップ済みCPUポインタ
-    D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_ = {};
-    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_ = {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> instancingResources_;  // 変換を格納するアップロードバッファ
+    std::array<Object3d::TransformationMatrix*, DirectXCommon::kFrameCount> instancingData_ {}; // マップ済みCPUポインタ
+    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> instancingSrvHandlesCPU_ {};
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> instancingSrvHandlesGPU_ {};
     SrvManager* srvManager_ = nullptr; // SRVの割り当てと解放を管理する
-    uint32_t instancingSrvIndex_ = UINT32_MAX; // インスタンシング用SRVの割り当て位置
+    std::array<uint32_t, DirectXCommon::kFrameCount> instancingSrvIndices_ { UINT32_MAX, UINT32_MAX }; // インスタンシング用SRVの割り当て位置
     uint32_t kNumInstance_ = 0;
 
     D3D12_GPU_DESCRIPTOR_HANDLE environmentMapSrvHandleGPU_ = {};
@@ -239,8 +247,10 @@ private: // メンバ変数
     };
 
     // カメラ定数バッファ（ビルボード用）
-    Microsoft::WRL::ComPtr<ID3D12Resource> cameraCBResource_ = nullptr;
-    CameraCB* cameraCBData_ = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> cameraCBResources_;
+    std::array<CameraCB*, DirectXCommon::kFrameCount> mappedCameraCBData_ {};
+    CameraCB cameraCBState_ {};
+    CameraCB* cameraCBData_ = &cameraCBState_;
 
     // 3Dオブジェクトが参照するデフォルトカメラ
     class Camera* defaultCamera_ = nullptr;
@@ -263,7 +273,7 @@ public: // メンバ変数へのアクセサ
     /// <summary>
     /// ポイントライトのデータ構造体のGPU仮想アドレスを取得
     /// </summary>
-    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightsGPUAddress() const { return pointLightsResource_ ? pointLightsResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightsGPUAddress() const;
 
     /// <summary>
     /// スポットライトのデータ構造体のポインタを取得
@@ -273,7 +283,7 @@ public: // メンバ変数へのアクセサ
     /// <summary>
     /// スポットライトのデータ構造体のGPU仮想アドレスを取得
     /// </summary>
-    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const;
 
     /// <summary>
     /// 点光源を追加する。成功すれば追加した点光源のインデックスを返す。上限に達していれば -1 を返す。

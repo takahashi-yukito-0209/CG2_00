@@ -96,8 +96,10 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
     vbView_.StrideInBytes = sizeof(Vertex);
 
     // 定数バッファの作成とマッピング
-    constantBuffer_ = dxCommon_->CreateBufferResource(256);
-    constantBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&mappedCB_));
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        constantBuffers_[frameIndex] = dxCommon_->CreateBufferResource(256);
+        constantBuffers_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedConstantBuffers_[frameIndex]));
+    }
     // 定数バッファの内容は描画前にUpdateViewProjで更新するため、ここでは初期化しない
     {
         HRESULT hr = S_OK;
@@ -145,7 +147,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         hr = D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sig, &err);
         if (FAILED(hr)) {
             if (err)
-                Logger::Log(reinterpret_cast<const char*>(err->GetBufferPointer()));
+                Logger::Error(reinterpret_cast<const char*>(err->GetBufferPointer()));
         }
         hr = dxCommon_->GetDevice()->CreateRootSignature(0, sig->GetBufferPointer(), sig->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
         assert(SUCCEEDED(hr));
@@ -192,7 +194,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         if (FAILED(hr)) {
             char buf[256];
             sprintf_s(buf, "ERROR SkyBox::Initialize: CreateGraphicsPipelineState failed hr=0x%08X\n", static_cast<unsigned int>(hr));
-            Logger::Log(buf);
+            Logger::Error(buf);
         }
         assert(SUCCEEDED(hr));
     }
@@ -204,15 +206,25 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
 void SkyBox::Finalize()
 {
     // 定数バッファのアンマップとリセット
-    if (constantBuffer_) {
-        constantBuffer_->Unmap(0, nullptr);
-        mappedCB_ = nullptr;
-        constantBuffer_.Reset();
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (constantBuffers_[frameIndex]) {
+            constantBuffers_[frameIndex]->Unmap(0, nullptr);
+            mappedConstantBuffers_[frameIndex] = nullptr;
+            constantBuffers_[frameIndex].Reset();
+        }
     }
 
     // バッファのリセット
     vertexBuffer_.Reset();
     indexBuffer_.Reset();
+
+    // パイプライン関連リソースのリセット
+    pipelineState_.Reset();
+    rootSignature_.Reset();
+
+    vbView_ = {};
+    ibView_ = {};
+    indexCount_ = 0;
 }
 
 /// <summary>
@@ -220,9 +232,10 @@ void SkyBox::Finalize()
 /// </summary>
 void SkyBox::UpdateViewProj(const float vp[16])
 {
-    if (!mappedCB_)
+    if (!vp) {
         return;
-    memcpy(mappedCB_, vp, sizeof(float) * 16);
+    }
+    memcpy(viewProjectionState_.data(), vp, sizeof(float) * viewProjectionState_.size());
 }
 
 /// <summary>
@@ -238,15 +251,15 @@ void SkyBox::Draw(Camera* camera)
 
     // エラーチェックとログ出力
     if (!pipelineState_) {
-        Logger::Log("ERROR SkyBox::Draw: pipelineState_ is null\n");
+        Logger::Error("ERROR SkyBox::Draw: pipelineState_ is null\n");
         return;
     }
     if (!rootSignature_) {
-        Logger::Log("ERROR SkyBox::Draw: rootSignature_ is null\n");
+        Logger::Error("ERROR SkyBox::Draw: rootSignature_ is null\n");
         return;
     }
     if (vbView_.BufferLocation == 0) {
-        Logger::Log("ERROR SkyBox::Draw: vertex buffer GPU address is null\n");
+        Logger::Error("ERROR SkyBox::Draw: vertex buffer GPU address is null\n");
         return;
     }
     // SRVヒープを設定する
@@ -266,7 +279,8 @@ void SkyBox::Draw(Camera* camera)
     }
 
     // 定数バッファの更新とルート0へのCBV設定
-    if (constantBuffer_) {
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    if (constantBuffers_[frameIndex]) {
         // カメラがある場合はビューとプロジェクションを更新して定数バッファにコピーする
         if (camera) {
             Math::Matrix4x4 view = camera->GetViewMatrix();
@@ -277,13 +291,14 @@ void SkyBox::Draw(Camera* camera)
             view.m[3][2] = 0.0f;
             Math::Matrix4x4 vp = MathUtil::Multiply(view, proj);
             // 定数バッファにコピー
-            if (mappedCB_) {
-                memcpy(mappedCB_, &vp, sizeof(vp));
-            }
+            memcpy(viewProjectionState_.data(), &vp, sizeof(vp));
         }
 
         // 定数バッファのGPUアドレスをルート0に設定
-        cmd->SetGraphicsRootConstantBufferView(0, constantBuffer_->GetGPUVirtualAddress());
+        if (mappedConstantBuffers_[frameIndex]) {
+            memcpy(mappedConstantBuffers_[frameIndex], viewProjectionState_.data(), sizeof(float) * viewProjectionState_.size());
+        }
+        cmd->SetGraphicsRootConstantBufferView(0, constantBuffers_[frameIndex]->GetGPUVirtualAddress());
     }
 
     // 頂点バッファの設定と描画コマンド

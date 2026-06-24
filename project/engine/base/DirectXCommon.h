@@ -29,86 +29,105 @@ class SrvManager;
 class DirectXCommon {
 public:
     DirectXCommon() = default;
+    static constexpr uint32_t kFrameCount = 2;
 
 public: // 公開メンバ関数
     /// <summary>
-    /// 初期化処理の全体フロー
+    /// 初期化処理
     /// </summary>
     void Initialize(WinApp* winApp);
 
     /// <summary>
-    /// 描画前処理（リソースバリア、RTV/DSV設定、クリア処理など）
+    /// 描画前処理
     /// </summary>
     void PreDraw();
 
     /// <summary>
-    /// 描画後処理（リソースバリア、コマンド実行、Present、GPU同期など）
+    /// 描画後処理
     /// </summary>
     void PostDraw();
 
     /// <summary>
-    /// バッファリソース（頂点、定数など）の生成
+    /// バッファリソースを作成する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
 
     /// <summary>
-    /// テクスチャリソースの生成
+    /// テクスチャリソースを作成する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(const DirectX::TexMetadata& metadata);
 
     /// <summary>
-    /// テクスチャデータのアップロード
+    /// テクスチャデータをアップロードする
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(
         Microsoft::WRL::ComPtr<ID3D12Resource>& texture,
         const DirectX::ScratchImage& mipImages);
 
     /// <summary>
-    /// シェーダーのコンパイル
+    /// 保留中のテクスチャアップロードコマンドを実行し、完了まで待機する
+    /// </summary>
+    void FlushTextureUploads();
+
+    /// <summary>
+    /// シェーダーをコンパイルする
     /// </summary>
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
         const std::wstring& filePath,
         const wchar_t* profile);
 
-    // --- Getter ---
-
     /// <summary>
-    /// デバイスの取得
+    /// デバイスを取得する
     /// </summary>
     ID3D12Device* GetDevice() const { return device_.Get(); }
 
     /// <summary>
-    /// コマンドリストの取得
+    /// コマンドリストを取得する
     /// </summary>
     ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
 
     /// <summary>
-    /// コマンドキューの取得
+    /// コマンドキューを取得する
     /// </summary>
     ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); }
 
     /// <summary>
-    /// SRV用CPUディスクリプタハンドルの取得
+    /// 現在のフレーム番号を取得する
+    /// </summary>
+    uint32_t GetCurrentFrameIndex() const;
+
+    /// <summary>
+    /// SRV用CPUディスクリプタハンドルを取得する
     /// </summary>
     D3D12_CPU_DESCRIPTOR_HANDLE GetSRVCPUDescriptorHandle(uint32_t index) const;
 
     /// <summary>
-    /// SRV用GPUディスクリプタハンドルの取得
+    /// SRV用GPUディスクリプタハンドルを取得する
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUDescriptorHandle(uint32_t index) const;
 
     /// <summary>
-    /// SRV用ディスクリプタヒープの生ポインタを取得（コマンドリストへのバインド用）
+    /// SRVディスクリプタヒープを取得する
     /// </summary>
     ID3D12DescriptorHeap* GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
 
     /// <summary>
-    /// スワップチェーンが実際に使っているフォーマットを取得
+    /// スワップチェーンのフォーマットを取得する
     /// </summary>
     DXGI_FORMAT GetSwapChainFormat() const { return swapChainFormat_; }
 
     /// <summary>
-    /// DSVヒープの先頭CPUディスクリプタハンドルを取得（外部でDSVを使ってOMSetRenderTargetsする場合に使用）
+    /// 現在の描画幅を取得する
+    /// </summary>
+    float GetRenderWidth() const { return viewport_.Width; }
+
+    /// <summary>
+    /// 現在の描画高さを取得する
+    /// </summary>
+    float GetRenderHeight() const { return viewport_.Height; }
+
+    /// <summary>
+    /// DSVハンドルを取得する
     /// </summary>
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const;
 
@@ -218,12 +237,12 @@ private: // Private メンバ変数
 
     // コマンド関連
     // コマンドアロケータ/コマンドリスト/コマンドキュー
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kFrameCount> commandAllocators_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
 
     // スワップチェーン
-    static const uint32_t kBackBufferCount = 2; // バックバッファ数
+    static const uint32_t kBackBufferCount = kFrameCount; // バックバッファ数
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     // バックバッファリソース配列
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kBackBufferCount> swapChainResources_;
@@ -247,10 +266,15 @@ private: // Private メンバ変数
     // SrvManager の参照（存在すればレンダーターゲットの SRV 解放に使用）
     class SrvManager* srvManager_ = nullptr;
 
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> textureUploadAllocator_; // テクスチャアップロード専用アロケータ
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> textureUploadCommandList_; // テクスチャアップロード専用コマンドリスト
+    bool hasPendingTextureUploads_ = false; // 未実行のテクスチャアップロードがあるか
+
     // フェンスと同期イベント
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
+    std::array<UINT64, kFrameCount> frameFenceValues_ {};
 
     // リサイズ処理中フラグ（再入防止）
     std::atomic<bool> resizingInProgress_ { false };
