@@ -34,24 +34,11 @@ TitleScene::~TitleScene() { }
 /// <summary>
 /// 初期化処理
 /// </summary>
-void TitleScene::Initialize(const SceneContext& ctx)
+/// <summary>
+/// パーティクル描画用オブジェクトを初期化する
+/// </summary>
+void TitleScene::InitializeParticleObjects()
 {
-    ctx_ = ctx;
-
-    // テクスチャのロード
-    if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("circle.png");
-        ctx_.textureManager->LoadTexture("gradationLine.png");
-    }
-
-    if (ctx_.object3dCommon) {
-        auto terrain = std::make_unique<Object3d>(); // タイトル画面に表示する地形
-        terrain->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        terrain->SetModel("terrain/terrain.obj");
-        terrain->SetScale({ 5.0f, 5.0f, 5.0f });
-        objects3d_.push_back(std::move(terrain));
-    }
-
     // パーティクルの初期化
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
@@ -70,6 +57,13 @@ void TitleScene::Initialize(const SceneContext& ctx)
     particleCylinder_->SetTexture("gradationLine.png");
     particleCylinder_->SetUseAlphaCutoutSampler(true);
 
+}
+
+/// <summary>
+/// パーティクル管理とエミッターを初期化する
+/// </summary>
+void TitleScene::InitializeParticleEffects()
+{
     // パーティクルマネージャー化とグループの作成
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
@@ -105,6 +99,13 @@ void TitleScene::Initialize(const SceneContext& ctx)
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
 
+}
+
+/// <summary>
+/// 時間演出用スプライトを初期化する
+/// </summary>
+void TitleScene::InitializeTemporalEffectSprites()
+{
     constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
     temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
     for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
@@ -164,6 +165,13 @@ void TitleScene::Initialize(const SceneContext& ctx)
     timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
     timeReversalConvergenceSprite_->Update();
 
+}
+
+/// <summary>
+/// ポストプロセス用レンダーターゲットを初期化する
+/// </summary>
+void TitleScene::InitializePostProcessTargets()
+{
     DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
     if (directXCommon && ctx_.srvManager) {
         sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
@@ -198,7 +206,31 @@ void TitleScene::Initialize(const SceneContext& ctx)
 
         postProcess_.Initialize(directXCommon);
         postProcess_.SetEffectType(PostEffectType::Copy);
+    }}
+
+void TitleScene::Initialize(const SceneContext& ctx)
+{
+    ctx_ = ctx;
+
+    // テクスチャのロード
+    if (ctx_.textureManager) {
+        ctx_.textureManager->LoadTexture("circle.png");
+        ctx_.textureManager->LoadTexture("gradationLine.png");
     }
+
+    if (ctx_.object3dCommon) {
+        auto terrain = std::make_unique<Object3d>(); // タイトル画面に表示する地形
+        terrain->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+        terrain->SetModel("terrain/terrain.obj");
+        terrain->SetScale({ 5.0f, 5.0f, 5.0f });
+        objects3d_.push_back(std::move(terrain));
+    }
+
+    InitializeParticleObjects();
+    InitializeParticleEffects();
+    InitializeTemporalEffectSprites();
+    InitializePostProcessTargets();
+
 }
 
 /// <summary>

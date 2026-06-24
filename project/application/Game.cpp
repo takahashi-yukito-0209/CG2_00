@@ -131,20 +131,10 @@ Game::~Game()
 }
 
 /// <summary>
-/// ゲームの初期化処理
+/// クラッシュダンプ出力を設定する
 /// </summary>
-bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
+void Game::SetupCrashDumpHandler()
 {
-    // 基底クラスの初期化を呼び出す。失敗したら false を返す
-    if (!Framework::Initialize(hInstance, nCmdShow)) {
-        return false;
-    }
-
-    // Impl がまだ存在しない場合は新たに作成する
-    if (!impl_) {
-        impl_ = std::make_unique<Impl>();
-    }
-
     SetUnhandledExceptionFilter([](EXCEPTION_POINTERS* exception) -> LONG {
         SYSTEMTIME time;
         GetLocalTime(&time);
@@ -162,8 +152,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         CloseHandle(dumpFileHandle);
         return EXCEPTION_EXECUTE_HANDLER;
     }); // クラッシュダンプの出力先を D:\Dumps\ に設定
+}
 
-    // ログファイルの設定: "logs" フォルダに日付と時刻を含むファイル名でログを出力する
+/// <summary>
+/// ログファイル出力を設定する
+/// </summary>
+void Game::SetupLogFile()
+{
     std::filesystem::create_directory("logs"); // "logs" フォルダが存在しない場合は作成する
     std::time_t now_c = std::time(nullptr); // 現在の時刻を取得
     struct tm local_tm; // ローカルタイムに変換するための構造体
@@ -174,8 +169,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     std::string logFilePath = std::string("logs/") + dateString + ".log"; // ログファイルのパスを "logs/YYYYMMDD_HHMMSS.log" 形式で作成
     Logger::SetLogFile(logFilePath); // ログファイルのパスを Logger に設定
     Logger::SetErrorLogFile(logFilePath); // エラーログファイルのパスも同じログファイルに設定
+}
 
-    // ウィンドウを作成してハンドルを取得
+/// <summary>
+/// ウィンドウと入力を初期化する
+/// </summary>
+bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
+{
     impl_->winApp.Initialize(hInstance, nCmdShow, L"LE3C_13_タカハシ_ユキト");
     impl_->hwnd = impl_->winApp.GetHwnd();
 
@@ -214,7 +214,14 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         return false;
     }
 
-    // スプライト共通管理の一時的なユニークポインタ
+    return true;
+}
+
+/// <summary>
+/// エンジン共通リソースを初期化する
+/// </summary>
+bool Game::InitializeEngineResources(HINSTANCE hInstance)
+{
     std::unique_ptr<SpriteCommon> spriteCommonTmp;
     // 3Dオブジェクト共通管理の一時的なユニークポインタ
     std::unique_ptr<Object3dCommon> object3dCommonTmp;
@@ -234,7 +241,14 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     // 3Dオブジェクト共通管理を Impl に移動
     impl_->object3dCommon = std::move(object3dCommonTmp);
 
-    // カメラの生成と初期設定
+    return true;
+}
+
+/// <summary>
+/// カメラとライトを初期化する
+/// </summary>
+void Game::InitializeCameraAndLighting()
+{
     impl_->camera = std::make_unique<Camera>();
     impl_->camera->SetRotate({ 5.9f, -7.43f, 0.0f });
     impl_->camera->SetTranslate({ 0.0f, 1.0f, -188.0f });
@@ -291,8 +305,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
         impl_->object3dCommon->SetUseDebugCameraForRender(impl_->useDebugCameraForRender);
         impl_->object3dCommon->SetEnableDebugCameraInput(impl_->isDebugCameraControl);
     }
+}
 
-    // ImGuiManagerの初期化
+/// <summary>
+/// デバッグ機能、ImGui、サウンドを初期化する
+/// </summary>
+void Game::InitializeDebugToolsAndSound()
+{
     impl_->imguiManager.Initialize(impl_->hwnd, &impl_->srvManager);
 
     // Media FoundationとXAudio2を明示的に初期化する
@@ -301,37 +320,45 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     } else {
         Logger::Warn("Game::Initialize: sound system initialization failed.\n");
     }
+}
 
-    // 初期化完了フラグを立てる
-    impl_->initialized = true;
-    impl_->endRequested = false;
-
-    // シーンマネージャ初期化と初期シーン設定
-    impl_->sceneManager = std::make_unique<SceneManager>();
-    impl_->sceneManager->Initialize();
-    // DirectXCommon のリサイズコールバックを設定して、ウィンドウリサイズ時に
-    // シーンやカメラへ通知する
+/// <summary>
+/// リサイズ通知を設定する
+/// </summary>
+void Game::SetupResizeCallbacks()
+{
+    // DirectXCommon のリサイズ通知を受け取り、カメラとシーンへ反映する
     DirectXCommon::GetInstance()->SetOnResizeCallback([this](uint32_t w, uint32_t h) {
-        // カメラのアスペクト比を更新
+        // カメラのアスペクト比を更新する
         if (impl_->camera) {
-            float aspect = (h != 0) ? static_cast<float>(w) / static_cast<float>(h) : 1.0f;
+            float aspect = (h != 0) ? static_cast<float>(w) / static_cast<float>(h) : 1.0f; // 画面のアスペクト比
             impl_->camera->SetAspectRatio(aspect);
             impl_->camera->Update();
         }
-        // デバッグカメラは画面サイズを再初期化
+        // デバッグカメラへ現在の画面サイズを反映する
         impl_->debugCamera.Initialize(static_cast<float>(w), static_cast<float>(h));
-        // SceneManager にもリサイズを伝播
+        // 現在のシーンへリサイズを通知する
         if (impl_->sceneManager) {
             impl_->sceneManager->OnWindowResize(w, h);
         }
     });
-    // WinAppは描画基盤を直接参照せず、登録された通知先へサイズ変更を伝える
+
+    // WinApp のリサイズ通知を DirectXCommon 側へ橋渡しする
     impl_->winApp.SetResizeCallback([](uint32_t width, uint32_t height) {
         DirectXCommon::GetInstance()->OnWindowResize(width, height);
     });
+}
 
-    // SceneContext を構築して SceneManager に渡す
-    SceneContext sctx;
+/// <summary>
+/// シーン管理を初期化する
+/// </summary>
+void Game::InitializeScene()
+{
+    impl_->sceneManager = std::make_unique<SceneManager>();
+    impl_->sceneManager->Initialize();
+    SetupResizeCallbacks();
+
+    SceneContext sctx; // シーンへ渡す共通コンテキスト
     sctx.object3dCommon = impl_->object3dCommon.get();
     sctx.spriteCommon = impl_->spriteCommon.get();
     sctx.camera = impl_->camera.get();
@@ -340,19 +367,49 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     sctx.textureManager = TextureManager::GetInstance();
     sctx.srvManager = &impl_->srvManager;
     sctx.directXCommon = DirectXCommon::GetInstance();
-
-    // ImGuiManager へのポインタを SceneContext にセットして、シーンが必要に応じて ImGui 描画用のフックを提供できるようにする
     sctx.imguiManager = &impl_->imguiManager;
     impl_->sceneManager->SetContext(sctx);
 
-    // 最初のシーンをタイトルシーンに設定する
-    auto initial = GameApp::SceneFactory::Create("Title");
+    auto initial = GameApp::SceneFactory::Create("Title"); // 最初に表示するシーン
     if (initial) {
-        // シーンマネージャに最初のシーンをセットする
         impl_->sceneManager->ChangeScene(std::move(initial));
     }
+}
 
-    // 初期化が成功したので true を返す
+/// <summary>
+/// ゲームの初期化処理
+/// </summary>
+bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
+{
+    // 基底クラスの初期化を行う
+    if (!Framework::Initialize(hInstance, nCmdShow)) {
+        return false;
+    }
+
+    // 実装データを必要に応じて生成する
+    if (!impl_) {
+        impl_ = std::make_unique<Impl>();
+    }
+
+    SetupCrashDumpHandler();
+    SetupLogFile();
+
+    if (!InitializeWindowAndInput(hInstance, nCmdShow)) {
+        return false;
+    }
+
+    if (!InitializeEngineResources(hInstance)) {
+        return false;
+    }
+
+    InitializeCameraAndLighting();
+    InitializeDebugToolsAndSound();
+
+    impl_->initialized = true;
+    impl_->endRequested = false;
+
+    InitializeScene();
+
     return true;
 }
 

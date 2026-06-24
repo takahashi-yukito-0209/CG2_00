@@ -34,6 +34,184 @@ PlayScene::~PlayScene() { }
 /// <summary>
 /// 初期化処理
 /// </summary>
+/// <summary>
+/// パーティクル描画用オブジェクトを初期化する
+/// </summary>
+void PlayScene::InitializeParticleObjects()
+{
+    // パーティクルの初期化
+    particlePlane_ = std::make_unique<Object3d>();
+    particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
+    particlePlane_->SetTexture("circle.png");
+
+    particleRing_ = std::make_unique<Object3d>();
+    particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
+    particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetUseAlphaCutoutSampler(true);
+
+    particleCylinder_ = std::make_unique<Object3d>();
+    particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
+    particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetUseAlphaCutoutSampler(true);
+
+}
+
+/// <summary>
+/// パーティクル管理とエミッターを初期化する
+/// </summary>
+void PlayScene::InitializeParticleEffects()
+{
+    // パーティクルマネージャー化とグループの作成
+    if (ParticleManager::GetInstance()) {
+        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
+        ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
+        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
+        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
+        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
+        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
+        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
+    }
+
+    // パーティクルエミッターと発射
+    pmEmitter_.groupName = "Hit";
+    pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    pmEmitter_.count = 8;
+    pmEmitter_.frequency = 1.0f;
+    pmEmitter_.useHitEffect = true;
+    pmEmitter_.Emit();
+
+    ringEmitter_.groupName = "Ring";
+    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    ringEmitter_.count = 1;
+    ringEmitter_.frequency = 1.0f;
+    ringEmitter_.useRingEffect = true;
+    ringEmitter_.Emit();
+
+    cylinderEmitter_.groupName = "Cylinder";
+    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
+    cylinderEmitter_.count = 1;
+    cylinderEmitter_.frequency = 1.0f;
+    cylinderEmitter_.useCylinderEffect = true;
+    cylinderEmitter_.Emit();
+
+}
+
+/// <summary>
+/// 時間演出用スプライトを初期化する
+/// </summary>
+void PlayScene::InitializeTemporalEffectSprites()
+{
+    constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
+    temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
+    for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
+        auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
+        afterimageSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetSize({ 1.0f, 1.0f });
+        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->Update();
+        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
+    for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
+        auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
+        particleSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        particleSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        particleSprite->SetSize({ 1.0f, 1.0f });
+        particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        particleSprite->Update();
+        timeReversalSprites_.push_back(std::move(particleSprite));
+    }
+
+    constexpr int kMaximumRewindAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+    const int maximumRewindAfterimageSpriteCount =
+        kMaximumTimeReversalParticleCount * kMaximumRewindAfterimageCount; // 確保する残像スプライト総数
+    timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
+    for (int afterimageIndex = 0;
+         afterimageIndex < maximumRewindAfterimageSpriteCount;
+         ++afterimageIndex) {
+        auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
+        afterimageSprite->Initialize(
+            ctx_.spriteCommon,
+            "circle2.png",
+            ctx_.imguiManager);
+        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetSize({ 1.0f, 1.0f });
+        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->Update();
+        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
+    timeReversalConvergenceSprite_->Initialize(
+        ctx_.spriteCommon,
+        "circle2.png",
+        ctx_.imguiManager);
+    timeReversalConvergenceSprite_->SetAnchorPoint({ 0.5f, 0.5f });
+    timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
+    timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    timeReversalConvergenceSprite_->Update();
+
+}
+
+/// <summary>
+/// ポストプロセス用レンダーターゲットを初期化する
+/// </summary>
+void PlayScene::InitializePostProcessTargets()
+{
+    DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
+    if (directXCommon && ctx_.srvManager) {
+        sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
+            WinApp::kWindowWidth,
+            WinApp::kWindowHeight,
+            directXCommon->GetSwapChainFormat(),
+            true,
+            { 0.53f, 0.71f, 0.82f, 1.0f },
+            true);
+
+        if (sceneRenderTargetHandle_ >= 0) {
+            sceneRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetSRV(
+                sceneRenderTargetHandle_,
+                sceneRenderTargetSrvIndex_);
+        }
+
+        postProcessIntermediateHandle_ = directXCommon->CreateRenderTarget(
+            WinApp::kWindowWidth,
+            WinApp::kWindowHeight,
+            directXCommon->GetSwapChainFormat(),
+            false,
+            { 0.0f, 0.0f, 0.0f, 1.0f },
+            true);
+
+        if (postProcessIntermediateHandle_ >= 0) {
+            postProcessIntermediateSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetSRV(
+                postProcessIntermediateHandle_,
+                postProcessIntermediateSrvIndex_);
+        }
+
+        postProcess_.Initialize(directXCommon);
+        postProcess_.SetEffectType(PostEffectType::Copy);
+    }
+}
+
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
@@ -104,156 +282,11 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     objects3d_[5]->SetScale({ 5.0f, 5.0f, 5.0f }); // terrain を大きくする
 
-    // パーティクルの初期化
-    particlePlane_ = std::make_unique<Object3d>();
-    particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
-    particlePlane_->SetTexture("circle.png");
+    InitializeParticleObjects();
+    InitializeParticleEffects();
+    InitializeTemporalEffectSprites();
+    InitializePostProcessTargets();
 
-    particleRing_ = std::make_unique<Object3d>();
-    particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
-    particleRing_->SetTexture("gradationLine.png");
-    particleRing_->SetUseAlphaCutoutSampler(true);
-
-    particleCylinder_ = std::make_unique<Object3d>();
-    particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
-    particleCylinder_->SetTexture("gradationLine.png");
-    particleCylinder_->SetUseAlphaCutoutSampler(true);
-
-    // パーティクルマネージャー化とグループの作成
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
-        ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
-        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
-        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
-        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
-    }
-
-    // パーティクルエミッターと発射
-    pmEmitter_.groupName = "Hit";
-    pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    pmEmitter_.count = 8;
-    pmEmitter_.frequency = 1.0f;
-    pmEmitter_.useHitEffect = true;
-    pmEmitter_.Emit();
-
-    ringEmitter_.groupName = "Ring";
-    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    ringEmitter_.count = 1;
-    ringEmitter_.frequency = 1.0f;
-    ringEmitter_.useRingEffect = true;
-    ringEmitter_.Emit();
-
-    cylinderEmitter_.groupName = "Cylinder";
-    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    cylinderEmitter_.count = 1;
-    cylinderEmitter_.frequency = 1.0f;
-    cylinderEmitter_.useCylinderEffect = true;
-    cylinderEmitter_.Emit();
-
-    constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
-    temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
-    for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
-        auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
-        afterimageSprite->Initialize(
-            ctx_.spriteCommon,
-            "circle2.png",
-            ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
-        afterimageSprite->Update();
-        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
-    }
-
-    constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
-    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
-    for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
-        auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
-        particleSprite->Initialize(
-            ctx_.spriteCommon,
-            "circle2.png",
-            ctx_.imguiManager);
-        particleSprite->SetAnchorPoint({ 0.5f, 0.5f });
-        particleSprite->SetSize({ 1.0f, 1.0f });
-        particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
-        particleSprite->Update();
-        timeReversalSprites_.push_back(std::move(particleSprite));
-    }
-
-    constexpr int kMaximumRewindAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
-    const int maximumRewindAfterimageSpriteCount =
-        kMaximumTimeReversalParticleCount * kMaximumRewindAfterimageCount; // 確保する残像スプライト総数
-    timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
-    for (int afterimageIndex = 0;
-         afterimageIndex < maximumRewindAfterimageSpriteCount;
-         ++afterimageIndex) {
-        auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
-        afterimageSprite->Initialize(
-            ctx_.spriteCommon,
-            "circle2.png",
-            ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
-        afterimageSprite->Update();
-        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
-    }
-
-    timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
-    timeReversalConvergenceSprite_->Initialize(
-        ctx_.spriteCommon,
-        "circle2.png",
-        ctx_.imguiManager);
-    timeReversalConvergenceSprite_->SetAnchorPoint({ 0.5f, 0.5f });
-    timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
-    timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
-    timeReversalConvergenceSprite_->Update();
-
-    DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
-    if (directXCommon && ctx_.srvManager) {
-        sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
-            WinApp::kWindowWidth,
-            WinApp::kWindowHeight,
-            directXCommon->GetSwapChainFormat(),
-            true,
-            { 0.53f, 0.71f, 0.82f, 1.0f },
-            true);
-
-        if (sceneRenderTargetHandle_ >= 0) {
-            sceneRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetSRV(
-                sceneRenderTargetHandle_,
-                sceneRenderTargetSrvIndex_);
-        }
-
-        postProcessIntermediateHandle_ = directXCommon->CreateRenderTarget(
-            WinApp::kWindowWidth,
-            WinApp::kWindowHeight,
-            directXCommon->GetSwapChainFormat(),
-            false,
-            { 0.0f, 0.0f, 0.0f, 1.0f },
-            true);
-
-        if (postProcessIntermediateHandle_ >= 0) {
-            postProcessIntermediateSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetSRV(
-                postProcessIntermediateHandle_,
-                postProcessIntermediateSrvIndex_);
-        }
-
-        postProcess_.Initialize(directXCommon);
-        postProcess_.SetEffectType(PostEffectType::Copy);
-    }
 }
 
 /// <summary>

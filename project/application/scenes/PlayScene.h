@@ -369,6 +369,26 @@ private:
     /// <summary>
     /// 3Dオブジェクトとパーティクルを描画する
     /// </summary>
+    /// <summary>
+    /// パーティクル描画用オブジェクトを初期化する
+    /// </summary>
+    void InitializeParticleObjects();
+
+    /// <summary>
+    /// パーティクル管理とエミッターを初期化する
+    /// </summary>
+    void InitializeParticleEffects();
+
+    /// <summary>
+    /// 時間演出用スプライトを初期化する
+    /// </summary>
+    void InitializeTemporalEffectSprites();
+
+    /// <summary>
+    /// ポストプロセス用レンダーターゲットを初期化する
+    /// </summary>
+    void InitializePostProcessTargets();
+
     void DrawWorldAndParticles();
 
     /// <summary>
