@@ -1,79 +1,108 @@
 #include "StringUtility.h"
 #include <Windows.h>
-#include <stdexcept>
 #include <string>
 
 namespace StringUtility {
 /// <summary>
-/// std::string から std::wstring へ変換する
+/// UTF-8文字列をワイド文字列へ変換する。失敗した場合は false を返す。
 /// </summary>
-std::wstring ConvertString(const std::string& str)
+bool TryConvertString(const std::string& str, std::wstring& out)
 {
-    // 引数が空文字列の場合は空のワイド文字列を返す
-    int requiredLength = MultiByteToWideChar(
-        CP_UTF8, 0,
-        str.c_str(), (int)str.length(),
-        nullptr, 0);
-
-    // 変換に失敗した場合は空のワイド文字列を返す
-    if (requiredLength == 0) {
-        return L"";
+    out.clear();
+    if (str.empty()) {
+        return true;
     }
 
-    // ワイド文字列を格納するためのバッファを確保
-    std::wstring wstr(requiredLength, 0);
+    int requiredLength = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        str.c_str(),
+        static_cast<int>(str.length()),
+        nullptr,
+        0); // 変換後に必要なワイド文字数
+    if (requiredLength == 0) {
+        return false;
+    }
 
-    // 変換を実行
-    MultiByteToWideChar(
-        CP_UTF8, 0,
-        str.c_str(), (int)str.length(),
-        wstr.data(), requiredLength);
+    std::wstring converted(requiredLength, L'\0'); // 変換結果を格納する文字列
+    int convertedLength = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        str.c_str(),
+        static_cast<int>(str.length()),
+        converted.data(),
+        requiredLength); // 実際に変換できたワイド文字数
+    if (convertedLength == 0) {
+        return false;
+    }
 
-    // ワイド文字列を返す
-    return wstr;
+    out = std::move(converted);
+    return true;
 }
 
 /// <summary>
-/// std::wstring から std::string へ変換する
+/// ワイド文字列をUTF-8文字列へ変換する。失敗した場合は false を返す。
+/// </summary>
+bool TryConvertString(const std::wstring& wstr, std::string& out)
+{
+    out.clear();
+    if (wstr.empty()) {
+        return true;
+    }
+
+    int requiredLength = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        wstr.c_str(),
+        static_cast<int>(wstr.length()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr); // 変換後に必要なバイト数
+    if (requiredLength == 0) {
+        return false;
+    }
+
+    std::string converted(requiredLength, '\0'); // 変換結果を格納する文字列
+    int convertedLength = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        wstr.c_str(),
+        static_cast<int>(wstr.length()),
+        converted.data(),
+        requiredLength,
+        nullptr,
+        nullptr); // 実際に変換できたバイト数
+    if (convertedLength == 0) {
+        return false;
+    }
+
+    out = std::move(converted);
+    return true;
+}
+
+/// <summary>
+/// std::string から std::wstring へ変換する。失敗した場合は空文字列を返す。
+/// </summary>
+std::wstring ConvertString(const std::string& str)
+{
+    std::wstring converted; // 変換結果を受け取るワイド文字列
+    if (!TryConvertString(str, converted)) {
+        return L"";
+    }
+    return converted;
+}
+
+/// <summary>
+/// std::wstring から std::string へ変換する。失敗した場合は空文字列を返す。
 /// </summary>
 std::string ConvertString(const std::wstring& wstr)
 {
-    // 引数が空文字列の場合は空の文字列を返す
-    if (wstr.empty()) {
+    std::string converted; // 変換結果を受け取るUTF-8文字列
+    if (!TryConvertString(wstr, converted)) {
         return "";
     }
-
-    // 変換に必要なバイト数を取得
-    int requiredLength = WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        wstr.c_str(),
-        (int)wstr.length(),
-        nullptr,
-        0,
-        nullptr,
-        nullptr);
-
-    // 変換に失敗した場合は空の文字列を返す
-    if (requiredLength == 0) {
-        return "";
-    }
-
-    // 変換後の文字列を格納するためのバッファを確保
-    std::string str(requiredLength, '\0');
-
-    // 変換を実行
-    WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        wstr.c_str(),
-        (int)wstr.length(),
-        str.data(),
-        requiredLength,
-        nullptr,
-        nullptr);
-
-    return str; // 不要な resize は絶対にしない
+    return converted;
 }
 
 } // namespace StringUtility
