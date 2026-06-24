@@ -21,6 +21,9 @@
 #include <cmath>
 #include <iostream>
 
+using namespace MyEngine;
+using namespace Math;
+
 /// <summary>
 /// コンストラクタ
 /// </summary>

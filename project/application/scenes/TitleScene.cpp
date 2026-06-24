@@ -21,6 +21,9 @@
 #include <cmath>
 #include <iostream>
 
+using namespace MyEngine;
+using namespace Math;
+
 /// <summary>
 /// コンストラクタ
 /// </summary>
@@ -206,7 +209,8 @@ void TitleScene::InitializePostProcessTargets()
 
         postProcess_.Initialize(directXCommon);
         postProcess_.SetEffectType(PostEffectType::Copy);
-    }}
+    }
+}
 
 void TitleScene::Initialize(const SceneContext& ctx)
 {

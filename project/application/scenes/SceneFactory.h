@@ -5,15 +5,15 @@
 
 namespace GameApp {
 
-using namespace MyEngine;
-
 /// <summary>
-/// シーンファクトリークラス: シーンの名前からシーンオブジェクトを生成するためのクラス
+/// シーン名から対応するシーンを生成するファクトリクラス
 /// </summary>
 class SceneFactory {
-public: // メンバ関数
-    // シンプルに名前からシーンを生成する
-    static std::unique_ptr<IScene> Create(const std::string& name);
+public:
+    /// <summary>
+    /// 指定されたシーン名に対応するシーンを生成する
+    /// </summary>
+    static std::unique_ptr<MyEngine::IScene> Create(const std::string& name);
 };
 
 } // namespace GameApp

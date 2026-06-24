@@ -60,6 +60,29 @@
 #pragma comment(lib, "dinput8.lib")
 
 using namespace MyEngine;
+using namespace Math;
+
+namespace {
+constexpr Vector3 kInitialCameraRotate = { 5.9f, -7.43f, 0.0f }; // 初期カメラの回転角
+constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -188.0f }; // 初期カメラの位置
+constexpr Vector4 kWhiteColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 白色
+constexpr Vector4 kPointLightPosition = { 0.0f, 1.5f, 0.0f, 0.0f }; // 点光源の位置
+constexpr Vector4 kPointLightColor = { 1.0f, 1.0f, 1.0f, 1.5f }; // 点光源の色と輝度
+constexpr float kPointLightRadius = 6.0f; // 点光源の有効半径
+constexpr float kLightDecay = 2.0f; // ライトの減衰率
+constexpr Vector4 kSpotLightPosition = { 2.0f, 1.25f, -3.0f, 0.0f }; // スポットライトの位置
+constexpr Vector4 kSpotLightColor = { 1.0f, 1.0f, 1.0f, 2.0f }; // スポットライトの色と輝度
+constexpr float kSpotLightDistance = 7.0f; // スポットライトの有効距離
+constexpr Vector3 kSpotLightDirection = { -1.0f, -1.0f, 0.0f }; // スポットライトの向き
+constexpr float kPi = 3.14159265358979323846f; // 円周率
+constexpr float kSpotLightAngle = kPi / 3.0f; // スポットライトの照射角
+constexpr float kSpotLightFalloffStartAngle = kPi / 2.0f; // スポットライトの減衰開始角
+constexpr float kInitialDebugCameraWidth = 1280.0f; // デバッグカメラの初期横解像度
+constexpr float kInitialDebugCameraHeight = 720.0f; // デバッグカメラの初期縦解像度
+constexpr float kDefaultCameraRotateSpeed = 0.01f; // 通常カメラのマウス回転速度
+constexpr float kDefaultCameraZoomSpeed = 0.1f; // 通常カメラのホイール移動速度
+constexpr float kFixedDeltaTime = 1.0f / 60.0f; // 固定更新のデルタタイム
+}
 
 Game::Game()
     : impl_(nullptr)
@@ -250,8 +273,8 @@ bool Game::InitializeEngineResources(HINSTANCE hInstance)
 void Game::InitializeCameraAndLighting()
 {
     impl_->camera = std::make_unique<Camera>();
-    impl_->camera->SetRotate({ 5.9f, -7.43f, 0.0f });
-    impl_->camera->SetTranslate({ 0.0f, 1.0f, -188.0f });
+    impl_->camera->SetRotate(kInitialCameraRotate);
+    impl_->camera->SetTranslate(kInitialCameraTranslate);
     impl_->camera->Update();
     // Object3dCommon にデフォルトカメラをセット
     impl_->object3dCommon->SetDefaultCamera(impl_->camera.get());
@@ -261,8 +284,8 @@ void Game::InitializeCameraAndLighting()
     // directionalLightData が存在する場合は、ライトの強度、色、方向を設定する
     if (directionalLightData) {
         // ライトの強度を 1.0f に設定
-        directionalLightData->intensity = 1.0f;
-        directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        directionalLightData->intensity = kWhiteColor.w;
+        directionalLightData->color = kWhiteColor;
         // ライトの方向を上向きに設定
         directionalLightData->direction = { 0.0f, 1.0f, 0.0f };
     }
@@ -270,11 +293,11 @@ void Game::InitializeCameraAndLighting()
     // 点光源の設定
     if (impl_->object3dCommon) {
         Object3d::PointLight pl = {};
-        pl.position = { 0.0f, 1.5f, 0.0f, 0.0f };
+        pl.position = kPointLightPosition;
         // 点光源の色を白に設定し、w成分に輝度を指定する（ここでは1.5fで少し強めの光にしている）
-        pl.color = { 1.0f, 1.0f, 1.0f, 1.5f };
-        pl.radius = 6.0f; // 点光源の有効範囲を半径6.0fに設定
-        pl.decay = 2.0f; // 減衰を2.0fに設定
+        pl.color = kPointLightColor;
+        pl.radius = kPointLightRadius; // 点光源の有効範囲を半径6.0fに設定
+        pl.decay = kLightDecay; // 減衰を2.0fに設定
         pl.enabled = 1; // 点光源を有効にする
         // Object3dCommon に点光源を追加する
         impl_->object3dCommon->AddPointLight(pl);
@@ -284,20 +307,20 @@ void Game::InitializeCameraAndLighting()
     if (impl_->object3dCommon) {
         auto sl = impl_->object3dCommon->GetSpotLightData();
         if (sl) {
-            sl->position = { 2.0f, 1.25f, -3.0f, 0.0f };
+            sl->position = kSpotLightPosition;
             // スポットライトの色を白に設定し、w成分に輝度を指定する（ここでは2.0fで少し強めの光にしている）
-            sl->color = { 1.0f, 1.0f, 1.0f, 2.0f };
-            sl->distance = 7.0f; // スポットライトの有効範囲を距離7.0fに設定
-            sl->direction = MathUtil::Normalize({ -1.0f, -1.0f, 0.0f }); // スポットライトの向きを下斜め左に設定
-            sl->decay = 2.0f; // 減衰を2.0fに設定
-            sl->cosAngle = cosf(3.14159265358979323846f / 3.0f); // スポットライトの照射角を60度に設定（コサイン値で指定）
-            sl->cosFalloffStart = cosf(3.14159265358979323846f / 2.0f); // スポットライトの減衰開始角を90度に設定（コサイン値で指定）
+            sl->color = kSpotLightColor;
+            sl->distance = kSpotLightDistance; // スポットライトの有効範囲を距離7.0fに設定
+            sl->direction = MathUtil::Normalize(kSpotLightDirection); // スポットライトの向きを下斜め左に設定
+            sl->decay = kLightDecay; // 減衰を2.0fに設定
+            sl->cosAngle = cosf(kSpotLightAngle); // スポットライトの照射角を60度に設定（コサイン値で指定）
+            sl->cosFalloffStart = cosf(kSpotLightFalloffStartAngle); // スポットライトの減衰開始角を90度に設定（コサイン値で指定）
             sl->enabled = 1; // スポットライトを有効にする
         }
     }
 
     // デバッグカメラの初期化（ウィンドウ解像度を指定）
-    impl_->debugCamera.Initialize(1280.0f, 720.0f);
+    impl_->debugCamera.Initialize(kInitialDebugCameraWidth, kInitialDebugCameraHeight);
 
     // Object3dCommon にデバッグカメラをセットして、UI側で編集できるようにする
     if (impl_->object3dCommon) {
@@ -476,14 +499,14 @@ void Game::Update()
                 // デフォルトカメラを操作（UIで編集しているカメラ）
                 if (impl_->camera) {
                     // 回転はラジアン単位で適用
-                    const float rotateSpeed = 0.01f;
+                    const float rotateSpeed = kDefaultCameraRotateSpeed;
                     Vector3 crot = impl_->camera->GetRotate();
                     crot.y += float(deltaX) * rotateSpeed;
                     crot.x += float(deltaY) * rotateSpeed;
                     impl_->camera->SetRotate(crot);
 
                     // ホイールで前後移動（ズーム）
-                    const float zoomSpeed = 0.1f;
+                    const float zoomSpeed = kDefaultCameraZoomSpeed;
                     Vector3 cpos = impl_->camera->GetTranslate();
                     cpos.z += float(wheelDelta) * zoomSpeed;
                     impl_->camera->SetTranslate(cpos);
@@ -504,7 +527,7 @@ void Game::Update()
     }
 
     // 固定タイムステップで更新（ここでは 1/60 秒固定）
-    const float dt = 1.0f / 60.0f;
+    const float dt = kFixedDeltaTime;
     // SoundSystem の Poll を呼び出して、サウンドの再生状態の更新やリソースの管理を行う
     impl_->soundSystem.Poll();
 
@@ -651,7 +674,7 @@ void Game::Draw()
     // ParticleManager のポインタをセットして、UIでパーティクルの情報や設定にアクセスできるようにする
     ctx.particleManager = ParticleManager::GetInstance();
     // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
-    ctx.dt = 1.0f / 60.0f;
+    ctx.dt = kFixedDeltaTime;
     ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
     // シーン名を ImGui に渡す
     if (impl_->sceneManager) {

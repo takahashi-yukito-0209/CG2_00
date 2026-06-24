@@ -20,6 +20,7 @@
 #include <unordered_set>
 
 using namespace MyEngine;
+using namespace Math;
 
 namespace MyEngine {
 

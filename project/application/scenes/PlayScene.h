@@ -23,12 +23,11 @@ class SkyBox;
 
 #include "../../engine/particle/ParticleEmitter.h"
 
-using namespace MyEngine;
 
 /// <summary>
 /// プレイシーンのクラス。IScene インターフェースを実装して、ゲームのプレイ中のシーンを表す。
 /// </summary>
-class PlayScene : public IScene {
+class PlayScene : public MyEngine::IScene {
 public: // メンバ関数
     /// <summary>
     /// コンストラクタ
@@ -43,7 +42,7 @@ public: // メンバ関数
     /// <summary>
     /// 初期化処理
     /// </summary>
-    void Initialize(const SceneContext& ctx) override;
+    void Initialize(const MyEngine::SceneContext& ctx) override;
 
     /// <summary>
     /// 終了処理
@@ -78,12 +77,12 @@ public: // メンバ関数
     /// <summary>
     /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
     /// </summary>
-    void FillObject3dPointers(std::vector<Object3d*>* out) override;
+    void FillObject3dPointers(std::vector<MyEngine::Object3d*>* out) override;
 
     /// <summary>
     /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
     /// </summary>
-    void FillSpritePointers(std::vector<Sprite*>* out) override;
+    void FillSpritePointers(std::vector<MyEngine::Sprite*>* out) override;
 
     /// <summary>
     /// シーンの名前を取得
@@ -93,7 +92,7 @@ public: // メンバ関数
     /// <summary>
     /// プレイシーンが使用しているポストプロセスを取得する
     /// </summary>
-    PostProcess* GetPostProcess() override { return &postProcess_; }
+    MyEngine::PostProcess* GetPostProcess() override { return &postProcess_; }
 
     /// <summary>
     /// 時空破砕エフェクトの調整UIを描画する
@@ -397,21 +396,21 @@ private:
     void DrawSprites();
 
 private: // メンバ変数
-    SceneContext ctx_;
-    std::vector<std::unique_ptr<Sprite>> sprites_;
-    std::vector<std::unique_ptr<Object3d>> objects3d_;
-    std::unique_ptr<Object3d> particlePlane_;
-    std::unique_ptr<Object3d> particleRing_;
-    std::unique_ptr<Object3d> particleCylinder_;
+    MyEngine::SceneContext ctx_;
+    std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
+    std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_;
+    std::unique_ptr<MyEngine::Object3d> particlePlane_;
+    std::unique_ptr<MyEngine::Object3d> particleRing_;
+    std::unique_ptr<MyEngine::Object3d> particleCylinder_;
     ParticleEmitter pmEmitter_;
     ParticleEmitter ringEmitter_;
     ParticleEmitter cylinderEmitter_;
-    std::unique_ptr<SkyBox> skybox_;
-    std::vector<std::unique_ptr<Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像
-    std::vector<std::unique_ptr<Sprite>> timeReversalSprites_; // 時間逆流専用パーティクルの表示スプライト
-    std::vector<std::unique_ptr<Sprite>> timeReversalAfterimageSprites_; // 巻き戻し軌道を表示する残像スプライト
-    std::unique_ptr<Sprite> timeReversalConvergenceSprite_; // 収束時のフラッシュ表示スプライト
-    PostProcess postProcess_; // 時空演出に使用するポストプロセス
+    std::unique_ptr<MyEngine::SkyBox> skybox_;
+    std::vector<std::unique_ptr<MyEngine::Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像
+    std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalSprites_; // 時間逆流専用パーティクルの表示スプライト
+    std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalAfterimageSprites_; // 巻き戻し軌道を表示する残像スプライト
+    std::unique_ptr<MyEngine::Sprite> timeReversalConvergenceSprite_; // 収束時のフラッシュ表示スプライト
+    MyEngine::PostProcess postProcess_; // 時空演出に使用するポストプロセス
     int sceneRenderTargetHandle_ = -1; // シーン描画用レンダーターゲット
     uint32_t sceneRenderTargetSrvIndex_ = UINT32_MAX; // シーン描画結果のSRV
     int postProcessIntermediateHandle_ = -1; // ポストエフェクト連結用の中間レンダーターゲット
@@ -424,7 +423,7 @@ private: // メンバ変数
     TimeStopPhase timeStopPhase_ = TimeStopPhase::Idle; // 現在の時間停止状態
     float timeStopPhaseTime_ = 0.0f; // 現在フェーズでの経過時間
     TimeStopSettings timeStopSettings_; // 時間停止の調整値
-    PostEffectType timeStopPreviousPostEffect_ = PostEffectType::Copy; // 再生前のポストエフェクト 
+    MyEngine::PostEffectType timeStopPreviousPostEffect_ = MyEngine::PostEffectType::Copy; // 再生前のポストエフェクト 
    std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
     std::deque<Math::Transform> timeReversalTransformHistory_; // 時間巻き戻し対象のTransform履歴
     std::mt19937 timeReversalRandom_ { std::random_device {}() }; // 粒子生成に使用する乱数

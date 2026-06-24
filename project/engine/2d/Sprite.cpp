@@ -10,6 +10,7 @@
 #include <cstdio>
 
 using namespace MyEngine;
+using namespace Math;
 
 /// <summary>
 /// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成を行う
