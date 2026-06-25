@@ -1,8 +1,6 @@
 #include "Game.h"
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
-#if 0 // imgui includes centralized in ImGuiManager.h
-#endif
 #include "mathUtility.h"
 #include <Windows.h>
 #include <cassert>
@@ -26,9 +24,7 @@
 #include <vector>
 #include <wrl.h>
 #include <xaudio2.h>
-#define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
 #include "Camera.h"
-#include "D3DResourceLeakChecker.h"
 #include "DebugCamera.h"
 #include "DirectXCommon.h"
 #include "ImGuiManager.h"
@@ -140,7 +136,6 @@ struct Game::Impl {
     bool useDebugCameraForRender = false; // レンダリングにデバッグカメラを使うか
 
     ImGuiManager imguiManager; // ImGui管理
-    std::unique_ptr<D3DResourceLeakChecker> leakChecker; // D3D リソースリークチェッカ
 
     // 保留中のシーン切替要求を格納する（ImGui コールバックから直接 ChangeScene を呼ばないため）
     std::string pendingSceneName;
@@ -215,11 +210,6 @@ bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
 
 #endif
 
-    // D3Dリソースリークチェッカはドライバの相互作用で不安定になる環境があるため
-    // 一時的に注入を無効化する（必要なら手動で有効化してください）
-#if 0
-    impl_->leakChecker = std::make_unique<D3DResourceLeakChecker>();
-#endif
 
     // DirectInput を初期化
     HRESULT result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(impl_->directInput.GetAddressOf()), nullptr);
@@ -391,6 +381,9 @@ void Game::InitializeScene()
     sctx.srvManager = &impl_->srvManager;
     sctx.directXCommon = DirectXCommon::GetInstance();
     sctx.imguiManager = &impl_->imguiManager;
+    sctx.requestSceneChange = [this](const std::string& sceneName) {
+        impl_->pendingSceneName = sceneName;
+    };
     impl_->sceneManager->SetContext(sctx);
 
     auto initial = GameApp::SceneFactory::Create("Title"); // 最初に表示するシーン
@@ -786,9 +779,6 @@ void Game::Finalize()
     DirectXCommon::GetInstance()->Finalize();
 
     // リークチェッカーは DirectX のリソース解放後、かつ COM がまだ有効なうちに破棄する
-    if (impl_->leakChecker) {
-        impl_->leakChecker.reset();
-    }
 
     // InputManager の終了処理を呼び出す
     InputManager::GetInstance()->Finalize();

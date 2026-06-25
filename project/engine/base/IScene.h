@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,7 @@ struct SceneContext {
     // 描画タイプ（Game の ImGui で選択された描画モードを渡すため）
     // 0=Model,1=Particle,2=Sprite,3=Bunny,4=Fence,5=Checker,6=Sphere,7=All
     int selectedDrawType = -1;
+    std::function<void(const std::string&)> requestSceneChange; // シーン側からのシーン切替要求
 };
 
 /// <summary>

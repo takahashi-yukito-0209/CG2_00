@@ -16,6 +16,7 @@
 #include "engine/base/SrvManager.h"
 #include "engine/particle/ParticleEmitter.h"
 #include "engine/particle/ParticleManager.h"
+#include <algorithm>
 #include <cmath>
 #include <unordered_set>
 
@@ -119,11 +120,19 @@ void ImGuiManager::Shutdown()
 /// </summary>
 void ImGuiManager::BuildUI(Context& ctx)
 {
-    ImGui::Begin("Effect Settings");
+    ImGui::Begin("Debug Settings");
+
+    DrawSceneSection(ctx);
 
     DrawPostProcessSection(ctx);
 
     DrawParticleSection(ctx);
+
+    DrawObjectSection(ctx);
+
+    DrawSpriteSection(ctx);
+
+    DrawCommonSection(ctx);
 
     ImGui::End();
 
@@ -160,6 +169,10 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
         if (ctx.currentSceneName) {
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
         }
+
+        const float frameRate = ImGui::GetIO().Framerate; // 現在のImGui計測FPS
+        const float frameTimeMs = frameRate > 0.0f ? 1000.0f / frameRate : 0.0f; // 1フレームあたりの表示時間
+        ImGui::Text("FPS: %.1f (%.3f ms)", frameRate, frameTimeMs);
     }
 #else
     (void)ctx;
@@ -537,24 +550,36 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
 void ImGuiManager::DrawObjectSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (!ctx.objects3d) {
+    if (!ctx.objects3d || ctx.objects3d->empty()) {
         return;
     }
 
     if (ImGui::CollapsingHeader("Objects")) {
-        for (int objectIndex = 0; objectIndex < static_cast<int>(ctx.objects3d->size()); ++objectIndex) {
-            Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示対象の3Dオブジェクト
-            if (!object) {
-                continue;
-            }
+        static int selectedObjectIndex = 0; // 編集対象の3Dオブジェクト番号
+        const int objectCount = static_cast<int>(ctx.objects3d->size()); // 表示可能な3Dオブジェクト数
+        selectedObjectIndex = (std::clamp)(selectedObjectIndex, 0, objectCount - 1);
 
-            ImGui::PushID(objectIndex);
-            char header[64] = {}; // オブジェクト表示名
-            sprintf_s(header, "Object %d", objectIndex);
-            if (ImGui::CollapsingHeader(header)) {
-                object->DrawImGui(objectIndex);
+        char preview[64] = {}; // コンボの現在表示名
+        sprintf_s(preview, "Object %d", selectedObjectIndex);
+        if (ImGui::BeginCombo("Target", preview)) {
+            for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
+                char label[64] = {}; // 選択候補の表示名
+                sprintf_s(label, "Object %d", objectIndex);
+                const bool isSelected = selectedObjectIndex == objectIndex; // 現在選択中か
+                if (ImGui::Selectable(label, isSelected)) {
+                    selectedObjectIndex = objectIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
             }
-            ImGui::PopID();
+            ImGui::EndCombo();
+        }
+
+        Object3d* selectedObject = (*ctx.objects3d)[selectedObjectIndex]; // 編集対象の3Dオブジェクト
+        if (selectedObject) {
+            ImGui::Separator();
+            selectedObject->DrawImGui(selectedObjectIndex);
         }
     }
 #else
@@ -567,37 +592,42 @@ void ImGuiManager::DrawObjectSection(Context& ctx)
 void ImGuiManager::DrawSpriteSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (!ctx.sprites) {
+    if (!ctx.sprites || ctx.sprites->empty()) {
         return;
     }
 
     if (ImGui::CollapsingHeader("Sprites")) {
-        int spriteIndex = 0; // 表示中のスプライト番号
+        static int selectedSpriteIndex = 0; // 編集対象のスプライト番号
+        const int spriteCount = static_cast<int>(ctx.sprites->size()); // 表示可能なスプライト数
+        selectedSpriteIndex = (std::clamp)(selectedSpriteIndex, 0, spriteCount - 1);
 
-        for (auto* sprite : *ctx.sprites) {
-            if (!sprite) {
-                ++spriteIndex;
-                continue;
+        char preview[64] = {}; // コンボの現在表示名
+        sprintf_s(preview, "Sprite %d", selectedSpriteIndex);
+        if (ImGui::BeginCombo("Target", preview)) {
+            for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
+                char label[64] = {}; // 選択候補の表示名
+                sprintf_s(label, "Sprite %d", spriteIndex);
+                const bool isSelected = selectedSpriteIndex == spriteIndex; // 現在選択中か
+                if (ImGui::Selectable(label, isSelected)) {
+                    selectedSpriteIndex = spriteIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
             }
+            ImGui::EndCombo();
+        }
 
-            ImGui::PushID(spriteIndex);
-
-            char header[64] = {};
-            sprintf_s(header, "Sprite %d", spriteIndex);
-
-            if (ImGui::CollapsingHeader(header)) {
-                sprite->DrawImGui();
-            }
-
-            ImGui::PopID();
-            ++spriteIndex;
+        Sprite* selectedSprite = (*ctx.sprites)[selectedSpriteIndex]; // 編集対象のスプライト
+        if (selectedSprite) {
+            ImGui::Separator();
+            selectedSprite->DrawImGui();
         }
     }
 #else
     (void)ctx;
 #endif
 }
-
 /// <summary>
 /// 3Dオブジェクト関連のImGuiを描画する
 /// </summary>
@@ -605,12 +635,39 @@ void ImGuiManager::DrawCommonSection(Context& ctx)
 {
 #ifdef USE_IMGUI
     if (ImGui::CollapsingHeader("Common")) {
-        if (ctx.spriteCommon) {
-            ctx.spriteCommon->DrawImGui();
+        if (ctx.spriteCommon || ctx.object3dCommon) {
+            if (ImGui::CollapsingHeader("Blend Mode")) {
+                const char* blendNames[] = {
+                    "None",
+                    "Alpha",
+                    "Add",
+                    "Subtract",
+                    "Multiply",
+                    "Screen"
+                }; // 選択可能なブレンドモード名
+
+                if (ctx.object3dCommon) {
+                    int objectBlendIndex = static_cast<int>(ctx.object3dCommon->GetBlendMode()); // 3Dオブジェクトのブレンドモード
+                    if (ImGui::Combo("1. Object3D Blend", &objectBlendIndex, blendNames, IM_ARRAYSIZE(blendNames))) {
+                        ctx.object3dCommon->SetBlendMode(static_cast<BlendMode>(objectBlendIndex));
+                    }
+                }
+
+                if (ctx.spriteCommon) {
+                    int spriteBlendIndex = static_cast<int>(ctx.spriteCommon->GetBlendMode()); // スプライトのブレンドモード
+                    if (ImGui::Combo("2. Sprite Blend", &spriteBlendIndex, blendNames, IM_ARRAYSIZE(blendNames))) {
+                        ctx.spriteCommon->SetBlendMode(static_cast<BlendMode>(spriteBlendIndex));
+                    }
+                }
+            }
         }
 
         if (ctx.object3dCommon) {
             ctx.object3dCommon->DrawImGui();
+        }
+
+        if (ctx.spriteCommon) {
+            ctx.spriteCommon->DrawImGui();
         }
     }
 #else

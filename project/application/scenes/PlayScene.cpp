@@ -24,6 +24,78 @@
 using namespace MyEngine;
 using namespace Math;
 
+namespace {
+constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
+constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
+constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
+constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
+constexpr float kNdcToUvScale = 0.5f; // NDC座標をUV座標へ変換する倍率
+constexpr float kNdcToUvOffset = 0.5f; // NDC座標をUV座標へ変換するオフセット
+constexpr float kHistorySampleRate = 60.0f; // 履歴時間をフレーム数へ変換する基準値
+constexpr float kTemporalVerticalDisplacementRate = 0.25f; // 時間ずれの縦方向移動率
+constexpr float kAfterimageBaseScaleRate = 0.75f; // 残像サイズの基準倍率
+constexpr float kAfterimageScaleRange = 0.25f; // 残像サイズの変化幅
+constexpr float kTimeReversalDistortionDampingRate = 0.35f; // 時間逆流中の歪み減衰率
+constexpr float kParticleShrinkRate = 0.35f; // 時間経過による粒子縮小率
+constexpr float kParticleAlphaFadeRate = 0.5f; // 時間経過による粒子透明度の減衰率
+constexpr float kRewindAfterimageBaseSizeRate = 0.85f; // 巻き戻し残像サイズの基準倍率
+constexpr float kRewindAfterimageSizeStep = 0.12f; // 巻き戻し残像ごとのサイズ減少量
+constexpr float kConvergenceFlashStartScale = 0.25f; // 収束フラッシュの開始倍率
+constexpr float kConvergenceFlashScaleRange = 0.75f; // 収束フラッシュの拡大幅
+constexpr float kConvergenceFlashColorAlpha = 0.75f; // 収束フラッシュ色の基準アルファ
+constexpr float kCrackRedBoost = 0.18f; // 亀裂色の赤成分加算量
+constexpr float kCrackBlueBoost = 0.12f; // 亀裂色の青成分加算量
+constexpr float kInnerRingStartRadius = 0.12f; // 内側リングの開始半径
+constexpr float kInnerRingEndRadius = 1.8f; // 内側リングの終了半径
+constexpr float kInnerRingLifeTime = 0.55f; // 内側リングの生存時間
+constexpr float kOuterRingStartRadius = 0.28f; // 外側リングの開始半径
+constexpr float kOuterRingEndRadius = 2.5f; // 外側リングの終了半径
+constexpr float kOuterRingLifeTime = 0.85f; // 外側リングの生存時間
+constexpr float kCameraShakePhaseX = 1.37f; // カメラ揺れX方向の位相倍率
+constexpr float kCameraShakePhaseY = 1.91f; // カメラ揺れY方向の位相倍率
+constexpr float kCameraShakePhaseZ = 1.13f; // カメラ揺れZ方向の位相倍率
+constexpr float kCameraShakeOffsetY = 1.2f; // カメラ揺れY方向の位相オフセット
+constexpr float kCameraShakeOffsetZ = 2.4f; // カメラ揺れZ方向の位相オフセット
+constexpr float kCameraShakeAmplitudeY = 0.65f; // カメラ揺れY方向の振幅倍率
+constexpr float kCameraShakeAmplitudeZ = 0.35f; // カメラ揺れZ方向の振幅倍率
+/// <summary>
+/// ワールド座標を画面UV座標へ変換する
+/// </summary>
+Vector2 CalculateScreenUvFromWorldPosition(const Camera* camera, const Vector3& worldPosition)
+{
+    if (!camera) {
+        return kScreenCenterUv;
+    }
+
+    const Matrix4x4 viewProjection = MathUtil::Multiply(
+        camera->GetViewMatrix(),
+        camera->GetProjectionMatrix()); // ワールド座標をクリップ座標へ変換する行列
+    const float clipX = worldPosition.x * viewProjection.m[0][0]
+        + worldPosition.y * viewProjection.m[1][0]
+        + worldPosition.z * viewProjection.m[2][0]
+        + viewProjection.m[3][0]; // クリップ座標のX成分
+    const float clipY = worldPosition.x * viewProjection.m[0][1]
+        + worldPosition.y * viewProjection.m[1][1]
+        + worldPosition.z * viewProjection.m[2][1]
+        + viewProjection.m[3][1]; // クリップ座標のY成分
+    const float clipW = worldPosition.x * viewProjection.m[0][3]
+        + worldPosition.y * viewProjection.m[1][3]
+        + worldPosition.z * viewProjection.m[2][3]
+        + viewProjection.m[3][3]; // 透視除算に使用するW成分
+    if (clipW <= kMinimumClipW) {
+        return kScreenCenterUv;
+    }
+
+    Vector2 screenUv = {
+        (clipX / clipW) * kNdcToUvScale + kNdcToUvOffset,
+        -(clipY / clipW) * kNdcToUvScale + kNdcToUvOffset,
+    }; // NDC座標を画面UV座標へ変換した結果
+    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
+    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
+    return screenUv;
+}
+}
+
 /// <summary>
 /// コンストラクタ
 /// </summary>
@@ -34,9 +106,6 @@ PlayScene::PlayScene() { }
 /// </summary>
 PlayScene::~PlayScene() { }
 
-/// <summary>
-/// 初期化処理
-/// </summary>
 /// <summary>
 /// パーティクル描画用オブジェクトを初期化する
 /// </summary>
@@ -120,7 +189,7 @@ void PlayScene::InitializeTemporalEffectSprites()
             ctx_.spriteCommon,
             "circle2.png",
             ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         afterimageSprite->SetSize({ 1.0f, 1.0f });
         afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
         afterimageSprite->Update();
@@ -135,7 +204,7 @@ void PlayScene::InitializeTemporalEffectSprites()
             ctx_.spriteCommon,
             "circle2.png",
             ctx_.imguiManager);
-        particleSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        particleSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         particleSprite->SetSize({ 1.0f, 1.0f });
         particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
         particleSprite->Update();
@@ -154,7 +223,7 @@ void PlayScene::InitializeTemporalEffectSprites()
             ctx_.spriteCommon,
             "circle2.png",
             ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint({ 0.5f, 0.5f });
+        afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         afterimageSprite->SetSize({ 1.0f, 1.0f });
         afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
         afterimageSprite->Update();
@@ -166,7 +235,7 @@ void PlayScene::InitializeTemporalEffectSprites()
         ctx_.spriteCommon,
         "circle2.png",
         ctx_.imguiManager);
-    timeReversalConvergenceSprite_->SetAnchorPoint({ 0.5f, 0.5f });
+    timeReversalConvergenceSprite_->SetAnchorPoint(kCenteredSpriteAnchor);
     timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
     timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
     timeReversalConvergenceSprite_->Update();
@@ -414,12 +483,6 @@ void PlayScene::Update(float dt)
     UpdateTimeReversalSprites();
 }
 
-/// <summary>
-/// 描画処理
-/// </summary>
-/// <summary>
-/// 時空破砕エフェクトを開始する
-/// </summary>
 /// <summary>
 /// 時空破砕エフェクトの調整UIを描画する
 /// </summary>
@@ -890,9 +953,6 @@ void PlayScene::DrawImGui()
 }
 
 /// <summary>
-/// 時空破砕エフェクトを開始する
-/// </summary>
-/// <summary>
 /// ImGuiで選択中のエフェクトを開始する
 /// </summary>
 void PlayScene::StartSelectedEffect()
@@ -937,9 +997,6 @@ bool PlayScene::IsAnyEffectPlaying() const
 }
 
 /// <summary>
-/// 次元破砕エフェクトを開始する
-/// </summary>
-/// <summary>
 /// 時間停止エフェクトを開始する
 /// </summary>
 void PlayScene::StartTimeStopEffect()
@@ -980,7 +1037,7 @@ void PlayScene::UpdateTimeStopEffect(float deltaTime)
         break;
 
     case TimeStopPhase::Entering: {
-        const float duration = (std::max)(timeStopSettings_.enterDuration, 0.0001f); // 開始演出時間
+        const float duration = (std::max)(timeStopSettings_.enterDuration, kMinimumEffectDuration); // 開始演出時間
         const float progress = (std::clamp)(timeStopPhaseTime_ / duration, 0.0f, 1.0f); // 開始演出の進行率
         postProcess_.SetEffectType(PostEffectType::Distortion);
         postProcess_.SetDistortionStrength(-timeStopSettings_.distortionStrength * progress);
@@ -1011,7 +1068,7 @@ void PlayScene::UpdateTimeStopEffect(float deltaTime)
         break;
 
     case TimeStopPhase::Releasing: {
-        const float duration = (std::max)(timeStopSettings_.releaseDuration, 0.0001f); // 再開演出時間
+        const float duration = (std::max)(timeStopSettings_.releaseDuration, kMinimumEffectDuration); // 再開演出時間
         const float progress = (std::clamp)(timeStopPhaseTime_ / duration, 0.0f, 1.0f); // 再開演出の進行率
         postProcess_.SetEffectType(PostEffectType::Distortion);
         postProcess_.SetDistortionStrength(timeStopSettings_.distortionStrength * (1.0f - progress));
@@ -1114,7 +1171,7 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
     if (timeReversalPhase_ == TimeReversalPhase::Rewinding) {
         const float rewindDuration = (std::max)(
             timeReversalSettings_.rewindDuration,
-            0.0001f); // ゼロ除算を防ぐ巻き戻し時間
+            kMinimumEffectDuration); // ゼロ除算を防ぐ巻き戻し時間
         const float rewindRate = (std::clamp)(
             timeReversalPhaseTime_ / rewindDuration,
             0.0f,
@@ -1135,7 +1192,7 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
         postProcess_.SetDistortionRadius(timeReversalSettings_.distortionRadius);
         postProcess_.SetDistortionWaveCount(timeReversalSettings_.distortionWaveCount);
         postProcess_.SetDistortionStrength(
-            timeReversalSettings_.distortionStrength * (1.0f - rewindRate * 0.35f));
+            timeReversalSettings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
         postProcess_.SetDistortionProgress(rewindRate);
         ApplyTimeReversalTransform();
 
@@ -1149,7 +1206,7 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
     if (timeReversalPhase_ == TimeReversalPhase::Converging) {
         const float convergenceDuration = (std::max)(
             timeReversalSettings_.convergenceDuration,
-            0.0001f); // ゼロ除算を防ぐ収束演出時間
+            kMinimumEffectDuration); // ゼロ除算を防ぐ収束演出時間
         const float convergenceRate = (std::clamp)(
             timeReversalPhaseTime_ / convergenceDuration,
             0.0f,
@@ -1212,7 +1269,7 @@ void PlayScene::UpdateTimeReversalSprites()
             ? (std::clamp)(particle.elapsedTime / particle.lifeTime, 0.0f, 1.0f)
             : 1.0f; // 拡散フェーズの進行率
         const float size = timeReversalSettings_.particleSize
-            * (1.0f - lifeRate * 0.35f); // 時間経過で少し縮小した粒子サイズ
+            * (1.0f - lifeRate * kParticleShrinkRate); // 時間経過で少し縮小した粒子サイズ
 
         particleSprite->SetPosition({
             screenUv.x * static_cast<float>(WinApp::kWindowWidth),
@@ -1223,7 +1280,7 @@ void PlayScene::UpdateTimeReversalSprites()
             timeReversalSettings_.particleColor.x,
             timeReversalSettings_.particleColor.y,
             timeReversalSettings_.particleColor.z,
-            timeReversalSettings_.particleColor.w * (1.0f - lifeRate * 0.5f),
+            timeReversalSettings_.particleColor.w * (1.0f - lifeRate * kParticleAlphaFadeRate),
         });
         particleSprite->Update();
     }
@@ -1235,7 +1292,7 @@ void PlayScene::UpdateTimeReversalSprites()
         static_cast<int>(kMaximumRewindAfterimageCount))); // 実際に表示する残像数
     const float rewindDuration = (std::max)(
         timeReversalSettings_.rewindDuration,
-        0.0001f); // 残像位置の計算に使用する巻き戻し時間
+        kMinimumEffectDuration); // 残像位置の計算に使用する巻き戻し時間
     const float rewindRate = (std::clamp)(
         timeReversalPhaseTime_ / rewindDuration,
         0.0f,
@@ -1287,8 +1344,8 @@ void PlayScene::UpdateTimeReversalSprites()
         const float alphaRate = 1.0f
             - static_cast<float>(afterimageIndex)
                 / static_cast<float>((std::max)(afterimageCount, size_t { 1 })); // 後方ほど薄くする係数
-        const float sizeRate = 0.85f
-            - static_cast<float>(afterimageIndex) * 0.12f; // 後方ほど小さくする係数
+        const float sizeRate = kRewindAfterimageBaseSizeRate
+            - static_cast<float>(afterimageIndex) * kRewindAfterimageSizeStep; // 後方ほど小さくする係数
 
         afterimageSprite->SetPosition({
             screenUv.x * static_cast<float>(WinApp::kWindowWidth),
@@ -1315,7 +1372,7 @@ void PlayScene::UpdateTimeReversalSprites()
         } else {
             const float convergenceDuration = (std::max)(
                 timeReversalSettings_.convergenceDuration,
-                0.0001f); // フラッシュ計算に使用する収束時間
+                kMinimumEffectDuration); // フラッシュ計算に使用する収束時間
             const float convergenceRate = (std::clamp)(
                 timeReversalPhaseTime_ / convergenceDuration,
                 0.0f,
@@ -1323,7 +1380,7 @@ void PlayScene::UpdateTimeReversalSprites()
             const Vector2 screenUv = CalculateWorldScreenUv(
                 timeReversalSettings_.effectPosition); // 収束地点の画面UV
             const float flashSize = timeReversalSettings_.convergenceFlashSize
-                * (0.25f + convergenceRate * 0.75f); // 中心から広がるフラッシュサイズ
+                * (kConvergenceFlashStartScale + convergenceRate * kConvergenceFlashScaleRange); // 中心から広がるフラッシュサイズ
             const float flashAlpha = timeReversalSettings_.convergenceFlashAlpha
                 * (1.0f - convergenceRate); // 終了へ向けて減衰する透明度
 
@@ -1333,7 +1390,7 @@ void PlayScene::UpdateTimeReversalSprites()
             });
             timeReversalConvergenceSprite_->SetSize({ flashSize, flashSize });
             timeReversalConvergenceSprite_->SetColor({
-                0.75f,
+                kConvergenceFlashColorAlpha,
                 0.92f,
                 1.0f,
                 flashAlpha,
@@ -1349,7 +1406,6 @@ void PlayScene::UpdateTimeReversalSprites()
 void PlayScene::UpdateTimeReversalTransformHistory()
 {
     constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
-    constexpr float kHistorySampleRate = 60.0f; // 履歴時間をフレーム数へ変換する基準値
 
     if (timeReversalPhase_ != TimeReversalPhase::Idle
         || temporalRiftPhase_ != TemporalRiftPhase::Idle
@@ -1388,7 +1444,7 @@ void PlayScene::ApplyTimeReversalTransform()
 
     const float rewindDuration = (std::max)(
         timeReversalSettings_.rewindDuration,
-        0.0001f); // Transform巻き戻しに使用する時間
+        kMinimumEffectDuration); // Transform巻き戻しに使用する時間
     const float rewindRate = (std::clamp)(
         timeReversalPhaseTime_ / rewindDuration,
         0.0f,
@@ -1587,89 +1643,19 @@ void PlayScene::UpdateTemporalRiftEffect(float deltaTime)
 }
 
 /// <summary>
-/// 空間亀裂を複数生成する
-/// </summary>
-/// <summary>
 /// 時空破砕のワールド座標を画面UV座標へ変換する
 /// </summary>
 Math::Vector2 PlayScene::CalculateTemporalRiftScreenUv() const
 {
-    constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
-    constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
-
-    if (!ctx_.camera) {
-        return kScreenCenterUv;
-    }
-
-    const Matrix4x4 viewProjection = MathUtil::Multiply(
-        ctx_.camera->GetViewMatrix(),
-        ctx_.camera->GetProjectionMatrix()); // ワールド座標をクリップ座標へ変換する行列
-    const float clipX = temporalRiftPosition_.x * viewProjection.m[0][0]
-        + temporalRiftPosition_.y * viewProjection.m[1][0]
-        + temporalRiftPosition_.z * viewProjection.m[2][0]
-        + viewProjection.m[3][0]; // クリップ座標のX成分
-    const float clipY = temporalRiftPosition_.x * viewProjection.m[0][1]
-        + temporalRiftPosition_.y * viewProjection.m[1][1]
-        + temporalRiftPosition_.z * viewProjection.m[2][1]
-        + viewProjection.m[3][1]; // クリップ座標のY成分
-    const float clipW = temporalRiftPosition_.x * viewProjection.m[0][3]
-        + temporalRiftPosition_.y * viewProjection.m[1][3]
-        + temporalRiftPosition_.z * viewProjection.m[2][3]
-        + viewProjection.m[3][3]; // 透視除算に使用するW成分
-
-    if (clipW <= kMinimumClipW) {
-        return kScreenCenterUv;
-    }
-
-    const float ndcX = clipX / clipW; // 透視除算後のX座標
-    const float ndcY = clipY / clipW; // 透視除算後のY座標
-    Vector2 screenUv = {
-        ndcX * 0.5f + 0.5f,
-        -ndcY * 0.5f + 0.5f,
-    }; // NDC座標を左上原点のUV座標へ変換した結果
-
-    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
-    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
-    return screenUv;
+    return CalculateScreenUvFromWorldPosition(ctx_.camera, temporalRiftPosition_);
 }
 
 /// <summary>
-/// 空間亀裂を複数生成する
+/// ワールド座標を画面UV座標へ変換する
 /// </summary>
 Math::Vector2 PlayScene::CalculateWorldScreenUv(const Math::Vector3& worldPosition) const
 {
-    constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
-    constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
-    if (!ctx_.camera) {
-        return kScreenCenterUv;
-    }
-
-    const Matrix4x4 viewProjection = MathUtil::Multiply(
-        ctx_.camera->GetViewMatrix(),
-        ctx_.camera->GetProjectionMatrix()); // ワールド座標をクリップ座標へ変換する行列
-    const float clipX = worldPosition.x * viewProjection.m[0][0]
-        + worldPosition.y * viewProjection.m[1][0]
-        + worldPosition.z * viewProjection.m[2][0]
-        + viewProjection.m[3][0]; // クリップ座標のX成分
-    const float clipY = worldPosition.x * viewProjection.m[0][1]
-        + worldPosition.y * viewProjection.m[1][1]
-        + worldPosition.z * viewProjection.m[2][1]
-        + viewProjection.m[3][1]; // クリップ座標のY成分
-    const float clipW = worldPosition.x * viewProjection.m[0][3]
-        + worldPosition.y * viewProjection.m[1][3]
-        + worldPosition.z * viewProjection.m[2][3]
-        + viewProjection.m[3][3]; // 透視除算に使用するW成分
-    if (clipW <= kMinimumClipW) {
-        return kScreenCenterUv;
-    }
-
-    Vector2 screenUv = {
-        (clipX / clipW) * 0.5f + 0.5f,
-        -(clipY / clipW) * 0.5f + 0.5f,
-    }; // NDC座標を左上原点のUV座標へ変換した結果
-    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
-    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
-    return screenUv;
+    return CalculateScreenUvFromWorldPosition(ctx_.camera, worldPosition);
 }
 
 /// <summary>
@@ -1718,7 +1704,7 @@ void PlayScene::UpdateTemporalAfterimages()
     const float displacement = temporalRiftSettings_.temporalDisplacement * displacementRate; // 現在の時間ずれ移動量
     Vector3 displacedPosition = temporalTargetBaseTransform_.translate; // 時間ずれ適用後の位置
     displacedPosition.x += displacement;
-    displacedPosition.y += displacement * 0.25f;
+    displacedPosition.y += displacement * kTemporalVerticalDisplacementRate;
     temporalTarget->SetTranslate(displacedPosition);
 
     Transform currentTransform {}; // 履歴へ保存する現在のTransform
@@ -1774,7 +1760,7 @@ void PlayScene::UpdateAfterimageSprites()
             / 3.0f; // Transformのスケール平均
         const float spriteSize = temporalRiftSettings_.afterimageSize
             * (std::max)(scaleAverage, 0.1f)
-            * (0.75f + lifeRate * 0.25f); // 過去Transformに応じた表示サイズ
+            * (kAfterimageBaseScaleRate + lifeRate * kAfterimageScaleRange); // 過去Transformに応じた表示サイズ
 
         afterimageSprite->SetPosition({
             screenUv.x * static_cast<float>(WinApp::kWindowWidth),
@@ -1809,9 +1795,6 @@ void PlayScene::DrawTemporalAfterimages()
     }
 }
 
-/// <summary>
-/// 空間亀裂を複数生成する
-/// </summary>
 /// <summary>
 /// 破砕時のヒットストップとカメラシェイクを開始する
 /// </summary>
@@ -1858,9 +1841,9 @@ void PlayScene::UpdateImpactResponse(float deltaTime)
     const float strength = temporalRiftSettings_.cameraShakeStrength
         * shakeRate; // 減衰を反映した現在の揺れ幅
     const Vector3 shakeOffset = {
-        std::sin(phase * 1.37f) * strength,
-        std::sin(phase * 1.91f + 1.2f) * strength * 0.65f,
-        std::sin(phase * 1.13f + 2.4f) * strength * 0.35f,
+        std::sin(phase * kCameraShakePhaseX) * strength,
+        std::sin(phase * kCameraShakePhaseY + kCameraShakeOffsetY) * strength * kCameraShakeAmplitudeY,
+        std::sin(phase * kCameraShakePhaseZ + kCameraShakeOffsetZ) * strength * kCameraShakeAmplitudeZ,
     }; // 軸ごとに周期をずらしたカメラ移動量
     ctx_.camera->SetTranslate({
         cameraShakeBasePosition_.x + shakeOffset.x,
@@ -1911,7 +1894,7 @@ void PlayScene::EmitSpaceCracks()
         temporalRiftSettings_.crackCount,
         1,
         static_cast<int>(kCrackAngles.size())); // 生成する亀裂総数
-    const float crackDuration = (std::max)(temporalRiftSettings_.crackDuration, 0.0001f); // 亀裂展開時間
+    const float crackDuration = (std::max)(temporalRiftSettings_.crackDuration, kMinimumEffectDuration); // 亀裂展開時間
     const float progress = (std::clamp)(temporalRiftPhaseTime_ / crackDuration, 0.0f, 1.0f); // 亀裂展開の進行率
     const int targetCrackCount = (std::min)(
         crackCount,
@@ -1931,8 +1914,8 @@ void PlayScene::EmitSpaceCracks()
         const float crackWidth = temporalRiftSettings_.crackWidth
             + static_cast<float>(crackIndex % 2) * temporalRiftSettings_.crackWidthVariation; // 枝ごとの太さ
         Vector4 crackColor = temporalRiftSettings_.crackColor; // 亀裂の発光色
-        crackColor.x = (std::min)(crackColor.x + branchRate * 0.18f, 1.0f);
-        crackColor.z = (std::min)(crackColor.z + branchRate * 0.12f, 1.0f);
+        crackColor.x = (std::min)(crackColor.x + branchRate * kCrackRedBoost, 1.0f);
+        crackColor.z = (std::min)(crackColor.z + branchRate * kCrackBlueBoost, 1.0f);
 
         particleManager->EmitSpaceCrack(
             "Hit",
@@ -1963,17 +1946,17 @@ void PlayScene::EmitRiftBurst()
         temporalRiftPosition_,
         innerRingCount,
         temporalRiftSettings_.innerRingColor,
-        0.12f,
-        1.8f,
-        0.55f);
+        kInnerRingStartRadius,
+        kInnerRingEndRadius,
+        kInnerRingLifeTime);
     particleManager->EmitRiftRing(
         "Ring",
         temporalRiftPosition_,
         outerRingCount,
         temporalRiftSettings_.outerRingColor,
-        0.28f,
-        2.5f,
-        0.85f);
+        kOuterRingStartRadius,
+        kOuterRingEndRadius,
+        kOuterRingLifeTime);
     particleManager->EmitRiftFragments(
         "Hit",
         temporalRiftPosition_,

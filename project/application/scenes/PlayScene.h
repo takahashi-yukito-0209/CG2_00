@@ -366,9 +366,6 @@ private:
     void EmitRiftBurst();
 
     /// <summary>
-    /// 3Dオブジェクトとパーティクルを描画する
-    /// </summary>
-    /// <summary>
     /// パーティクル描画用オブジェクトを初期化する
     /// </summary>
     void InitializeParticleObjects();

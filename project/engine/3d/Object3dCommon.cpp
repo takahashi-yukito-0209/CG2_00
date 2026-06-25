@@ -337,15 +337,6 @@ void Object3dCommon::DrawImGui()
         }
     }
 
-    // ブレンドモードの編集UI
-    if (ImGui::CollapsingHeader("Blend Mode")) {
-        const char* blendNames[] = { "None", "Alpha", "Add", "Subtract", "Multiply", "Screen" };
-        int blendIdx = static_cast<int>(GetBlendMode());
-        if (ImGui::Combo("Object3D Blend", &blendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-            SetBlendMode(static_cast<BlendMode>(blendIdx));
-        }
-    }
-
     ImGui::PopID();
 }
 

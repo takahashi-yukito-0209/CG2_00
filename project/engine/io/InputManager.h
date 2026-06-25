@@ -1,5 +1,8 @@
 #pragma once
 #include <cstdint>
+#ifndef DIRECTINPUT_VERSION
+#define DIRECTINPUT_VERSION 0x0800 // DirectInputの使用バージョン
+#endif
 #include <dinput.h>
 #include <wrl.h>
 

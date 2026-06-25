@@ -47,28 +47,7 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 #ifdef USE_IMGUI
 void SpriteCommon::DrawImGui()
 {
-    // Sprite用のID空間を分ける
-    ImGui::PushID("SpriteCommon");
-
-    // ブレンドモード設定
-    if (ImGui::CollapsingHeader("Blend Mode")) {
-        const char* blendNames[] = {
-            "None",
-            "Alpha",
-            "Add",
-            "Subtract",
-            "Multiply",
-            "Screen"
-        };
-
-        int spriteBlendIdx = static_cast<int>(GetBlendMode()); // 現在選択中のスプライト用ブレンドモード
-
-        if (ImGui::Combo("Sprite Blend", &spriteBlendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-            SetBlendMode(static_cast<BlendMode>(spriteBlendIdx));
-        }
-    }
-
-    ImGui::PopID();
+    // ブレンドモードは ImGuiManager の Common セクションでまとめて表示する
 }
 #else
 void SpriteCommon::DrawImGui() { (void)0; }
