@@ -25,6 +25,6 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     output.color = float4(
         textureColor.rgb * vignette,
-        textureColor.a);
+        1.0f);
     return output;
 }

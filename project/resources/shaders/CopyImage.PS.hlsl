@@ -12,5 +12,6 @@ PSOutput main(VertexShaderOutput input)
 {
     PSOutput o;
     o.color = gTexture.Sample(gSampler, input.texcoord);
+    o.color.a = 1.0f;
     return o;
 }

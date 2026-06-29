@@ -56,6 +56,10 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
         ImGui::CreateContext();
     }
 
+    ImGuiIO& imguiIo = ImGui::GetIO(); // ImGui全体の設定を扱うIO情報
+    imguiIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ドッキング機能を有効化する
+    imguiIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // ImGuiウィンドウをメイン画面外へ出せるようにする
+
     // ImGuiのスタイルをカスタマイズする
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -72,6 +76,11 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
     colors[ImGuiCol_Button] = ImVec4(0.25f, 0.32f, 0.40f, 1.00f);
     colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.42f, 0.50f, 1.00f);
     colors[ImGuiCol_ButtonActive] = ImVec4(0.40f, 0.48f, 0.56f, 1.00f);
+
+    if (imguiIo.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        style.WindowRounding = 0.0f; // 外部ウィンドウと通常ウィンドウの見た目を揃える
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f; // 外部ウィンドウ背景を不透明にする
+    }
 
     // バックエンドの初期化
     ImGui_ImplWin32_Init(hwnd);
@@ -120,6 +129,10 @@ void ImGuiManager::Shutdown()
 /// </summary>
 void ImGuiManager::BuildUI(Context& ctx)
 {
+    DrawDockSpace();
+
+    DrawSceneViewWindow(ctx);
+
     ImGui::Begin("Debug Settings");
 
     DrawSceneSection(ctx);
@@ -146,6 +159,12 @@ void ImGuiManager::Render(ID3D12GraphicsCommandList* commandList)
     // ImGui の描画コマンドを発行する。ImGui::Render とバックエンドの Render を呼び出す
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+    ImGuiIO& imguiIo = ImGui::GetIO(); // ImGui全体の設定を扱うIO情報
+    if (imguiIo.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows(); // メイン画面外へ出したImGuiウィンドウを更新する
+        ImGui::RenderPlatformWindowsDefault(); // 追加ウィンドウの描画を実行する
+    }
 }
 
 bool ImGuiManager::IsCapturingInput()
@@ -160,6 +179,85 @@ bool ImGuiManager::IsCapturingInput()
 }
 
 /// <summary>
+/// メインウィンドウ全体に ImGui のドッキング領域を作成する
+/// </summary>
+void ImGuiManager::DrawDockSpace()
+{
+#ifdef USE_IMGUI
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport(); // DockSpaceを配置するメインビューポート
+    ImGui::SetNextWindowPos(mainViewport->WorkPos);
+    ImGui::SetNextWindowSize(mainViewport->WorkSize);
+    ImGui::SetNextWindowViewport(mainViewport->ID);
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking; // DockSpace用ウィンドウの基本フラグ
+    windowFlags |= ImGuiWindowFlags_NoTitleBar;
+    windowFlags |= ImGuiWindowFlags_NoCollapse;
+    windowFlags |= ImGuiWindowFlags_NoResize;
+    windowFlags |= ImGuiWindowFlags_NoMove;
+    windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
+    windowFlags |= ImGuiWindowFlags_NoNavFocus;
+    windowFlags |= ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("Main DockSpace", nullptr, windowFlags);
+    ImGui::PopStyleVar(2);
+
+    ImGuiID dockSpaceId = ImGui::GetID("MainDockSpace"); // DockSpaceを識別するID
+    ImGuiDockNodeFlags dockSpaceFlags = ImGuiDockNodeFlags_PassthruCentralNode; // 中央部分はゲーム画面を見せる
+    ImGui::DockSpace(dockSpaceId, ImVec2(0.0f, 0.0f), dockSpaceFlags);
+
+    ImGui::End();
+#endif
+}
+/// <summary>
+/// シーン表示用テクスチャをImGuiウィンドウ内に描画する
+/// </summary>
+void ImGuiManager::DrawSceneViewWindow(Context& ctx)
+{
+#ifdef USE_IMGUI
+    ImGui::Begin("Scene View");
+
+    const bool hasSceneTexture = ctx.srvManager && ctx.sceneViewSrvIndex != UINT32_MAX; // Scene Viewへ表示できるSRVがあるか
+    if (!hasSceneTexture) {
+        ImGui::TextDisabled("No scene texture");
+        ImGui::End();
+        return;
+    }
+
+    ImVec2 availableSize = ImGui::GetContentRegionAvail(); // Scene View内で画像表示に使える領域
+    if (availableSize.x <= 1.0f || availableSize.y <= 1.0f) {
+        ImGui::End();
+        return;
+    }
+
+    const float sourceWidth = ctx.sceneViewWidth > 0.0f ? ctx.sceneViewWidth : availableSize.x; // 元テクスチャの横幅
+    const float sourceHeight = ctx.sceneViewHeight > 0.0f ? ctx.sceneViewHeight : availableSize.y; // 元テクスチャの縦幅
+    const float sourceAspect = sourceWidth / sourceHeight; // 元テクスチャのアスペクト比
+    const float availableAspect = availableSize.x / availableSize.y; // 表示領域のアスペクト比
+
+    ImVec2 imageSize = availableSize; // 実際に表示する画像サイズ
+    if (availableAspect > sourceAspect) {
+        imageSize.x = imageSize.y * sourceAspect;
+    } else {
+        imageSize.y = imageSize.x / sourceAspect;
+    }
+
+    const float offsetX = (availableSize.x - imageSize.x) * 0.5f; // 中央寄せ用の横オフセット
+    if (offsetX > 0.0f) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE sceneSrvHandle = ctx.srvManager->GetGPUDescriptorHandle(ctx.sceneViewSrvIndex); // Scene View用SRVのGPUハンドル
+    ImTextureRef sceneTexture(static_cast<ImTextureID>(sceneSrvHandle.ptr)); // ImGuiへ渡すテクスチャ参照
+    ImGui::Image(sceneTexture, imageSize);
+
+    ImGui::End();
+#else
+    (void)ctx;
+#endif
+}
+/// <summary>
 /// シーン情報をImGuiで描画する
 /// </summary>
 void ImGuiManager::DrawSceneSection(Context& ctx)
@@ -168,6 +266,22 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
     if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ctx.currentSceneName) {
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
+        }
+
+        if (ctx.selectedDrawType) {
+            const char* drawTypeLabels[] = {
+                "Model",
+                "Particle",
+                "Sprite",
+                "Bunny",
+                "Fence",
+                "Checker",
+                "Sphere",
+                "All"
+            }; // 描画対象の表示名
+            constexpr int drawTypeCount = static_cast<int>(sizeof(drawTypeLabels) / sizeof(drawTypeLabels[0])); // 描画対象数
+            *ctx.selectedDrawType = (std::clamp)(*ctx.selectedDrawType, 0, drawTypeCount - 1);
+            ImGui::Combo("Draw Target", ctx.selectedDrawType, drawTypeLabels, drawTypeCount);
         }
 
         const float frameRate = ImGui::GetIO().Framerate; // 現在のImGui計測FPS
@@ -711,3 +825,7 @@ bool ImGuiManager::IsCapturingInput() { return false; }
 #endif // USE_IMGUI
 
 } // namespace MyEngine
+
+
+
+

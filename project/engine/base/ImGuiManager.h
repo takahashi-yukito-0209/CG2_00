@@ -22,6 +22,7 @@ class ParticleManager;
 class PostProcess;
 }
 
+#include <cstdint>
 #include <vector>
 
 namespace MyEngine {
@@ -71,9 +72,14 @@ public: // メンバ関数
         float dt = 0.0f;
         // レンダリングにデバッグカメラを使うかどうかのフラグへのポインタ
         bool* useDebugCameraForRender = nullptr;
+        int* selectedDrawType = nullptr; // 現在の描画対象を選択する値
         // 現在のシーン名へのポインタ
         const char* currentSceneName = nullptr;
         PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス
+        SrvManager* srvManager = nullptr; // Scene View用SRVをGPUハンドルへ変換するSRV管理
+        uint32_t sceneViewSrvIndex = UINT32_MAX; // Scene Viewに表示するシーン描画結果のSRV番号
+        float sceneViewWidth = 0.0f; // Scene Viewに表示するシーン描画結果の横幅
+        float sceneViewHeight = 0.0f; // Scene Viewに表示するシーン描画結果の縦幅
         // シーン変更要求のコールバック関数（引数は新しいシーン名）
     };
 
@@ -94,9 +100,19 @@ public: // メンバ関数
 
 private: // メンバ関数
     /// <summary>
+    /// シーン表示用テクスチャをImGuiウィンドウ内に描画する
+    /// </summary>
+    void DrawSceneViewWindow(Context& ctx);
+
+    /// <summary>
     /// シーン情報をImGuiで描画する
     /// </summary>
     void DrawSceneSection(Context& ctx);
+
+    /// <summary>
+    /// メインウィンドウ全体に ImGui のドッキング領域を作成する
+    /// </summary>
+    void DrawDockSpace();
 
     /// <summary>
     /// ポストエフェクトの設定と状態をImGuiへ表示する
@@ -129,3 +145,9 @@ private: // メンバ関数
     void DrawCameraWindow(Context& ctx);
 };
 } // namespace MyEngine
+
+
+
+
+
+

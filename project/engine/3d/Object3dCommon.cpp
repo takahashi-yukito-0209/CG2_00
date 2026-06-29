@@ -964,7 +964,7 @@ void Object3dCommon::CreateGraphicsPipeline()
         particleRenderTargetBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
         particleRenderTargetBlend.DestBlend = D3D12_BLEND_ONE;
         particleRenderTargetBlend.BlendOp = D3D12_BLEND_OP_ADD;
-        particleRenderTargetBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        particleRenderTargetBlend.SrcBlendAlpha = D3D12_BLEND_ZERO;
         particleRenderTargetBlend.DestBlendAlpha = D3D12_BLEND_ONE;
         particleRenderTargetBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
         particleRenderTargetBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
@@ -1048,3 +1048,4 @@ D3D12_GPU_DESCRIPTOR_HANDLE Object3dCommon::GetInstancingSrvGPUHandle() const
     const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
     return instancingSrvHandlesGPU_[frameIndex];
 }
+

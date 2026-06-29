@@ -1,4 +1,4 @@
-#include "PlayScene.h"
+﻿#include "PlayScene.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -116,17 +116,20 @@ void PlayScene::InitializeParticleObjects()
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
     particlePlane_->SetTexture("circle.png");
+    particlePlane_->SetEnableLighting(false);
 
     particleRing_ = std::make_unique<Object3d>();
     particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
     particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetEnableLighting(false);
     particleRing_->SetUseAlphaCutoutSampler(true);
 
     particleCylinder_ = std::make_unique<Object3d>();
     particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
     particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetEnableLighting(false);
     particleCylinder_->SetUseAlphaCutoutSampler(true);
 
 }
@@ -279,6 +282,21 @@ void PlayScene::InitializePostProcessTargets()
                 postProcessIntermediateSrvIndex_);
         }
 
+        finalRenderTargetHandle_ = directXCommon->CreateRenderTarget(
+            WinApp::kWindowWidth,
+            WinApp::kWindowHeight,
+            directXCommon->GetSwapChainFormat(),
+            false,
+            { 0.0f, 0.0f, 0.0f, 1.0f },
+            true);
+
+        if (finalRenderTargetHandle_ >= 0) {
+            finalRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetSRV(
+                finalRenderTargetHandle_,
+                finalRenderTargetSrvIndex_);
+        }
+
         postProcess_.Initialize(directXCommon);
         postProcess_.SetEffectType(PostEffectType::Copy);
     }
@@ -379,6 +397,11 @@ void PlayScene::Finalize()
         directXCommon->DestroyRenderTarget(postProcessIntermediateHandle_);
         postProcessIntermediateHandle_ = -1;
         postProcessIntermediateSrvIndex_ = UINT32_MAX;
+    }
+    if (directXCommon && finalRenderTargetHandle_ >= 0) {
+        directXCommon->DestroyRenderTarget(finalRenderTargetHandle_);
+        finalRenderTargetHandle_ = -1;
+        finalRenderTargetSrvIndex_ = UINT32_MAX;
     }
     postProcess_.Finalize();
     // パーティクルマネージャーの終了処理
@@ -1991,6 +2014,9 @@ void PlayScene::Draw()
         DrawTimeReversalParticles();
         directXCommon->EndRenderTo(sceneRenderTargetHandle_);
 
+        uint32_t postProcessSourceSrvIndex = sceneRenderTargetSrvIndex_; // 最終パスに入力するSRV番号
+        PostEffectType finalEffectType = postProcess_.GetEffectType(); // 最終パスで適用するポストエフェクト
+
         if (canUseTemporalChain) {
             // 1パス目で空間歪みを中間レンダーターゲットへ描画する
             directXCommon->BeginRenderTo(postProcessIntermediateHandle_, true);
@@ -1999,15 +2025,25 @@ void PlayScene::Draw()
                 PostEffectType::Distortion);
             directXCommon->EndRenderTo(postProcessIntermediateHandle_);
 
-            // 2パス目で歪み結果へラジアルブラーを適用する
-            postProcess_.DrawTexture(
-                postProcessIntermediateSrvIndex_,
-                PostEffectType::RadialBlur);
-        } else {
-            postProcess_.DrawTexture(sceneRenderTargetSrvIndex_);
+            postProcessSourceSrvIndex = postProcessIntermediateSrvIndex_;
+            finalEffectType = PostEffectType::RadialBlur;
         }
 
+        const bool canUseFinalRenderTarget = sceneViewOnly_
+            && finalRenderTargetHandle_ >= 0
+            && finalRenderTargetSrvIndex_ != UINT32_MAX; // Scene Viewへ最終結果を書き込める状態か
+
+        if (canUseFinalRenderTarget) {
+            directXCommon->BeginRenderTo(finalRenderTargetHandle_, true);
+        }
+
+        postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
         DrawSprites();
+
+        if (canUseFinalRenderTarget) {
+            directXCommon->EndRenderTo(finalRenderTargetHandle_);
+        }
+
         return;
     }
 
@@ -2076,17 +2112,8 @@ void PlayScene::DrawWorldAndParticles()
 
         // パーティクル描画は Particle モードまたは All のときに行う
         if (sel == -1 || sel == 1 || sel == 7) {
-            if (ctx_.camera) {
-                Matrix4x4 view = ctx_.camera->GetViewMatrix();
-                Matrix4x4 proj = ctx_.camera->GetProjectionMatrix();
-                Matrix4x4 vp = MathUtil::Multiply(view, proj);
-                Vector3 right = { view.m[0][0], view.m[1][0], view.m[2][0] };
-                Vector3 up = { view.m[0][1], view.m[1][1], view.m[2][1] };
-                ctx_.object3dCommon->SetBillboardCameraWithVP(right, up, vp, true);
-
-                if (ParticleManager::GetInstance()) {
-                    ParticleManager::GetInstance()->Draw();
-                }
+            if (ParticleManager::GetInstance()) {
+                ParticleManager::GetInstance()->Draw();
             }
         }
     }
@@ -2159,3 +2186,8 @@ void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
         out->push_back(s.get());
     }
 }
+
+
+
+
+

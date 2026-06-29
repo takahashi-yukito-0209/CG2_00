@@ -75,6 +75,11 @@ public: // メンバ関数
     void SetSelectedDrawType(int t) override;
 
     /// <summary>
+    /// デバッグ表示時にシーンをScene View内だけへ描画するか設定する
+    /// </summary>
+    void SetSceneViewOnly(bool enabled) override { sceneViewOnly_ = enabled; }
+
+    /// <summary>
     /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
     /// </summary>
     void FillObject3dPointers(std::vector<MyEngine::Object3d*>* out) override;
@@ -93,6 +98,11 @@ public: // メンバ関数
     /// プレイシーンが使用しているポストプロセスを取得する
     /// </summary>
     MyEngine::PostProcess* GetPostProcess() override { return &postProcess_; }
+
+    /// <summary>
+    /// ImGuiのScene Viewに表示するシーン描画結果のSRV番号を取得する
+    /// </summary>
+    uint32_t GetSceneViewSrvIndex() const override { return sceneViewOnly_ && finalRenderTargetSrvIndex_ != UINT32_MAX ? finalRenderTargetSrvIndex_ : sceneRenderTargetSrvIndex_; }
 
     /// <summary>
     /// 時空破砕エフェクトの調整UIを描画する
@@ -410,8 +420,11 @@ private: // メンバ変数
     MyEngine::PostProcess postProcess_; // 時空演出に使用するポストプロセス
     int sceneRenderTargetHandle_ = -1; // シーン描画用レンダーターゲット
     uint32_t sceneRenderTargetSrvIndex_ = UINT32_MAX; // シーン描画結果のSRV
+    bool sceneViewOnly_ = false; // シーンをScene View用RTだけに描画するか
     int postProcessIntermediateHandle_ = -1; // ポストエフェクト連結用の中間レンダーターゲット
     uint32_t postProcessIntermediateSrvIndex_ = UINT32_MAX; // 中間描画結果のSRV
+    int finalRenderTargetHandle_ = -1; // Scene Viewへ表示する最終描画用レンダーターゲット
+    uint32_t finalRenderTargetSrvIndex_ = UINT32_MAX; // Scene Viewへ表示する最終描画結果のSRV
     TemporalRiftPhase temporalRiftPhase_ = TemporalRiftPhase::Idle; // 現在の演出状態
     EffectType selectedEffectType_ = EffectType::DimensionalShatter; // ImGuiで選択中のエフェクト
     TimeReversalPhase timeReversalPhase_ = TimeReversalPhase::Idle; // 時間逆流の現在状態
@@ -438,3 +451,8 @@ private: // メンバ変数
     Math::Vector3 cameraShakeBasePosition_ {}; // シェイク開始前のカメラ位置
     bool isCameraShakeActive_ = false; // カメラシェイク中か
 };
+
+
+
+
+

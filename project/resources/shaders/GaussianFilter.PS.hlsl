@@ -53,6 +53,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
     output.color = float4(
         filteredColor / max(weightTotal, 0.0001f),
-        gTexture.Sample(gSampler, input.texcoord).a);
+        1.0f);
     return output;
 }

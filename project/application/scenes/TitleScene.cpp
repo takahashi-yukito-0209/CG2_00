@@ -25,14 +25,6 @@ TitleScene::~TitleScene() { }
 void TitleScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
-
-    if (ctx_.object3dCommon) {
-        auto terrain = std::make_unique<Object3d>(); // タイトル画面に表示する地形
-        terrain->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        terrain->SetModel("terrain/terrain.obj");
-        terrain->SetScale({ 5.0f, 5.0f, 5.0f });
-        objects3d_.push_back(std::move(terrain));
-    }
 }
 
 /// <summary>

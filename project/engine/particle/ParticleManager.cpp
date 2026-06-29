@@ -1,4 +1,4 @@
-#include "ParticleManager.h"
+﻿#include "ParticleManager.h"
 #include "ImGuiManager.h"
 #include "engine/3d/Camera.h"
 #include "engine/3d/Model.h"
@@ -562,6 +562,7 @@ void ParticleManager::Draw()
         }
 
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
+        object3dCommon_->SetInstancingDrawSetting();
 
         uint32_t instanceIndex = 0; // インスタンスバッファへ書き込む位置
         for (const PM_CpuParticle& particle : group.particles) {
@@ -694,6 +695,49 @@ void ParticleManager::DrawImGui()
             if (ImGui::TreeNode(kv.first.c_str())) {
                 ImGui::Text("Count = %zu", kv.second.particles.size());
                 ImGui::Text("Texture = %s", kv.second.texturePath.c_str());
+                if (!kv.second.particles.empty()) {
+                    bool hasBounds = false; // 範囲の初期化が済んでいるか
+                    Vector3 minimumPosition {}; // グループ内の最小座標
+                    Vector3 maximumPosition {}; // グループ内の最大座標
+                    const PM_CpuParticle* firstParticle = nullptr; // 先頭パーティクルの参照
+
+                    for (const PM_CpuParticle& particle : kv.second.particles) {
+                        const Vector3& position = particle.transform.translate; // 現在のワールド座標
+                        if (!hasBounds) {
+                            minimumPosition = position;
+                            maximumPosition = position;
+                            firstParticle = &particle;
+                            hasBounds = true;
+                            continue;
+                        }
+
+                        minimumPosition.x = (std::min)(minimumPosition.x, position.x);
+                        minimumPosition.y = (std::min)(minimumPosition.y, position.y);
+                        minimumPosition.z = (std::min)(minimumPosition.z, position.z);
+                        maximumPosition.x = (std::max)(maximumPosition.x, position.x);
+                        maximumPosition.y = (std::max)(maximumPosition.y, position.y);
+                        maximumPosition.z = (std::max)(maximumPosition.z, position.z);
+                    }
+
+                    const Vector3 centerPosition {
+                        (minimumPosition.x + maximumPosition.x) * 0.5f,
+                        (minimumPosition.y + maximumPosition.y) * 0.5f,
+                        (minimumPosition.z + maximumPosition.z) * 0.5f
+                    }; // グループ全体の中心座標
+
+                    ImGui::Text("Center = %.2f, %.2f, %.2f", centerPosition.x, centerPosition.y, centerPosition.z);
+                    ImGui::Text("Min = %.2f, %.2f, %.2f", minimumPosition.x, minimumPosition.y, minimumPosition.z);
+                    ImGui::Text("Max = %.2f, %.2f, %.2f", maximumPosition.x, maximumPosition.y, maximumPosition.z);
+                    if (firstParticle) {
+                        const Vector3& firstPosition = firstParticle->transform.translate; // 先頭パーティクルの座標
+                        ImGui::Text("First = %.2f, %.2f, %.2f", firstPosition.x, firstPosition.y, firstPosition.z);
+                        const Vector3& firstScale = firstParticle->transform.scale; // 先頭パーティクルのスケール
+                        const Vector4& firstColor = firstParticle->color; // 先頭パーティクルの色
+                        ImGui::Text("Scale = %.2f, %.2f, %.2f", firstScale.x, firstScale.y, firstScale.z);
+                        ImGui::Text("Color = %.2f, %.2f, %.2f, %.2f", firstColor.x, firstColor.y, firstColor.z, firstColor.w);
+                    }
+                }
+
                 ImGui::Checkbox("Use Billboard", &kv.second.useBillboard);
                 ImGui::TreePop();
             }

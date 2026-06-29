@@ -1,4 +1,4 @@
-#include "Game.h"
+﻿#include "Game.h"
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
 #include "mathUtility.h"
@@ -128,7 +128,7 @@ struct Game::Impl {
 
     ParticleEmitter pmEmitter; // パーティクルエミッタ (UIの操作用など軽量なまま保持)
 
-    DrawType selectedDrawType = DRAW_SPHERE; // 描画する内容の種類を選択するための変数
+    int selectedDrawType = DRAW_ALL; // 描画する内容の種類を選択するための変数
 
     DebugCamera debugCamera; // デバッグカメラ (global DebugCamera)
     bool isDebugCameraControl = true; // デバッグカメラ操作フラグ
@@ -276,8 +276,8 @@ void Game::InitializeCameraAndLighting()
         // ライトの強度を 1.0f に設定
         directionalLightData->intensity = kWhiteColor.w;
         directionalLightData->color = kWhiteColor;
-        // ライトの方向を上向きに設定
-        directionalLightData->direction = { 0.0f, 1.0f, 0.0f };
+        // ライトの方向を下向きに設定
+        directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
     }
 
     // 点光源の設定
@@ -669,6 +669,7 @@ void Game::Draw()
     // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
     ctx.dt = kFixedDeltaTime;
     ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
+    ctx.selectedDrawType = &impl_->selectedDrawType;
     // シーン名を ImGui に渡す
     if (impl_->sceneManager) {
         static std::string sname;
@@ -676,6 +677,10 @@ void Game::Draw()
         ctx.currentSceneName = sname.c_str();
         if (impl_->sceneManager->GetCurrent()) {
             ctx.postProcess = impl_->sceneManager->GetCurrent()->GetPostProcess();
+            ctx.srvManager = &impl_->srvManager;
+            ctx.sceneViewSrvIndex = impl_->sceneManager->GetCurrent()->GetSceneViewSrvIndex();
+            ctx.sceneViewWidth = DirectXCommon::GetInstance()->GetRenderWidth();
+            ctx.sceneViewHeight = DirectXCommon::GetInstance()->GetRenderHeight();
         }
     }
     // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
@@ -705,7 +710,14 @@ void Game::Draw()
 
     // シーン側にも現在の描画モードを伝えて、シーン自身が必要な要素だけ描画できるようにする
     if (impl_->sceneManager) {
-        impl_->sceneManager->SetSelectedDrawType(static_cast<int>(impl_->selectedDrawType));
+        impl_->sceneManager->SetSelectedDrawType(impl_->selectedDrawType);
+        if (impl_->sceneManager->GetCurrent()) {
+#ifdef USE_IMGUI
+            impl_->sceneManager->GetCurrent()->SetSceneViewOnly(true);
+#else
+            impl_->sceneManager->GetCurrent()->SetSceneViewOnly(false);
+#endif
+        }
         impl_->sceneManager->Draw();
     }
 
@@ -817,3 +829,6 @@ bool Game::PollEvents()
     // WinApp の ProcessMessage を呼び出して、ウィンドウメッセージの処理を行う。WM_QUIT が検出された場合は false を返す設計になっている
     return impl_->winApp.ProcessMessage();
 }
+
+
+
