@@ -14,7 +14,7 @@ namespace MyEngine {
 class SpriteCommon;
 
 /// <summary>
-/// スプライト描画に必要な共通設定を管理するクラス
+/// 2Dスプライトの描画リソースと表示状態を管理するクラス
 /// </summary>
 class Sprite {
 
@@ -47,18 +47,17 @@ public: // メンバ構造体
 
 public: // メンバ関数
     /// <summary>
-    /// 初期化
+    /// スプライト描画に必要なリソースを生成し、初期テクスチャを設定する
     /// </summary>
-    // Single Initialize: optional ImGuiManager parameter (default nullptr)
     void Initialize(SpriteCommon* spriteCommon, std::string textureFilePath, class ImGuiManager* imguiManager = nullptr);
 
     /// <summary>
-    /// 更新処理
+    /// スプライトの頂点、UV、変換行列を更新する
     /// </summary>
     void Update();
 
     /// <summary>
-    /// 頂点バッファビュー、インデックスバッファビュー、マテリアル定数バッファ、変換行列定数バッファ、SRVをコマンドリストにセットして描画
+    /// スプライトを描画する
     /// </summary>
     void Draw();
 
@@ -158,21 +157,25 @@ public: // メンバ関数
     void SetTexture(const std::string& filePath);
 
     /// <summary>
-    /// ImGui を使ってこのスプライトのプロパティを編集する関数
+    /// ImGui表示用のテクスチャ名を取得する
+    /// </summary>
+    const std::string& GetTextureFilePath() const { return textureFilePath_; }
+
+    /// <summary>
+    /// ImGuiでスプライトの状態を表示・編集する
     /// </summary>
     void DrawImGui();
 
-    // ImGui registration moved to central manager; no per-sprite registration fields
     ~Sprite();
 
 private: // メンバ関数
     /// <summary>
-    /// テクスチャサイズをイメージに合わせてスプライトのサイズも調整する
+    /// テクスチャのサイズに合わせてスプライトの表示サイズを調整する
     /// </summary>
     void AdjustTextureSize();
 
     /// <summary>
-    /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+    /// 現在フレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources();
 
@@ -207,7 +210,8 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW indexBufferView_ = {};
 
     // SRV ディスクリプタヒープ内のテクスチャスロット番号。
-    uint32_t textureIndex_ = 0;
+    uint32_t textureIndex_ = 0; // 使用するテクスチャのSRVインデックス
+    std::string textureFilePath_; // ImGuiで識別するためのテクスチャ名
 
     // スプライトの変換情報
     Math::Transform transform_ = {};

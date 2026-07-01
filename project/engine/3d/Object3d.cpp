@@ -80,6 +80,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     ModelManager* mgr = ModelManager::GetInstance();
     // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
     model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_.get());
+    debugName_ = "plane.obj";
     // モデル読み込み後にテクスチャ割り当てを行う（MTLが先に読み込まれるように）
     AssignTexture();
 
@@ -90,13 +91,13 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
 }
 
 /// <summary>
-/// ImGui を使用してオブジェクトのパラメータを編集するための関数
+/// ImGuiでオブジェクトの状態を表示・編集する
 /// </summary>
 void Object3d::DrawImGui(int index)
 {
 #ifdef USE_IMGUI
-    // オブジェクト識別用のテキスト
-    ImGui::Text("Object %d", index);
+    // 選択中オブジェクトの識別名を表示
+    ImGui::Text("Object %d : %s", index, debugName_.c_str());
     ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f, 0.001f, 1000.0f);
     ImGui::DragFloat3("Rotate", &transform_.rotate.x, 0.01f);
     ImGui::DragFloat3("Translate", &transform_.translate.x, 0.01f);
@@ -107,7 +108,7 @@ void Object3d::DrawImGui(int index)
         materialData_->useAlphaCutoutSampler = useAlphaCutoutSampler_ ? 1 : 0;
         ImGui::Checkbox("Use Alpha Discard", &useAlphaDiscard_);
         materialData_->useAlphaDiscard = useAlphaDiscard_ ? 1 : 0;
-        // Color control for material
+        // マテリアル色を編集
         float col[4] = { materialData_->color.x, materialData_->color.y, materialData_->color.z, materialData_->color.w };
         if (ImGui::ColorEdit4("Color", col)) {
             materialData_->color.x = col[0];
@@ -126,7 +127,7 @@ void Object3d::DrawImGui(int index)
 }
 
 /// <summary>
-/// ファイルパスを指定してテクスチャを割り当てる関数
+/// 指定したテクスチャをこのオブジェクトへ割り当てる
 /// </summary>
 void Object3d::SetTexture(const std::string& filePath)
 {
@@ -147,17 +148,15 @@ void Object3d::SetTexture(const std::string& filePath)
     // マテリアルデータにファイルパスとインデックスを設定
     modelData_.material.textureFilePath = texToUse;
     modelData_.material.textureIndex = (idx == UINT32_MAX) ? UINT32_MAX : idx;
-
-    // Model が既に持つマテリアル側も更新しておく
-    if (model_) {
-        // Model::Initialize がセットする textureIndex_ は読み込み時のみ反映されるため
-        // ここではモデルが保持する textureIndex_ を直接更新するためのアクセサはない。
-        // 代わりに、Model 側の描画時に Object3d の modelData を参照するので十分。
+    if (!model_) {
+        debugName_ = std::string("Custom Mesh : ") + filePath; // 直接指定メッシュはテクスチャ名も識別名に含める
     }
+
+    // モデル描画時はObject3d側のmodelDataが優先参照されるため、ここでの更新だけで反映される。
 }
 
 /// <summary>
-/// ファイルパスを指定してモデルを読み込んでセットする関数
+/// ファイルパスを指定してモデルを取得・設定する
 /// </summary>
 void Object3d::SetModel(const std::string& filePath)
 {
@@ -173,16 +172,18 @@ void Object3d::SetModel(const std::string& filePath)
         m = mgr->LoadModel("resources", filePath, modelCommon_.get());
     }
     model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
+    debugName_ = filePath; // ImGuiでモデルを識別するための表示名
     // モデル読み込み後にテクスチャの割り当てを行う
     AssignTexture();
 }
 
 /// <summary>
-/// 頂点データを直接セットする関数
+/// モデルを使わず、指定した頂点データを設定する
 /// </summary>
 void Object3d::SetMesh(const std::vector<VertexData>& vertices)
 {
     model_ = nullptr;
+    debugName_ = "Custom Mesh"; // 直接指定メッシュ用の表示名
     modelData_.vertices = vertices;
 
     if (vertices.empty() || !object3dCommon_ || !object3dCommon_->GetDxCommon()) {

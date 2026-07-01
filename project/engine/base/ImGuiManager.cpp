@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <sstream>
+#include <string>
 
-#include "ImGuiManager.h"
 
 #include "engine/2d/Sprite.h"
 #include "engine/2d/SpriteCommon.h"
@@ -244,8 +244,12 @@ void ImGuiManager::DrawSceneViewWindow(Context& ctx)
     }
 
     const float offsetX = (availableSize.x - imageSize.x) * 0.5f; // 中央寄せ用の横オフセット
-    if (offsetX > 0.0f) {
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+    const float offsetY = (availableSize.y - imageSize.y) * 0.5f; // 中央寄せ用の縦オフセット
+    if (offsetX > 0.0f || offsetY > 0.0f) {
+        ImVec2 cursorPosition = ImGui::GetCursorPos(); // 現在の描画開始位置
+        cursorPosition.x += (std::max)(offsetX, 0.0f);
+        cursorPosition.y += (std::max)(offsetY, 0.0f);
+        ImGui::SetCursorPos(cursorPosition);
     }
 
     D3D12_GPU_DESCRIPTOR_HANDLE sceneSrvHandle = ctx.srvManager->GetGPUDescriptorHandle(ctx.sceneViewSrvIndex); // Scene View用SRVのGPUハンドル
@@ -673,14 +677,22 @@ void ImGuiManager::DrawObjectSection(Context& ctx)
         const int objectCount = static_cast<int>(ctx.objects3d->size()); // 表示可能な3Dオブジェクト数
         selectedObjectIndex = (std::clamp)(selectedObjectIndex, 0, objectCount - 1);
 
-        char preview[64] = {}; // コンボの現在表示名
-        sprintf_s(preview, "Object %d", selectedObjectIndex);
-        if (ImGui::BeginCombo("Target", preview)) {
+        Object3d* previewObject = (*ctx.objects3d)[selectedObjectIndex]; // コンボで現在選択している3Dオブジェクト
+        std::string preview = "Object " + std::to_string(selectedObjectIndex); // コンボの現在表示名
+        if (previewObject && !previewObject->GetDebugName().empty()) {
+            preview += " : " + previewObject->GetDebugName();
+        }
+
+        if (ImGui::BeginCombo("Target", preview.c_str())) {
             for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
-                char label[64] = {}; // 選択候補の表示名
-                sprintf_s(label, "Object %d", objectIndex);
+                Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示名を取得する3Dオブジェクト
+                std::string label = "Object " + std::to_string(objectIndex); // 選択候補の表示名
+                if (object && !object->GetDebugName().empty()) {
+                    label += " : " + object->GetDebugName();
+                }
+
                 const bool isSelected = selectedObjectIndex == objectIndex; // 現在選択中か
-                if (ImGui::Selectable(label, isSelected)) {
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
                     selectedObjectIndex = objectIndex;
                 }
                 if (isSelected) {
@@ -715,14 +727,22 @@ void ImGuiManager::DrawSpriteSection(Context& ctx)
         const int spriteCount = static_cast<int>(ctx.sprites->size()); // 表示可能なスプライト数
         selectedSpriteIndex = (std::clamp)(selectedSpriteIndex, 0, spriteCount - 1);
 
-        char preview[64] = {}; // コンボの現在表示名
-        sprintf_s(preview, "Sprite %d", selectedSpriteIndex);
-        if (ImGui::BeginCombo("Target", preview)) {
+        Sprite* previewSprite = (*ctx.sprites)[selectedSpriteIndex]; // コンボで現在選択しているスプライト
+        std::string preview = "Sprite " + std::to_string(selectedSpriteIndex); // コンボの現在表示名
+        if (previewSprite && !previewSprite->GetTextureFilePath().empty()) {
+            preview += " : " + previewSprite->GetTextureFilePath();
+        }
+
+        if (ImGui::BeginCombo("Target", preview.c_str())) {
             for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
-                char label[64] = {}; // 選択候補の表示名
-                sprintf_s(label, "Sprite %d", spriteIndex);
+                Sprite* sprite = (*ctx.sprites)[spriteIndex]; // 表示名を取得するスプライト
+                std::string label = "Sprite " + std::to_string(spriteIndex); // 選択候補の表示名
+                if (sprite && !sprite->GetTextureFilePath().empty()) {
+                    label += " : " + sprite->GetTextureFilePath();
+                }
+
                 const bool isSelected = selectedSpriteIndex == spriteIndex; // 現在選択中か
-                if (ImGui::Selectable(label, isSelected)) {
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
                     selectedSpriteIndex = spriteIndex;
                 }
                 if (isSelected) {
@@ -743,7 +763,7 @@ void ImGuiManager::DrawSpriteSection(Context& ctx)
 #endif
 }
 /// <summary>
-/// 3Dオブジェクト関連のImGuiを描画する
+/// 共通設定関連のImGuiを描画する
 /// </summary>
 void ImGuiManager::DrawCommonSection(Context& ctx)
 {

@@ -13,7 +13,7 @@ using namespace MyEngine;
 using namespace Math;
 
 /// <summary>
-/// SpriteCommonの初期化と、Sprite描画に必要なリソースの生成を行う
+/// スプライト描画に必要なリソースを生成し、初期テクスチャを設定する
 /// </summary>
 void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath, ImGuiManager* imguiManager)
 {
@@ -116,6 +116,7 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
 
         // フォールバックのSRVインデックスを使用
         textureIndex_ = srvIdx;
+        textureFilePath_ = "resources/uvChecker.png"; // 実際に使用するフォールバックテクスチャ名
         char buf[256];
         sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to uvChecker srvIndex=%u\n", textureFilePath.c_str(), srvIdx);
         Logger::Warn(buf);
@@ -123,11 +124,12 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
     } else {
         // 指定されたテクスチャがロードされている場合はそのSRVインデックスを使用
         textureIndex_ = idx;
+        textureFilePath_ = textureFilePath; // 解決後のテクスチャ名を表示用に保持
     }
 
     // テクスチャサイズに合わせてスプライトのサイズを調整
     AdjustTextureSize();
-    // ImGui parameter is accepted for compatibility but UI is handled centrally
+    // ImGui表示はImGuiManager側でまとめて扱う
     (void)imguiManager;
 }
 
@@ -137,12 +139,12 @@ Sprite::~Sprite()
 }
 
 /// <summary>
-/// スプライトのプロパティを編集する関数
+/// ImGuiでスプライトの状態を表示・編集する
 /// </summary>
 void Sprite::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Text("Sprite");
+    ImGui::Text("Sprite : %s", textureFilePath_.empty() ? "No Texture" : textureFilePath_.c_str());
     Vector2 pos = GetPosition();
     if (ImGui::DragFloat2("Position", &pos.x, 0.1f)) {
         SetPosition(pos);
@@ -414,6 +416,7 @@ void Sprite::SetTexture(const std::string& filePath)
 
     // テクスチャと表示サイズを更新する
     textureIndex_ = idx;
+    textureFilePath_ = filePath; // ImGui表示用に指定名を保持
     AdjustTextureSize();
 }
 

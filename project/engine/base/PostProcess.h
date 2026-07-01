@@ -15,9 +15,9 @@ class DirectXCommon;
 enum class PostEffectType {
     Distortion, // 指定した中心から画面を円形に歪ませる
     Copy, // 元画像をそのまま描画する
-    Grayscale, // 元画像をグレイスケール化して描画する
+    Grayscale, // 元画像をグレースケール化して描画する
     Vignette, // 画面周辺を暗くして描画する
-    BoxFilter, // Box Filterによる平均化処理を適用する
+    BoxFilter, // Box Filterによる平滑化処理を適用する
     GaussianFilter, // 分離型Gaussian Filterを適用する
     LuminanceOutline, // 輝度差から輪郭を検出する
     DepthOutline, // 深度差から輪郭を検出する
@@ -92,7 +92,7 @@ public:
     bool IsCopyReady() const { return copyPipelineState_ != nullptr; }
 
     /// <summary>
-    /// グレイスケール用PSOが生成済みか確認する
+    /// グレースケール用PSOが生成済みか確認する
     /// </summary>
     bool IsGrayscaleReady() const { return grayscalePipelineState_ != nullptr; }
 
@@ -142,20 +142,17 @@ public:
     float GetGaussianSigma() const { return gaussianSigma_; }
 
     /// <summary>
+    /// Gaussian Filterの1方向分を現在の描画先へ描画する
+    /// </summary>
+    void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
+
+    /// <summary>
     /// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
     /// </summary>
     void DrawGaussianTexture(
         uint32_t sourceSrvIndex,
         int intermediateRenderTargetHandle,
         uint32_t intermediateSrvIndex);
-
-    /// <summary>
-    /// 深度テクスチャを使用してOutlineを描画する
-    /// </summary>
-    void DrawDepthOutline(
-        uint32_t colorSrvIndex,
-        uint32_t depthSrvIndex,
-        const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
     /// Outlineの強度を設定する
@@ -198,17 +195,25 @@ public:
     bool IsDepthOutlineReady() const { return depthOutlinePipelineState_ != nullptr; }
 
     /// <summary>
+    /// 深度テクスチャを使用してOutlineを描画する
+    /// </summary>
+    void DrawDepthOutline(
+        uint32_t colorSrvIndex,
+        uint32_t depthSrvIndex,
+        const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
     /// Radial Blur用PSOが生成済みか確認する
     /// </summary>
     bool IsRadialBlurReady() const { return radialBlurPipelineState_ != nullptr; }
 
     /// <summary>
-    /// Radial Blurの中心座標を設定する
+    /// Radial Blurの中心UV座標を設定する
     /// </summary>
     void SetRadialBlurCenter(const Math::Vector2& center);
 
     /// <summary>
-    /// Radial Blurの中心座標を取得する
+    /// Radial Blurの中心UV座標を取得する
     /// </summary>
     const Math::Vector2& GetRadialBlurCenter() const { return radialBlurCenter_; }
 
@@ -233,7 +238,7 @@ public:
     uint32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
 
     /// <summary>
-    /// Distortion用PSOが生成済みか確認する
+    /// 画面歪み用PSOが生成済みか確認する
     /// </summary>
     bool IsDistortionReady() const { return distortionPipelineState_ != nullptr; }
 
@@ -258,12 +263,12 @@ public:
     float GetDistortionStrength() const { return distortionStrength_; }
 
     /// <summary>
-    /// 画面歪みの影響半径を設定する
+    /// 画面歪みの半径を設定する
     /// </summary>
     void SetDistortionRadius(float radius);
 
     /// <summary>
-    /// 画面歪みの影響半径を取得する
+    /// 画面歪みの半径を取得する
     /// </summary>
     float GetDistortionRadius() const { return distortionRadius_; }
 
@@ -350,12 +355,12 @@ public:
     float GetRandomStrength() const { return randomStrength_; }
 
     /// <summary>
-    /// Randomのノイズの細かさを設定する
+    /// Randomのノイズスケールを設定する
     /// </summary>
     void SetRandomScale(float scale);
 
     /// <summary>
-    /// Randomのノイズの細かさを取得する
+    /// Randomのノイズスケールを取得する
     /// </summary>
     float GetRandomScale() const { return randomScale_; }
 
@@ -381,26 +386,21 @@ private:
     void CreateRootSignature();
 
     /// <summary>
-    /// 指定したピクセルシェーダーからパイプラインステートを生成する
+    /// 指定したピクセルシェーダーからPSOを生成する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12PipelineState> CreatePipelineState(
         const wchar_t* pixelShaderPath);
 
     /// <summary>
-    /// 指定したポストエフェクトに対応するパイプラインステートを取得する
+    /// 指定したポストエフェクトに対応するPSOを取得する
     /// </summary>
     ID3D12PipelineState* GetPipelineState(PostEffectType effectType) const;
-
-    /// <summary>
-    /// Gaussian Filterの1方向分を描画する
-    /// </summary>
-    void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
 
 private:
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通基盤
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 全画面描画用ルートシグネチャ
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipelineState_; // 通常コピー用PSO
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレイスケール用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_; // グレースケール用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_; // ビネット用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> boxFilterPipelineState_; // Box Filter用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianFilterPipelineState_; // Gaussian Filter用PSO
@@ -409,6 +409,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_; // Radial Blur用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> dissolvePipelineState_; // Dissolve用PSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> randomPipelineState_; // Random用PSO
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> distortionPipelineState_; // 画面歪み用PSO
     PostEffectType effectType_ = PostEffectType::Grayscale; // 現在選択中のエフェクト
     bool enabled_ = true; // ポストエフェクトの有効状態
     uint32_t lastSrvIndex_ = UINT32_MAX; // 最後に描画へ使用したSRVインデックス
@@ -428,8 +429,6 @@ private:
     float randomStrength_ = 1.0f; // 入力画像へ乗算するノイズ強度
     float randomScale_ = 600.0f; // UVに掛けるノイズの細かさ
     float randomSpeed_ = 1.0f; // ノイズの時間変化速度
-private:
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> distortionPipelineState_; // 画面歪み用PSO
     Math::Vector2 distortionCenter_ = { 0.5f, 0.5f }; // 画面歪みの中心UV座標
     float distortionStrength_ = 0.02f; // 画面歪みの強度
     float distortionRadius_ = 0.35f; // 画面歪みの影響半径

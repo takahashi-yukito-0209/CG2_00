@@ -1,4 +1,4 @@
-﻿#include "PlayScene.h"
+#include "PlayScene.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -265,6 +265,11 @@ void PlayScene::InitializePostProcessTargets()
             directXCommon->CreateRenderTargetSRV(
                 sceneRenderTargetHandle_,
                 sceneRenderTargetSrvIndex_);
+
+            sceneDepthSrvIndex_ = ctx_.srvManager->Allocate();
+            directXCommon->CreateRenderTargetDepthSRV(
+                sceneRenderTargetHandle_,
+                sceneDepthSrvIndex_);
         }
 
         postProcessIntermediateHandle_ = directXCommon->CreateRenderTarget(
@@ -295,6 +300,11 @@ void PlayScene::InitializePostProcessTargets()
             directXCommon->CreateRenderTargetSRV(
                 finalRenderTargetHandle_,
                 finalRenderTargetSrvIndex_);
+        }
+
+        if (ctx_.textureManager) {
+            ctx_.textureManager->LoadTexture("noise0.png");
+            dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
         }
 
         postProcess_.Initialize(directXCommon);
@@ -392,6 +402,7 @@ void PlayScene::Finalize()
         directXCommon->DestroyRenderTarget(sceneRenderTargetHandle_);
         sceneRenderTargetHandle_ = -1;
         sceneRenderTargetSrvIndex_ = UINT32_MAX;
+        sceneDepthSrvIndex_ = UINT32_MAX;
     }
     if (directXCommon && postProcessIntermediateHandle_ >= 0) {
         directXCommon->DestroyRenderTarget(postProcessIntermediateHandle_);
@@ -403,6 +414,7 @@ void PlayScene::Finalize()
         finalRenderTargetHandle_ = -1;
         finalRenderTargetSrvIndex_ = UINT32_MAX;
     }
+    dissolveMaskSrvIndex_ = UINT32_MAX;
     postProcess_.Finalize();
     // パーティクルマネージャーの終了処理
     if (ParticleManager::GetInstance()) {
@@ -1120,6 +1132,7 @@ bool PlayScene::IsTimeStopped() const
 /// </summary>
 void PlayScene::StartTimeReversalEffect()
 {
+    timeReversalPreviousPostEffect_ = postProcess_.GetEffectType(); // 再生前のポストエフェクト
     timeReversalPhase_ = TimeReversalPhase::Expanding;
     timeReversalPhaseTime_ = 0.0f;
     timeReversalParticles_.clear();
@@ -1245,7 +1258,7 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
             timeReversalPhase_ = TimeReversalPhase::Idle;
             timeReversalPhaseTime_ = 0.0f;
             timeReversalTransformHistory_.clear();
-            postProcess_.SetEffectType(PostEffectType::Copy);
+            postProcess_.SetEffectType(timeReversalPreviousPostEffect_);
             postProcess_.SetDistortionStrength(0.0f);
         }
         return;
@@ -1555,6 +1568,7 @@ void PlayScene::DrawTimeReversalParticles()
 /// </summary>
 void PlayScene::StartTemporalRiftEffect()
 {
+    temporalRiftPreviousPostEffect_ = postProcess_.GetEffectType(); // 再生前のポストエフェクト
     constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする球体
     if (objects3d_.size() > kTemporalTargetIndex && objects3d_[kTemporalTargetIndex]) {
         Object3d* temporalTarget = objects3d_[kTemporalTargetIndex].get(); // 時間ずれ対象の3Dオブジェクト
@@ -1594,7 +1608,6 @@ void PlayScene::UpdateTemporalRiftEffect(float deltaTime)
 
     switch (temporalRiftPhase_) {
     case TemporalRiftPhase::Idle:
-        postProcess_.SetEffectType(PostEffectType::Copy);
         break;
 
     case TemporalRiftPhase::Compress: {
@@ -1659,6 +1672,7 @@ void PlayScene::UpdateTemporalRiftEffect(float deltaTime)
         postProcess_.SetEffectType(PostEffectType::Copy);
         if (temporalRiftPhaseTime_ >= temporalRiftSettings_.recoverDuration) {
             temporalRiftPhase_ = TemporalRiftPhase::Idle;
+            postProcess_.SetEffectType(temporalRiftPreviousPostEffect_);
             temporalRiftPhaseTime_ = 0.0f;
         }
         break;
@@ -2032,18 +2046,43 @@ void PlayScene::Draw()
         const bool canUseFinalRenderTarget = sceneViewOnly_
             && finalRenderTargetHandle_ >= 0
             && finalRenderTargetSrvIndex_ != UINT32_MAX; // Scene Viewへ最終結果を書き込める状態か
+        const bool canUseGaussianFilter = finalEffectType == PostEffectType::GaussianFilter
+            && postProcessIntermediateHandle_ >= 0
+            && postProcessIntermediateSrvIndex_ != UINT32_MAX; // Gaussian Filterの2パス処理を実行できるか
+
+        if (canUseGaussianFilter) {
+            directXCommon->BeginRenderTo(postProcessIntermediateHandle_, true);
+            postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 0);
+            directXCommon->EndRenderTo(postProcessIntermediateHandle_);
+            postProcessSourceSrvIndex = postProcessIntermediateSrvIndex_;
+        }
 
         if (canUseFinalRenderTarget) {
             directXCommon->BeginRenderTo(finalRenderTargetHandle_, true);
         }
 
-        postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
+        if (canUseGaussianFilter) {
+            postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 1);
+        } else if (finalEffectType == PostEffectType::DepthOutline
+            && sceneDepthSrvIndex_ != UINT32_MAX
+            && ctx_.camera) {
+            postProcess_.DrawDepthOutline(
+                postProcessSourceSrvIndex,
+                sceneDepthSrvIndex_,
+                ctx_.camera->GetProjectionMatrix());
+        } else if (finalEffectType == PostEffectType::Dissolve
+            && dissolveMaskSrvIndex_ != UINT32_MAX) {
+            postProcess_.DrawDissolveTexture(
+                postProcessSourceSrvIndex,
+                dissolveMaskSrvIndex_);
+        } else {
+            postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
+        }
         DrawSprites();
 
         if (canUseFinalRenderTarget) {
             directXCommon->EndRenderTo(finalRenderTargetHandle_);
         }
-
         return;
     }
 
@@ -2110,8 +2149,9 @@ void PlayScene::DrawWorldAndParticles()
             }
         }
 
-        // パーティクル描画は Particle モードまたは All のときに行う
-        if (sel == -1 || sel == 1 || sel == 7) {
+        // エフェクト再生中は描画モードに関係なくパーティクルを描画する
+        const bool shouldDrawParticles = sel == -1 || sel == 1 || sel == 7 || IsAnyEffectPlaying(); // パーティクル描画を行うか
+        if (shouldDrawParticles) {
             if (ParticleManager::GetInstance()) {
                 ParticleManager::GetInstance()->Draw();
             }

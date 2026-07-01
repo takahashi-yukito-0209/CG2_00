@@ -420,11 +420,13 @@ private: // メンバ変数
     MyEngine::PostProcess postProcess_; // 時空演出に使用するポストプロセス
     int sceneRenderTargetHandle_ = -1; // シーン描画用レンダーターゲット
     uint32_t sceneRenderTargetSrvIndex_ = UINT32_MAX; // シーン描画結果のSRV
+    uint32_t sceneDepthSrvIndex_ = UINT32_MAX; // シーン描画深度のSRV
     bool sceneViewOnly_ = false; // シーンをScene View用RTだけに描画するか
     int postProcessIntermediateHandle_ = -1; // ポストエフェクト連結用の中間レンダーターゲット
     uint32_t postProcessIntermediateSrvIndex_ = UINT32_MAX; // 中間描画結果のSRV
     int finalRenderTargetHandle_ = -1; // Scene Viewへ表示する最終描画用レンダーターゲット
     uint32_t finalRenderTargetSrvIndex_ = UINT32_MAX; // Scene Viewへ表示する最終描画結果のSRV
+    uint32_t dissolveMaskSrvIndex_ = UINT32_MAX; // Dissolveで使用するノイズマスクSRV
     TemporalRiftPhase temporalRiftPhase_ = TemporalRiftPhase::Idle; // 現在の演出状態
     EffectType selectedEffectType_ = EffectType::DimensionalShatter; // ImGuiで選択中のエフェクト
     TimeReversalPhase timeReversalPhase_ = TimeReversalPhase::Idle; // 時間逆流の現在状態
@@ -433,8 +435,10 @@ private: // メンバ変数
     TimeStopPhase timeStopPhase_ = TimeStopPhase::Idle; // 現在の時間停止状態
     float timeStopPhaseTime_ = 0.0f; // 現在フェーズでの経過時間
     TimeStopSettings timeStopSettings_; // 時間停止の調整値
-    MyEngine::PostEffectType timeStopPreviousPostEffect_ = MyEngine::PostEffectType::Copy; // 再生前のポストエフェクト 
-   std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
+    MyEngine::PostEffectType temporalRiftPreviousPostEffect_ = MyEngine::PostEffectType::Copy; // 時空破砕再生前のポストエフェクト
+    MyEngine::PostEffectType timeReversalPreviousPostEffect_ = MyEngine::PostEffectType::Copy; // 時間逆流再生前のポストエフェクト
+    MyEngine::PostEffectType timeStopPreviousPostEffect_ = MyEngine::PostEffectType::Copy; // 時間停止再生前のポストエフェクト
+    std::vector<TimeReversalParticle> timeReversalParticles_; // 時間逆流専用パーティクル
     std::deque<Math::Transform> timeReversalTransformHistory_; // 時間巻き戻し対象のTransform履歴
     std::mt19937 timeReversalRandom_ { std::random_device {}() }; // 粒子生成に使用する乱数
     float temporalRiftPhaseTime_ = 0.0f; // 現在の演出状態での経過時間

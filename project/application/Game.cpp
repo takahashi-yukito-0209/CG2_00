@@ -1,29 +1,4 @@
-﻿#include "Game.h"
-#include "externals/DirectXTex/DirectXTex.h"
-#include "externals/DirectXTex/d3dx12.h"
-#include "mathUtility.h"
-#include <Windows.h>
-#include <cassert>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <d3d12.h>
-#include <dbghelp.h>
-#include <dxcapi.h>
-#include <dxgi1_6.h>
-#include <dxgidebug.h>
-#include <filesystem>
-#include <fstream>
-#include <iomanip>
-#include <list>
-#include <memory>
-#include <random>
-#include <sstream>
-#include <string>
-#include <strsafe.h>
-#include <vector>
-#include <wrl.h>
-#include <xaudio2.h>
+#include "Game.h"
 #include "Camera.h"
 #include "DebugCamera.h"
 #include "DirectXCommon.h"
@@ -45,7 +20,32 @@
 #include "engine/base/SceneManager.h"
 #include "engine/base/SrvManager.h"
 #include "engine/sound/Sound.h"
+#include "externals/DirectXTex/DirectXTex.h"
+#include "externals/DirectXTex/d3dx12.h"
+#include "mathUtility.h"
+#include <Windows.h>
+#include <cassert>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <d3d12.h>
+#include <dbghelp.h>
 #include <dinput.h>
+#include <dxcapi.h>
+#include <dxgi1_6.h>
+#include <dxgidebug.h>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <list>
+#include <memory>
+#include <random>
+#include <sstream>
+#include <string>
+#include <strsafe.h>
+#include <vector>
+#include <wrl.h>
+#include <xaudio2.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -128,7 +128,7 @@ struct Game::Impl {
 
     ParticleEmitter pmEmitter; // パーティクルエミッタ (UIの操作用など軽量なまま保持)
 
-    int selectedDrawType = DRAW_ALL; // 描画する内容の種類を選択するための変数
+    int selectedDrawType = DRAW_PARTICLE; // 描画する内容の種類を選択するための変数
 
     DebugCamera debugCamera; // デバッグカメラ (global DebugCamera)
     bool isDebugCameraControl = true; // デバッグカメラ操作フラグ
@@ -209,7 +209,6 @@ bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
     }
 
 #endif
-
 
     // DirectInput を初期化
     HRESULT result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(impl_->directInput.GetAddressOf()), nullptr);
@@ -829,6 +828,3 @@ bool Game::PollEvents()
     // WinApp の ProcessMessage を呼び出して、ウィンドウメッセージの処理を行う。WM_QUIT が検出された場合は false を返す設計になっている
     return impl_->winApp.ProcessMessage();
 }
-
-
-

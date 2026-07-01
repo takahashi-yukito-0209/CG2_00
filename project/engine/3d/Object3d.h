@@ -20,7 +20,7 @@ class Object3dCommon;
 class Model;
 
 /// <summary>
-/// 3Dオブジェクトクラス
+/// 3Dオブジェクトの変換、マテリアル、モデル参照を管理するクラス
 /// </summary>
 class Object3d {
 public: // メンバ構造体
@@ -104,22 +104,22 @@ public: // メンバ構造体
 
 public: // メンバ関数
     /// <summary>
-    /// 初期化
+    /// 3Dオブジェクトの描画に必要な初期リソースを生成する
     /// </summary>
     void Initialize(Object3dCommon* object3dCommon, class ImGuiManager* imguiManager = nullptr);
 
     /// <summary>
-    /// 終了処理
+    /// 3Dオブジェクトを終了する
     /// </summary>
     ~Object3d();
 
     /// <summary>
-    /// 更新
+    /// 変換行列を更新し、描画用の状態を反映する
     /// </summary>
     void Update(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
-    /// 描画
+    /// 3Dオブジェクトを描画する
     /// </summary>
     void Draw();
 
@@ -139,27 +139,31 @@ public: // メンバ関数
     static ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename);
 
     /// <summary>
-    /// モデルのセット
+    /// 既存のModelインスタンスを設定する
     /// </summary>
-    void SetModel(Model* model) { model_ = model; }
+    void SetModel(Model* model)
+    {
+        model_ = model;
+        debugName_ = model ? "External Model" : "No Model";
+    }
 
     /// <summary>
-    /// モデルファイルを指定してモデルをセットする。内部で LoadModelFile を呼び出してモデルデータを読みこみ、モデルを作成してセットする。
+    /// モデルファイル名を指定してModelManagerからモデルを取得する
     /// </summary>
     void SetModel(const std::string& filePath);
 
     /// <summary>
-    /// テクスチャのセット
+    /// このオブジェクトで使用するテクスチャを設定する
     /// </summary>
     void SetTexture(const std::string& filePath);
 
     /// <summary>
-    /// 頂点データを直接セットする
+    /// モデルを使わず、直接指定した頂点データを設定する
     /// </summary>
     void SetMesh(const std::vector<VertexData>& vertices);
 
     /// <summary>
-    /// モデルのゲット
+    /// 設定されているモデルを取得する
     /// </summary>
     Model* GetModel() const { return model_; }
 
@@ -179,14 +183,19 @@ public: // メンバ関数
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const;
 
     /// <summary>
-    /// モデルデータの取得
+    /// このオブジェクトが保持するモデル補助データを取得する
     /// </summary>
     const ModelData& GetModelData() const { return modelData_; }
 
     /// <summary>
-    /// オブジェクト共通情報用ポインタの取得
+    /// Object3dCommonへの参照を取得する
     /// </summary>
     Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
+
+    /// <summary>
+    /// ImGui表示用の名前を取得する
+    /// </summary>
+    const std::string& GetDebugName() const { return debugName_; }
 
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
@@ -219,8 +228,9 @@ private: // メンバ変数
     Math::Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
     Math::Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
-    // `Model` へのポインタ
+    // 設定されているモデルへのポインタ
     Model* model_ = nullptr;
+    std::string debugName_ = "No Model"; // ImGuiで識別するための表示名
     // モデル用にこの `Object3d` が所有する `ModelCommon`
     std::unique_ptr<ModelCommon> modelCommon_;
 
@@ -265,7 +275,7 @@ public: // メンバ関数
     }
 
     /// <summary>
-    /// ImGuiでオブジェクトの状態を表示・編集するための関数
+    /// ImGuiでオブジェクトの状態を表示・編集する
     /// </summary>
     void DrawImGui(int index);
 
