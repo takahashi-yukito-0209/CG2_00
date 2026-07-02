@@ -214,6 +214,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\3d\Object3dCommon.cpp" />
     <ClCompile Include="application\Game.cpp" />
     <ClCompile Include="application\scenes\PlayScene.cpp" />
+    <ClCompile Include="application\scenes\PlaySceneEffect.cpp" />
+    <ClCompile Include="application\effects\TimeStopEffect.cpp" />
+    <ClCompile Include="application\effects\TimeReversalEffect.cpp" />
+    <ClCompile Include="application\effects\TemporalRiftEffect.cpp" />
     <ClCompile Include="application\scenes\SceneFactory.cpp" />
     <ClCompile Include="application\scenes\TitleScene.cpp" />
   </ItemGroup>
@@ -298,6 +302,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\ImGuiManager.h" />
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
+    <ClInclude Include="application\effects\TimeStopEffect.h" />
+    <ClInclude Include="application\effects\TimeReversalEffect.h" />
+    <ClInclude Include="application\effects\TemporalRiftEffect.h" />
     <ClInclude Include="application\scenes\SceneFactory.h" />
     <ClInclude Include="application\scenes\TitleScene.h" />
   </ItemGroup>
