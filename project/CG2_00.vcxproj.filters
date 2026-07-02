@@ -129,6 +129,9 @@
     <ClCompile Include="engine\base\DirectXCommon.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="engine\base\RenderTarget.cpp">
+      <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="engine\utility\Logger.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
@@ -285,6 +288,9 @@
     </ClInclude>
     <ClInclude Include="engine\base\DirectXCommon.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\RenderTarget.h">
+      <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\StringUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>

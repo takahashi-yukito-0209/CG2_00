@@ -1,5 +1,4 @@
 #include "Model.h"
-#include "Model.h"
 #include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
@@ -17,6 +16,57 @@ using namespace Math;
 
 namespace {
 constexpr const char* kFallbackModelTexturePath = "resources/uvChecker.png";
+}
+
+/// <summary>
+/// 描画時に使用するテクスチャ番号を決定する
+/// </summary>
+uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
+{
+    if (owner) {
+        const auto& ownerMaterial = owner->GetModelData().material; // Object3dで明示指定されたマテリアル
+        if (!ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX) {
+            return ownerMaterial.textureIndex;
+        }
+    }
+
+    if (textureIndex_ != UINT32_MAX) {
+        return textureIndex_;
+    }
+
+    auto textureManager = TextureManager::GetInstance(); // fallbackテクスチャの取得元
+    if (!textureManager) {
+        return UINT32_MAX;
+    }
+    return textureManager->GetSrvIndex(kFallbackModelTexturePath);
+}
+
+/// <summary>
+/// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Model::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
+{
+    if (!commandList || textureIndex == UINT32_MAX) {
+        Logger::Debug(std::string(logContext) + ": texture SRV is invalid - skipping SRV bind\n");
+        return false;
+    }
+
+    auto textureManager = TextureManager::GetInstance(); // テクスチャSRVの取得元
+    if (!textureManager) {
+        Logger::Debug(std::string(logContext) + ": TextureManager is null - skipping SRV bind\n");
+        return false;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = textureManager->GetSrvHandleGPU(textureIndex); // 描画に使うSRV
+    if (srvHandle.ptr == 0) {
+        char buffer[256];
+        sprintf_s(buffer, "%s: srv handle for index %u is null - skipping SRV bind\n", logContext, textureIndex);
+        Logger::Debug(buffer);
+        return false;
+    }
+
+    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    return true;
 }
 
 /// <summary>
@@ -118,54 +168,9 @@ void Model::Draw(Object3d* owner)
     // 非インスタンス描画パス: 予期せぬディスクリプタテーブルの競合を避けるため、インスタンシングSRV（ルートパラメータ4）はバインドしない。
 
     // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
-    uint32_t texIndex = UINT32_MAX;
-    // オーナーのマテリアル情報を確認してテクスチャインデックスを取得
-    const auto& ownerMat = owner->GetModelData().material;
-    // オーナーが明示的にテクスチャファイルパスを指定している場合のみ、オーナーのテクスチャインデックスを優先して使用
-    if (!ownerMat.textureFilePath.empty()) {
-        // オーナーが明示的にテクスチャを指定している場合のみオーナーの index を優先
-        if (ownerMat.textureIndex != UINT32_MAX) {
-            texIndex = ownerMat.textureIndex;
-        }
-    } else if (textureIndex_ != UINT32_MAX) {
-        // 通常はモデル側のテクスチャを使う
-        texIndex = textureIndex_;
-    }
+    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
+    BindTexture(cmdList, textureIndex, "Model::Draw");
 
-    // テクスチャインデックスが有効な場合はSRVをバインド、無効な場合はフォールバックのチェッカーテクスチャを使用
-    auto texMgr = TextureManager::GetInstance();
-    // テクスチャインデックスが有効な場合はSRVをバインド
-    if (texIndex != UINT32_MAX) {
-        // テクスチャインデックスが有効な場合はSRVをバインド
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        // SRVハンドルが無効な場合はSRVをバインドせずに描画する（テクスチャが存在しない可能性があるため）
-        if (srvHandle.ptr == 0) {
-            char buf[256];
-            sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
-            Logger::Debug(buf);
-        } else {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-
-    } else {
-        // フォールバック: 既定のチェッカーテクスチャを使用（SRV絶対インデックス）
-        uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-        // フォールバックのチェッカーテクスチャのSRVインデックスを取得
-        if (fallbackIdx == UINT32_MAX) {
-            Logger::Debug("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
-            return;
-        }
-
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
-        // フォールバックのSRVハンドルを取得
-        if (srvHandle.ptr == 0) {
-            Logger::Debug("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
-        } else {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-    }
-
-    // スタンス描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
     const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
     // 頂点データはモデル側が空の場合はオーナー側の頂点データを使用
     if (verts.empty()) {
@@ -261,48 +266,8 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(7, plAddrInst);
     }
 
-    uint32_t texIndex = UINT32_MAX;
-    const auto& ownerMat2 = owner->GetModelData().material;
-    // オーナーのマテリアル情報を確認してテクスチャインデックスを取得
-    if (!ownerMat2.textureFilePath.empty()) {
-        if (ownerMat2.textureIndex != UINT32_MAX) {
-            texIndex = ownerMat2.textureIndex;
-        }
-    } else if (textureIndex_ != UINT32_MAX) {
-        texIndex = textureIndex_;
-    }
-
-    auto texMgr = TextureManager::GetInstance();
-    // テクスチャインデックスが有効な場合はSRVをバインド、無効な場合はフォールバックのチェッカーテクスチャを使用
-    if (texIndex != UINT32_MAX) {
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        if (srvHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        } else {
-            // フォールバック
-            uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-            if (fb == UINT32_MAX) {
-                Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
-                return;
-            }
-
-            D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
-            if (fbHandle.ptr != 0) {
-                cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
-            }
-        }
-    } else {
-        uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-        if (fb == UINT32_MAX) {
-            Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
-            return;
-        }
-
-        D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
-        if (fbHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
-        }
-    }
+    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
+    BindTexture(cmdList, textureIndex, "Model::DrawInstanced");
 
     D3D12_GPU_DESCRIPTOR_HANDLE instSrv = common->GetInstancingSrvGPUHandle();
     // インスタンシング描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。

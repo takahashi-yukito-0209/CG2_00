@@ -370,6 +370,21 @@ private: // 内部関数
     void AssignTexture();
 
     /// <summary>
+    /// テクスチャパスを解決し、未ロードならロードしてSRV番号を取得する
+    /// </summary>
+    uint32_t ResolveTextureIndex(const std::string& filePath, std::string* resolvedPath, bool releaseIntermediateAfterLoad) const;
+
+    /// <summary>
+    /// デフォルトテクスチャのSRV番号を取得する
+    /// </summary>
+    uint32_t ResolveFallbackTextureIndex() const;
+
+    /// <summary>
+    /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
+
+    /// <summary>
     /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources(); // モデルデータ割り当て

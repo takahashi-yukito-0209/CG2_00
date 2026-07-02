@@ -27,6 +27,7 @@ using namespace MyEngine;
 const uint32_t DirectXCommon::kMaxSRVCount = 512;
 
 // レンダーターゲットの内部構造体定義
+namespace MyEngine {
 struct RenderTargetInternal {
     Microsoft::WRL::ComPtr<ID3D12Resource> colorResource;
     Microsoft::WRL::ComPtr<ID3D12Resource> depthResource;
@@ -46,8 +47,9 @@ struct RenderTargetInternal {
     uint32_t srvIndex = UINT32_MAX;
     uint32_t depthSrvIndex = UINT32_MAX;
 };
+} // namespace MyEngine
 
-static std::vector<std::unique_ptr<RenderTargetInternal>> g_renderTargets;
+DirectXCommon::~DirectXCommon() = default;
 
 // ----------------------------------------------------------------------
 // Static メンバ関数の実装
@@ -429,8 +431,8 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     }
 
     // 管理リストに追加してハンドル（インデックス）を返す
-    int idx = static_cast<int>(g_renderTargets.size());
-    g_renderTargets.push_back(std::move(rt));
+    int idx = static_cast<int>(renderTargets_.size());
+    renderTargets_.push_back(std::move(rt));
     return idx;
 }
 
@@ -439,11 +441,11 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
 /// </summary>
 void DirectXCommon::DestroyRenderTarget(int handle)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
     // SRV が割り当てられている場合は SrvManager に解放を依頼する
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (rt) {
         if (rt->srvIndex != UINT32_MAX && srvManager_) {
             srvManager_->Free(rt->srvIndex);
@@ -454,7 +456,7 @@ void DirectXCommon::DestroyRenderTarget(int handle)
             rt->depthSrvIndex = UINT32_MAX;
         }
     }
-    g_renderTargets[handle].reset();
+    renderTargets_[handle].reset();
 }
 
 /// <summary>
@@ -462,10 +464,10 @@ void DirectXCommon::DestroyRenderTarget(int handle)
 /// </summary>
 void DirectXCommon::DestroyAllRenderTargets()
 {
-    for (size_t i = 0; i < g_renderTargets.size(); ++i) {
+    for (size_t i = 0; i < renderTargets_.size(); ++i) {
         DestroyRenderTarget(static_cast<int>(i));
     }
-    g_renderTargets.clear();
+    renderTargets_.clear();
 }
 
 /// <summary>
@@ -473,12 +475,12 @@ void DirectXCommon::DestroyAllRenderTargets()
 /// </summary>
 void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t height)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
 
     // 既存のレンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt) {
         return;
     }
@@ -512,21 +514,37 @@ void DirectXCommon::ResizeRenderTarget(int handle, uint32_t width, uint32_t heig
 
     // 新しいレンダーターゲットが作成できたら、管理リスト内で入れ替える
     if (newIdx != handle) {
-        g_renderTargets[handle].swap(g_renderTargets[newIdx]);
-        g_renderTargets[newIdx].reset();
+        renderTargets_[handle].swap(renderTargets_[newIdx]);
+        renderTargets_[newIdx].reset();
     }
 }
 
 /// <summary>
 /// 指定したハンドルのレンダーターゲットのカラーテクスチャに対してSRVを作成し、グローバルSRVヒープの指定されたインデックスに配置する
 /// </summary>
+uint32_t DirectXCommon::CreateRenderTargetSRV(int handle)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
+        return UINT32_MAX;
+    }
+
+    auto& rt = renderTargets_[handle]; // SRVを作成するRT
+    if (!rt || !rt->colorResource || !srvManager_ || !srvManager_->CanAllocate()) {
+        return UINT32_MAX;
+    }
+
+    uint32_t srvIndex = srvManager_->Allocate(); // DirectXCommon側で確保したSRV番号
+    CreateRenderTargetSRV(handle, srvIndex);
+    return srvIndex;
+}
+
 void DirectXCommon::CreateRenderTargetSRV(int handle, uint32_t srvIndex)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
     // レンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt || !rt->colorResource) {
         return;
     }
@@ -548,13 +566,29 @@ void DirectXCommon::CreateRenderTargetSRV(int handle, uint32_t srvIndex)
 /// <summary>
 /// オフスクリーン深度バッファのSRVを生成する
 /// </summary>
+uint32_t DirectXCommon::CreateRenderTargetDepthSRV(int handle)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
+        return UINT32_MAX;
+    }
+
+    auto& rt = renderTargets_[handle]; // 深度SRVを作成するRT
+    if (!rt || !rt->depthResource || !srvManager_ || !srvManager_->CanAllocate()) {
+        return UINT32_MAX;
+    }
+
+    uint32_t srvIndex = srvManager_->Allocate(); // DirectXCommon側で確保したSRV番号
+    CreateRenderTargetDepthSRV(handle, srvIndex);
+    return srvIndex;
+}
+
 void DirectXCommon::CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
 
-    auto& rt = g_renderTargets[handle]; // SRVを生成するレンダーターゲット
+    auto& rt = renderTargets_[handle]; // SRVを生成するレンダーターゲット
     if (!rt || !rt->depthResource) {
         return;
     }
@@ -580,12 +614,12 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetRenderTargetRTV(int handle) const
 {
     D3D12_CPU_DESCRIPTOR_HANDLE h {};
     h.ptr = 0;
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return h;
     }
 
     // レンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt) {
         return h;
     }
@@ -600,12 +634,12 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetRenderTargetDSV(int handle) const
 {
     D3D12_CPU_DESCRIPTOR_HANDLE h {};
     h.ptr = 0;
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return h;
     }
 
     // レンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt) {
         return h;
     }
@@ -618,12 +652,12 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetRenderTargetDSV(int handle) const
 /// </summary>
 void DirectXCommon::BeginRenderTo(int handle, bool clear)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
 
     // レンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt) {
         return;
     }
@@ -700,12 +734,12 @@ void DirectXCommon::BeginRenderTo(int handle, bool clear)
 /// </summary>
 void DirectXCommon::EndRenderTo(int handle)
 {
-    if (handle < 0 || static_cast<size_t>(handle) >= g_renderTargets.size()) {
+    if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
         return;
     }
 
     // レンダーターゲットを取得
-    auto& rt = g_renderTargets[handle];
+    auto& rt = renderTargets_[handle];
     if (!rt) {
         return;
     }
@@ -792,17 +826,27 @@ void DirectXCommon::Initialize(WinApp* winApp)
 /// </summary>
 void DirectXCommon::PreDraw()
 {
-    FlushTextureUploads();
-
-    // スワップチェーンが未作成の場合は前処理をスキップ
     if (!swapChain_) {
         Logger::Warn("DirectXCommon::PreDraw: swapChain_ is null\n");
         return;
     }
 
+    const uint32_t frameIndex = GetCurrentFrameIndex(); // これから描画するバックバッファ番号
+    const UINT64 frameFenceValue = frameFenceValues_[frameIndex]; // 対象フレームが使用中のFence値
+    if (frameFenceValue != 0 && fence_->GetCompletedValue() < frameFenceValue) {
+        HRESULT hrWait = fence_->SetEventOnCompletion(frameFenceValue, fenceEvent_);
+        if (FAILED(hrWait)) {
+            Logger::Error("DirectXCommon::PreDraw: failed to set frame fence event\n");
+            return;
+        }
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+
+    ResetCommandList();
+    FlushTextureUploads();
+
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
-    // リソースバリア (Present -> Render Target)
     D3D12_RESOURCE_BARRIER barrier {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -811,25 +855,20 @@ void DirectXCommon::PreDraw()
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     commandList_->ResourceBarrier(1, &barrier);
 
-    // 描画先RTVとDSVを指定
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
     commandList_->OMSetRenderTargets(1, &rtvHandles_[bbIndex], false, &dsvHandle);
 
-    // 画面全体のクリア
-    float clearColor[] = { 0.30f, 0.48f, 0.68f, 1.0f }; // (仮の色)
+    float clearColor[] = { 0.30f, 0.48f, 0.68f, 1.0f }; // 画面消去に使う背景色
     commandList_->ClearRenderTargetView(rtvHandles_[bbIndex], clearColor, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    // SRV用ディスクリプタヒープを指定
     ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap_.Get() };
-    // SRVヒープがない場合は異常として記録する
     if (!srvDescriptorHeap_) {
         Logger::Warn("DirectXCommon::PreDraw: srvDescriptorHeap_ is null\n");
         return;
     }
     commandList_->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-    // ビューポート、シザー矩形の設定
     commandList_->RSSetViewports(1, &viewport_);
     commandList_->RSSetScissorRects(1, &scissorRect_);
 }
@@ -839,8 +878,6 @@ void DirectXCommon::PreDraw()
 /// </summary>
 void DirectXCommon::PostDraw()
 {
-
-    // スワップチェーンが未作成の場合は後処理をスキップ
     if (!swapChain_) {
         Logger::Warn("DirectXCommon::PostDraw: swapChain_ is null\n");
         return;
@@ -848,7 +885,6 @@ void DirectXCommon::PostDraw()
 
     UINT bbIndex = swapChain_->GetCurrentBackBufferIndex();
 
-    // リソースバリア (Render Target -> Present)
     D3D12_RESOURCE_BARRIER barrier {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -857,26 +893,22 @@ void DirectXCommon::PostDraw()
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     commandList_->ResourceBarrier(1, &barrier);
 
-    // コマンドリストを閉じる（記録終了）
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
-    // コマンドをGPUへ送信しフェンスをシグナル
     ExecuteCommandList();
-    // Present（描画結果を画面に送る）
     HRESULT hrPresent = swapChain_->Present(1, 0);
     if (FAILED(hrPresent)) {
         char buf[256];
         sprintf_s(buf, "DirectXCommon::PostDraw: swapChain_->Present failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hrPresent));
         Logger::Error(std::string(buf));
-        // ローカル的にデバイス削除理由もログ出力しておく
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::PostDraw: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
             Logger::Error(std::string(buf));
         }
     }
-    // このフレームが使用するGPU処理の完了値を記録する
+
     fenceValue_++;
     HRESULT hrSignal = commandQueue_->Signal(fence_.Get(), fenceValue_);
     if (FAILED(hrSignal)) {
@@ -885,21 +917,6 @@ void DirectXCommon::PostDraw()
     }
     frameFenceValues_[bbIndex] = fenceValue_;
 
-    const uint32_t nextFrameIndex = GetCurrentFrameIndex(); // 次に記録するフレーム番号
-    const UINT64 nextFrameFenceValue = frameFenceValues_[nextFrameIndex]; // 次フレームが使用中のFence値
-    if (nextFrameFenceValue != 0 && fence_->GetCompletedValue() < nextFrameFenceValue) {
-        HRESULT hrWait = fence_->SetEventOnCompletion(nextFrameFenceValue, fenceEvent_);
-        if (FAILED(hrWait)) {
-            Logger::Error("DirectXCommon::PostDraw: failed to set frame fence event\n");
-            return;
-        }
-        WaitForSingleObject(fenceEvent_, INFINITE);
-    }
-
-    // allocator と commandList をリセット
-    ResetCommandList();
-
-    // FPS固定
     UpdateFixFPS();
 }
 
@@ -1242,6 +1259,8 @@ void DirectXCommon::InitCommandRelated()
     }
 
     hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocators_[0].Get(), nullptr, IID_PPV_ARGS(&commandList_));
+    assert(SUCCEEDED(hr));
+    hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 }
 
@@ -1590,9 +1609,9 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
 
     // ウィンドウサイズへ追従するオフスクリーンレンダーターゲットを再作成する
     std::vector<int> resizeTargetHandles; // リサイズ対象のレンダーターゲットハンドル
-    resizeTargetHandles.reserve(g_renderTargets.size());
-    for (size_t i = 0; i < g_renderTargets.size(); ++i) {
-        if (g_renderTargets[i] && g_renderTargets[i]->resizeWithWindow) {
+    resizeTargetHandles.reserve(renderTargets_.size());
+    for (size_t i = 0; i < renderTargets_.size(); ++i) {
+        if (renderTargets_[i] && renderTargets_[i]->resizeWithWindow) {
             resizeTargetHandles.push_back(static_cast<int>(i));
         }
     }

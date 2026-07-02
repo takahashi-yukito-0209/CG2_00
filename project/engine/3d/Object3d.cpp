@@ -21,10 +21,68 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <unordered_map>
 
 using namespace MyEngine;
 using Microsoft::WRL::ComPtr;
 using namespace Math;
+
+namespace {
+constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
+std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
+
+/// <summary>
+/// モデルデータキャッシュで使用するファイルパスキーを作成する。
+/// </summary>
+std::string MakeModelDataCacheKey(const std::string& filePath)
+{
+    std::filesystem::path modelPath(filePath); // キャッシュ対象のモデルパス
+    std::error_code error; // ファイルシステム操作のエラー情報
+
+    if (std::filesystem::exists(modelPath, error)) {
+        std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(modelPath, error); // 表記ゆれを吸収したパス
+        if (!error && !canonicalPath.empty()) {
+            std::string cacheKey = canonicalPath.generic_string(); // 正規化済みパス
+            error.clear();
+            const auto writeTime = std::filesystem::last_write_time(canonicalPath, error); // モデルファイルの更新時刻
+            if (!error) {
+                cacheKey += "#" + std::to_string(writeTime.time_since_epoch().count());
+            }
+            return cacheKey;
+        }
+    }
+
+    error.clear();
+    std::filesystem::path absolutePath = std::filesystem::absolute(modelPath, error); // 存在しない場合の代替パス
+    if (!error && !absolutePath.empty()) {
+        return absolutePath.lexically_normal().generic_string();
+    }
+
+    return modelPath.lexically_normal().generic_string();
+}
+
+/// <summary>
+/// 読み込み済みのモデルデータをキャッシュから取得する。
+/// </summary>
+const Object3d::ModelData* FindCachedModelData(const std::string& cacheKey)
+{
+    auto cacheIterator = g_modelDataCache.find(cacheKey); // キャッシュ上の検索位置
+    if (cacheIterator == g_modelDataCache.end()) {
+        return nullptr;
+    }
+
+    return &cacheIterator->second;
+}
+
+/// <summary>
+/// 読み込みに成功したモデルデータをキャッシュへ保存する。
+/// </summary>
+Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Object3d::ModelData& modelData)
+{
+    g_modelDataCache[cacheKey] = modelData;
+    return g_modelDataCache[cacheKey];
+}
+}
 
 /// <summary>
 /// Assimp のノードを再帰的に読み込んで Object3d::ModelData::Node に変換する関数
@@ -131,29 +189,17 @@ void Object3d::DrawImGui(int index)
 /// </summary>
 void Object3d::SetTexture(const std::string& filePath)
 {
-    auto texMgr = TextureManager::GetInstance();
-    std::string texToUse = filePath;
-    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture);
-    if (!resolved.empty())
-        texToUse = resolved;
-    // 既にロード済みでなければロードを依頼
-    uint32_t idx = texMgr->GetTextureIndexByFilePath(texToUse);
-    if (idx == UINT32_MAX) {
-        texMgr->LoadTexture(texToUse);
-        // 実行中の差し替えでも次の描画前に確実に使えるように転送を完了させる
-        texMgr->ReleaseIntermediateResources();
-        idx = texMgr->GetTextureIndexByFilePath(texToUse);
-    }
+    std::string resolvedTexturePath; // 実際にTextureManagerへ渡すテクスチャパス
+    const uint32_t textureIndex = ResolveTextureIndex(filePath, &resolvedTexturePath, true); // 明示指定されたテクスチャのSRV番号
 
-    // マテリアルデータにファイルパスとインデックスを設定
-    modelData_.material.textureFilePath = texToUse;
-    modelData_.material.textureIndex = (idx == UINT32_MAX) ? UINT32_MAX : idx;
+    modelData_.material.textureFilePath = resolvedTexturePath.empty() ? filePath : resolvedTexturePath;
+    modelData_.material.textureIndex = textureIndex;
+
     if (!model_) {
-        debugName_ = std::string("Custom Mesh : ") + filePath; // 直接指定メッシュはテクスチャ名も識別名に含める
+        debugName_ = std::string("Custom Mesh : ") + filePath; // カスタムメッシュを識別する表示名
     }
-
-    // モデル描画時はObject3d側のmodelDataが優先参照されるため、ここでの更新だけで反映される。
 }
+
 
 /// <summary>
 /// ファイルパスを指定してモデルを取得・設定する
@@ -352,63 +398,107 @@ void Object3d::CreateTransformationMatrixResource()
 /// </summary>
 void Object3d::AssignTexture()
 {
-    // テクスチャマネージャからインデックスを取得してモデルデータに格納
-    auto texMgr = TextureManager::GetInstance();
     if (!modelData_.material.textureFilePath.empty()) {
-        std::string texturePath = modelData_.material.textureFilePath; // 割り当て対象のテクスチャパス
-        std::string resolved = ResourceResolver::Resolve(texturePath, ResourceResolver::Type::Texture); // 解決済みテクスチャパス
-        if (!resolved.empty()) {
-            texturePath = resolved;
-            modelData_.material.textureFilePath = texturePath;
-        }
+        std::string resolvedTexturePath; // モデルまたは明示指定から解決したテクスチャパス
+        const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
 
-        uint32_t idx = texMgr->GetTextureIndexByFilePath(texturePath);
-        if (idx == UINT32_MAX) {
-            // ロードされていないテクスチャが指定されている場合はロードしてからインデックスを取得する
-            texMgr->LoadTexture(texturePath);
-            idx = texMgr->GetSrvIndex(texturePath);
-        }
+        modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
+        modelData_.material.textureIndex = textureIndex;
 
-        // 取得したインデックスをモデルデータに格納する
-        modelData_.material.textureIndex = idx;
-
-        // ログ出力: テクスチャ割り当て結果
-        char buf[256];
-        sprintf_s(buf, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), idx);
-        Logger::Debug(buf);
-
+        char buffer[256]; // ログ出力用バッファ
+        sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
+        Logger::Debug(buffer);
         return;
     }
 
-    // パス自体が無い場合のみデフォルトを割り当てる
-    uint32_t loadedCount = texMgr->GetLoadedTextureCount();
-    if (loadedCount > 0) {
-        // 既定のチェッカーテクスチャへフォールバックし、そのSRV絶対インデックスを使用
-        uint32_t srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
-        if (srvIdx == UINT32_MAX) {
-            // 未ロードならロードして割り当て
-            texMgr->LoadTexture("resources/uvChecker.png");
-            // 再度インデックスを取得する
-            srvIdx = texMgr->GetSrvIndex("resources/uvChecker.png");
-        }
+    modelData_.material.textureIndex = ResolveFallbackTextureIndex();
+    if (modelData_.material.textureIndex != UINT32_MAX) {
+        modelData_.material.textureFilePath = kDefaultObjectTexturePath;
 
-        // モデルデータにSRVインデックスを格納する
-        modelData_.material.textureIndex = srvIdx;
-
-        // ログ出力: デフォルトテクスチャ割り当て
-        char buf[256];
-        sprintf_s(buf, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", srvIdx);
-        Logger::Debug(buf);
-
-    } else {
-        // ロードされたテクスチャが1枚もない場合は、インデックスを無効値のままにしておく
-        modelData_.material.textureIndex = UINT32_MAX;
-        Logger::Debug("Object3d::AssignTexture: no textures loaded, leaving textureIndex invalid\n");
+        char buffer[256]; // ログ出力用バッファ
+        sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
+        Logger::Debug(buffer);
+        return;
     }
+
+    Logger::Debug("Object3d::AssignTexture: no fallback texture available, leaving textureIndex invalid\n");
+}
+
+
+/// <summary>
+/// テクスチャパスを解決し、未ロードならロードしてSRV番号を取得する
+/// </summary>
+uint32_t Object3d::ResolveTextureIndex(const std::string& filePath, std::string* resolvedPath, bool releaseIntermediateAfterLoad) const
+{
+    auto textureManager = TextureManager::GetInstance(); // テクスチャ管理
+    if (!textureManager || filePath.empty()) {
+        return UINT32_MAX;
+    }
+
+    std::string texturePath = filePath; // 解決前後のテクスチャパス
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Texture); // リソース検索後のパス
+    if (!resolved.empty()) {
+        texturePath = resolved;
+    }
+
+    uint32_t textureIndex = textureManager->GetTextureIndexByFilePath(texturePath); // 使用するSRV番号
+    if (textureIndex == UINT32_MAX) {
+        textureManager->LoadTexture(texturePath);
+        if (releaseIntermediateAfterLoad) {
+            textureManager->ReleaseIntermediateResources();
+        }
+        textureIndex = textureManager->GetTextureIndexByFilePath(texturePath);
+    }
+
+    if (resolvedPath) {
+        *resolvedPath = texturePath;
+    }
+
+    return textureIndex;
 }
 
 /// <summary>
-/// 座標変換行列を更新して定数バッファに転送する関数
+/// デフォルトテクスチャのSRV番号を取得する
+/// </summary>
+uint32_t Object3d::ResolveFallbackTextureIndex() const
+{
+    return ResolveTextureIndex(kDefaultObjectTexturePath, nullptr, false);
+}
+
+/// <summary>
+/// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
+{
+    if (!commandList || textureIndex == UINT32_MAX) {
+        char buffer[128]; // ログ出力用バッファ
+        sprintf_s(buffer, "%s: texture SRV is invalid - skipping SRV bind\n", logContext);
+        Logger::Debug(buffer);
+        return false;
+    }
+
+    auto textureManager = TextureManager::GetInstance(); // テクスチャSRVの取得元
+    if (!textureManager) {
+        char buffer[128]; // ログ出力用バッファ
+        sprintf_s(buffer, "%s: TextureManager is null - skipping SRV bind\n", logContext);
+        Logger::Debug(buffer);
+        return false;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = textureManager->GetSrvHandleGPU(textureIndex); // 描画に使うSRV
+    if (srvHandle.ptr == 0) {
+        char buffer[128]; // ログ出力用バッファ
+        sprintf_s(buffer, "%s: SRV handle for index %u is null - skipping SRV bind\n", logContext, textureIndex);
+        Logger::Debug(buffer);
+        return false;
+    }
+
+    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    return true;
+}
+
+/// <summary>
+/// 座標変換行列を更新して定数バッファに転送する
 /// </summary>
 void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix)
 {
@@ -522,25 +612,8 @@ void Object3d::Draw()
         cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
     }
 
-    // SRVは TextureManager からハンドルを取り出して RootDescriptorTable にセット
-    uint32_t texIndex = modelData_.material.textureIndex;
-    // テクスチャインデックスが有効な場合のみSRVをセットする
-    auto texMgr = TextureManager::GetInstance();
-    // SRVハンドルを取得してルートパラメータ2にセット
-    if (texIndex != UINT32_MAX) {
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        if (srvHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        } else {
-            char buf[128];
-            sprintf_s(buf, "Object3d::Draw: SRV handle for index %u is null - skipping SRV bind\n", texIndex);
-            Logger::Debug(buf);
-        }
-    } else {
-        char buf[128];
-        sprintf_s(buf, "Object3d::Draw: no valid texture assigned (index=%u) - skipping SRV\n", texIndex);
-        Logger::Debug(buf);
-    }
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(cmdList, textureIndex, "Object3d::Draw");
     // 描画コマンド
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
 }
@@ -596,14 +669,8 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
     }
 
-    auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
-    const uint32_t textureIndex = modelData_.material.textureIndex; // 使用するテクスチャ番号
-    if (texMgr && textureIndex != UINT32_MAX) {
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(textureIndex);
-        if (srvHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-    }
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(cmdList, textureIndex, "Object3d::DrawInstanced");
 
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
     if (instancingSrvHandle.ptr != 0) {
@@ -624,6 +691,11 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     std::string fullPath = directoryPath + "/" + filename;
     std::filesystem::path objPath(fullPath);
     std::string objDir = objPath.parent_path().string();
+
+    const std::string cacheKey = MakeModelDataCacheKey(fullPath); // モデルデータキャッシュの検索キー
+    if (const ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
+        return *cachedModelData;
+    }
 
     // Assimp を使って読み込む
     Assimp::Importer importer;
@@ -773,6 +845,10 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     }
 
     // 読み込んだモデルデータを返す
+    if (!modelData.vertices.empty()) {
+        return StoreCachedModelData(cacheKey, modelData);
+    }
+
     return modelData;
 }
 

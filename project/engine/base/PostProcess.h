@@ -8,6 +8,7 @@
 namespace MyEngine {
 
 class DirectXCommon;
+class RenderTarget;
 
 /// <summary>
 /// ポストエフェクトの種類
@@ -57,9 +58,19 @@ public:
     void DrawTexture(uint32_t srvIndex, PostEffectType effectType);
 
     /// <summary>
+    /// RenderTargetのカラーSRVを指定したポストエフェクトで描画する
+    /// </summary>
+    void DrawTexture(const RenderTarget& sourceRenderTarget, PostEffectType effectType);
+
+    /// <summary>
     /// 現在選択されているポストエフェクトでテクスチャを描画する
     /// </summary>
     void DrawTexture(uint32_t srvIndex);
+
+    /// <summary>
+    /// RenderTargetのカラーSRVを現在のポストエフェクトで描画する
+    /// </summary>
+    void DrawTexture(const RenderTarget& sourceRenderTarget);
 
     /// <summary>
     /// 描画に必要なリソースが揃っているか確認する
@@ -147,12 +158,22 @@ public:
     void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
 
     /// <summary>
+    /// RenderTargetのカラーSRVからGaussian Filterの1方向分を描画する
+    /// </summary>
+    void DrawGaussianPass(const RenderTarget& sourceRenderTarget, uint32_t direction);
+
+    /// <summary>
     /// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
     /// </summary>
     void DrawGaussianTexture(
         uint32_t sourceSrvIndex,
         int intermediateRenderTargetHandle,
         uint32_t intermediateSrvIndex);
+
+    /// <summary>
+    /// RenderTargetを中間描画先として分離型Gaussian Filterを描画する
+    /// </summary>
+    void DrawGaussianTexture(uint32_t sourceSrvIndex, RenderTarget& intermediateRenderTarget);
 
     /// <summary>
     /// Outlineの強度を設定する
@@ -200,6 +221,14 @@ public:
     void DrawDepthOutline(
         uint32_t colorSrvIndex,
         uint32_t depthSrvIndex,
+        const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// RenderTargetの深度SRVを使用してOutlineを描画する
+    /// </summary>
+    void DrawDepthOutline(
+        uint32_t colorSrvIndex,
+        const RenderTarget& depthSourceRenderTarget,
         const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
@@ -332,6 +361,13 @@ public:
     /// </summary>
     void DrawDissolveTexture(
         uint32_t sourceSrvIndex,
+        uint32_t maskSrvIndex);
+
+    /// <summary>
+    /// RenderTargetのカラーSRVとノイズマスクを使用してDissolveを描画する
+    /// </summary>
+    void DrawDissolveTexture(
+        const RenderTarget& sourceRenderTarget,
         uint32_t maskSrvIndex);
 
     /// <summary>

@@ -22,6 +22,7 @@ class WinApp;
 namespace MyEngine {
 
 class SrvManager;
+struct RenderTargetInternal;
 
 /// <summary>
 /// DirectX関連の共通処理をまとめたクラス
@@ -29,6 +30,7 @@ class SrvManager;
 class DirectXCommon {
 public:
     DirectXCommon() = default;
+    ~DirectXCommon();
     static constexpr uint32_t kFrameCount = 2;
 
 public: // 公開メンバ関数
@@ -169,9 +171,19 @@ public: // 公開メンバ関数
     void CreateRenderTargetSRV(int handle, uint32_t srvIndex);
 
     /// <summary>
+    /// RTのカラーSRVを作成してSRV番号を返す
+    /// </summary>
+    uint32_t CreateRenderTargetSRV(int handle);
+
+    /// <summary>
     /// オフスクリーン深度バッファのSRVを生成する
     /// </summary>
     void CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex);
+
+    /// <summary>
+    /// RTの深度SRVを作成してSRV番号を返す
+    /// </summary>
+    uint32_t CreateRenderTargetDepthSRV(int handle);
 
     /// <summary>
     /// 指定したハンドルのレンダーターゲットのRTVのCPUディスクリプタハンドルを取得する
@@ -265,6 +277,7 @@ private: // Private メンバ変数
 
     // SrvManager の参照（存在すればレンダーターゲットの SRV 解放に使用）
     class SrvManager* srvManager_ = nullptr;
+    std::vector<std::unique_ptr<RenderTargetInternal>> renderTargets_; // DirectXCommonが管理するRT一覧
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> textureUploadAllocator_; // テクスチャアップロード専用アロケータ
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> textureUploadCommandList_; // テクスチャアップロード専用コマンドリスト

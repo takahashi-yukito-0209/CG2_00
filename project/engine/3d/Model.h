@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 
 #include "Object3d.h"
 #include <d3d12.h>
@@ -41,6 +40,17 @@ public: // メンバ関数
     void DrawInstanced(Object3d* owner, uint32_t instanceCount);
 
 private: // メンバ変数
+
+    /// <summary>
+    /// 描画時に使用するテクスチャ番号を決定する
+    /// </summary>
+    uint32_t ResolveTextureIndex(const Object3d* owner) const;
+
+    /// <summary>
+    /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
+
 
     // モデル共通情報へのポインタ
     ModelCommon* modelCommon_ = nullptr;

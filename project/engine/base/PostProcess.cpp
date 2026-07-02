@@ -1,5 +1,7 @@
 #include "PostProcess.h"
 
+#include "RenderTarget.h"
+
 #include "../utility/mathUtility.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
@@ -733,4 +735,49 @@ void PostProcess::DrawTexture(uint32_t srvIndex)
 {
     PostEffectType drawEffectType = enabled_ ? effectType_ : PostEffectType::Copy; // 無効時は元画像を表示する
     DrawTexture(srvIndex, drawEffectType);
+}
+
+
+void PostProcess::DrawTexture(const RenderTarget& sourceRenderTarget, PostEffectType effectType)
+{
+    DrawTexture(sourceRenderTarget.GetColorSrvIndex(), effectType);
+}
+
+void PostProcess::DrawTexture(const RenderTarget& sourceRenderTarget)
+{
+    DrawTexture(sourceRenderTarget.GetColorSrvIndex());
+}
+
+void PostProcess::DrawGaussianPass(const RenderTarget& sourceRenderTarget, uint32_t direction)
+{
+    DrawGaussianPass(sourceRenderTarget.GetColorSrvIndex(), direction);
+}
+
+void PostProcess::DrawGaussianTexture(uint32_t sourceSrvIndex, RenderTarget& intermediateRenderTarget)
+{
+    if (!enabled_) {
+        DrawTexture(sourceSrvIndex, PostEffectType::Copy);
+        return;
+    }
+
+    intermediateRenderTarget.Begin(true);
+    DrawGaussianPass(sourceSrvIndex, 0);
+    intermediateRenderTarget.End();
+
+    DrawGaussianPass(intermediateRenderTarget.GetColorSrvIndex(), 1);
+}
+
+void PostProcess::DrawDepthOutline(
+    uint32_t colorSrvIndex,
+    const RenderTarget& depthSourceRenderTarget,
+    const Math::Matrix4x4& projectionMatrix)
+{
+    DrawDepthOutline(colorSrvIndex, depthSourceRenderTarget.GetDepthSrvIndex(), projectionMatrix);
+}
+
+void PostProcess::DrawDissolveTexture(
+    const RenderTarget& sourceRenderTarget,
+    uint32_t maskSrvIndex)
+{
+    DrawDissolveTexture(sourceRenderTarget.GetColorSrvIndex(), maskSrvIndex);
 }

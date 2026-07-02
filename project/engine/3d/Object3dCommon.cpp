@@ -13,6 +13,25 @@
 using namespace Math;
 using namespace MyEngine;
 
+namespace {
+/// <summary>
+/// ブレンドモードがPSO配列の範囲内か確認する
+/// </summary>
+bool IsValidObjectBlendMode(BlendMode mode)
+{
+    const int modeIndex = static_cast<int>(mode); // 確認対象のブレンドモード番号
+    return 0 <= modeIndex && modeIndex < static_cast<int>(BlendMode::Count);
+}
+
+/// <summary>
+/// ブレンドモードをPSO配列の添字へ変換する
+/// </summary>
+size_t ToObjectBlendModeIndex(BlendMode mode)
+{
+    return static_cast<size_t>(mode);
+}
+} // namespace
+
 /// <summary>
 /// 初期化
 /// </summary>
@@ -121,7 +140,12 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
 
     // グラフィックスパイプラインの生成
-    CreateGraphicsPipeline();
+    // ルートシグネチャはブレンドモードに依存しないため一度だけ生成する
+    CreateRootSignature();
+    for (int modeIndex = 0; modeIndex < static_cast<int>(BlendMode::Count); ++modeIndex) {
+        BlendMode mode = static_cast<BlendMode>(modeIndex); // 作成対象のブレンドモード
+        CreateGraphicsPipeline(mode);
+    }
 
     // インスタンシング用リソースの作成（構造化バッファ + SRV）
     const uint32_t kNumInstance = 100; // パーティクルデモ用に最大インスタンス数を増加
@@ -399,11 +423,25 @@ void Object3dCommon::DrawCameraImGui() { (void)0; }
 /// </summary>
 void Object3dCommon::SetBlendMode(BlendMode mode)
 {
-    // 選択されたブレンドモードを保存し、PSOを再生成する
+    if (!IsValidObjectBlendMode(mode)) {
+        Logger::Log("Object3dCommon::SetBlendMode: invalid blend mode\n");
+        return;
+    }
+
+    const size_t modeIndex = ToObjectBlendModeIndex(mode); // 参照するPSO配列の添字
+    if (!graphicsPipelineStates_[modeIndex]) {
+        CreateGraphicsPipeline(mode);
+    }
+
+    if (!graphicsPipelineStates_[modeIndex]) {
+        Logger::Log("Object3dCommon::SetBlendMode: pipeline state for blend mode is not ready\n");
+        return;
+    }
+
     blendMode_ = mode;
-    // 新しいブレンドステートを適用するためパイプラインを再生成
-    CreateGraphicsPipeline();
 }
+
+
 
 /// <summary>
 /// インスタンシング／パーティクル用の描画設定をコマンドリストに設定
@@ -445,13 +483,18 @@ void Object3dCommon::SetInstancingDrawSetting()
 
     // フォールバック: インスタンシング用PSOが未準備なら標準のグラフィックスPSOを使用してGPUクラッシュを回避
     if (!instancingPipelineState_) {
-        Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null, falling back to graphicsPipelineState_\n");
-        if (!graphicsPipelineState_) {
-            Logger::Log("Object3dCommon::SetInstancingDrawSetting: graphicsPipelineState_ also null\n");
+        Logger::Log("Object3dCommon::SetInstancingDrawSetting: instancingPipelineState_ is null, falling back to current graphics PSO\n");
+        if (!IsValidObjectBlendMode(blendMode_)) {
+            Logger::Log("Object3dCommon::SetInstancingDrawSetting: invalid blendMode_\n");
+            return;
+        }
+        auto& fallbackPipelineState = graphicsPipelineStates_[ToObjectBlendModeIndex(blendMode_)]; // フォールバック用PSO
+        if (!fallbackPipelineState) {
+            Logger::Log("Object3dCommon::SetInstancingDrawSetting: fallback graphics PSO is null\n");
             return;
         }
         cmdList->SetGraphicsRootSignature(rootSignature_.Get()); // ルートシグネチャは共通
-        cmdList->SetPipelineState(graphicsPipelineState_.Get()); // フォールバックして通常のグラフィックスPSOを使用
+        cmdList->SetPipelineState(fallbackPipelineState.Get()); // フォールバックして通常のグラフィックスPSOを使用
     } else {
         cmdList->SetGraphicsRootSignature(rootSignature_.Get()); // ルートシグネチャは共通
         cmdList->SetPipelineState(instancingPipelineState_.Get()); // インスタンシング用PSOを使用
@@ -523,16 +566,19 @@ void Object3dCommon::SetCommonDrawSetting()
     }
 
     // ここでグラフィックスパイプラインステートがnullの場合もGPUクラッシュを回避するために早期リターンする
-    if (!graphicsPipelineState_) {
-        Logger::Log("Object3dCommon::SetCommonDrawSetting: graphicsPipelineState_ is null\n");
+    if (!IsValidObjectBlendMode(blendMode_)) {
+        Logger::Log("Object3dCommon::SetCommonDrawSetting: invalid blendMode_\n");
         return;
     }
 
-    // ルートシグネチャをセットするコマンド
+    auto& pipelineState = graphicsPipelineStates_[ToObjectBlendModeIndex(blendMode_)]; // 現在のブレンドモード用PSO
+    if (!pipelineState) {
+        Logger::Log("Object3dCommon::SetCommonDrawSetting: graphicsPipelineState is null\n");
+        return;
+    }
+
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-    // パイプラインステートをセットするコマンド
-    cmdList->SetPipelineState(graphicsPipelineState_.Get()); // PSOを設定
-    // プリミティブトポロジーをセットするコマンド
+    cmdList->SetPipelineState(pipelineState.Get()); // PSOを設定
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 形状を設定
 
     // Spot light CBV を全ての通常描画パスでもバインドする（シェーダー b5 / ルートパラメータ 8）
@@ -775,11 +821,17 @@ bool Object3dCommon::UpdatePointLight(int index, const Object3d::PointLight& pl)
 /// </summary>
 void Object3dCommon::CreateGraphicsPipeline()
 {
+    CreateGraphicsPipeline(blendMode_);
+}
+
+/// <summary>
+/// 指定されたブレンドモード用のグラフィックスパイプラインを作成する
+/// </summary>
+void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
+{
 
     HRESULT hr;
 
-    // ルートシグネチャの作成を先に実行する
-    CreateRootSignature();
 
     // InputLayout
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
@@ -810,7 +862,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD; // アルファブレンドオペレーションも加算を基本とする
 
     // ブレンドモードに応じて、ソースブレンドとデスティネーションブレンドを設定する
-    switch (blendMode_) {
+    switch (mode) {
     case BlendMode::None: // ブレンドなし（上書き）
 
         // ブレンドを無効にして、ソースがそのまま出力されるようにする
@@ -930,7 +982,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     depthStencilDesc.DepthEnable = true;
     // Depth書き込みマスク: 透明表現（例: Alpha）を使用するブレンドモードでは不正なオクルージョンを防ぐため深度書き込みを無効化。
     // 不透明（None）のレンダリングでは深度書き込みを有効化する。
-    if (blendMode_ == BlendMode::Alpha || blendMode_ == BlendMode::Add || blendMode_ == BlendMode::Subtract || blendMode_ == BlendMode::Multiply || blendMode_ == BlendMode::Screen) {
+    if (mode == BlendMode::Alpha || mode == BlendMode::Add || mode == BlendMode::Subtract || mode == BlendMode::Multiply || mode == BlendMode::Screen) {
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     } else {
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
@@ -943,8 +995,13 @@ void Object3dCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
     // 実際に生成し、メンバ変数に保持する
-    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
+    const size_t modeIndex = ToObjectBlendModeIndex(mode); // 作成したPSOを格納する添字
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates_[modeIndex]));
     assert(SUCCEEDED(hr));
+
+    if (instancingPipelineState_) {
+        return;
+    }
 
     // Particleシェーダーを用いて、インスタンシング／パーティクル描画用の別PSOを作成
     Microsoft::WRL::ComPtr<IDxcBlob> instVS = dxCommon_->CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");

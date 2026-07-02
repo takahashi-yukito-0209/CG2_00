@@ -1,6 +1,7 @@
 #pragma once
 #include "../../engine/base/IScene.h"
 #include "../../engine/base/PostProcess.h"
+#include "../../engine/base/RenderTarget.h"
 #include "../effects/TemporalRiftEffect.h"
 #include "../effects/TimeReversalEffect.h"
 #include "../effects/TimeStopEffect.h"
@@ -226,6 +227,51 @@ private:
     /// </summary>
     void InitializePostProcessTargets();
 
+
+    /// <summary>
+    /// ポストプロセス描画が利用できるか判定する
+    /// </summary>
+    bool CanUsePostProcess() const;
+
+    /// <summary>
+    /// シーン描画結果をポストプロセス入力用RTへ描画する
+    /// </summary>
+    void DrawSceneToPostProcessTarget();
+
+    /// <summary>
+    /// 時間演出用のポストプロセス連鎖を適用する
+    /// </summary>
+    void ApplyTemporalPostProcessChain(uint32_t& postProcessSourceSrvIndex, MyEngine::PostEffectType& finalEffectType);
+
+    /// <summary>
+    /// Gaussian Filterの2pass描画が利用できるか判定する
+    /// </summary>
+    bool CanUseGaussianFilter(MyEngine::PostEffectType finalEffectType) const;
+
+    /// <summary>
+    /// Scene View表示用の最終RTが利用できるか判定する
+    /// </summary>
+    bool CanUseFinalRenderTarget() const;
+
+    /// <summary>
+    /// Gaussian Filterの1pass目を中間RTへ描画する
+    /// </summary>
+    void ApplyGaussianFirstPass(uint32_t& postProcessSourceSrvIndex);
+
+    /// <summary>
+    /// 最終ポストプロセス描画を実行する
+    /// </summary>
+    void DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, MyEngine::PostEffectType finalEffectType, bool useGaussianFilter);
+
+    /// <summary>
+    /// ポストプロセス付きでシーンを描画する
+    /// </summary>
+    bool DrawPostProcessedScene();
+
+    /// <summary>
+    /// シーン内の3D要素を描画する
+    /// </summary>
+    void DrawSceneContent();
     /// <summary>
     /// 3D空間とパーティクルを描画する
     /// </summary>
@@ -236,7 +282,7 @@ private:
     /// </summary>
     void DrawSprites();
 
-private: // メンバ変数
+private: // メンバー変数
     MyEngine::SceneContext ctx_;
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_;
@@ -247,19 +293,15 @@ private: // メンバ変数
     ParticleEmitter ringEmitter_;
     ParticleEmitter cylinderEmitter_;
     std::unique_ptr<MyEngine::SkyBox> skybox_;
-    std::vector<std::unique_ptr<MyEngine::Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像
+    std::vector<std::unique_ptr<MyEngine::Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像スプライト
     std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalSprites_; // 時間逆行用パーティクルの表示スプライト
-    std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalAfterimageSprites_; // 巻き戻し軌跡を表示する残像スプライト
+    std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalAfterimageSprites_; // 巻き戻り軌跡を表示する残像スプライト
     std::unique_ptr<MyEngine::Sprite> timeReversalConvergenceSprite_; // 収束時のフラッシュ表示スプライト
     MyEngine::PostProcess postProcess_; // 時間演出に使用するポストプロセス
-    int sceneRenderTargetHandle_ = -1; // シーン描画用レンダーターゲット
-    uint32_t sceneRenderTargetSrvIndex_ = UINT32_MAX; // シーン描画結果のSRV
-    uint32_t sceneDepthSrvIndex_ = UINT32_MAX; // シーン描画深度のSRV
+    MyEngine::RenderTarget sceneRenderTarget_; // シーン描画結果を保持するRT
     bool sceneViewOnly_ = false; // シーンをScene View用RTだけに描画するか
-    int postProcessIntermediateHandle_ = -1; // ポストエフェクト連結用の中間レンダーターゲット
-    uint32_t postProcessIntermediateSrvIndex_ = UINT32_MAX; // 中間描画結果のSRV
-    int finalRenderTargetHandle_ = -1; // Scene Viewへ表示する最終描画用レンダーターゲット
-    uint32_t finalRenderTargetSrvIndex_ = UINT32_MAX; // Scene Viewへ表示する最終描画結果のSRV
+    MyEngine::RenderTarget postProcessIntermediateTarget_; // ポストプロセス連鎖用の中間RT
+    MyEngine::RenderTarget finalRenderTarget_; // Scene Viewへ渡す最終描画結果RT
     uint32_t dissolveMaskSrvIndex_ = UINT32_MAX; // Dissolveで使用するノイズマスクSRV
     TemporalRiftEffect temporalRiftEffect_; // 時空破砕エフェクト
     EffectType selectedEffectType_ = EffectType::DimensionalShatter; // ImGuiで選択中のエフェクト

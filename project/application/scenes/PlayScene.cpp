@@ -178,66 +178,51 @@ void PlayScene::InitializeTemporalEffectSprites()
 /// </summary>
 void PlayScene::InitializePostProcessTargets()
 {
-    DirectXCommon* directXCommon = ctx_.directXCommon; // オフスクリーン描画に使用するDirectX基盤
-    if (directXCommon && ctx_.srvManager) {
-        sceneRenderTargetHandle_ = directXCommon->CreateRenderTarget(
-            WinApp::kWindowWidth,
-            WinApp::kWindowHeight,
-            directXCommon->GetSwapChainFormat(),
-            true,
-            { 0.53f, 0.71f, 0.82f, 1.0f },
-            true);
-
-        if (sceneRenderTargetHandle_ >= 0) {
-            sceneRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetSRV(
-                sceneRenderTargetHandle_,
-                sceneRenderTargetSrvIndex_);
-
-            sceneDepthSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetDepthSRV(
-                sceneRenderTargetHandle_,
-                sceneDepthSrvIndex_);
-        }
-
-        postProcessIntermediateHandle_ = directXCommon->CreateRenderTarget(
-            WinApp::kWindowWidth,
-            WinApp::kWindowHeight,
-            directXCommon->GetSwapChainFormat(),
-            false,
-            { 0.0f, 0.0f, 0.0f, 1.0f },
-            true);
-
-        if (postProcessIntermediateHandle_ >= 0) {
-            postProcessIntermediateSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetSRV(
-                postProcessIntermediateHandle_,
-                postProcessIntermediateSrvIndex_);
-        }
-
-        finalRenderTargetHandle_ = directXCommon->CreateRenderTarget(
-            WinApp::kWindowWidth,
-            WinApp::kWindowHeight,
-            directXCommon->GetSwapChainFormat(),
-            false,
-            { 0.0f, 0.0f, 0.0f, 1.0f },
-            true);
-
-        if (finalRenderTargetHandle_ >= 0) {
-            finalRenderTargetSrvIndex_ = ctx_.srvManager->Allocate();
-            directXCommon->CreateRenderTargetSRV(
-                finalRenderTargetHandle_,
-                finalRenderTargetSrvIndex_);
-        }
-
-        if (ctx_.textureManager) {
-            ctx_.textureManager->LoadTexture("noise0.png");
-            dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
-        }
-
-        postProcess_.Initialize(directXCommon);
-        postProcess_.SetEffectType(PostEffectType::Copy);
+    DirectXCommon* directXCommon = ctx_.directXCommon; // 初期化に使用するDirectX基盤
+    if (!directXCommon) {
+        return;
     }
+
+    RenderTargetDesc sceneRenderTargetDesc {}; // シーン描画用RT設定
+    sceneRenderTargetDesc.width = WinApp::kWindowWidth;
+    sceneRenderTargetDesc.height = WinApp::kWindowHeight;
+    sceneRenderTargetDesc.format = directXCommon->GetSwapChainFormat();
+    sceneRenderTargetDesc.useDepth = true;
+    sceneRenderTargetDesc.createColorSrv = true;
+    sceneRenderTargetDesc.createDepthSrv = true;
+    sceneRenderTargetDesc.resizeWithWindow = true;
+    sceneRenderTargetDesc.clearColor = { 0.53f, 0.71f, 0.82f, 1.0f };
+    sceneRenderTarget_.Initialize(directXCommon, sceneRenderTargetDesc);
+
+    RenderTargetDesc intermediateTargetDesc {}; // ポストプロセス中間RT設定
+    intermediateTargetDesc.width = WinApp::kWindowWidth;
+    intermediateTargetDesc.height = WinApp::kWindowHeight;
+    intermediateTargetDesc.format = directXCommon->GetSwapChainFormat();
+    intermediateTargetDesc.useDepth = false;
+    intermediateTargetDesc.createColorSrv = true;
+    intermediateTargetDesc.createDepthSrv = false;
+    intermediateTargetDesc.resizeWithWindow = true;
+    intermediateTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    postProcessIntermediateTarget_.Initialize(directXCommon, intermediateTargetDesc);
+
+    RenderTargetDesc finalRenderTargetDesc {}; // Scene View表示用RT設定
+    finalRenderTargetDesc.width = WinApp::kWindowWidth;
+    finalRenderTargetDesc.height = WinApp::kWindowHeight;
+    finalRenderTargetDesc.format = directXCommon->GetSwapChainFormat();
+    finalRenderTargetDesc.useDepth = false;
+    finalRenderTargetDesc.createColorSrv = true;
+    finalRenderTargetDesc.createDepthSrv = false;
+    finalRenderTargetDesc.resizeWithWindow = true;
+    finalRenderTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
+
+    if (ctx_.textureManager) {
+        ctx_.textureManager->LoadTexture("noise0.png");
+        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
+    }
+
+    postProcess_.Initialize(directXCommon);
+    postProcess_.SetEffectType(PostEffectType::Copy);
 }
 
 void PlayScene::Initialize(const SceneContext& ctx)
@@ -317,38 +302,23 @@ void PlayScene::Initialize(const SceneContext& ctx)
 }
 
 /// <summary>
-/// 終了処理
+/// 終了処理を行う
 /// </summary>
 void PlayScene::Finalize()
 {
     std::cout << "PlayScene Finalize\n";
     StopCameraShake();
 
-    DirectXCommon* directXCommon = ctx_.directXCommon; // 解放対象を管理するDirectX基盤
-    if (directXCommon && sceneRenderTargetHandle_ >= 0) {
-        directXCommon->DestroyRenderTarget(sceneRenderTargetHandle_);
-        sceneRenderTargetHandle_ = -1;
-        sceneRenderTargetSrvIndex_ = UINT32_MAX;
-        sceneDepthSrvIndex_ = UINT32_MAX;
-    }
-    if (directXCommon && postProcessIntermediateHandle_ >= 0) {
-        directXCommon->DestroyRenderTarget(postProcessIntermediateHandle_);
-        postProcessIntermediateHandle_ = -1;
-        postProcessIntermediateSrvIndex_ = UINT32_MAX;
-    }
-    if (directXCommon && finalRenderTargetHandle_ >= 0) {
-        directXCommon->DestroyRenderTarget(finalRenderTargetHandle_);
-        finalRenderTargetHandle_ = -1;
-        finalRenderTargetSrvIndex_ = UINT32_MAX;
-    }
+    sceneRenderTarget_.Finalize();
+    postProcessIntermediateTarget_.Finalize();
+    finalRenderTarget_.Finalize();
     dissolveMaskSrvIndex_ = UINT32_MAX;
     postProcess_.Finalize();
-    // パーティクルマネージャーの終了処理
+
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->Finalize();
     }
 
-    // スプライトとオブジェクトの解放
     sprites_.clear();
     objects3d_.clear();
     temporalAfterimageSprites_.clear();
@@ -357,12 +327,10 @@ void PlayScene::Finalize()
     timeReversalConvergenceSprite_.reset();
     timeReversalEffect_.ResetState();
 
-    // パーティクル描画に使用していたプレーンを ParticleManager から解除
     if (ParticleManager::GetInstance()) {
         ParticleManager::GetInstance()->SetParticlePlane(nullptr);
     }
 
-    // プレーンのリセット
     particlePlane_.reset();
     particleRing_.reset();
     particleCylinder_.reset();
@@ -441,89 +409,150 @@ void PlayScene::Update(float dt)
 }
 
 /// <summary>
-/// プレイシーンを描画する
+/// 描画処理を行う
 /// </summary>
 void PlayScene::Draw()
 {
-    DirectXCommon* directXCommon = ctx_.directXCommon; // 描画先を切り替えるDirectX基盤
-    const bool canUsePostProcess = directXCommon
-        && sceneRenderTargetHandle_ >= 0
-        && sceneRenderTargetSrvIndex_ != UINT32_MAX
-        && postProcess_.IsReady(); // ポストプロセスを実行できる状態か
-    const bool canUseTemporalChain = canUsePostProcess
-        && temporalRiftEffect_.IsPostProcessChainPhase()
-        && postProcessIntermediateHandle_ >= 0
-        && postProcessIntermediateSrvIndex_ != UINT32_MAX; // 2パス連結を実行できる状態か
-
-    if (canUsePostProcess) {
-        directXCommon->BeginRenderTo(sceneRenderTargetHandle_, true);
-        DrawWorldAndParticles();
-        DrawTemporalAfterimages();
-        DrawTimeReversalParticles();
-        directXCommon->EndRenderTo(sceneRenderTargetHandle_);
-
-        uint32_t postProcessSourceSrvIndex = sceneRenderTargetSrvIndex_; // 最終パスに入力するSRV番号
-        PostEffectType finalEffectType = postProcess_.GetEffectType(); // 最終パスで適用するポストエフェクト
-
-        if (canUseTemporalChain) {
-            // 1パス目で空間歪みを中間レンダーターゲットへ描画する
-            directXCommon->BeginRenderTo(postProcessIntermediateHandle_, true);
-            postProcess_.DrawTexture(
-                sceneRenderTargetSrvIndex_,
-                PostEffectType::Distortion);
-            directXCommon->EndRenderTo(postProcessIntermediateHandle_);
-
-            postProcessSourceSrvIndex = postProcessIntermediateSrvIndex_;
-            finalEffectType = PostEffectType::RadialBlur;
-        }
-
-        const bool canUseFinalRenderTarget = sceneViewOnly_
-            && finalRenderTargetHandle_ >= 0
-            && finalRenderTargetSrvIndex_ != UINT32_MAX; // Scene Viewへ最終結果を書き込める状態か
-        const bool canUseGaussianFilter = finalEffectType == PostEffectType::GaussianFilter
-            && postProcessIntermediateHandle_ >= 0
-            && postProcessIntermediateSrvIndex_ != UINT32_MAX; // Gaussian Filterの2パス処理を実行できるか
-
-        if (canUseGaussianFilter) {
-            directXCommon->BeginRenderTo(postProcessIntermediateHandle_, true);
-            postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 0);
-            directXCommon->EndRenderTo(postProcessIntermediateHandle_);
-            postProcessSourceSrvIndex = postProcessIntermediateSrvIndex_;
-        }
-
-        if (canUseFinalRenderTarget) {
-            directXCommon->BeginRenderTo(finalRenderTargetHandle_, true);
-        }
-
-        if (canUseGaussianFilter) {
-            postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 1);
-        } else if (finalEffectType == PostEffectType::DepthOutline
-            && sceneDepthSrvIndex_ != UINT32_MAX
-            && ctx_.camera) {
-            postProcess_.DrawDepthOutline(
-                postProcessSourceSrvIndex,
-                sceneDepthSrvIndex_,
-                ctx_.camera->GetProjectionMatrix());
-        } else if (finalEffectType == PostEffectType::Dissolve
-            && dissolveMaskSrvIndex_ != UINT32_MAX) {
-            postProcess_.DrawDissolveTexture(
-                postProcessSourceSrvIndex,
-                dissolveMaskSrvIndex_);
-        } else {
-            postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
-        }
-        DrawSprites();
-
-        if (canUseFinalRenderTarget) {
-            directXCommon->EndRenderTo(finalRenderTargetHandle_);
-        }
+    if (DrawPostProcessedScene()) {
         return;
     }
 
+    DrawSceneContent();
+    DrawSprites();
+}
+
+/// <summary>
+/// ポストプロセス描画が利用できるか判定する
+/// </summary>
+bool PlayScene::CanUsePostProcess() const
+{
+    DirectXCommon* directXCommon = ctx_.directXCommon; // 描画に使用するDirectX基盤
+    return directXCommon
+        && sceneRenderTarget_.IsValid()
+        && sceneRenderTarget_.HasColorSrv()
+        && postProcess_.IsReady();
+}
+
+/// <summary>
+/// シーン描画結果をポストプロセス入力用RTへ描画する
+/// </summary>
+void PlayScene::DrawSceneToPostProcessTarget()
+{
+    sceneRenderTarget_.Begin(true);
+    DrawSceneContent();
+    sceneRenderTarget_.End();
+}
+
+/// <summary>
+/// 時間演出用のポストプロセス連鎖を適用する
+/// </summary>
+void PlayScene::ApplyTemporalPostProcessChain(uint32_t& postProcessSourceSrvIndex, PostEffectType& finalEffectType)
+{
+    const bool canUseTemporalChain = temporalRiftEffect_.IsPostProcessChainPhase()
+        && postProcessIntermediateTarget_.IsValid()
+        && postProcessIntermediateTarget_.HasColorSrv(); // 2pass目に渡すRTが必要
+    if (!canUseTemporalChain) {
+        return;
+    }
+
+    postProcessIntermediateTarget_.Begin(true);
+    postProcess_.DrawTexture(sceneRenderTarget_, PostEffectType::Distortion);
+    postProcessIntermediateTarget_.End();
+
+    postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
+    finalEffectType = PostEffectType::RadialBlur;
+}
+
+/// <summary>
+/// Gaussian Filterの2pass描画が利用できるか判定する
+/// </summary>
+bool PlayScene::CanUseGaussianFilter(PostEffectType finalEffectType) const
+{
+    return finalEffectType == PostEffectType::GaussianFilter
+        && postProcessIntermediateTarget_.IsValid()
+        && postProcessIntermediateTarget_.HasColorSrv();
+}
+
+/// <summary>
+/// Scene View表示用の最終RTが利用できるか判定する
+/// </summary>
+bool PlayScene::CanUseFinalRenderTarget() const
+{
+    return sceneViewOnly_
+        && finalRenderTarget_.IsValid()
+        && finalRenderTarget_.HasColorSrv();
+}
+
+/// <summary>
+/// Gaussian Filterの1pass目を中間RTへ描画する
+/// </summary>
+void PlayScene::ApplyGaussianFirstPass(uint32_t& postProcessSourceSrvIndex)
+{
+    postProcessIntermediateTarget_.Begin(true);
+    postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 0);
+    postProcessIntermediateTarget_.End();
+    postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
+}
+
+/// <summary>
+/// 最終ポストプロセス描画を実行する
+/// </summary>
+void PlayScene::DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, PostEffectType finalEffectType, bool useGaussianFilter)
+{
+    if (useGaussianFilter) {
+        postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 1);
+    } else if (finalEffectType == PostEffectType::DepthOutline && sceneRenderTarget_.HasDepthSrv() && ctx_.camera) {
+        postProcess_.DrawDepthOutline(postProcessSourceSrvIndex, sceneRenderTarget_, ctx_.camera->GetProjectionMatrix());
+    } else if (finalEffectType == PostEffectType::Dissolve && dissolveMaskSrvIndex_ != UINT32_MAX) {
+        postProcess_.DrawDissolveTexture(postProcessSourceSrvIndex, dissolveMaskSrvIndex_);
+    } else {
+        postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
+    }
+}
+
+/// <summary>
+/// ポストプロセス付きでシーンを描画する
+/// </summary>
+bool PlayScene::DrawPostProcessedScene()
+{
+    if (!CanUsePostProcess()) {
+        return false;
+    }
+
+    DrawSceneToPostProcessTarget();
+
+    uint32_t postProcessSourceSrvIndex = sceneRenderTarget_.GetColorSrvIndex(); // 現在の入力SRV
+    PostEffectType finalEffectType = postProcess_.GetEffectType(); // 最終的に適用する効果
+
+    ApplyTemporalPostProcessChain(postProcessSourceSrvIndex, finalEffectType);
+
+    const bool canUseGaussianFilter = CanUseGaussianFilter(finalEffectType); // Gaussian 2passが必要か
+    if (canUseGaussianFilter) {
+        ApplyGaussianFirstPass(postProcessSourceSrvIndex);
+    }
+
+    const bool canUseFinalRenderTarget = CanUseFinalRenderTarget(); // Scene View用RTを使うか
+    if (canUseFinalRenderTarget) {
+        finalRenderTarget_.Begin(true);
+    }
+
+    DrawFinalPostProcessPass(postProcessSourceSrvIndex, finalEffectType, canUseGaussianFilter);
+    DrawSprites();
+
+    if (canUseFinalRenderTarget) {
+        finalRenderTarget_.End();
+    }
+    return true;
+}
+
+/// <summary>
+/// シーン内の3D要素を描画する
+/// </summary>
+void PlayScene::DrawSceneContent()
+{
     DrawWorldAndParticles();
     DrawTemporalAfterimages();
     DrawTimeReversalParticles();
-    DrawSprites();
 }
 
 /// <summary>
@@ -641,15 +670,15 @@ void PlayScene::SetSceneViewOnly(bool enabled)
     sceneViewOnly_ = enabled;
 }
 
-/// <summary>
-/// Scene Viewへ表示するSRV番号を取得する
-/// </summary>
 uint32_t PlayScene::GetSceneViewSrvIndex() const
 {
-    if (finalRenderTargetSrvIndex_ != UINT32_MAX) {
-        return finalRenderTargetSrvIndex_;
+    if (finalRenderTarget_.HasColorSrv()) {
+        return finalRenderTarget_.GetColorSrvIndex();
     }
-    return sceneRenderTargetSrvIndex_;
+    if (sceneRenderTarget_.HasColorSrv()) {
+        return sceneRenderTarget_.GetColorSrvIndex();
+    }
+    return UINT32_MAX;
 }
 
 /// <summary>
