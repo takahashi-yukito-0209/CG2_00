@@ -324,6 +324,26 @@ bool Model::LoadFromFile(const std::string& directoryPath, const std::string& fi
 }
 
 /// <summary>
+/// モデル頂点データから頂点バッファを作成する
+/// </summary>
+void Model::CreateVertexBuffer()
+{
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t vertexBufferSize = sizeof(Object3d::VertexData) * modelData_.vertices.size(); // 頂点バッファサイズ
+    vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
+
+    void* mappedVertexData = nullptr; // 頂点データ転送先
+    vertexResource_->Map(0, nullptr, &mappedVertexData);
+    assert(mappedVertexData != nullptr);
+    std::memcpy(mappedVertexData, modelData_.vertices.data(), vertexBufferSize);
+    vertexResource_->Unmap(0, nullptr);
+
+    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
+    vertexBufferView_.SizeInBytes = static_cast<UINT>(vertexBufferSize);
+    vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
+}
+
+/// <summary>
 /// モデルの初期化
 /// </summary>
 void Model::Initialize(ModelCommon* modelCommon)
@@ -334,24 +354,12 @@ void Model::Initialize(ModelCommon* modelCommon)
         return;
     }
 
-    // 頂点バッファの生成
+    // テクスチャ管理の取得とfallbackテクスチャの読み込み
     auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
     EnsureFallbackModelTextureLoaded(texMgr);
 
-    DirectXCommon* dx = modelCommon_->GetDxCommon();
-    size_t vbSize = sizeof(Object3d::VertexData) * modelData_.vertices.size();
-    vertexResource_ = dx->CreateBufferResource(vbSize);
-    // 頂点データ転送
-    void* mapped = nullptr;
-    vertexResource_->Map(0, nullptr, &mapped);
-    assert(mapped != nullptr);
-    std::memcpy(mapped, modelData_.vertices.data(), vbSize);
-    vertexResource_->Unmap(0, nullptr);
-
-    // 頂点バッファビューの設定
-    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vertexBufferView_.SizeInBytes = static_cast<UINT>(vbSize);
-    vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
+    // 頂点バッファの生成
+    CreateVertexBuffer();
 
     // モデルマテリアルテクスチャの解決
     const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(texMgr, modelData_.material); // モデルマテリアルのSRV番号

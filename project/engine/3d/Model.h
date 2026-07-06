@@ -47,6 +47,11 @@ private: // メンバ変数
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
 
     /// <summary>
+    /// モデル頂点データから頂点バッファを作成する
+    /// </summary>
+    void CreateVertexBuffer();
+
+    /// <summary>
     /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
