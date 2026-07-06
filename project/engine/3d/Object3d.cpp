@@ -85,6 +85,28 @@ Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Obje
 }
 
 /// <summary>
+/// モデル読み込みで最終的に選択されたテクスチャパスをログへ出力する
+/// </summary>
+void LogResolvedModelTexturePath(const Object3d::ModelData& modelData)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
+    Logger::Debug(buffer);
+}
+
+/// <summary>
+/// 読み込み済みモデルデータを必要に応じてキャッシュへ保存して返す
+/// </summary>
+Object3d::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const Object3d::ModelData& modelData)
+{
+    if (!modelData.vertices.empty()) {
+        return StoreCachedModelData(cacheKey, modelData);
+    }
+
+    return modelData;
+}
+
+/// <summary>
 /// Assimp のマテリアルから diffuse テクスチャパスを取得する
 /// </summary>
 std::string FindDiffuseTexturePathFromMaterials(const aiScene* scene, const std::string& modelDirectory)
@@ -899,19 +921,8 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     AppendMeshVerticesToModelData(scene, modelData); // Assimp のメッシュを頂点データへ展開
     modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
 
-    // 最終的に選択されたテクスチャをログ出力
-    {
-        char buf[256];
-        sprintf_s(buf, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
-        Logger::Debug(buf);
-    }
-
-    // 読み込んだモデルデータを返す
-    if (!modelData.vertices.empty()) {
-        return StoreCachedModelData(cacheKey, modelData);
-    }
-
-    return modelData;
+    LogResolvedModelTexturePath(modelData);
+    return FinalizeLoadedModelData(cacheKey, modelData);
 }
 
 /// <summary>
