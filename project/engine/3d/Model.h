@@ -47,6 +47,11 @@ private: // メンバ変数
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
 
     /// <summary>
+    /// 描画時に使用する頂点データを取得する
+    /// </summary>
+    const std::vector<Object3d::VertexData>& ResolveDrawVertices(const Object3d* owner) const;
+
+    /// <summary>
     /// モデル頂点データから頂点バッファを作成する
     /// </summary>
     void CreateVertexBuffer();

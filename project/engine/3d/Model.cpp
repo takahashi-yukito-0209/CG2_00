@@ -72,6 +72,18 @@ uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
 }
 
 /// <summary>
+/// 描画時に使用する頂点データを取得する
+/// </summary>
+const std::vector<Object3d::VertexData>& Model::ResolveDrawVertices(const Object3d* owner) const
+{
+    if (modelData_.vertices.empty()) {
+        return owner->GetModelData().vertices;
+    }
+
+    return modelData_.vertices;
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Model::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -201,8 +213,7 @@ void Model::Draw(Object3d* owner)
     const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
     BindTexture(cmdList, textureIndex, "Model::Draw");
 
-    const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
-    // 頂点データはモデル側が空の場合はオーナー側の頂点データを使用
+    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
     if (verts.empty()) {
         Logger::Debug("Model::Draw skipped: no vertices available\n");
         return;
@@ -305,7 +316,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
     }
 
-    const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
+    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
     if (verts.empty()) {
         return;
     }
