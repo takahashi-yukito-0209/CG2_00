@@ -411,6 +411,11 @@ void Object3d::AssignTexture()
         return;
     }
 
+    if (model_) {
+        modelData_.material.textureIndex = UINT32_MAX;
+        Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
+        return;
+    }
     modelData_.material.textureIndex = ResolveFallbackTextureIndex();
     if (modelData_.material.textureIndex != UINT32_MAX) {
         modelData_.material.textureFilePath = kDefaultObjectTexturePath;

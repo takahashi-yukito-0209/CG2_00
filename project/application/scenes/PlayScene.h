@@ -104,6 +104,15 @@ public: // メンバ関数
 
 private:
     /// <summary>
+    /// ポストプロセス描画で使用する状態
+    /// </summary>
+    struct PostProcessDrawContext {
+        uint32_t sourceSrvIndex = UINT32_MAX; // 最終描画で入力として使うSRV番号
+        MyEngine::PostEffectType finalEffectType = MyEngine::PostEffectType::Copy; // 最終的に適用するポストエフェクト
+        bool useGaussianFilter = false; // Gaussian Filterの2pass描画を行うか
+        bool useFinalRenderTarget = false; // Scene View用RTへ最終結果を描画するか
+    };
+    /// <summary>
     /// エディターから選択できるエフェクト種別
     /// </summary>
     enum class EffectType {
@@ -262,6 +271,25 @@ private:
     /// 最終ポストプロセス描画を実行する
     /// </summary>
     void DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, MyEngine::PostEffectType finalEffectType, bool useGaussianFilter);
+    /// <summary>
+    /// 最終描画に必要なポストプロセス状態を作成する
+    /// </summary>
+    PostProcessDrawContext BuildPostProcessDrawContext();
+
+    /// <summary>
+    /// Scene View用RTが必要な場合だけ描画先を切り替える
+    /// </summary>
+    void BeginSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
+
+    /// <summary>
+    /// Scene View用RTへ描画していた場合だけ描画先を戻す
+    /// </summary>
+    void EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
+
+    /// <summary>
+    /// 作成済みのポストプロセス状態に従って最終結果を描画する
+    /// </summary>
+    void DrawPostProcessResult(const PostProcessDrawContext& drawContext);
 
     /// <summary>
     /// ポストプロセス付きでシーンを描画する

@@ -509,6 +509,65 @@ void PlayScene::DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, Pos
         postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
     }
 }
+/// <summary>
+/// 最終描画に必要なポストプロセス状態を作成する
+/// </summary>
+PlayScene::PostProcessDrawContext PlayScene::BuildPostProcessDrawContext()
+{
+    PostProcessDrawContext drawContext {}; // ポストプロセス描画で共有する状態
+    drawContext.sourceSrvIndex = sceneRenderTarget_.GetColorSrvIndex();
+    drawContext.finalEffectType = postProcess_.GetEffectType();
+
+    ApplyTemporalPostProcessChain(drawContext.sourceSrvIndex, drawContext.finalEffectType);
+
+    drawContext.useGaussianFilter = CanUseGaussianFilter(drawContext.finalEffectType);
+    if (drawContext.useGaussianFilter) {
+        ApplyGaussianFirstPass(drawContext.sourceSrvIndex);
+    }
+
+    drawContext.useFinalRenderTarget = CanUseFinalRenderTarget();
+    return drawContext;
+}
+
+/// <summary>
+/// Scene View用RTが必要な場合だけ描画先を切り替える
+/// </summary>
+void PlayScene::BeginSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget)
+{
+    if (!useFinalRenderTarget) {
+        return;
+    }
+
+    finalRenderTarget_.Begin(true);
+}
+
+/// <summary>
+/// Scene View用RTへ描画していた場合だけ描画先を戻す
+/// </summary>
+void PlayScene::EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget)
+{
+    if (!useFinalRenderTarget) {
+        return;
+    }
+
+    finalRenderTarget_.End();
+}
+
+/// <summary>
+/// 作成済みのポストプロセス状態に従って最終結果を描画する
+/// </summary>
+void PlayScene::DrawPostProcessResult(const PostProcessDrawContext& drawContext)
+{
+    BeginSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
+
+    DrawFinalPostProcessPass(
+        drawContext.sourceSrvIndex,
+        drawContext.finalEffectType,
+        drawContext.useGaussianFilter);
+    DrawSprites();
+
+    EndSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
+}
 
 /// <summary>
 /// ポストプロセス付きでシーンを描画する
@@ -521,27 +580,8 @@ bool PlayScene::DrawPostProcessedScene()
 
     DrawSceneToPostProcessTarget();
 
-    uint32_t postProcessSourceSrvIndex = sceneRenderTarget_.GetColorSrvIndex(); // 現在の入力SRV
-    PostEffectType finalEffectType = postProcess_.GetEffectType(); // 最終的に適用する効果
-
-    ApplyTemporalPostProcessChain(postProcessSourceSrvIndex, finalEffectType);
-
-    const bool canUseGaussianFilter = CanUseGaussianFilter(finalEffectType); // Gaussian 2passが必要か
-    if (canUseGaussianFilter) {
-        ApplyGaussianFirstPass(postProcessSourceSrvIndex);
-    }
-
-    const bool canUseFinalRenderTarget = CanUseFinalRenderTarget(); // Scene View用RTを使うか
-    if (canUseFinalRenderTarget) {
-        finalRenderTarget_.Begin(true);
-    }
-
-    DrawFinalPostProcessPass(postProcessSourceSrvIndex, finalEffectType, canUseGaussianFilter);
-    DrawSprites();
-
-    if (canUseFinalRenderTarget) {
-        finalRenderTarget_.End();
-    }
+    const PostProcessDrawContext drawContext = BuildPostProcessDrawContext(); // 最終描画に使用する状態
+    DrawPostProcessResult(drawContext);
     return true;
 }
 
