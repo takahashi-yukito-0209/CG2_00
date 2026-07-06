@@ -173,6 +173,48 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
     Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     return kDefaultObjectTexturePath;
 }
+/// <summary>
+/// Assimp の全メッシュを Object3d 用の頂点データへ展開する
+/// </summary>
+void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& modelData)
+{
+    for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+        aiMesh* mesh = scene->mMeshes[meshIndex]; // 展開対象のメッシュ
+
+        if (!mesh->HasNormals()) {
+            char buffer[256]; // ログ出力用バッファ
+            sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
+            Logger::Warn(buffer);
+            continue;
+        }
+
+        const bool hasTextureCoords = mesh->HasTextureCoords(0); // テクスチャ座標を持っているか
+
+        for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
+            const aiFace& face = mesh->mFaces[faceIndex]; // 展開対象の面
+            if (face.mNumIndices != 3) {
+                continue;
+            }
+
+            for (uint32_t element = 0; element < 3; ++element) {
+                const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
+                const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
+                const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
+                aiVector3D texcoord(0, 0, 0); // Assimp 側のテクスチャ座標
+                if (hasTextureCoords) {
+                    texcoord = mesh->mTextureCoords[0][vertexIndex];
+                }
+
+                Object3d::VertexData vertexData; // ModelData に追加する頂点データ
+                vertexData.position = { -position.x, position.y, position.z, 1.0f };
+                vertexData.texcoord = { texcoord.x, texcoord.y };
+                vertexData.normal = { -normal.x, normal.y, normal.z };
+
+                modelData.vertices.push_back(vertexData);
+            }
+        }
+    }
+}
 }
 
 /// <summary>
@@ -834,55 +876,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
         modelData.rootNode = ReadNode(scene->mRootNode);
     }
 
-    // メッシュデータを展開する（シーンに含まれる全メッシュを結合する）
-    for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
-        aiMesh* mesh = scene->mMeshes[meshIndex];
-
-        // 法線は必須とする（ない場合は警告を出してそのメッシュをスキップする）
-        if (!mesh->HasNormals()) {
-            char buf[256];
-            sprintf_s(buf, "Warning: mesh %u has no normals - skipping\n", meshIndex);
-            Logger::Warn(buf);
-            continue;
-        }
-
-        // テクスチャ座標はオプション（ない場合は 0 を使う）
-        bool hasTex = mesh->HasTextureCoords(0);
-
-        // メッシュの全ての面をループして頂点データを展開する
-        for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
-            // 面を取り出す
-            const aiFace& face = mesh->mFaces[faceIndex];
-            // 三角形のみサポート
-            if (face.mNumIndices != 3) {
-                continue;
-            }
-
-            // 各頂点を取り出し、VertexData を作成して順次 push する
-            for (uint32_t element = 0; element < 3; ++element) {
-                // 頂点インデックスを取得して頂点データを取り出す
-                uint32_t vertexIndex = face.mIndices[element];
-                const aiVector3D& p = mesh->mVertices[vertexIndex];
-                const aiVector3D& n = mesh->mNormals[vertexIndex];
-                aiVector3D t(0, 0, 0);
-                // テクスチャ座標がある場合は取得する
-                if (hasTex) {
-                    t = mesh->mTextureCoords[0][vertexIndex];
-                }
-
-                VertexData vtx;
-                // 既存実装との互換性のため X を反転（右手系->左手系の調整）
-                vtx.position = { -p.x, p.y, p.z, 1.0f };
-                // Assimp の aiProcess_FlipUVs を指定しているためここで y を反転しない
-                vtx.texcoord = { t.x, t.y };
-                // 法線の X も反転
-                vtx.normal = { -n.x, n.y, n.z };
-
-                // 作成した頂点をモデルデータに追加する
-                modelData.vertices.push_back(vtx);
-            }
-        }
-    }
+    AppendMeshVerticesToModelData(scene, modelData); // Assimp のメッシュを頂点データへ展開
     modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
 
     // 最終的に選択されたテクスチャをログ出力
