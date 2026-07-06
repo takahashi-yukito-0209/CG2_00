@@ -394,11 +394,27 @@ void Object3d::CreateTransformationMatrixResource()
 }
 
 /// <summary>
-/// モデルへテクスチャを割り当てる
+/// Object3d側で明示指定されたテクスチャがあるか確認する
+/// </summary>
+bool Object3d::HasExplicitTextureOverride() const
+{
+    return !modelData_.material.textureFilePath.empty();
+}
+
+/// <summary>
+/// 読み込み済みモデル側のマテリアルテクスチャを使用するか確認する
+/// </summary>
+bool Object3d::UsesLoadedModelMaterialTexture() const
+{
+    return model_ != nullptr;
+}
+
+/// <summary>
+/// Object3d側の明示テクスチャまたはメッシュ用fallbackを割り当てる
 /// </summary>
 void Object3d::AssignTexture()
 {
-    if (!modelData_.material.textureFilePath.empty()) {
+    if (HasExplicitTextureOverride()) {
         std::string resolvedTexturePath; // モデルまたは明示指定から解決したテクスチャパス
         const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
 
@@ -411,7 +427,7 @@ void Object3d::AssignTexture()
         return;
     }
 
-    if (model_) {
+    if (UsesLoadedModelMaterialTexture()) {
         modelData_.material.textureIndex = UINT32_MAX;
         Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
         return;

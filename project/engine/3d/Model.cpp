@@ -25,7 +25,8 @@ uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
 {
     if (owner) {
         const auto& ownerMaterial = owner->GetModelData().material; // Object3dで明示指定されたマテリアル
-        if (!ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX) {
+        const bool hasOwnerTextureOverride = !ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX; // Object3d側の明示テクスチャが有効か
+        if (hasOwnerTextureOverride) {
             return ownerMaterial.textureIndex;
         }
     }

@@ -367,6 +367,19 @@ private: // 内部関数
     // 初期化補助
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
+    /// <summary>
+    /// Object3d側で明示指定されたテクスチャがあるか確認する
+    /// </summary>
+    bool HasExplicitTextureOverride() const;
+
+    /// <summary>
+    /// 読み込み済みモデル側のマテリアルテクスチャを使用するか確認する
+    /// </summary>
+    bool UsesLoadedModelMaterialTexture() const;
+
+    /// <summary>
+    /// Object3d側の明示テクスチャまたはメッシュ用fallbackを割り当てる
+    /// </summary>
     void AssignTexture();
 
     /// <summary>
