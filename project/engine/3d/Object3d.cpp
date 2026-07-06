@@ -270,6 +270,18 @@ static Object3d::ModelData::Node ReadNode(const aiNode* node)
 }
 
 /// <summary>
+/// Assimp のルートノードをモデルデータへ読み込む
+/// </summary>
+static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& modelData)
+{
+    if (!scene->mRootNode) {
+        return;
+    }
+
+    modelData.rootNode = ReadNode(scene->mRootNode);
+}
+
+/// <summary>
 /// Object3d の初期化
 /// </summary>
 void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager)
@@ -882,10 +894,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
         return modelData;
     }
 
-    // ノード階層を読み取って modelData.rootNode に保存
-    if (scene->mRootNode) {
-        modelData.rootNode = ReadNode(scene->mRootNode);
-    }
+    ReadRootNodeToModelData(scene, modelData); // Assimp のルートノードを読み込む
 
     AppendMeshVerticesToModelData(scene, modelData); // Assimp のメッシュを頂点データへ展開
     modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
