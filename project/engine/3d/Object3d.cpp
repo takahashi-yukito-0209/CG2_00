@@ -29,6 +29,7 @@ using namespace Math;
 
 namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
+const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
 
 /// <summary>
@@ -81,6 +82,96 @@ Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Obje
 {
     g_modelDataCache[cacheKey] = modelData;
     return g_modelDataCache[cacheKey];
+}
+
+/// <summary>
+/// Assimp のマテリアルから diffuse テクスチャパスを取得する
+/// </summary>
+std::string FindDiffuseTexturePathFromMaterials(const aiScene* scene, const std::string& modelDirectory)
+{
+    std::string textureFilePath; // マテリアルから最後に見つかったテクスチャパス
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial* material = scene->mMaterials[materialIndex]; // Assimp のマテリアル
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) == 0) {
+            continue;
+        }
+
+        aiString assimpTexturePath; // Assimp が返す diffuse テクスチャパス
+        material->GetTexture(aiTextureType_DIFFUSE, 0, &assimpTexturePath);
+        textureFilePath = modelDirectory + "/" + assimpTexturePath.C_Str();
+    }
+
+    return textureFilePath;
+}
+
+/// <summary>
+/// モデルファイルと同じベース名の画像ファイルを探す
+/// </summary>
+std::string FindTexturePathByModelBaseName(const std::string& modelDirectory, const std::string& modelBaseName)
+{
+    for (const auto& extension : kModelTextureExtensions) {
+        std::string texturePath = modelDirectory + "/" + modelBaseName + extension; // ベース名から作る候補パス
+        if (std::filesystem::exists(texturePath)) {
+            char buffer[256]; // ログ出力用バッファ
+            sprintf_s(buffer, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", texturePath.c_str());
+            Logger::Debug(buffer);
+            return texturePath;
+        }
+    }
+
+    return {};
+}
+
+/// <summary>
+/// モデルディレクトリ内で最初に見つかった画像ファイルを探す
+/// </summary>
+std::string FindFirstTexturePathInDirectory(const std::string& modelDirectory)
+{
+    for (const auto& entry : std::filesystem::directory_iterator(modelDirectory)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+
+        std::string extension = entry.path().extension().string(); // 判定する拡張子
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+        if (std::find(kModelTextureExtensions.begin(), kModelTextureExtensions.end(), extension) == kModelTextureExtensions.end()) {
+            continue;
+        }
+
+        std::string texturePath = entry.path().string(); // ディレクトリ内で見つかった画像パス
+        char buffer[256]; // ログ出力用バッファ
+        sprintf_s(buffer, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", texturePath.c_str());
+        Logger::Debug(buffer);
+        return texturePath;
+    }
+
+    return {};
+}
+
+/// <summary>
+/// モデルに割り当てるテクスチャパスをマテリアル、ベース名、ディレクトリ内画像、既定画像の順に解決する
+/// </summary>
+std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesystem::path& modelPath)
+{
+    const std::string modelDirectory = modelPath.parent_path().string(); // モデルファイルの配置ディレクトリ
+    std::string textureFilePath = FindDiffuseTexturePathFromMaterials(scene, modelDirectory); // マテリアル由来のテクスチャパス
+    if (!textureFilePath.empty()) {
+        return textureFilePath;
+    }
+
+    const std::string modelBaseName = modelPath.stem().string(); // 拡張子を除いたモデル名
+    textureFilePath = FindTexturePathByModelBaseName(modelDirectory, modelBaseName);
+    if (!textureFilePath.empty()) {
+        return textureFilePath;
+    }
+
+    textureFilePath = FindFirstTexturePathInDirectory(modelDirectory);
+    if (!textureFilePath.empty()) {
+        return textureFilePath;
+    }
+
+    Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
+    return kDefaultObjectTexturePath;
 }
 }
 
@@ -711,8 +802,6 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     // フルパスとディレクトリを用意
     std::string fullPath = directoryPath + "/" + filename;
     std::filesystem::path objPath(fullPath);
-    std::string objDir = objPath.parent_path().string();
-
     const std::string cacheKey = MakeModelDataCacheKey(fullPath); // モデルデータキャッシュの検索キー
     if (const ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
         return *cachedModelData;
@@ -743,17 +832,6 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     // ノード階層を読み取って modelData.rootNode に保存
     if (scene->mRootNode) {
         modelData.rootNode = ReadNode(scene->mRootNode);
-    }
-
-    // マテリアルからテクスチャパスを取得（見つかるものを最後のもので上書きする挙動を維持）
-    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
-        aiMaterial* material = scene->mMaterials[materialIndex];
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-            aiString textureFilePath;
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
-            // Assimp の返すパスは相対パスの場合があるので、obj のディレクトリを基準にする
-            modelData.material.textureFilePath = objDir + "/" + textureFilePath.C_Str();
-        }
     }
 
     // メッシュデータを展開する（シーンに含まれる全メッシュを結合する）
@@ -805,58 +883,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
             }
         }
     }
-
-    // Assimp でマテリアルから見つからなかった場合は従来のフォールバック処理を行う
-    if (modelData.material.textureFilePath.empty()) {
-        // まず同じベース名を試す（例: fence.obj -> fence.png）
-        std::string base = objPath.stem().string();
-        // 拡張子の候補を用意してループで試す
-        const std::vector<std::string> exts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
-        // ベース名 + 拡張子の組み合わせでファイルが存在するかチェック
-        for (const auto& ext : exts) {
-            // obj のディレクトリにベース名 + 拡張子のファイルが存在するか確認
-            std::string tryPath = objDir + "/" + base + ext;
-            // ファイルが存在すればそれをテクスチャパスとして使用する
-            if (std::filesystem::exists(tryPath)) {
-                // 見つかったファイルをテクスチャパスに設定する
-                modelData.material.textureFilePath = tryPath;
-                // ログ出力: ベース名から見つかったテクスチャファイル
-                char buf[256];
-                sprintf_s(buf, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", tryPath.c_str());
-                Logger::Debug(buf);
-                break;
-            }
-        }
-
-        // それでも空なら、ディレクトリ内の任意の画像ファイルを走査
-        if (modelData.material.textureFilePath.empty()) {
-            for (const auto& entry : std::filesystem::directory_iterator(objDir)) {
-                if (!entry.is_regular_file()) {
-                    continue;
-                }
-                // 拡張子を小文字にしてチェック
-                std::string ext = entry.path().extension().string();
-                // 小文字に変換
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                // 対応する拡張子か確認
-                if (std::find(exts.begin(), exts.end(), ext) != exts.end()) {
-                    // 最初に見つかった画像ファイルをテクスチャとして使用する
-                    modelData.material.textureFilePath = entry.path().string();
-                    // ログ出力: ディレクトリ内で見つかったテクスチャファイル
-                    char buf[256];
-                    sprintf_s(buf, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", modelData.material.textureFilePath.c_str());
-                    Logger::Debug(buf);
-                    break;
-                }
-            }
-        }
-    }
-
-    // フォールバック: resources のチェッカーテクスチャ
-    if (modelData.material.textureFilePath.empty()) {
-        modelData.material.textureFilePath = "resources/uvChecker.png";
-        Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
-    }
+    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
 
     // 最終的に選択されたテクスチャをログ出力
     {
