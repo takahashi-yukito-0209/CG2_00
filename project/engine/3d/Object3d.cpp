@@ -173,6 +173,29 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
     Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     return kDefaultObjectTexturePath;
 }
+
+/// <summary>
+/// Assimp で読み込んだシーンがモデルデータとして使用可能か確認する
+/// </summary>
+bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
+{
+    if (!scene) {
+        char buffer[256]; // ログ出力用バッファ
+        sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
+        Logger::Warn(buffer);
+        return false;
+    }
+
+    if (!scene->HasMeshes()) {
+        char buffer[256]; // ログ出力用バッファ
+        sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
+        Logger::Warn(buffer);
+        return false;
+    }
+
+    return true;
+}
+
 /// <summary>
 /// Assimp の全メッシュを Object3d 用の頂点データへ展開する
 /// </summary>
@@ -855,19 +878,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     const aiScene* scene = importer.ReadFile(fullPath.c_str(),
         aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder);
 
-    // 読み込み失敗のチェック
-    if (!scene) {
-        char buf[256];
-        sprintf_s(buf, "Warning: Assimp failed to load %s\n", fullPath.c_str());
-        Logger::Warn(buf);
-        return modelData;
-    }
-
-    // メッシュがない場合は警告を出して空の ModelData を返す
-    if (!scene->HasMeshes()) {
-        char buf[256];
-        sprintf_s(buf, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
-        Logger::Warn(buf);
+    if (!ValidateAssimpScene(scene, fullPath)) {
         return modelData;
     }
 
