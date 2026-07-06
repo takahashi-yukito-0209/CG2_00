@@ -16,6 +16,35 @@ using namespace Math;
 
 namespace {
 constexpr const char* kFallbackModelTexturePath = "resources/uvChecker.png";
+
+/// <summary>
+/// モデル描画用のfallbackテクスチャを未ロードなら読み込む
+/// </summary>
+void EnsureFallbackModelTextureLoaded(TextureManager* textureManager)
+{
+    uint32_t fallbackTextureIndex = textureManager->GetSrvIndex(kFallbackModelTexturePath); // fallbackテクスチャのSRV番号
+    if (fallbackTextureIndex == UINT32_MAX) {
+        textureManager->LoadTexture(kFallbackModelTexturePath);
+    }
+}
+
+/// <summary>
+/// モデルマテリアルに設定されたテクスチャのSRV番号を取得する
+/// </summary>
+uint32_t ResolveModelMaterialTextureIndex(TextureManager* textureManager, const Object3d::MaterialData& materialData)
+{
+    if (materialData.textureFilePath.empty()) {
+        return UINT32_MAX;
+    }
+
+    uint32_t textureIndex = textureManager->GetTextureIndexByFilePath(materialData.textureFilePath); // マテリアルテクスチャのSRV番号
+    if (textureIndex == UINT32_MAX) {
+        textureManager->LoadTexture(materialData.textureFilePath);
+        textureIndex = textureManager->GetTextureIndexByFilePath(materialData.textureFilePath);
+    }
+
+    return textureIndex;
+}
 }
 
 /// <summary>
@@ -306,11 +335,8 @@ void Model::Initialize(ModelCommon* modelCommon)
     }
 
     // 頂点バッファの生成
-    auto texMgr = TextureManager::GetInstance();
-    uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-    if (fallbackIdx == UINT32_MAX) {
-        texMgr->LoadTexture(kFallbackModelTexturePath);
-    }
+    auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
+    EnsureFallbackModelTextureLoaded(texMgr);
 
     DirectXCommon* dx = modelCommon_->GetDxCommon();
     size_t vbSize = sizeof(Object3d::VertexData) * modelData_.vertices.size();
@@ -327,17 +353,9 @@ void Model::Initialize(ModelCommon* modelCommon)
     vertexBufferView_.SizeInBytes = static_cast<UINT>(vbSize);
     vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
 
-    // マテリアル用定数バッファの生成
-    if (!modelData_.material.textureFilePath.empty()) {
-        uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        if (idx == UINT32_MAX) {
-            // テクスチャがまだロードされていなければ読み込んでアップロードする
-            texMgr->LoadTexture(modelData_.material.textureFilePath);
-            idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        }
-
-        if (idx != UINT32_MAX) {
-            textureIndex_ = idx;
-        }
+    // モデルマテリアルテクスチャの解決
+    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(texMgr, modelData_.material); // モデルマテリアルのSRV番号
+    if (materialTextureIndex != UINT32_MAX) {
+        textureIndex_ = materialTextureIndex;
     }
 }
