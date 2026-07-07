@@ -108,6 +108,22 @@ Object3d::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const O
 }
 
 /// <summary>
+/// モデルファイルの読み込みに使用するフルパス文字列を作成する。
+/// </summary>
+std::string BuildModelFilePath(const std::string& directoryPath, const std::string& filename)
+{
+    return directoryPath + "/" + filename;
+}
+
+/// <summary>
+/// Assimp を使用してモデルファイルを読み込む。
+/// </summary>
+const aiScene* ReadAssimpScene(Assimp::Importer& importer, const std::string& fullPath)
+{
+    return importer.ReadFile(fullPath.c_str(), kAssimpLoadFlags);
+}
+
+/// <summary>
 /// Assimp のマテリアルから diffuse テクスチャパスを取得する
 /// </summary>
 std::string FindDiffuseTexturePathFromMaterials(const aiScene* scene, const std::string& modelDirectory)
@@ -1003,18 +1019,15 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
 {
     ModelData modelData; // 構築するModelData
 
-    // フルパスとディレクトリを用意
-    std::string fullPath = directoryPath + "/" + filename;
-    std::filesystem::path objPath(fullPath);
+    const std::string fullPath = BuildModelFilePath(directoryPath, filename); // モデルファイルのフルパス
+    const std::filesystem::path objPath(fullPath); // filesystem 操作用のモデルパス
     const std::string cacheKey = MakeModelDataCacheKey(fullPath); // モデルデータキャッシュの検索キー
     if (const ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
         return *cachedModelData;
     }
 
-    // Assimp を使って読み込む
-    Assimp::Importer importer;
-    // 読み込み時のオプションを指定してファイルを読み込む
-    const aiScene* scene = importer.ReadFile(fullPath.c_str(), kAssimpLoadFlags);
+    Assimp::Importer importer; // Assimp の読み込み管理
+    const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimp が読み込んだシーン
 
     if (!ValidateAssimpScene(scene, fullPath)) {
         return modelData;
