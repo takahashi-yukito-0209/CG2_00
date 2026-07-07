@@ -254,6 +254,25 @@ void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
 }
 
 /// <summary>
+/// MTL ファイルの1行を読み取り、対応するマテリアル情報へ反映する。
+/// </summary>
+void ApplyMaterialTemplateLine(const std::string& line, const std::string& directoryPath, Object3d::MaterialData& materialData)
+{
+    std::istringstream lineStream(line); // MTL ファイルから読んだ1行の解析用ストリーム
+    std::string identifier; // 行頭の識別子
+    lineStream >> identifier;
+
+    if (identifier != "map_Kd") {
+        return;
+    }
+
+    std::string textureFilename; // MTL に記述されたテクスチャファイル名
+    lineStream >> textureFilename;
+    materialData.textureFilePath = directoryPath + "/" + textureFilename;
+    LogMaterialTemplateTexturePath(materialData.textureFilePath);
+}
+
+/// <summary>
 /// Assimp で読み込んだシーンがモデルデータとして使用可能か確認する
 /// </summary>
 bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
@@ -572,19 +591,7 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
 
     // 3.実際にファイルを読み、MaterialDataを構築していく
     while (std::getline(file, line)) {
-        std::string identifier;
-        std::istringstream s(line);
-        s >> identifier;
-
-        // identifierに応じた処理
-        if (identifier == "map_Kd") {
-            std::string textureFilename;
-            s >> textureFilename;
-            // 連結してファイルパスにする
-            materialData.textureFilePath = directoryPath + "/" + textureFilename;
-            // ログ出力: mtlで指定されたテクスチャパス
-            LogMaterialTemplateTexturePath(materialData.textureFilePath);
-        }
+        ApplyMaterialTemplateLine(line, directoryPath, materialData);
     }
 
     // 4.MaterialDataを返す
