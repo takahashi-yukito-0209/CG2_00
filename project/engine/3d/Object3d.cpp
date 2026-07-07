@@ -349,6 +349,14 @@ static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& m
 }
 
 /// <summary>
+/// Assimp シーンから解決したテクスチャパスをモデルデータのマテリアルへ設定する。
+/// </summary>
+void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+{
+    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, modelPath);
+}
+
+/// <summary>
 /// Assimp のシーンから Object3d 用のモデルデータを構築する
 /// </summary>
 static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, const std::filesystem::path& modelPath)
@@ -357,7 +365,7 @@ static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, c
 
     ReadRootNodeToModelData(scene, modelData);
     AppendMeshVerticesToModelData(scene, modelData);
-    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, modelPath);
+    ReadMaterialTexturePathToModelData(scene, modelPath, modelData);
 
     return modelData;
 }
