@@ -720,6 +720,57 @@ bool Object3d::BindTransformationMatrixResource(ID3D12GraphicsCommandList* comma
 }
 
 /// <summary>
+/// 平行光源CBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindDirectionalLightResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
+{
+    if (!commandList) {
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源CBVのGPUアドレス
+    if (lightAddress == 0) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: directional light GPU address is null\n");
+        }
+        return false;
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(3, lightAddress);
+    return true;
+}
+
+/// <summary>
+/// カメラCBVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindCameraResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS cameraAddress = object3dCommon_->GetCameraGPUAddress(); // カメラCBVのGPUアドレス
+    if (cameraAddress != 0) {
+        commandList->SetGraphicsRootConstantBufferView(6, cameraAddress);
+    }
+}
+
+/// <summary>
+/// 点光源CBVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindPointLightResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS pointLightAddress = object3dCommon_->GetPointLightsGPUAddress(); // 点光源CBVのGPUアドレス
+    if (pointLightAddress != 0) {
+        commandList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
+    }
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -831,29 +882,14 @@ void Object3d::Draw()
         return;
     }
 
-    // 光源CBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
-    // 光源CBVが利用できない場合は描画をスキップしてログを出す
-    if (lightAddr == 0) {
-        Logger::Debug("Object3d::Draw skipped: directional light GPU address is null\n");
+    // 平行光源CBVをルートパラメータ3に設定する
+    if (!BindDirectionalLightResource(cmdList, "Object3d::Draw")) {
         return;
     }
-    // ルートパラメータ3に光源CBVをセット
-    cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
 
-    // 点光源CBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS plAddr = object3dCommon_->GetPointLightsGPUAddress();
-    // 点光源CBVが利用できない場合はログを出すが描画は続行する（点光源なしで描画する）
-    if (plAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(7, plAddr);
-    }
-
-    // カメラCBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();
-    // カメラCBVが利用できない場合はログを出すが描画は続行する（カメラ位置なしで描画する）
-    if (camAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
-    }
+    // 点光源CBVとカメラCBVは利用できる場合のみ設定する
+    BindPointLightResource(cmdList);
+    BindCameraResource(cmdList);
 
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
     BindTexture(cmdList, textureIndex, "Object3d::Draw");
@@ -893,20 +929,9 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     BindTransformationMatrixResource(cmdList, nullptr);
 
-    D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源のGPUアドレス
-    if (lightAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(3, lightAddress);
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS cameraAddress = object3dCommon_->GetCameraGPUAddress(); // カメラ情報のGPUアドレス
-    if (cameraAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(6, cameraAddress);
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS pointLightAddress = object3dCommon_->GetPointLightsGPUAddress(); // 点光源のGPUアドレス
-    if (pointLightAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
-    }
+    BindDirectionalLightResource(cmdList, nullptr);
+    BindCameraResource(cmdList);
+    BindPointLightResource(cmdList);
 
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
     BindTexture(cmdList, textureIndex, "Object3d::DrawInstanced");

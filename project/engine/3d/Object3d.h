@@ -403,6 +403,21 @@ private: // 内部関数
     bool BindTransformationMatrixResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
 
     /// <summary>
+    /// 平行光源CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindDirectionalLightResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
+
+    /// <summary>
+    /// カメラCBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindCameraResource(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
+    /// 点光源CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindPointLightResource(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
     /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
