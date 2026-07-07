@@ -214,21 +214,37 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
 }
 
 /// <summary>
+/// Assimp のモデルファイル読み込み失敗を警告ログへ出力する。
+/// </summary>
+void LogAssimpLoadFailure(const std::string& fullPath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
+/// Assimp シーンにメッシュが存在しないことを警告ログへ出力する。
+/// </summary>
+void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
 /// Assimp で読み込んだシーンがモデルデータとして使用可能か確認する
 /// </summary>
 bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 {
     if (!scene) {
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
-        Logger::Warn(buffer);
+        LogAssimpLoadFailure(fullPath);
         return false;
     }
 
     if (!scene->HasMeshes()) {
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
-        Logger::Warn(buffer);
+        LogAssimpSceneHasNoMeshes(fullPath);
         return false;
     }
 
