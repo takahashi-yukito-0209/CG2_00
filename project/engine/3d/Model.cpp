@@ -96,6 +96,31 @@ D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) c
 }
 
 /// <summary>
+/// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Model::BindOwnerMaterialResource(ID3D12GraphicsCommandList* commandList, const Object3d* owner, const char* logContext) const
+{
+    auto materialResource = owner->GetMaterialResource(); // オーナーが保持するマテリアルCBV
+    if (!materialResource) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: owner material resource missing\n");
+        }
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: owner material GPU address is 0\n");
+        }
+        return false;
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(0, materialAddress);
+    return true;
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Model::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -161,18 +186,9 @@ void Model::Draw(Object3d* owner)
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
     // Material CBV は Object3d が持つものを使用する
-    auto materialResource = owner->GetMaterialResource();
-    if (!materialResource) {
-        Logger::Debug("Model::Draw skipped: owner material resource missing\n");
+    if (!BindOwnerMaterialResource(cmdList, owner, "Model::Draw")) {
         return;
     }
-
-    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
-    if (materialAddress == 0) {
-        Logger::Debug("Model::Draw skipped: owner material GPU address is 0\n");
-        return;
-    }
-    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
 
 
     // 座標変換行列CBV設定 (オーナーから)
@@ -269,16 +285,9 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
     cmdList->IASetVertexBuffers(0, 1, &vbv);
     // Material CBV は Object3d が持つものを使用する
-    auto materialResource = owner->GetMaterialResource();
-    if (!materialResource) {
+    if (!BindOwnerMaterialResource(cmdList, owner, nullptr)) {
         return;
     }
-
-    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
-    if (materialAddress == 0) {
-        return;
-    }
-    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
 
 
     // 変換行列（インスタンシング使用時はオーナーのCBVは未使用）

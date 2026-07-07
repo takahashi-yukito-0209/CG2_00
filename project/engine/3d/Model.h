@@ -62,6 +62,11 @@ private: // メンバ変数
     void CreateVertexBuffer();
 
     /// <summary>
+    /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindOwnerMaterialResource(ID3D12GraphicsCommandList* commandList, const Object3d* owner, const char* logContext) const;
+
+    /// <summary>
     /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
