@@ -803,6 +803,21 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
 }
 
 /// <summary>
+/// インスタンシング用SRVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindInstancingResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
+    if (instancingSrvHandle.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(4, instancingSrvHandle);
+    }
+}
+
+/// <summary>
 /// 座標変換行列を更新して定数バッファに転送する
 /// </summary>
 void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix)
@@ -936,10 +951,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
     BindTexture(cmdList, textureIndex, "Object3d::DrawInstanced");
 
-    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
-    if (instancingSrvHandle.ptr != 0) {
-        cmdList->SetGraphicsRootDescriptorTable(4, instancingSrvHandle);
-    }
+    BindInstancingResource(cmdList);
 
     cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), instanceCount, 0, 0);
 }

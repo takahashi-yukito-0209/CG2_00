@@ -423,6 +423,11 @@ private: // 内部関数
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
 
     /// <summary>
+    /// インスタンシング用SRVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindInstancingResource(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
     /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources(); // モデルデータ割り当て
