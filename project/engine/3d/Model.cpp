@@ -1,5 +1,4 @@
 #include "Model.h"
-#include "Model.h"
 #include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
@@ -17,6 +16,136 @@ using namespace Math;
 
 namespace {
 constexpr const char* kFallbackModelTexturePath = "resources/uvChecker.png";
+
+/// <summary>
+/// モデル描画用のfallbackテクスチャを未ロードなら読み込む
+/// </summary>
+void EnsureFallbackModelTextureLoaded(TextureManager* textureManager)
+{
+    uint32_t fallbackTextureIndex = textureManager->GetSrvIndex(kFallbackModelTexturePath); // fallbackテクスチャのSRV番号
+    if (fallbackTextureIndex == UINT32_MAX) {
+        textureManager->LoadTexture(kFallbackModelTexturePath);
+    }
+}
+
+/// <summary>
+/// モデルマテリアルに設定されたテクスチャのSRV番号を取得する
+/// </summary>
+uint32_t ResolveModelMaterialTextureIndex(TextureManager* textureManager, const Object3d::MaterialData& materialData)
+{
+    if (materialData.textureFilePath.empty()) {
+        return UINT32_MAX;
+    }
+
+    uint32_t textureIndex = textureManager->GetTextureIndexByFilePath(materialData.textureFilePath); // マテリアルテクスチャのSRV番号
+    if (textureIndex == UINT32_MAX) {
+        textureManager->LoadTexture(materialData.textureFilePath);
+        textureIndex = textureManager->GetTextureIndexByFilePath(materialData.textureFilePath);
+    }
+
+    return textureIndex;
+}
+}
+
+/// <summary>
+/// 描画時に使用するテクスチャ番号を決定する
+/// </summary>
+uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
+{
+    if (owner) {
+        const auto& ownerMaterial = owner->GetModelData().material; // Object3dで明示指定されたマテリアル
+        const bool hasOwnerTextureOverride = !ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX; // Object3d側の明示テクスチャが有効か
+        if (hasOwnerTextureOverride) {
+            return ownerMaterial.textureIndex;
+        }
+    }
+
+    if (textureIndex_ != UINT32_MAX) {
+        return textureIndex_;
+    }
+
+    auto textureManager = TextureManager::GetInstance(); // fallbackテクスチャの取得元
+    if (!textureManager) {
+        return UINT32_MAX;
+    }
+    return textureManager->GetSrvIndex(kFallbackModelTexturePath);
+}
+
+/// <summary>
+/// 描画時に使用する頂点データを取得する
+/// </summary>
+const std::vector<Object3d::VertexData>& Model::ResolveDrawVertices(const Object3d* owner) const
+{
+    if (modelData_.vertices.empty()) {
+        return owner->GetModelData().vertices;
+    }
+
+    return modelData_.vertices;
+}
+
+/// <summary>
+/// 描画時に使用する頂点バッファビューを取得する
+/// </summary>
+D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) const
+{
+    if (vertexBufferView_.SizeInBytes != 0) {
+        return vertexBufferView_;
+    }
+
+    return owner->GetVertexBufferView();
+}
+
+/// <summary>
+/// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Model::BindOwnerMaterialResource(ID3D12GraphicsCommandList* commandList, const Object3d* owner, const char* logContext) const
+{
+    auto materialResource = owner->GetMaterialResource(); // オーナーが保持するマテリアルCBV
+    if (!materialResource) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: owner material resource missing\n");
+        }
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
+    if (materialAddress == 0) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: owner material GPU address is 0\n");
+        }
+        return false;
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(0, materialAddress);
+    return true;
+}
+
+/// <summary>
+/// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Model::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
+{
+    if (!commandList || textureIndex == UINT32_MAX) {
+        Logger::Debug(std::string(logContext) + ": texture SRV is invalid - skipping SRV bind\n");
+        return false;
+    }
+
+    auto textureManager = TextureManager::GetInstance(); // テクスチャSRVの取得元
+    if (!textureManager) {
+        Logger::Debug(std::string(logContext) + ": TextureManager is null - skipping SRV bind\n");
+        return false;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = textureManager->GetSrvHandleGPU(textureIndex); // 描画に使うSRV
+    if (srvHandle.ptr == 0) {
+        char buffer[256];
+        sprintf_s(buffer, "%s: srv handle for index %u is null - skipping SRV bind\n", logContext, textureIndex);
+        Logger::Debug(buffer);
+        return false;
+    }
+
+    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    return true;
 }
 
 /// <summary>
@@ -53,22 +182,13 @@ void Model::Draw(Object3d* owner)
     }
 
     // 頂点バッファの設定 (モデルまたはオーナーから)
-    D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
+    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
     // Material CBV は Object3d が持つものを使用する
-    auto materialResource = owner->GetMaterialResource();
-    if (!materialResource) {
-        Logger::Debug("Model::Draw skipped: owner material resource missing\n");
+    if (!BindOwnerMaterialResource(cmdList, owner, "Model::Draw")) {
         return;
     }
-
-    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
-    if (materialAddress == 0) {
-        Logger::Debug("Model::Draw skipped: owner material GPU address is 0\n");
-        return;
-    }
-    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
 
 
     // 座標変換行列CBV設定 (オーナーから)
@@ -118,56 +238,10 @@ void Model::Draw(Object3d* owner)
     // 非インスタンス描画パス: 予期せぬディスクリプタテーブルの競合を避けるため、インスタンシングSRV（ルートパラメータ4）はバインドしない。
 
     // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
-    uint32_t texIndex = UINT32_MAX;
-    // オーナーのマテリアル情報を確認してテクスチャインデックスを取得
-    const auto& ownerMat = owner->GetModelData().material;
-    // オーナーが明示的にテクスチャファイルパスを指定している場合のみ、オーナーのテクスチャインデックスを優先して使用
-    if (!ownerMat.textureFilePath.empty()) {
-        // オーナーが明示的にテクスチャを指定している場合のみオーナーの index を優先
-        if (ownerMat.textureIndex != UINT32_MAX) {
-            texIndex = ownerMat.textureIndex;
-        }
-    } else if (textureIndex_ != UINT32_MAX) {
-        // 通常はモデル側のテクスチャを使う
-        texIndex = textureIndex_;
-    }
+    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
+    BindTexture(cmdList, textureIndex, "Model::Draw");
 
-    // テクスチャインデックスが有効な場合はSRVをバインド、無効な場合はフォールバックのチェッカーテクスチャを使用
-    auto texMgr = TextureManager::GetInstance();
-    // テクスチャインデックスが有効な場合はSRVをバインド
-    if (texIndex != UINT32_MAX) {
-        // テクスチャインデックスが有効な場合はSRVをバインド
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        // SRVハンドルが無効な場合はSRVをバインドせずに描画する（テクスチャが存在しない可能性があるため）
-        if (srvHandle.ptr == 0) {
-            char buf[256];
-            sprintf_s(buf, "Model::Draw: srv handle for index %u is null - skipping SRV\n", texIndex);
-            Logger::Debug(buf);
-        } else {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-
-    } else {
-        // フォールバック: 既定のチェッカーテクスチャを使用（SRV絶対インデックス）
-        uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-        // フォールバックのチェッカーテクスチャのSRVインデックスを取得
-        if (fallbackIdx == UINT32_MAX) {
-            Logger::Debug("Model::Draw: fallback texture is not loaded - skipping SRV bind\n");
-            return;
-        }
-
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(fallbackIdx);
-        // フォールバックのSRVハンドルを取得
-        if (srvHandle.ptr == 0) {
-            Logger::Debug("Model::Draw: fallback srv handle is null - skipping SRV bind\n");
-        } else {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        }
-    }
-
-    // スタンス描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
-    const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
-    // 頂点データはモデル側が空の場合はオーナー側の頂点データを使用
+    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
     if (verts.empty()) {
         Logger::Debug("Model::Draw skipped: no vertices available\n");
         return;
@@ -208,20 +282,12 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     }
 
     // インスタンシング描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
-    D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
-    // モデル側の頂点バッファが有効であればそれを使用、無ければオーナー側の頂点バッファを使用
+    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
     cmdList->IASetVertexBuffers(0, 1, &vbv);
     // Material CBV は Object3d が持つものを使用する
-    auto materialResource = owner->GetMaterialResource();
-    if (!materialResource) {
+    if (!BindOwnerMaterialResource(cmdList, owner, nullptr)) {
         return;
     }
-
-    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // Material CBV のGPUアドレス
-    if (materialAddress == 0) {
-        return;
-    }
-    cmdList->SetGraphicsRootConstantBufferView(0, materialAddress);
 
 
     // 変換行列（インスタンシング使用時はオーナーのCBVは未使用）
@@ -261,48 +327,8 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(7, plAddrInst);
     }
 
-    uint32_t texIndex = UINT32_MAX;
-    const auto& ownerMat2 = owner->GetModelData().material;
-    // オーナーのマテリアル情報を確認してテクスチャインデックスを取得
-    if (!ownerMat2.textureFilePath.empty()) {
-        if (ownerMat2.textureIndex != UINT32_MAX) {
-            texIndex = ownerMat2.textureIndex;
-        }
-    } else if (textureIndex_ != UINT32_MAX) {
-        texIndex = textureIndex_;
-    }
-
-    auto texMgr = TextureManager::GetInstance();
-    // テクスチャインデックスが有効な場合はSRVをバインド、無効な場合はフォールバックのチェッカーテクスチャを使用
-    if (texIndex != UINT32_MAX) {
-        D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = texMgr->GetSrvHandleGPU(texIndex);
-        if (srvHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, srvHandle);
-        } else {
-            // フォールバック
-            uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-            if (fb == UINT32_MAX) {
-                Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
-                return;
-            }
-
-            D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
-            if (fbHandle.ptr != 0) {
-                cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
-            }
-        }
-    } else {
-        uint32_t fb = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-        if (fb == UINT32_MAX) {
-            Logger::Debug("Model::DrawInstanced: fallback texture is not loaded - skipping SRV bind\n");
-            return;
-        }
-
-        D3D12_GPU_DESCRIPTOR_HANDLE fbHandle = texMgr->GetSrvHandleGPU(fb);
-        if (fbHandle.ptr != 0) {
-            cmdList->SetGraphicsRootDescriptorTable(2, fbHandle);
-        }
-    }
+    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
+    BindTexture(cmdList, textureIndex, "Model::DrawInstanced");
 
     D3D12_GPU_DESCRIPTOR_HANDLE instSrv = common->GetInstancingSrvGPUHandle();
     // インスタンシング描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
@@ -310,7 +336,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
     }
 
-    const auto& verts = modelData_.vertices.empty() ? owner->GetModelData().vertices : modelData_.vertices;
+    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
     if (verts.empty()) {
         return;
     }
@@ -329,6 +355,26 @@ bool Model::LoadFromFile(const std::string& directoryPath, const std::string& fi
 }
 
 /// <summary>
+/// モデル頂点データから頂点バッファを作成する
+/// </summary>
+void Model::CreateVertexBuffer()
+{
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t vertexBufferSize = sizeof(Object3d::VertexData) * modelData_.vertices.size(); // 頂点バッファサイズ
+    vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
+
+    void* mappedVertexData = nullptr; // 頂点データ転送先
+    vertexResource_->Map(0, nullptr, &mappedVertexData);
+    assert(mappedVertexData != nullptr);
+    std::memcpy(mappedVertexData, modelData_.vertices.data(), vertexBufferSize);
+    vertexResource_->Unmap(0, nullptr);
+
+    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
+    vertexBufferView_.SizeInBytes = static_cast<UINT>(vertexBufferSize);
+    vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
+}
+
+/// <summary>
 /// モデルの初期化
 /// </summary>
 void Model::Initialize(ModelCommon* modelCommon)
@@ -339,39 +385,16 @@ void Model::Initialize(ModelCommon* modelCommon)
         return;
     }
 
+    // テクスチャ管理の取得とfallbackテクスチャの読み込み
+    auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
+    EnsureFallbackModelTextureLoaded(texMgr);
+
     // 頂点バッファの生成
-    auto texMgr = TextureManager::GetInstance();
-    uint32_t fallbackIdx = texMgr->GetSrvIndex(kFallbackModelTexturePath);
-    if (fallbackIdx == UINT32_MAX) {
-        texMgr->LoadTexture(kFallbackModelTexturePath);
-    }
+    CreateVertexBuffer();
 
-    DirectXCommon* dx = modelCommon_->GetDxCommon();
-    size_t vbSize = sizeof(Object3d::VertexData) * modelData_.vertices.size();
-    vertexResource_ = dx->CreateBufferResource(vbSize);
-    // 頂点データ転送
-    void* mapped = nullptr;
-    vertexResource_->Map(0, nullptr, &mapped);
-    assert(mapped != nullptr);
-    std::memcpy(mapped, modelData_.vertices.data(), vbSize);
-    vertexResource_->Unmap(0, nullptr);
-
-    // 頂点バッファビューの設定
-    vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vertexBufferView_.SizeInBytes = static_cast<UINT>(vbSize);
-    vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
-
-    // マテリアル用定数バッファの生成
-    if (!modelData_.material.textureFilePath.empty()) {
-        uint32_t idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        if (idx == UINT32_MAX) {
-            // テクスチャがまだロードされていなければ読み込んでアップロードする
-            texMgr->LoadTexture(modelData_.material.textureFilePath);
-            idx = texMgr->GetTextureIndexByFilePath(modelData_.material.textureFilePath);
-        }
-
-        if (idx != UINT32_MAX) {
-            textureIndex_ = idx;
-        }
+    // モデルマテリアルテクスチャの解決
+    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(texMgr, modelData_.material); // モデルマテリアルのSRV番号
+    if (materialTextureIndex != UINT32_MAX) {
+        textureIndex_ = materialTextureIndex;
     }
 }

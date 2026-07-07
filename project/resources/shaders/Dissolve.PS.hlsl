@@ -46,6 +46,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
     output.color = float4(
         textureColor.rgb + edge * gEdgeColor,
-        textureColor.a);
+        1.0f);
     return output;
 }

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="ソース ファイル">
@@ -76,11 +76,17 @@
     <Filter Include="ソース ファイル\application\scenes">
       <UniqueIdentifier>{10c6df76-23ce-4741-866d-c1322e63fb19}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\application\effects">
+      <UniqueIdentifier>{e14dc0e2-c64b-4e82-a935-9c084153f8c1}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソース ファイル\engine\utility">
       <UniqueIdentifier>{f3d99883-ad4c-411a-83b1-c61da3991c1a}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\application\scenes">
       <UniqueIdentifier>{3b1f8ad4-6d15-4f81-b904-b1da251d5478}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\application\effects">
+      <UniqueIdentifier>{263b1d14-7d42-4475-b0e0-87b1b41e5d4c}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -122,6 +128,9 @@
     </ClCompile>
     <ClCompile Include="engine\base\DirectXCommon.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\RenderTarget.cpp">
+      <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\Logger.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
@@ -198,6 +207,18 @@
     <ClCompile Include="application\scenes\PlayScene.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneEffect.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\effects\TimeStopEffect.cpp">
+      <Filter>ソース ファイル\application\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="application\effects\TimeReversalEffect.cpp">
+      <Filter>ソース ファイル\application\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="application\effects\TemporalRiftEffect.cpp">
+      <Filter>ソース ファイル\application\effects</Filter>
+    </ClCompile>
     <ClCompile Include="application\scenes\TitleScene.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
@@ -267,6 +288,9 @@
     </ClInclude>
     <ClInclude Include="engine\base\DirectXCommon.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\RenderTarget.h">
+      <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\StringUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
@@ -351,6 +375,15 @@
     </ClInclude>
     <ClInclude Include="application\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\effects\TimeStopEffect.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="application\effects\TimeReversalEffect.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="application\effects\TemporalRiftEffect.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
     <ClInclude Include="application\scenes\TitleScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>

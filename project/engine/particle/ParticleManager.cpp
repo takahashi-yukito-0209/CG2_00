@@ -36,6 +36,7 @@ void ParticleManager::Finalize()
 {
     particleGroups_.clear();
     instancingLimitWarnedGroups_.clear();
+    totalParticleCount_ = 0;
 }
 
 /// <summary>
@@ -54,26 +55,13 @@ uint32_t ParticleManager::GetParticleLimit() const
 }
 
 /// <summary>
-/// 全グループで保持しているパーティクル数を取得する
-/// </summary>
-size_t ParticleManager::GetTotalParticleCount() const
-{
-    size_t totalCount = 0; // 全グループ合計のパーティクル数
-    for (const auto& groupPair : particleGroups_) {
-        totalCount += groupPair.second.particles.size();
-    }
-
-    return totalCount;
-}
-
-/// <summary>
 /// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
 /// </summary>
 uint32_t ParticleManager::GetEmitCountWithinLimit(const ParticleGroup& group, uint32_t requestCount) const
 {
     const uint32_t particleLimit = GetParticleLimit(); // 全体と1グループで保持する最大数
     const size_t currentGroupCount = group.particles.size(); // 対象グループで保持しているパーティクル数
-    const size_t currentTotalCount = GetTotalParticleCount(); // 全グループで保持しているパーティクル数
+    const size_t currentTotalCount = totalParticleCount_; // 全グループで保持しているパーティクル数
 
     if (currentGroupCount >= static_cast<size_t>(particleLimit) || currentTotalCount >= static_cast<size_t>(particleLimit)) {
         return 0;
@@ -156,6 +144,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name, const std::st
     }
 
     auto& group = particleGroups_[name]; // 作成または更新するグループ
+    totalParticleCount_ -= group.particles.size();
     group.texturePath = textureFilePath;
     group.particles.clear();
 
@@ -179,11 +168,12 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, uin
         return;
     }
 
-    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    auto& particles = it->second.particles; // 生成先のパーティクル配列
     const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
     if (emitCount == 0) {
         return;
     }
+    particles.reserve(particles.size() + emitCount);
 
     std::uniform_real_distribution<float> lifeDist(lifeMin_, lifeMax_); // 寿命範囲
     std::uniform_real_distribution<float> rx(spawnPosMin_.x, spawnPosMax_.x); // X位置範囲
@@ -214,8 +204,9 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, uin
         particle.currentTime = 0.0f;
         particle.spawnTime = globalTime_;
 
-        list.push_back(particle);
+        particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 
 /// <summary>
@@ -228,11 +219,12 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
         return;
     }
 
-    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    auto& particles = it->second.particles; // 生成先のパーティクル配列
     const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
     if (emitCount == 0) {
         return;
     }
+    particles.reserve(particles.size() + emitCount);
 
     std::uniform_real_distribution<float> rotateDist(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // Z回転範囲
     std::uniform_real_distribution<float> scaleYDist(0.9f, 1.8f); // 縦方向スケール範囲
@@ -257,13 +249,11 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
 
-        list.push_back(particle);
+        particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 
-/// <summary>
-/// Ringエフェクト用のパーティクルを生成する
-/// </summary>
 /// <summary>
 /// 指定した形状で空間亀裂用のパーティクルを生成する
 /// </summary>
@@ -285,6 +275,7 @@ void ParticleManager::EmitSpaceCrack(
     if (emitCount == 0) {
         return;
     }
+    groupIterator->second.particles.reserve(groupIterator->second.particles.size() + emitCount);
 
     PM_CpuParticle particle {}; // 生成する空間亀裂パーティクル
     particle.startScale = { width * 0.15f, length * 0.2f, 1.0f };
@@ -302,6 +293,7 @@ void ParticleManager::EmitSpaceCrack(
     particle.useFadeOut = true;
 
     groupIterator->second.particles.push_back(particle);
+    ++totalParticleCount_;
 }
 
 /// <summary>
@@ -314,11 +306,12 @@ void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& pos
         return;
     }
 
-    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    auto& particles = it->second.particles; // 生成先のパーティクル配列
     const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
     if (emitCount == 0) {
         return;
     }
+    particles.reserve(particles.size() + emitCount);
 
     for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
@@ -336,8 +329,9 @@ void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& pos
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
 
-        list.push_back(particle);
+        particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 
 /// <summary>
@@ -350,11 +344,12 @@ void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3&
         return;
     }
 
-    auto& list = it->second.particles; // 生成先のパーティクルリスト
+    auto& particles = it->second.particles; // 生成先のパーティクル配列
     const uint32_t emitCount = GetEmitCountWithinLimit(it->second, count); // 上限を考慮した実際の生成数
     if (emitCount == 0) {
         return;
     }
+    particles.reserve(particles.size() + emitCount);
 
     for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
@@ -372,8 +367,9 @@ void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3&
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
 
-        list.push_back(particle);
+        particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 
 /// <summary>
@@ -395,6 +391,11 @@ void ParticleManager::EmitRiftRing(
 
     auto& particles = groupIterator->second.particles; // 生成先のパーティクルリスト
     const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, count); // 実際に生成するリング数
+    if (emitCount == 0) {
+        return;
+    }
+    particles.reserve(particles.size() + emitCount);
+
     for (uint32_t ringIndex = 0; ringIndex < emitCount; ++ringIndex) {
         const float scaleOffset = static_cast<float>(ringIndex) * 0.08f; // 同時生成リングの大きさ差
         PM_CpuParticle particle {}; // 生成するリングパーティクル
@@ -410,6 +411,7 @@ void ParticleManager::EmitRiftRing(
         particle.useFadeOut = true;
         particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 
 /// <summary>
@@ -431,6 +433,11 @@ void ParticleManager::EmitRiftFragments(
 
     auto& particles = groupIterator->second.particles; // 生成先のパーティクルリスト
     const uint32_t emitCount = GetEmitCountWithinLimit(groupIterator->second, count); // 実際に生成する破片数
+    if (emitCount == 0) {
+        return;
+    }
+    particles.reserve(particles.size() + emitCount);
+
     const float minSpeed = (std::min)(minimumSpeed, maximumSpeed); // 破片の最低速度
     const float maxSpeed = (std::max)(minimumSpeed, maximumSpeed); // 破片の最高速度
     std::uniform_real_distribution<float> angleDistribution(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // 放射方向
@@ -456,6 +463,7 @@ void ParticleManager::EmitRiftFragments(
         particle.useFadeOut = true;
         particles.push_back(particle);
     }
+    totalParticleCount_ += emitCount;
 }
 /// <summary>
 /// パーティクルを更新する
@@ -465,9 +473,11 @@ void ParticleManager::Update(float dt)
     globalTime_ += dt;
 
     for (auto& kv : particleGroups_) {
-        auto& particles = kv.second.particles; // 更新するパーティクルリスト
-        for (auto it = particles.begin(); it != particles.end();) {
-            PM_CpuParticle& particle = *it; // 更新対象のパーティクル
+        auto& particles = kv.second.particles; // 更新するパーティクル配列
+        size_t writeIndex = 0; // 生存パーティクルを書き戻す位置
+
+        for (size_t readIndex = 0; readIndex < particles.size(); ++readIndex) {
+            PM_CpuParticle particle = particles[readIndex]; // 更新対象のパーティクル
 
             if (fieldEnabled_) {
                 const Vector3& position = particle.transform.translate; // 現在位置
@@ -507,14 +517,20 @@ void ParticleManager::Update(float dt)
                 particle.color.w = particle.startColor.w * (1.0f - lifeRate);
             }
 
-            if (particle.currentTime >= particle.lifeTime) {
-                it = particles.erase(it);
-            } else {
-                ++it;
+            if (particle.currentTime < particle.lifeTime) {
+                particles[writeIndex] = particle;
+                ++writeIndex;
             }
+        }
+
+        const size_t removedCount = particles.size() - writeIndex; // 今回寿命で消えた数
+        if (removedCount > 0) {
+            particles.resize(writeIndex);
+            totalParticleCount_ -= removedCount;
         }
     }
 }
+
 
 /// <summary>
 /// パーティクルを描画する
@@ -562,6 +578,7 @@ void ParticleManager::Draw()
         }
 
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
+        object3dCommon_->SetInstancingDrawSetting();
 
         uint32_t instanceIndex = 0; // インスタンスバッファへ書き込む位置
         for (const PM_CpuParticle& particle : group.particles) {
@@ -694,6 +711,49 @@ void ParticleManager::DrawImGui()
             if (ImGui::TreeNode(kv.first.c_str())) {
                 ImGui::Text("Count = %zu", kv.second.particles.size());
                 ImGui::Text("Texture = %s", kv.second.texturePath.c_str());
+                if (!kv.second.particles.empty()) {
+                    bool hasBounds = false; // 範囲の初期化が済んでいるか
+                    Vector3 minimumPosition {}; // グループ内の最小座標
+                    Vector3 maximumPosition {}; // グループ内の最大座標
+                    const PM_CpuParticle* firstParticle = nullptr; // 先頭パーティクルの参照
+
+                    for (const PM_CpuParticle& particle : kv.second.particles) {
+                        const Vector3& position = particle.transform.translate; // 現在のワールド座標
+                        if (!hasBounds) {
+                            minimumPosition = position;
+                            maximumPosition = position;
+                            firstParticle = &particle;
+                            hasBounds = true;
+                            continue;
+                        }
+
+                        minimumPosition.x = (std::min)(minimumPosition.x, position.x);
+                        minimumPosition.y = (std::min)(minimumPosition.y, position.y);
+                        minimumPosition.z = (std::min)(minimumPosition.z, position.z);
+                        maximumPosition.x = (std::max)(maximumPosition.x, position.x);
+                        maximumPosition.y = (std::max)(maximumPosition.y, position.y);
+                        maximumPosition.z = (std::max)(maximumPosition.z, position.z);
+                    }
+
+                    const Vector3 centerPosition {
+                        (minimumPosition.x + maximumPosition.x) * 0.5f,
+                        (minimumPosition.y + maximumPosition.y) * 0.5f,
+                        (minimumPosition.z + maximumPosition.z) * 0.5f
+                    }; // グループ全体の中心座標
+
+                    ImGui::Text("Center = %.2f, %.2f, %.2f", centerPosition.x, centerPosition.y, centerPosition.z);
+                    ImGui::Text("Min = %.2f, %.2f, %.2f", minimumPosition.x, minimumPosition.y, minimumPosition.z);
+                    ImGui::Text("Max = %.2f, %.2f, %.2f", maximumPosition.x, maximumPosition.y, maximumPosition.z);
+                    if (firstParticle) {
+                        const Vector3& firstPosition = firstParticle->transform.translate; // 先頭パーティクルの座標
+                        ImGui::Text("First = %.2f, %.2f, %.2f", firstPosition.x, firstPosition.y, firstPosition.z);
+                        const Vector3& firstScale = firstParticle->transform.scale; // 先頭パーティクルのスケール
+                        const Vector4& firstColor = firstParticle->color; // 先頭パーティクルの色
+                        ImGui::Text("Scale = %.2f, %.2f, %.2f", firstScale.x, firstScale.y, firstScale.z);
+                        ImGui::Text("Color = %.2f, %.2f, %.2f, %.2f", firstColor.x, firstColor.y, firstColor.z, firstColor.w);
+                    }
+                }
+
                 ImGui::Checkbox("Use Billboard", &kv.second.useBillboard);
                 ImGui::TreePop();
             }

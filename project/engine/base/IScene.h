@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,7 @@ struct SceneContext {
     // 描画タイプ（Game の ImGui で選択された描画モードを渡すため）
     // 0=Model,1=Particle,2=Sprite,3=Bunny,4=Fence,5=Checker,6=Sphere,7=All
     int selectedDrawType = -1;
+    std::function<void(const std::string&)> requestSceneChange; // シーン側からのシーン切替要求
 };
 
 /// <summary>
@@ -84,6 +87,11 @@ public: // メンバ関数
     virtual void SetSelectedDrawType(int) { }
 
     /// <summary>
+    /// シーン描画をScene View用のオフスクリーン描画だけにするか設定する
+    /// </summary>
+    virtual void SetSceneViewOnly(bool) { }
+
+    /// <summary>
     /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
     /// デフォルト実装は何もしない
     /// </summary>
@@ -94,6 +102,11 @@ public: // メンバ関数
     /// デフォルト実装は何もしない
     /// </summary>
     virtual void FillSpritePointers(std::vector<class Sprite*>* out) { }
+
+    /// <summary>
+    /// シーン表示用テクスチャのSRV番号を取得する
+    /// </summary>
+    virtual uint32_t GetSceneViewSrvIndex() const { return UINT32_MAX; }
 
     /// <summary>
     /// シーンが使用しているポストプロセスを取得する
@@ -112,3 +125,7 @@ public: // メンバ関数
 };
 
 } // namespace MyEngine
+
+
+
+

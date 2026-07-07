@@ -14,7 +14,7 @@ struct Material
     int useAlphaCutoutSampler;
     int useAlphaDiscard;
     float _pad1;
-    float shininess; // align with Object3d material layout
+    float shininess;
     float3 _pad2;
 };
 
@@ -34,9 +34,6 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
-// Note: b2 is reserved for billboard camera vectors in the vertex shader path.
-// No pixel shader camera constant buffer is required for particles currently.
-
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
@@ -45,13 +42,8 @@ PixelShaderOutput main(VertexShaderOutput input)
     float4 textureColorPoint = gtexture.Sample(gSamplerPointClamp, transformedUV.xy);
     float4 textureColor = (gMaterial.useAlphaCutoutSampler != 0) ? textureColorPoint : textureColorLinear;
 
-    float3 texRGB = textureColor.rgb;
-    float texA = textureColor.a;
-    float3 matRGB = gMaterial.color.rgb;
-    float matA = gMaterial.color.a;
-
-    float3 finalRGB = matRGB * texRGB * input.color.rgb;
-    float finalA = matA * texA * input.color.a;
+    float3 finalRGB = gMaterial.color.rgb * textureColor.rgb * input.color.rgb;
+    float finalA = gMaterial.color.a * textureColor.a * input.color.a;
 
     if (gMaterial.enableLighting != 0)
     {
@@ -72,12 +64,12 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     output.color = float4(finalRGB, finalA);
 #if !SWAPCHAIN_SRGB
-    // Encode to sRGB if swapchain doesn't do it for us
     output.color.rgb = pow(output.color.rgb, 1.0 / 2.2);
 #endif
-    if (gMaterial.useAlphaDiscard != 0 && texA <= 0.001f)
+    if (gMaterial.useAlphaDiscard != 0 && textureColor.a <= 0.001f)
     {
         discard;
     }
+
     return output;
 }

@@ -47,28 +47,7 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon)
 #ifdef USE_IMGUI
 void SpriteCommon::DrawImGui()
 {
-    // Sprite用のID空間を分ける
-    ImGui::PushID("SpriteCommon");
-
-    // ブレンドモード設定
-    if (ImGui::CollapsingHeader("Blend Mode")) {
-        const char* blendNames[] = {
-            "None",
-            "Alpha",
-            "Add",
-            "Subtract",
-            "Multiply",
-            "Screen"
-        };
-
-        int spriteBlendIdx = static_cast<int>(GetBlendMode()); // 現在選択中のスプライト用ブレンドモード
-
-        if (ImGui::Combo("Sprite Blend", &spriteBlendIdx, blendNames, IM_ARRAYSIZE(blendNames))) {
-            SetBlendMode(static_cast<BlendMode>(spriteBlendIdx));
-        }
-    }
-
-    ImGui::PopID();
+    // ブレンドモードは ImGuiManager の Common セクションでまとめて表示する
 }
 #else
 void SpriteCommon::DrawImGui() { (void)0; }
@@ -333,7 +312,11 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
         rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO; // destのアルファは使わない
         break;
     }
-
+    if (rtBlend.BlendEnable) {
+        // Scene Viewへ描画結果をテクスチャとして渡すため、ブレンド時も最終RTの不透明度を維持する
+        rtBlend.SrcBlendAlpha = D3D12_BLEND_ZERO;
+        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
+    }
     // RasterizerStateの設定
     D3D12_RASTERIZER_DESC rasterizerDesc {};
     // カリングしない（裏面も表示させる）
@@ -367,8 +350,8 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
 
     // DepthStencilStateの設定
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc {};
-    // Depthの機能を有効化する
-    depthStencilDesc.DepthEnable = true;
+    // 2DスプライトはScene View用の深度なしRTにも描画するため、深度テストは使用しない
+    depthStencilDesc.DepthEnable = false;
     // 書き込みします
     depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     // 比較関数はLessEqual。つまり、近ければ描画される
@@ -376,7 +359,7 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
 
     // DepthStencilの設定
     graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
-    graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
 
     // PSO生成前のデバッグ情報
     {

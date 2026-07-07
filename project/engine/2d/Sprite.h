@@ -7,7 +7,6 @@
 #include <string>
 #include <wrl.h>
 
-using namespace Math;
 
 namespace MyEngine {
 
@@ -15,24 +14,24 @@ namespace MyEngine {
 class SpriteCommon;
 
 /// <summary>
-/// スプライト描画に必要な共通設定を管理するクラス
+/// 2Dスプライトの描画リソースと表示状態を管理するクラス
 /// </summary>
 class Sprite {
 
 public: // メンバ構造体
     // 頂点データ構造体
     struct VertexData {
-        Vector4 position;
-        Vector2 texcoord;
-        Vector3 normal;
+        Math::Vector4 position;
+        Math::Vector2 texcoord;
+        Math::Vector3 normal;
     };
 
     // マテリアル構造体
     struct Material {
-        Vector4 color;
+        Math::Vector4 color;
         int32_t enableLighting;
         float padding1[3];
-        Matrix4x4 uvTransform;
+        Math::Matrix4x4 uvTransform;
         int lightingMode;
         int32_t useAlphaCutoutSampler;
         float padding2[2];
@@ -42,31 +41,30 @@ public: // メンバ構造体
 
     // 座標変換行列データ
     struct TransformationMatrix {
-        Matrix4x4 WVP;
-        Matrix4x4 World;
+        Math::Matrix4x4 WVP;
+        Math::Matrix4x4 World;
     };
 
 public: // メンバ関数
     /// <summary>
-    /// 初期化
+    /// スプライト描画に必要なリソースを生成し、初期テクスチャを設定する
     /// </summary>
-    // Single Initialize: optional ImGuiManager parameter (default nullptr)
     void Initialize(SpriteCommon* spriteCommon, std::string textureFilePath, class ImGuiManager* imguiManager = nullptr);
 
     /// <summary>
-    /// 更新処理
+    /// スプライトの頂点、UV、変換行列を更新する
     /// </summary>
     void Update();
 
     /// <summary>
-    /// 頂点バッファビュー、インデックスバッファビュー、マテリアル定数バッファ、変換行列定数バッファ、SRVをコマンドリストにセットして描画
+    /// スプライトを描画する
     /// </summary>
     void Draw();
 
     /// <summary>
     /// 座標取得
     /// </summary>
-    const Vector2& GetPosition() const { return position_; }
+    const Math::Vector2& GetPosition() const { return position_; }
 
     /// <summary>
     /// 回転取得
@@ -76,17 +74,17 @@ public: // メンバ関数
     /// <summary>
     /// 色取得
     /// </summary>
-    const Vector4& GetColor() const { return materialData_->color; }
+    const Math::Vector4& GetColor() const { return materialData_->color; }
 
     /// <summary>
     /// 大きさ取得
     /// </summary>
-    const Vector2& GetSize() const { return size_; }
+    const Math::Vector2& GetSize() const { return size_; }
 
     /// <summary>
     /// アンカーポイント取得
     /// </summary>
-    const Vector2& GetAnchorPoint() const { return anchorPoint_; }
+    const Math::Vector2& GetAnchorPoint() const { return anchorPoint_; }
 
     /// <summary>
     /// フリップ状態取得(X座標)
@@ -101,17 +99,17 @@ public: // メンバ関数
     /// <summary>
     /// テクスチャ左上座標取得
     /// </summary>
-    const Vector2& GetTextureLeftTop() const { return textureLeftTop_; }
+    const Math::Vector2& GetTextureLeftTop() const { return textureLeftTop_; }
 
     /// <summary>
     /// テクスチャサイズ取得
     /// </summary>
-    const Vector2& GetTextureSize() const { return textureSize_; }
+    const Math::Vector2& GetTextureSize() const { return textureSize_; }
 
     /// <summary>
     /// 座標設定
     /// </summary>
-    void SetPosition(const Vector2& position) { position_ = position; }
+    void SetPosition(const Math::Vector2& position) { position_ = position; }
 
     /// <summary>
     /// 回転設定
@@ -121,17 +119,17 @@ public: // メンバ関数
     /// <summary>
     /// 色設定
     /// </summary>
-    void SetColor(const Vector4& color) { materialData_->color = color; }
+    void SetColor(const Math::Vector4& color) { materialData_->color = color; }
 
     /// <summary>
     /// 大きさ設定
     /// </summary>
-    void SetSize(const Vector2& size) { size_ = size; }
+    void SetSize(const Math::Vector2& size) { size_ = size; }
 
     /// <summary>
     /// アンカーポイント設定
     /// </summary>
-    void SetAnchorPoint(const Vector2& anchorPoint) { anchorPoint_ = anchorPoint; }
+    void SetAnchorPoint(const Math::Vector2& anchorPoint) { anchorPoint_ = anchorPoint; }
 
     /// <summary>
     /// フリップ状態設定(X座標)
@@ -146,12 +144,12 @@ public: // メンバ関数
     /// <summary>
     /// テクスチャ左上座標設定
     /// </summary>
-    void SetTextureLeftTop(const Vector2& textureLeftTop) { textureLeftTop_ = textureLeftTop; }
+    void SetTextureLeftTop(const Math::Vector2& textureLeftTop) { textureLeftTop_ = textureLeftTop; }
 
     /// <summary>
     /// テクスチャサイズ設定
     /// </summary>
-    void SetTextureSize(const Vector2& textureSize) { textureSize_ = textureSize; }
+    void SetTextureSize(const Math::Vector2& textureSize) { textureSize_ = textureSize; }
 
     /// <summary>
     /// ロード済みテクスチャをスプライトへ設定する
@@ -159,21 +157,25 @@ public: // メンバ関数
     void SetTexture(const std::string& filePath);
 
     /// <summary>
-    /// ImGui を使ってこのスプライトのプロパティを編集する関数
+    /// ImGui表示用のテクスチャ名を取得する
+    /// </summary>
+    const std::string& GetTextureFilePath() const { return textureFilePath_; }
+
+    /// <summary>
+    /// ImGuiでスプライトの状態を表示・編集する
     /// </summary>
     void DrawImGui();
 
-    // ImGui registration moved to central manager; no per-sprite registration fields
     ~Sprite();
 
 private: // メンバ関数
     /// <summary>
-    /// テクスチャサイズをイメージに合わせてスプライトのサイズも調整する
+    /// テクスチャのサイズに合わせてスプライトの表示サイズを調整する
     /// </summary>
     void AdjustTextureSize();
 
     /// <summary>
-    /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
+    /// 現在フレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources();
 
@@ -208,29 +210,30 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW indexBufferView_ = {};
 
     // SRV ディスクリプタヒープ内のテクスチャスロット番号。
-    uint32_t textureIndex_ = 0;
+    uint32_t textureIndex_ = 0; // 使用するテクスチャのSRVインデックス
+    std::string textureFilePath_; // ImGuiで識別するためのテクスチャ名
 
     // スプライトの変換情報
-    Transform transform_ = {};
+    Math::Transform transform_ = {};
     // UVテクスチャ変換情報
-    Transform uvTransform_ = {};
+    Math::Transform uvTransform_ = {};
 
     // スプライトの基準座標（単位はワールド/スクリーンに依存）。
-    Vector2 position_ = { 0.0f, 0.0f };
+    Math::Vector2 position_ = { 0.0f, 0.0f };
     // 回転角（ラジアンか度かの規約をここで統一しておくこと。通常ラジアンを想定）。
     float rotation_ = 0.0f;
     // スプライトの幅/高さ（テクスチャ比率に基づくスケール）。
-    Vector2 size_ = { 1.0f, 1.0f };
+    Math::Vector2 size_ = { 1.0f, 1.0f };
     // アンカー（原点）を [0,0] 左上、[1,1] 右下 とする正規化座標。
-    Vector2 anchorPoint_ = { 0.0f, 0.0f };
+    Math::Vector2 anchorPoint_ = { 0.0f, 0.0f };
     //  テクスチャの左右反転フラグ。
     bool isFlipX_ = false;
     // テクスチャの上下反転フラグ。
     bool isFlipY_ = false;
     // テクスチャ上の切り出し左上座標（ピクセル単位）。
-    Vector2 textureLeftTop_ = { 0.0f, 0.0f };
+    Math::Vector2 textureLeftTop_ = { 0.0f, 0.0f };
     // テクスチャの切り出しサイズ（ピクセル単位）。
-    Vector2 textureSize_ = { 100.0f, 100.0f };
+    Math::Vector2 textureSize_ = { 100.0f, 100.0f };
 };
 
 } // namespace MyEngine

@@ -6,7 +6,7 @@
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
 #include <cstddef>
-#include <list>
+#include <vector>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -30,7 +30,7 @@ struct PM_CpuParticle {
 // パーティクルグループ
 struct ParticleGroup {
     std::string texturePath; // 使用するテクスチャ
-    std::list<PM_CpuParticle> particles; // パーティクルリスト
+    std::vector<PM_CpuParticle> particles; // パーティクル配列
     uint32_t srvIndex = 0; // SRVインデックス
     MyEngine::Object3d* renderObject = nullptr; // 描画に使うPrimitive
     bool useBillboard = true; // ビルボード描画を使うか
@@ -180,11 +180,6 @@ private:
     uint32_t GetParticleLimit() const;
 
     /// <summary>
-    /// 全グループで保持しているパーティクル数を取得する
-    /// </summary>
-    size_t GetTotalParticleCount() const;
-
-    /// <summary>
     /// 現在の保持数を考慮して実際に生成できるパーティクル数を取得する
     /// </summary>
     uint32_t GetEmitCountWithinLimit(const ParticleGroup& group, uint32_t requestCount) const;
@@ -197,6 +192,7 @@ private:
     SrvManager* srvManager_ = nullptr; // SRV管理
     TextureManager* texManager_ = nullptr; // テクスチャ管理
     Object3d* particlePlane_ = nullptr; // 既定の描画Primitive
+    size_t totalParticleCount_ = 0; // 全グループで保持しているパーティクル数
 
     float lifeMin_ = 1.0f;
     float lifeMax_ = 3.0f;

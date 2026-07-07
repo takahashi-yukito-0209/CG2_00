@@ -1,11 +1,25 @@
 #include "InputManager.h"
+#include "Logger.h"
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
 
 using namespace MyEngine;
+
+namespace {
+/// <summary>
+/// DirectInput初期化時の失敗内容をログへ出力する
+/// </summary>
+void LogDirectInputInitializeFailure(const char* step, HRESULT hr)
+{
+    char message[256] = {}; // ログへ出力するエラー内容
+    sprintf_s(message, "InputManager::Initialize failed at %s. HRESULT=0x%08X\n", step, static_cast<unsigned int>(hr));
+    Logger::Error(message);
+}
+}
 
 /// <summary>
 /// シングルトンインスタンスを取得する
@@ -29,55 +43,60 @@ bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
     std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を初期化
 
     if (!directInput || !hwnd) {
+        Logger::Error("InputManager::Initialize failed. directInput or hwnd is null.\n");
         return false;
     }
 
     HRESULT hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr); // キーボードデバイスを生成
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("CreateDevice Keyboard", hr);
         Finalize();
         return false;
     }
 
     hr = keyboard_->SetDataFormat(&c_dfDIKeyboard); // キーボードのデータ形式を設定
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("SetDataFormat Keyboard", hr);
         Finalize();
         return false;
     }
 
     hr = keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // キーボードの協調レベルを設定
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("SetCooperativeLevel Keyboard", hr);
         Finalize();
         return false;
     }
 
     hr = keyboard_->Acquire(); // キーボード入力を取得開始
     if (FAILED(hr)) {
-        Finalize();
-        return false;
+        LogDirectInputInitializeFailure("Acquire Keyboard", hr);
     }
 
     hr = directInput->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr); // マウスデバイスを生成
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("CreateDevice Mouse", hr);
         Finalize();
         return false;
     }
 
     hr = mouse_->SetDataFormat(&c_dfDIMouse2); // マウスのデータ形式を設定
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("SetDataFormat Mouse", hr);
         Finalize();
         return false;
     }
 
     hr = mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // マウスの協調レベルを設定
     if (FAILED(hr)) {
+        LogDirectInputInitializeFailure("SetCooperativeLevel Mouse", hr);
         Finalize();
         return false;
     }
 
     hr = mouse_->Acquire(); // マウス入力を取得開始
     if (FAILED(hr)) {
-        Finalize();
-        return false;
+        LogDirectInputInitializeFailure("Acquire Mouse", hr);
     }
 
     return true;

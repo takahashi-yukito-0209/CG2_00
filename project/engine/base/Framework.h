@@ -6,8 +6,8 @@
 #include "engine/base/SrvManager.h"
 #include "engine/base/WinApp.h"
 #include <Windows.h>
+#include <memory>
 
-using namespace MyEngine;
 /// <summary>
 /// アプリケーションの基本的なライフサイクルを管理するフレームワーククラス
 /// </summary>
@@ -66,10 +66,10 @@ public: // メンバ関数
     /// <summary>
     /// エンジンの初期化処理をまとめて行うユーティリティ関数
     /// </summary>
-    bool InitializeEngine(HINSTANCE hInstance, WinApp* winApp, HWND hwnd,
-        std::unique_ptr<SpriteCommon>& spriteCommonOut,
-        SrvManager& srvManagerOut,
-        std::unique_ptr<Object3dCommon>& object3dCommonOut);
+    bool InitializeEngine(HINSTANCE hInstance, MyEngine::WinApp* winApp, HWND hwnd,
+        std::unique_ptr<MyEngine::SpriteCommon>& spriteCommonOut,
+        MyEngine::SrvManager& srvManagerOut,
+        std::unique_ptr<MyEngine::Object3dCommon>& object3dCommonOut);
 
     /// <summary>
     /// エンジンの終了処理をまとめて行うユーティリティ関数

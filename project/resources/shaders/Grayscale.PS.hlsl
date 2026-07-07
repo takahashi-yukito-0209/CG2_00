@@ -20,6 +20,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     float grayscaleValue =
         dot(textureColor.rgb, luminanceWeight); // 輝度値
 
-    output.color = float4(grayscaleValue.xxx, textureColor.a);
+    output.color = float4(grayscaleValue.xxx, 1.0f);
     return output;
 }

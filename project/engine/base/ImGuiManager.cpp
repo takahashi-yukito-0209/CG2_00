@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <sstream>
+#include <string>
 
-#include "ImGuiManager.h"
 
 #include "engine/2d/Sprite.h"
 #include "engine/2d/SpriteCommon.h"
@@ -16,10 +16,12 @@
 #include "engine/base/SrvManager.h"
 #include "engine/particle/ParticleEmitter.h"
 #include "engine/particle/ParticleManager.h"
+#include <algorithm>
 #include <cmath>
 #include <unordered_set>
 
 using namespace MyEngine;
+using namespace Math;
 
 namespace MyEngine {
 
@@ -54,6 +56,10 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
         ImGui::CreateContext();
     }
 
+    ImGuiIO& imguiIo = ImGui::GetIO(); // ImGui全体の設定を扱うIO情報
+    imguiIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ドッキング機能を有効化する
+    imguiIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // ImGuiウィンドウをメイン画面外へ出せるようにする
+
     // ImGuiのスタイルをカスタマイズする
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -70,6 +76,11 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
     colors[ImGuiCol_Button] = ImVec4(0.25f, 0.32f, 0.40f, 1.00f);
     colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.42f, 0.50f, 1.00f);
     colors[ImGuiCol_ButtonActive] = ImVec4(0.40f, 0.48f, 0.56f, 1.00f);
+
+    if (imguiIo.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        style.WindowRounding = 0.0f; // 外部ウィンドウと通常ウィンドウの見た目を揃える
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f; // 外部ウィンドウ背景を不透明にする
+    }
 
     // バックエンドの初期化
     ImGui_ImplWin32_Init(hwnd);
@@ -118,11 +129,23 @@ void ImGuiManager::Shutdown()
 /// </summary>
 void ImGuiManager::BuildUI(Context& ctx)
 {
-    ImGui::Begin("Effect Settings");
+    DrawDockSpace();
+
+    DrawSceneViewWindow(ctx);
+
+    ImGui::Begin("Debug Settings");
+
+    DrawSceneSection(ctx);
 
     DrawPostProcessSection(ctx);
 
     DrawParticleSection(ctx);
+
+    DrawObjectSection(ctx);
+
+    DrawSpriteSection(ctx);
+
+    DrawCommonSection(ctx);
 
     ImGui::End();
 
@@ -136,6 +159,12 @@ void ImGuiManager::Render(ID3D12GraphicsCommandList* commandList)
     // ImGui の描画コマンドを発行する。ImGui::Render とバックエンドの Render を呼び出す
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+    ImGuiIO& imguiIo = ImGui::GetIO(); // ImGui全体の設定を扱うIO情報
+    if (imguiIo.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows(); // メイン画面外へ出したImGuiウィンドウを更新する
+        ImGui::RenderPlatformWindowsDefault(); // 追加ウィンドウの描画を実行する
+    }
 }
 
 bool ImGuiManager::IsCapturingInput()
@@ -150,6 +179,89 @@ bool ImGuiManager::IsCapturingInput()
 }
 
 /// <summary>
+/// メインウィンドウ全体に ImGui のドッキング領域を作成する
+/// </summary>
+void ImGuiManager::DrawDockSpace()
+{
+#ifdef USE_IMGUI
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport(); // DockSpaceを配置するメインビューポート
+    ImGui::SetNextWindowPos(mainViewport->WorkPos);
+    ImGui::SetNextWindowSize(mainViewport->WorkSize);
+    ImGui::SetNextWindowViewport(mainViewport->ID);
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking; // DockSpace用ウィンドウの基本フラグ
+    windowFlags |= ImGuiWindowFlags_NoTitleBar;
+    windowFlags |= ImGuiWindowFlags_NoCollapse;
+    windowFlags |= ImGuiWindowFlags_NoResize;
+    windowFlags |= ImGuiWindowFlags_NoMove;
+    windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
+    windowFlags |= ImGuiWindowFlags_NoNavFocus;
+    windowFlags |= ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("Main DockSpace", nullptr, windowFlags);
+    ImGui::PopStyleVar(2);
+
+    ImGuiID dockSpaceId = ImGui::GetID("MainDockSpace"); // DockSpaceを識別するID
+    ImGuiDockNodeFlags dockSpaceFlags = ImGuiDockNodeFlags_PassthruCentralNode; // 中央部分はゲーム画面を見せる
+    ImGui::DockSpace(dockSpaceId, ImVec2(0.0f, 0.0f), dockSpaceFlags);
+
+    ImGui::End();
+#endif
+}
+/// <summary>
+/// シーン表示用テクスチャをImGuiウィンドウ内に描画する
+/// </summary>
+void ImGuiManager::DrawSceneViewWindow(Context& ctx)
+{
+#ifdef USE_IMGUI
+    ImGui::Begin("Scene View");
+
+    const bool hasSceneTexture = ctx.srvManager && ctx.sceneViewSrvIndex != UINT32_MAX; // Scene Viewへ表示できるSRVがあるか
+    if (!hasSceneTexture) {
+        ImGui::TextDisabled("No scene texture");
+        ImGui::End();
+        return;
+    }
+
+    ImVec2 availableSize = ImGui::GetContentRegionAvail(); // Scene View内で画像表示に使える領域
+    if (availableSize.x <= 1.0f || availableSize.y <= 1.0f) {
+        ImGui::End();
+        return;
+    }
+
+    const float sourceWidth = ctx.sceneViewWidth > 0.0f ? ctx.sceneViewWidth : availableSize.x; // 元テクスチャの横幅
+    const float sourceHeight = ctx.sceneViewHeight > 0.0f ? ctx.sceneViewHeight : availableSize.y; // 元テクスチャの縦幅
+    const float sourceAspect = sourceWidth / sourceHeight; // 元テクスチャのアスペクト比
+    const float availableAspect = availableSize.x / availableSize.y; // 表示領域のアスペクト比
+
+    ImVec2 imageSize = availableSize; // 実際に表示する画像サイズ
+    if (availableAspect > sourceAspect) {
+        imageSize.x = imageSize.y * sourceAspect;
+    } else {
+        imageSize.y = imageSize.x / sourceAspect;
+    }
+
+    const float offsetX = (availableSize.x - imageSize.x) * 0.5f; // 中央寄せ用の横オフセット
+    const float offsetY = (availableSize.y - imageSize.y) * 0.5f; // 中央寄せ用の縦オフセット
+    if (offsetX > 0.0f || offsetY > 0.0f) {
+        ImVec2 cursorPosition = ImGui::GetCursorPos(); // 現在の描画開始位置
+        cursorPosition.x += (std::max)(offsetX, 0.0f);
+        cursorPosition.y += (std::max)(offsetY, 0.0f);
+        ImGui::SetCursorPos(cursorPosition);
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE sceneSrvHandle = ctx.srvManager->GetGPUDescriptorHandle(ctx.sceneViewSrvIndex); // Scene View用SRVのGPUハンドル
+    ImTextureRef sceneTexture(static_cast<ImTextureID>(sceneSrvHandle.ptr)); // ImGuiへ渡すテクスチャ参照
+    ImGui::Image(sceneTexture, imageSize);
+
+    ImGui::End();
+#else
+    (void)ctx;
+#endif
+}
+/// <summary>
 /// シーン情報をImGuiで描画する
 /// </summary>
 void ImGuiManager::DrawSceneSection(Context& ctx)
@@ -159,6 +271,26 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
         if (ctx.currentSceneName) {
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
         }
+
+        if (ctx.selectedDrawType) {
+            const char* drawTypeLabels[] = {
+                "Model",
+                "Particle",
+                "Sprite",
+                "Bunny",
+                "Fence",
+                "Checker",
+                "Sphere",
+                "All"
+            }; // 描画対象の表示名
+            constexpr int drawTypeCount = static_cast<int>(sizeof(drawTypeLabels) / sizeof(drawTypeLabels[0])); // 描画対象数
+            *ctx.selectedDrawType = (std::clamp)(*ctx.selectedDrawType, 0, drawTypeCount - 1);
+            ImGui::Combo("Draw Target", ctx.selectedDrawType, drawTypeLabels, drawTypeCount);
+        }
+
+        const float frameRate = ImGui::GetIO().Framerate; // 現在のImGui計測FPS
+        const float frameTimeMs = frameRate > 0.0f ? 1000.0f / frameRate : 0.0f; // 1フレームあたりの表示時間
+        ImGui::Text("FPS: %.1f (%.3f ms)", frameRate, frameTimeMs);
     }
 #else
     (void)ctx;
@@ -536,24 +668,44 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
 void ImGuiManager::DrawObjectSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (!ctx.objects3d) {
+    if (!ctx.objects3d || ctx.objects3d->empty()) {
         return;
     }
 
     if (ImGui::CollapsingHeader("Objects")) {
-        for (int objectIndex = 0; objectIndex < static_cast<int>(ctx.objects3d->size()); ++objectIndex) {
-            Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示対象の3Dオブジェクト
-            if (!object) {
-                continue;
-            }
+        static int selectedObjectIndex = 0; // 編集対象の3Dオブジェクト番号
+        const int objectCount = static_cast<int>(ctx.objects3d->size()); // 表示可能な3Dオブジェクト数
+        selectedObjectIndex = (std::clamp)(selectedObjectIndex, 0, objectCount - 1);
 
-            ImGui::PushID(objectIndex);
-            char header[64] = {}; // オブジェクト表示名
-            sprintf_s(header, "Object %d", objectIndex);
-            if (ImGui::CollapsingHeader(header)) {
-                object->DrawImGui(objectIndex);
+        Object3d* previewObject = (*ctx.objects3d)[selectedObjectIndex]; // コンボで現在選択している3Dオブジェクト
+        std::string preview = "Object " + std::to_string(selectedObjectIndex); // コンボの現在表示名
+        if (previewObject && !previewObject->GetDebugName().empty()) {
+            preview += " : " + previewObject->GetDebugName();
+        }
+
+        if (ImGui::BeginCombo("Target", preview.c_str())) {
+            for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
+                Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示名を取得する3Dオブジェクト
+                std::string label = "Object " + std::to_string(objectIndex); // 選択候補の表示名
+                if (object && !object->GetDebugName().empty()) {
+                    label += " : " + object->GetDebugName();
+                }
+
+                const bool isSelected = selectedObjectIndex == objectIndex; // 現在選択中か
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedObjectIndex = objectIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
             }
-            ImGui::PopID();
+            ImGui::EndCombo();
+        }
+
+        Object3d* selectedObject = (*ctx.objects3d)[selectedObjectIndex]; // 編集対象の3Dオブジェクト
+        if (selectedObject) {
+            ImGui::Separator();
+            selectedObject->DrawImGui(selectedObjectIndex);
         }
     }
 #else
@@ -566,50 +718,90 @@ void ImGuiManager::DrawObjectSection(Context& ctx)
 void ImGuiManager::DrawSpriteSection(Context& ctx)
 {
 #ifdef USE_IMGUI
-    if (!ctx.sprites) {
+    if (!ctx.sprites || ctx.sprites->empty()) {
         return;
     }
 
     if (ImGui::CollapsingHeader("Sprites")) {
-        int spriteIndex = 0; // 表示中のスプライト番号
+        static int selectedSpriteIndex = 0; // 編集対象のスプライト番号
+        const int spriteCount = static_cast<int>(ctx.sprites->size()); // 表示可能なスプライト数
+        selectedSpriteIndex = (std::clamp)(selectedSpriteIndex, 0, spriteCount - 1);
 
-        for (auto* sprite : *ctx.sprites) {
-            if (!sprite) {
-                ++spriteIndex;
-                continue;
+        Sprite* previewSprite = (*ctx.sprites)[selectedSpriteIndex]; // コンボで現在選択しているスプライト
+        std::string preview = "Sprite " + std::to_string(selectedSpriteIndex); // コンボの現在表示名
+        if (previewSprite && !previewSprite->GetTextureFilePath().empty()) {
+            preview += " : " + previewSprite->GetTextureFilePath();
+        }
+
+        if (ImGui::BeginCombo("Target", preview.c_str())) {
+            for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
+                Sprite* sprite = (*ctx.sprites)[spriteIndex]; // 表示名を取得するスプライト
+                std::string label = "Sprite " + std::to_string(spriteIndex); // 選択候補の表示名
+                if (sprite && !sprite->GetTextureFilePath().empty()) {
+                    label += " : " + sprite->GetTextureFilePath();
+                }
+
+                const bool isSelected = selectedSpriteIndex == spriteIndex; // 現在選択中か
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedSpriteIndex = spriteIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
             }
+            ImGui::EndCombo();
+        }
 
-            ImGui::PushID(spriteIndex);
-
-            char header[64] = {};
-            sprintf_s(header, "Sprite %d", spriteIndex);
-
-            if (ImGui::CollapsingHeader(header)) {
-                sprite->DrawImGui();
-            }
-
-            ImGui::PopID();
-            ++spriteIndex;
+        Sprite* selectedSprite = (*ctx.sprites)[selectedSpriteIndex]; // 編集対象のスプライト
+        if (selectedSprite) {
+            ImGui::Separator();
+            selectedSprite->DrawImGui();
         }
     }
 #else
     (void)ctx;
 #endif
 }
-
 /// <summary>
-/// 3Dオブジェクト関連のImGuiを描画する
+/// 共通設定関連のImGuiを描画する
 /// </summary>
 void ImGuiManager::DrawCommonSection(Context& ctx)
 {
 #ifdef USE_IMGUI
     if (ImGui::CollapsingHeader("Common")) {
-        if (ctx.spriteCommon) {
-            ctx.spriteCommon->DrawImGui();
+        if (ctx.spriteCommon || ctx.object3dCommon) {
+            if (ImGui::CollapsingHeader("Blend Mode")) {
+                const char* blendNames[] = {
+                    "None",
+                    "Alpha",
+                    "Add",
+                    "Subtract",
+                    "Multiply",
+                    "Screen"
+                }; // 選択可能なブレンドモード名
+
+                if (ctx.object3dCommon) {
+                    int objectBlendIndex = static_cast<int>(ctx.object3dCommon->GetBlendMode()); // 3Dオブジェクトのブレンドモード
+                    if (ImGui::Combo("1. Object3D Blend", &objectBlendIndex, blendNames, IM_ARRAYSIZE(blendNames))) {
+                        ctx.object3dCommon->SetBlendMode(static_cast<BlendMode>(objectBlendIndex));
+                    }
+                }
+
+                if (ctx.spriteCommon) {
+                    int spriteBlendIndex = static_cast<int>(ctx.spriteCommon->GetBlendMode()); // スプライトのブレンドモード
+                    if (ImGui::Combo("2. Sprite Blend", &spriteBlendIndex, blendNames, IM_ARRAYSIZE(blendNames))) {
+                        ctx.spriteCommon->SetBlendMode(static_cast<BlendMode>(spriteBlendIndex));
+                    }
+                }
+            }
         }
 
         if (ctx.object3dCommon) {
             ctx.object3dCommon->DrawImGui();
+        }
+
+        if (ctx.spriteCommon) {
+            ctx.spriteCommon->DrawImGui();
         }
     }
 #else
@@ -653,3 +845,7 @@ bool ImGuiManager::IsCapturingInput() { return false; }
 #endif // USE_IMGUI
 
 } // namespace MyEngine
+
+
+
+

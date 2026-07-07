@@ -43,6 +43,46 @@ public: // メンバ関数
     bool PollEvents() override;
 
 private: // メンバ変数
+    /// <summary>
+    /// クラッシュダンプ出力を設定する
+    /// </summary>
+    void SetupCrashDumpHandler();
+
+    /// <summary>
+    /// ログファイル出力を設定する
+    /// </summary>
+    void SetupLogFile();
+
+    /// <summary>
+    /// ウィンドウと入力を初期化する
+    /// </summary>
+    bool InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow);
+
+    /// <summary>
+    /// エンジン共通リソースを初期化する
+    /// </summary>
+    bool InitializeEngineResources(HINSTANCE hInstance);
+
+    /// <summary>
+    /// カメラとライトを初期化する
+    /// </summary>
+    void InitializeCameraAndLighting();
+
+    /// <summary>
+    /// デバッグ機能、ImGui、サウンドを初期化する
+    /// </summary>
+    void InitializeDebugToolsAndSound();
+
+    /// <summary>
+    /// リサイズ通知を設定する
+    /// </summary>
+    void SetupResizeCallbacks();
+
+    /// <summary>
+    /// シーン管理を初期化する
+    /// </summary>
+    void InitializeScene();
+
     struct Impl;
     std::unique_ptr<Impl> impl_ = nullptr; // 実装の隠蔽
 };

@@ -192,11 +192,12 @@ private: // メンバ関数
     /// グラフィックスパイプラインの作成
     /// </summary>
     void CreateGraphicsPipeline();
+    void CreateGraphicsPipeline(BlendMode mode);
 
 private: // メンバ変数
     DirectXCommon* dxCommon_; // DirectXCommon へのポインタ（外部で管理される）
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 3Dオブジェクトの描画に使用するルートシグネチャ
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_; // 3Dオブジェクトの描画に使用するグラフィックスパイプラインステート
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, static_cast<size_t>(BlendMode::Count)> graphicsPipelineStates_ {}; // ブレンドモード別の3Dオブジェクト用PSO
 
     // インスタンシング／パーティクル描画に使用するPSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancingPipelineState_;

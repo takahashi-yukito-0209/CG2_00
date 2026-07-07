@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-using namespace Math;
 
 /// <summary>
 /// 衝突判定ユーティリティ
@@ -13,32 +12,32 @@ namespace CollisionUtility {
 
 // 軸平行境界ボックス（AABB）
 struct AABB {
-    Vector3 min {}; // box最小点
-    Vector3 max {}; // box最大点
+    Math::Vector3 min {}; // box最小点
+    Math::Vector3 max {}; // box最大点
 };
 
 // オブジェクトに対して回転を許容する境界ボックス（OBB）
 struct OBB {
-    Vector3 center {}; // box center
-    Vector3 axis[3] {}; // ローカル軸（単位長さを想定）
+    Math::Vector3 center {}; // box center
+    Math::Vector3 axis[3] {}; // ローカル軸（単位長さを想定）
     float halfLength[3] {}; // 各軸方向の半長さ
 };
 
 // 球
 struct Sphere {
-    Vector3 center {}; // 球の中心
+    Math::Vector3 center {}; // 球の中心
     float radius = 0.0f; // 球の半径
 };
 
 // レイ
 struct Ray {
-    Vector3 origin {}; // レイの開始点
-    Vector3 dir {}; // 正規化されていることが望ましい
+    Math::Vector3 origin {}; // レイの開始点
+    Math::Vector3 dir {}; // 正規化されていることが望ましい
 };
 
 // 三角形
 struct Triangle {
-    Vector3 a, b, c; // 頂点座標
+    Math::Vector3 a, b, c; // 頂点座標
 };
 
 // メッシュ（複数の三角形で構成される）
@@ -94,19 +93,19 @@ bool RayIntersectOBB(const Ray& ray, const OBB& obb, float* outT = nullptr);
 /// </summary>
 bool RayIntersectSphere(const Ray& ray, const Sphere& s, float* outT = nullptr);
 
-// Transform から OBB を作成するヘルパー
+// Math::Transform から OBB を作成するヘルパー
 // 引数 halfLengths はローカル空間における各軸の半長さ
-OBB MakeOBBFromTransform(const Transform& t, const Vector3& halfLengths);
+OBB MakeOBBFromTransform(const Math::Transform& t, const Math::Vector3& halfLengths);
 
-// Transform から AABB を作成するヘルパー
+// Math::Transform から AABB を作成するヘルパー
 // 引数 halfLengths はローカル空間における各軸の半長さ
-AABB MakeAABBFromTransform(const Transform& t, const Vector3& halfLengths);
+AABB MakeAABBFromTransform(const Math::Transform& t, const Math::Vector3& halfLengths);
 
 // 衝突詳細情報を返すための構造体
 struct CollisionResult {
     bool hit = false; // 衝突したか
-    Vector3 point {}; // 接触点（近似）
-    Vector3 normal {}; // 衝突法線（A -> B の向き）
+    Math::Vector3 point {}; // 接触点（近似）
+    Math::Vector3 normal {}; // 衝突法線（A -> B の向き）
     float penetration = 0.0f; // 貫入深度（正の値）
 };
 
@@ -114,8 +113,8 @@ struct CollisionResult {
 struct RayHitResult {
     bool hit = false; // ヒットしたか
     float t = 0.0f; // レイ長さ（パラメータ）
-    Vector3 point {}; // ヒット位置
-    Vector3 normal {}; // ヒット法線
+    Math::Vector3 point {}; // ヒット位置
+    Math::Vector3 normal {}; // ヒット法線
 };
 
 // ----------------------
@@ -260,8 +259,8 @@ RayHitResult RayIntersectMesh_BVH(const Ray& ray, const Mesh& mesh);
 
 // 接触マニフォールド - 複数の接触点をまとめる構造体
 struct ContactPoint {
-    Vector3 position;
-    Vector3 normal; // A->B の向き
+    Math::Vector3 position;
+    Math::Vector3 normal; // A->B の向き
     float penetration = 0.0f;
 };
 

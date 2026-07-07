@@ -43,6 +43,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     PixelShaderOutput output;
     output.color = float4(
         accumulatedColor / float(sampleCount),
-        sourceColor.a);
+        1.0f);
     return output;
 }
