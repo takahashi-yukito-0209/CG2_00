@@ -433,6 +433,16 @@ private: // 内部関数
     void BindInstancingResource(ID3D12GraphicsCommandList* commandList) const;
 
     /// <summary>
+    /// 非モデル通常描画で使用する共通リソースを設定する
+    /// </summary>
+    bool BindNonModelDrawResources(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
+    /// 非モデルインスタンシング描画で使用する共通リソースを設定する
+    /// </summary>
+    bool BindNonModelInstancedDrawResources(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
     /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources(); // モデルデータ割り当て

@@ -826,6 +826,51 @@ void Object3d::BindInstancingResource(ID3D12GraphicsCommandList* commandList) co
 }
 
 /// <summary>
+/// 非モデル通常描画で使用する共通リソースを設定する
+/// </summary>
+bool Object3d::BindNonModelDrawResources(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!BindMaterialResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    if (!BindTransformationMatrixResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    if (!BindDirectionalLightResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    BindPointLightResource(commandList);
+    BindCameraResource(commandList);
+
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(commandList, textureIndex, "Object3d::Draw");
+    return true;
+}
+
+/// <summary>
+/// 非モデルインスタンシング描画で使用する共通リソースを設定する
+/// </summary>
+bool Object3d::BindNonModelInstancedDrawResources(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!BindMaterialResource(commandList, nullptr)) {
+        return false;
+    }
+
+    BindTransformationMatrixResource(commandList, nullptr);
+    BindDirectionalLightResource(commandList, nullptr);
+    BindCameraResource(commandList);
+    BindPointLightResource(commandList);
+
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(commandList, textureIndex, "Object3d::DrawInstanced");
+    BindInstancingResource(commandList);
+    return true;
+}
+
+/// <summary>
 /// 座標変換行列を更新して定数バッファに転送する
 /// </summary>
 void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix)
@@ -895,27 +940,10 @@ void Object3d::Draw()
     // VBVを設定
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    // マテリアルCBVをルートパラメータ0に設定する
-    if (!BindMaterialResource(cmdList, "Object3d::Draw")) {
+    // 非モデル通常描画で使用する共通リソースを設定する
+    if (!BindNonModelDrawResources(cmdList)) {
         return;
     }
-
-    // 座標変換行列CBVをルートパラメータ1に設定する
-    if (!BindTransformationMatrixResource(cmdList, "Object3d::Draw")) {
-        return;
-    }
-
-    // 平行光源CBVをルートパラメータ3に設定する
-    if (!BindDirectionalLightResource(cmdList, "Object3d::Draw")) {
-        return;
-    }
-
-    // 点光源CBVとカメラCBVは利用できる場合のみ設定する
-    BindPointLightResource(cmdList);
-    BindCameraResource(cmdList);
-
-    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(cmdList, textureIndex, "Object3d::Draw");
     // 描画コマンド
     cmdList->DrawInstanced(GetDrawVertexCount(), 1, 0, 0);
 }
@@ -946,20 +974,9 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    if (!BindMaterialResource(cmdList, nullptr)) {
+    if (!BindNonModelInstancedDrawResources(cmdList)) {
         return;
     }
-
-    BindTransformationMatrixResource(cmdList, nullptr);
-
-    BindDirectionalLightResource(cmdList, nullptr);
-    BindCameraResource(cmdList);
-    BindPointLightResource(cmdList);
-
-    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(cmdList, textureIndex, "Object3d::DrawInstanced");
-
-    BindInstancingResource(cmdList);
 
     cmdList->DrawInstanced(GetDrawVertexCount(), instanceCount, 0, 0);
 }
