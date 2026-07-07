@@ -677,6 +677,14 @@ uint32_t Object3d::ResolveFallbackTextureIndex() const
 }
 
 /// <summary>
+/// 非モデル描画で使用する頂点数を取得する
+/// </summary>
+uint32_t Object3d::GetDrawVertexCount() const
+{
+    return static_cast<uint32_t>(modelData_.vertices.size());
+}
+
+/// <summary>
 /// マテリアルCBVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Object3d::BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
@@ -909,7 +917,7 @@ void Object3d::Draw()
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
     BindTexture(cmdList, textureIndex, "Object3d::Draw");
     // 描画コマンド
-    cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
+    cmdList->DrawInstanced(GetDrawVertexCount(), 1, 0, 0);
 }
 
 /// <summary>
@@ -927,7 +935,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
         return;
     }
 
-    if (vertexBufferView_.SizeInBytes == 0 || modelData_.vertices.empty()) {
+    if (vertexBufferView_.SizeInBytes == 0 || GetDrawVertexCount() == 0) {
         return;
     }
 
@@ -953,7 +961,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     BindInstancingResource(cmdList);
 
-    cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), instanceCount, 0, 0);
+    cmdList->DrawInstanced(GetDrawVertexCount(), instanceCount, 0, 0);
 }
 
 /// <summary>

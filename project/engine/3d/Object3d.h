@@ -393,6 +393,11 @@ private: // 内部関数
     uint32_t ResolveFallbackTextureIndex() const;
 
     /// <summary>
+    /// 非モデル描画で使用する頂点数を取得する
+    /// </summary>
+    uint32_t GetDrawVertexCount() const;
+
+    /// <summary>
     /// マテリアルCBVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
