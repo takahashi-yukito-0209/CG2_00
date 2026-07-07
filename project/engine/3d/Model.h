@@ -52,6 +52,11 @@ private: // メンバ変数
     const std::vector<Object3d::VertexData>& ResolveDrawVertices(const Object3d* owner) const;
 
     /// <summary>
+    /// 描画時に使用する頂点バッファビューを取得する
+    /// </summary>
+    D3D12_VERTEX_BUFFER_VIEW ResolveVertexBufferView(const Object3d* owner) const;
+
+    /// <summary>
     /// モデル頂点データから頂点バッファを作成する
     /// </summary>
     void CreateVertexBuffer();

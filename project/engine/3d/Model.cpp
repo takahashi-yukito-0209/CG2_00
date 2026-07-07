@@ -84,6 +84,18 @@ const std::vector<Object3d::VertexData>& Model::ResolveDrawVertices(const Object
 }
 
 /// <summary>
+/// 描画時に使用する頂点バッファビューを取得する
+/// </summary>
+D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) const
+{
+    if (vertexBufferView_.SizeInBytes != 0) {
+        return vertexBufferView_;
+    }
+
+    return owner->GetVertexBufferView();
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Model::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -145,7 +157,7 @@ void Model::Draw(Object3d* owner)
     }
 
     // 頂点バッファの設定 (モデルまたはオーナーから)
-    D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
+    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
     // Material CBV は Object3d が持つものを使用する
@@ -254,8 +266,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     }
 
     // インスタンシング描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
-    D3D12_VERTEX_BUFFER_VIEW vbv = vertexBufferView_.SizeInBytes != 0 ? vertexBufferView_ : owner->GetVertexBufferView();
-    // モデル側の頂点バッファが有効であればそれを使用、無ければオーナー側の頂点バッファを使用
+    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
     cmdList->IASetVertexBuffers(0, 1, &vbv);
     // Material CBV は Object3d が持つものを使用する
     auto materialResource = owner->GetMaterialResource();
