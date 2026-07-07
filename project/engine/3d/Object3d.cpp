@@ -30,6 +30,7 @@ using namespace Math;
 namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
+constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
 
 /// <summary>
@@ -1013,8 +1014,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
     // Assimp を使って読み込む
     Assimp::Importer importer;
     // 読み込み時のオプションを指定してファイルを読み込む
-    const aiScene* scene = importer.ReadFile(fullPath.c_str(),
-        aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder);
+    const aiScene* scene = importer.ReadFile(fullPath.c_str(), kAssimpLoadFlags);
 
     if (!ValidateAssimpScene(scene, fullPath)) {
         return modelData;
