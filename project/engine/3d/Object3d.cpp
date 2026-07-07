@@ -236,6 +236,21 @@ bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 }
 
 /// <summary>
+/// Assimp メッシュが頂点展開に必要な法線を持つか確認する。
+/// </summary>
+bool HasRequiredMeshNormals(const aiMesh* mesh, uint32_t meshIndex)
+{
+    if (mesh->HasNormals()) {
+        return true;
+    }
+
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
+    Logger::Warn(buffer);
+    return false;
+}
+
+/// <summary>
 /// Assimp の頂点情報を Object3d 用の頂点データへ変換する。
 /// </summary>
 Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint32_t vertexIndex, bool hasTextureCoords)
@@ -274,10 +289,7 @@ void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& mo
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh* mesh = scene->mMeshes[meshIndex]; // 展開対象のメッシュ
 
-        if (!mesh->HasNormals()) {
-            char buffer[256]; // ログ出力用バッファ
-            sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
-            Logger::Warn(buffer);
+        if (!HasRequiredMeshNormals(mesh, meshIndex)) {
             continue;
         }
 
