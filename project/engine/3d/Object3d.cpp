@@ -236,7 +236,38 @@ bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 }
 
 /// <summary>
-/// Assimp の全メッシュを Object3d 用の頂点データへ展開する
+/// Assimp の頂点情報を Object3d 用の頂点データへ変換する。
+/// </summary>
+Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint32_t vertexIndex, bool hasTextureCoords)
+{
+    const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
+    const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
+    aiVector3D texcoord(0, 0, 0); // Assimp 側のテクスチャ座標
+    if (hasTextureCoords) {
+        texcoord = mesh->mTextureCoords[0][vertexIndex];
+    }
+
+    Object3d::VertexData vertexData; // ModelData に追加する頂点データ
+    vertexData.position = { -position.x, position.y, position.z, 1.0f };
+    vertexData.texcoord = { texcoord.x, texcoord.y };
+    vertexData.normal = { -normal.x, normal.y, normal.z };
+    return vertexData;
+}
+
+/// <summary>
+/// Assimp の三角形面を Object3d 用の頂点配列へ追加する。
+/// </summary>
+void AppendFaceVerticesToModelData(const aiMesh* mesh, const aiFace& face, bool hasTextureCoords, Object3d::ModelData& modelData)
+{
+    for (uint32_t element = 0; element < 3; ++element) {
+        const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
+        const Object3d::VertexData vertexData = ConvertAssimpVertexToObjectVertex(mesh, vertexIndex, hasTextureCoords); // 追加する頂点データ
+        modelData.vertices.push_back(vertexData);
+    }
+}
+
+/// <summary>
+/// Assimp の全メッシュを Object3d 用の頂点データへ展開する。
 /// </summary>
 void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& modelData)
 {
@@ -258,22 +289,7 @@ void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& mo
                 continue;
             }
 
-            for (uint32_t element = 0; element < 3; ++element) {
-                const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
-                const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
-                const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
-                aiVector3D texcoord(0, 0, 0); // Assimp 側のテクスチャ座標
-                if (hasTextureCoords) {
-                    texcoord = mesh->mTextureCoords[0][vertexIndex];
-                }
-
-                Object3d::VertexData vertexData; // ModelData に追加する頂点データ
-                vertexData.position = { -position.x, position.y, position.z, 1.0f };
-                vertexData.texcoord = { texcoord.x, texcoord.y };
-                vertexData.normal = { -normal.x, normal.y, normal.z };
-
-                modelData.vertices.push_back(vertexData);
-            }
+            AppendFaceVerticesToModelData(mesh, face, hasTextureCoords, modelData);
         }
     }
 }
