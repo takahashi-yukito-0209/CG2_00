@@ -304,6 +304,20 @@ static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& m
 }
 
 /// <summary>
+/// Assimp のシーンから Object3d 用のモデルデータを構築する
+/// </summary>
+static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, const std::filesystem::path& modelPath)
+{
+    Object3d::ModelData modelData; // 構築するモデルデータ
+
+    ReadRootNodeToModelData(scene, modelData);
+    AppendMeshVerticesToModelData(scene, modelData);
+    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, modelPath);
+
+    return modelData;
+}
+
+/// <summary>
 /// Object3d の初期化
 /// </summary>
 void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager)
@@ -1006,10 +1020,7 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
         return modelData;
     }
 
-    ReadRootNodeToModelData(scene, modelData); // Assimp のルートノードを読み込む
-
-    AppendMeshVerticesToModelData(scene, modelData); // Assimp のメッシュを頂点データへ展開
-    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
+    modelData = BuildModelDataFromAssimpScene(scene, objPath); // Assimp シーンからモデルデータを構築
 
     LogResolvedModelTexturePath(modelData);
     return FinalizeLoadedModelData(cacheKey, modelData);
