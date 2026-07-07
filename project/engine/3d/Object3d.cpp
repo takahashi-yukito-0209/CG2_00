@@ -702,6 +702,24 @@ bool Object3d::BindMaterialResource(ID3D12GraphicsCommandList* commandList, cons
 }
 
 /// <summary>
+/// 座標変換行列CBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindTransformationMatrixResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
+{
+    auto transformationResource = GetTransformationMatrixResource(); // 現在のフレームで使用する座標変換行列CBV
+    if (!commandList || !transformationResource) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: transformation matrix resource is null\n");
+        }
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS transformationAddress = transformationResource->GetGPUVirtualAddress(); // 座標変換行列CBVのGPUアドレス
+    commandList->SetGraphicsRootConstantBufferView(1, transformationAddress);
+    return true;
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -808,16 +826,10 @@ void Object3d::Draw()
         return;
     }
 
-    // 座標変換行列CBV (必須)
-    if (!GetTransformationMatrixResource()) {
-        Logger::Debug("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
+    // 座標変換行列CBVをルートパラメータ1に設定する
+    if (!BindTransformationMatrixResource(cmdList, "Object3d::Draw")) {
         return;
     }
-
-    // GPU仮想アドレスを取得してルートパラメータ1にセット
-    auto wvpAddr = GetTransformationMatrixResource()->GetGPUVirtualAddress();
-    // ルートパラメータ1に座標変換行列CBVをセット
-    cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
 
     // 光源CBV (Object3dCommon で共有されている)
     D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
@@ -879,9 +891,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
         return;
     }
 
-    if (GetTransformationMatrixResource()) {
-        cmdList->SetGraphicsRootConstantBufferView(1, GetTransformationMatrixResource()->GetGPUVirtualAddress());
-    }
+    BindTransformationMatrixResource(cmdList, nullptr);
 
     D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源のGPUアドレス
     if (lightAddress != 0) {

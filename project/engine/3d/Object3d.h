@@ -398,6 +398,11 @@ private: // 内部関数
     bool BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
 
     /// <summary>
+    /// 座標変換行列CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindTransformationMatrixResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
+
+    /// <summary>
     /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
