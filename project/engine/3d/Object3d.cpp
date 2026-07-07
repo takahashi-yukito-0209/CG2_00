@@ -677,6 +677,31 @@ uint32_t Object3d::ResolveFallbackTextureIndex() const
 }
 
 /// <summary>
+/// マテリアルCBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
+{
+    auto materialResource = GetMaterialResource(); // 現在のフレームで使用するマテリアルCBV
+    if (!commandList || !materialResource) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: material resource is null\n");
+        }
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS materialAddress = materialResource->GetGPUVirtualAddress(); // マテリアルCBVのGPUアドレス
+    if (materialAddress == 0) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: material GPU address is 0\n");
+        }
+        return false;
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(0, materialAddress);
+    return true;
+}
+
+/// <summary>
 /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
@@ -778,15 +803,10 @@ void Object3d::Draw()
     // VBVを設定
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    // マテリアルCBV (必須)
-    if (!GetMaterialResource()) {
-        Logger::Debug("Object3d::Draw skipped: materialResource_ is null\n");
+    // マテリアルCBVをルートパラメータ0に設定する
+    if (!BindMaterialResource(cmdList, "Object3d::Draw")) {
         return;
     }
-    // GPU仮想アドレスを取得してルートパラメータ0にセット
-    auto matAddr = GetMaterialResource()->GetGPUVirtualAddress();
-    // ルートパラメータ0にマテリアルCBVをセット
-    cmdList->SetGraphicsRootConstantBufferView(0, matAddr);
 
     // 座標変換行列CBV (必須)
     if (!GetTransformationMatrixResource()) {
@@ -855,9 +875,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    if (GetMaterialResource()) {
-        cmdList->SetGraphicsRootConstantBufferView(0, GetMaterialResource()->GetGPUVirtualAddress());
-    } else {
+    if (!BindMaterialResource(cmdList, nullptr)) {
         return;
     }
 
