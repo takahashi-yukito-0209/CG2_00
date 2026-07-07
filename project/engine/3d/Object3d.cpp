@@ -234,6 +234,26 @@ void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
 }
 
 /// <summary>
+/// MTL ファイルを開けなかったことを警告ログへ出力する。
+/// </summary>
+void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std::string& filename)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
+/// MTL ファイルから取得した diffuse テクスチャパスをログへ出力する。
+/// </summary>
+void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "LoadMaterialTemplateFile: map_Kd -> %s\n", textureFilePath.c_str());
+    Logger::Debug(buffer);
+}
+
+/// <summary>
 /// Assimp で読み込んだシーンがモデルデータとして使用可能か確認する
 /// </summary>
 bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
@@ -546,9 +566,7 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
     // 2.ファイルを開く
     std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
     if (!file.is_open()) {
-        char buf[256];
-        sprintf_s(buf, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
-        Logger::Warn(buf);
+        LogMaterialTemplateOpenFailure(directoryPath, filename);
         return materialData;
     }
 
@@ -565,11 +583,7 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
             // 連結してファイルパスにする
             materialData.textureFilePath = directoryPath + "/" + textureFilename;
             // ログ出力: mtlで指定されたテクスチャパス
-            {
-                char buf[256];
-                sprintf_s(buf, "LoadMaterialTemplateFile: map_Kd -> %s\n", materialData.textureFilePath.c_str());
-                Logger::Debug(buf);
-            }
+            LogMaterialTemplateTexturePath(materialData.textureFilePath);
         }
     }
 
