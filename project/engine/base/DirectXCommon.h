@@ -142,6 +142,8 @@ public: // 公開メンバ関数
     static DirectXCommon* GetInstance();
 
     // --- RenderTarget (offscreen) 管理 ---
+    // DirectXCommonはオフスクリーンRTの実体、Descriptor、SRV割り当てを管理する。
+    // 利用側はRenderTargetラッパーを通して Begin/End/Resize/Finalize を行う。
 
     /// <summary>
     /// 指定したサイズとフォーマットでオフスクリーンのレンダーターゲットを作成し、管理リストに追加する
