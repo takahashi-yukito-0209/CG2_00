@@ -48,6 +48,18 @@ constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期
 constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
+constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
+constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
+constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
+constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
+constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
+constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
+constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
+constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
+constexpr const char* kHitParticleGroupName = "Hit"; // ヒット演出パーティクルグループ名
+constexpr const char* kRingParticleGroupName = "Ring"; // リング演出パーティクルグループ名
+constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱演出パーティクルグループ名
 }
 
 /// <summary>
@@ -69,20 +81,20 @@ void PlayScene::InitializeParticleObjects()
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
-    particlePlane_->SetTexture("circle.png");
+    particlePlane_->SetTexture(kCircleTextureName);
     particlePlane_->SetEnableLighting(false);
 
     particleRing_ = std::make_unique<Object3d>();
     particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particleRing_->SetMesh(PrimitiveFactory::CreateRing(kParticleRingOuterRadius, kParticleRingInnerRadius));
-    particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetTexture(kGradationLineTextureName);
     particleRing_->SetEnableLighting(false);
     particleRing_->SetUseAlphaCutoutSampler(true);
 
     particleCylinder_ = std::make_unique<Object3d>();
     particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(kParticleCylinderRadius, kParticleCylinderHeight, kParticleCylinderSubdivision));
-    particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetTexture(kGradationLineTextureName);
     particleCylinder_->SetEnableLighting(false);
     particleCylinder_->SetUseAlphaCutoutSampler(true);
 }
@@ -99,16 +111,16 @@ void PlayScene::InitializeParticleManager()
 
     particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
     particleManager->SetParticlePlane(particlePlane_.get());
-    particleManager->CreateParticleGroup("Circle", "circle.png");
-    particleManager->CreateParticleGroup("Checker", "uvChecker.png");
-    particleManager->CreateParticleGroup("Ball", "monsterBall.png");
-    particleManager->CreateParticleGroup("Hit", "circle2.png");
-    particleManager->CreateParticleGroup("Ring", "gradationLine.png");
-    particleManager->CreateParticleGroup("Cylinder", "gradationLine.png");
-    particleManager->SetParticleObject("Hit", particlePlane_.get());
-    particleManager->SetParticleObject("Ring", particleRing_.get());
-    particleManager->SetParticleObject("Cylinder", particleCylinder_.get());
-    particleManager->SetGroupBillboard("Cylinder", false);
+    particleManager->CreateParticleGroup(kCircleParticleGroupName, kCircleTextureName);
+    particleManager->CreateParticleGroup(kCheckerParticleGroupName, kUvCheckerTextureName);
+    particleManager->CreateParticleGroup(kBallParticleGroupName, kMonsterBallTextureName);
+    particleManager->CreateParticleGroup(kHitParticleGroupName, kCircleFlashTextureName);
+    particleManager->CreateParticleGroup(kRingParticleGroupName, kGradationLineTextureName);
+    particleManager->CreateParticleGroup(kCylinderParticleGroupName, kGradationLineTextureName);
+    particleManager->SetParticleObject(kHitParticleGroupName, particlePlane_.get());
+    particleManager->SetParticleObject(kRingParticleGroupName, particleRing_.get());
+    particleManager->SetParticleObject(kCylinderParticleGroupName, particleCylinder_.get());
+    particleManager->SetGroupBillboard(kCylinderParticleGroupName, false);
 }
 
 /// <summary>
@@ -116,7 +128,7 @@ void PlayScene::InitializeParticleManager()
 /// </summary>
 void PlayScene::InitializeHitParticleEmitter()
 {
-    pmEmitter_.groupName = "Hit";
+    pmEmitter_.groupName = kHitParticleGroupName;
     pmEmitter_.transform.translate = kEmitterDefaultPosition;
     pmEmitter_.count = kHitEmitterParticleCount;
     pmEmitter_.frequency = kEmitterDefaultFrequency;
@@ -129,7 +141,7 @@ void PlayScene::InitializeHitParticleEmitter()
 /// </summary>
 void PlayScene::InitializeRingParticleEmitter()
 {
-    ringEmitter_.groupName = "Ring";
+    ringEmitter_.groupName = kRingParticleGroupName;
     ringEmitter_.transform.translate = kEmitterDefaultPosition;
     ringEmitter_.count = kSingleEffectEmitterCount;
     ringEmitter_.frequency = kEmitterDefaultFrequency;
@@ -142,7 +154,7 @@ void PlayScene::InitializeRingParticleEmitter()
 /// </summary>
 void PlayScene::InitializeCylinderParticleEmitter()
 {
-    cylinderEmitter_.groupName = "Cylinder";
+    cylinderEmitter_.groupName = kCylinderParticleGroupName;
     cylinderEmitter_.transform.translate = kEmitterDefaultPosition;
     cylinderEmitter_.count = kSingleEffectEmitterCount;
     cylinderEmitter_.frequency = kEmitterDefaultFrequency;
@@ -179,7 +191,7 @@ void PlayScene::InitializeTemporalEffectSprites()
         auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
         afterimageSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
@@ -193,7 +205,7 @@ void PlayScene::InitializeTemporalEffectSprites()
         auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
         particleSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         particleSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         particleSprite->SetSize(kTemporalSpriteDefaultSize);
@@ -210,7 +222,7 @@ void PlayScene::InitializeTemporalEffectSprites()
         auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
         afterimageSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
         afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
@@ -222,7 +234,7 @@ void PlayScene::InitializeTemporalEffectSprites()
     timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
     timeReversalConvergenceSprite_->Initialize(
         ctx_.spriteCommon,
-        "circle2.png",
+        kCircleFlashTextureName,
         ctx_.imguiManager);
     timeReversalConvergenceSprite_->SetAnchorPoint(kCenteredSpriteAnchor);
     timeReversalConvergenceSprite_->SetSize(kTemporalSpriteDefaultSize);
@@ -274,8 +286,8 @@ void PlayScene::InitializePostProcessTargets()
     finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
 
     if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("noise0.png");
-        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
+        ctx_.textureManager->LoadTexture(kDissolveMaskTextureName);
+        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex(kDissolveMaskTextureName);
     }
 
     postProcess_.Initialize(directXCommon);
@@ -353,10 +365,10 @@ void PlayScene::LoadSceneTextures()
         return;
     }
 
-    ctx_.textureManager->LoadTexture("uvChecker.png");
-    ctx_.textureManager->LoadTexture("monsterBall.png");
-    ctx_.textureManager->LoadTexture("circle.png");
-    ctx_.textureManager->LoadTexture("gradationLine.png");
+    ctx_.textureManager->LoadTexture(kUvCheckerTextureName);
+    ctx_.textureManager->LoadTexture(kMonsterBallTextureName);
+    ctx_.textureManager->LoadTexture(kCircleTextureName);
+    ctx_.textureManager->LoadTexture(kGradationLineTextureName);
     ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
 }
 
