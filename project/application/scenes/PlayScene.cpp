@@ -464,33 +464,61 @@ void PlayScene::Update(float dt)
     postProcess_.SetDistortionCenter(postEffectCenter);
 
     // パーティクルエミッターの更新とマネージャーの更新
-    const float particleDeltaTime = (temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f || IsTimeStopped()) ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
-    pmEmitter_.Update(particleDeltaTime);
-    ringEmitter_.Update(particleDeltaTime);
-    cylinderEmitter_.Update(particleDeltaTime);
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Update(particleDeltaTime);
-    }
+    UpdateParticleSystems(dt);
 
-    // オブジェクトの更新
-    for (auto& o : objects3d_) {
-        if (o) {
-            if (ctx_.camera) {
-                o->Update(ctx_.camera->GetViewMatrix(), ctx_.camera->GetProjectionMatrix());
-            }
-        }
-    }
+    UpdateSceneObjects();
 
-    // スプライトの更新
-    for (auto& s : sprites_) {
-        if (s)
-            s->Update();
-    }
+    UpdateDemoSprites();
 
     UpdateAfterimageSprites();
     UpdateTimeReversalSprites();
 }
 
+/// <summary>
+/// パーティクルエミッターとParticleManagerを更新する。
+/// </summary>
+void PlayScene::UpdateParticleSystems(float deltaTime)
+{
+    const float particleDeltaTime = (temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f || IsTimeStopped()) ? 0.0f : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
+    pmEmitter_.Update(particleDeltaTime);
+    ringEmitter_.Update(particleDeltaTime);
+    cylinderEmitter_.Update(particleDeltaTime);
+
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を更新する管理クラス
+    if (particleManager) {
+        particleManager->Update(particleDeltaTime);
+    }
+}
+
+/// <summary>
+/// シーン内の3Dオブジェクトを更新する。
+/// </summary>
+void PlayScene::UpdateSceneObjects()
+{
+    if (!ctx_.camera) {
+        return;
+    }
+
+    const Matrix4x4 viewMatrix = ctx_.camera->GetViewMatrix(); // 3Dオブジェクト更新に使用するビュー行列
+    const Matrix4x4 projectionMatrix = ctx_.camera->GetProjectionMatrix(); // 3Dオブジェクト更新に使用する射影行列
+    for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
+        if (object3d) {
+            object3d->Update(viewMatrix, projectionMatrix);
+        }
+    }
+}
+
+/// <summary>
+/// 確認用スプライトを更新する。
+/// </summary>
+void PlayScene::UpdateDemoSprites()
+{
+    for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
+        if (sprite) {
+            sprite->Update();
+        }
+    }
+}
 /// <summary>
 /// 描画処理を行う
 /// </summary>
@@ -708,7 +736,7 @@ void PlayScene::DrawObject3dAtIndex(size_t objectIndex)
 /// </summary>
 void PlayScene::DrawAllObjects3d()
 {
-    for (auto& object3d : objects3d_) {
+    for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
         if (object3d) {
             object3d->Draw();
         }
@@ -808,7 +836,7 @@ void PlayScene::DrawSprites()
 
     if (selectedDrawType == -1 || selectedDrawType == 2 || selectedDrawType == 7) {
         ctx_.spriteCommon->SetCommonDrawSetting();
-        for (auto& sprite : sprites_) {
+        for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
             if (sprite) {
                 sprite->Draw();
             }

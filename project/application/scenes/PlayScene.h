@@ -218,6 +218,21 @@ private:
     void StopCameraShake();
 
     /// <summary>
+    /// パーティクルエミッターとParticleManagerを更新する。
+    /// </summary>
+    void UpdateParticleSystems(float deltaTime);
+
+    /// <summary>
+    /// シーン内の3Dオブジェクトを更新する。
+    /// </summary>
+    void UpdateSceneObjects();
+
+    /// <summary>
+    /// 確認用スプライトを更新する。
+    /// </summary>
+    void UpdateDemoSprites();
+
+    /// <summary>
     /// パーティクル描画用オブジェクトを初期化する
     /// </summary>
     void InitializeParticleObjects();
