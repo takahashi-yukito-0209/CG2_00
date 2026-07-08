@@ -609,72 +609,108 @@ void PlayScene::DrawSceneContent()
 }
 
 /// <summary>
-/// 3Dオブジェクトとパーティクルを描画する
+/// 指定した番号の3Dオブジェクトを描画する。
+/// </summary>
+void PlayScene::DrawObject3dAtIndex(size_t objectIndex)
+{
+    if (objects3d_.size() <= objectIndex || !objects3d_[objectIndex]) {
+        return;
+    }
+
+    objects3d_[objectIndex]->Draw();
+}
+
+/// <summary>
+/// すべての3Dオブジェクトを描画する。
+/// </summary>
+void PlayScene::DrawAllObjects3d()
+{
+    for (auto& object3d : objects3d_) {
+        if (object3d) {
+            object3d->Draw();
+        }
+    }
+}
+
+/// <summary>
+/// 選択中の描画種別に対応する3Dオブジェクトを描画する。
+/// </summary>
+void PlayScene::DrawSelectedObjects3d(int selectedDrawType)
+{
+    switch (selectedDrawType) {
+    case 0:
+        DrawObject3dAtIndex(0);
+        break;
+    case 3:
+        DrawObject3dAtIndex(1);
+        break;
+    case 4:
+        DrawObject3dAtIndex(3);
+        break;
+    case 5:
+        DrawObject3dAtIndex(2);
+        break;
+    case 6:
+        DrawObject3dAtIndex(4);
+        DrawObject3dAtIndex(5);
+        DrawObject3dAtIndex(6);
+        break;
+    default:
+        break;
+    }
+}
+
+/// <summary>
+/// パーティクルを描画する必要があるか判定する。
+/// </summary>
+bool PlayScene::ShouldDrawParticles(int selectedDrawType) const
+{
+    return selectedDrawType == -1
+        || selectedDrawType == 1
+        || selectedDrawType == 7
+        || IsAnyEffectPlaying();
+}
+
+/// <summary>
+/// 必要な場合だけパーティクルを描画する。
+/// </summary>
+void PlayScene::DrawParticlesIfNeeded(int selectedDrawType)
+{
+    if (!ShouldDrawParticles(selectedDrawType)) {
+        return;
+    }
+
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス
+    if (!particleManager) {
+        return;
+    }
+
+    particleManager->Draw();
+}
+
+/// <summary>
+/// 3D空間とパーティクルを描画する。
 /// </summary>
 void PlayScene::DrawWorldAndParticles()
 {
-    // シーン側でも Game の選択モードに応じて個別描画できるようにする
-    int sel = ctx_.selectedDrawType;
+    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
 
-    // Draw SkyBox first so it appears behind other geometry (depth disabled in its PSO)
     if (skybox_ && ctx_.camera) {
         skybox_->Draw(ctx_.camera);
     }
 
-    // オブジェクト系の描画（Model, Bunny, Fence, Checker, Sphere, All）
-    if (ctx_.object3dCommon) {
-
-        // モデル全体描画（All）または個別モデル描画
-        if (sel == -1 || sel == 7) {
-            ctx_.object3dCommon->SetCommonDrawSetting();
-            for (auto& o : objects3d_) {
-                if (o)
-                    o->Draw();
-            }
-        } else {
-            // 個別オブジェクト描画マッピング
-            ctx_.object3dCommon->SetCommonDrawSetting();
-            switch (sel) {
-            case 0: // Model -> index 0
-                if (objects3d_.size() > 0 && objects3d_[0])
-                    objects3d_[0]->Draw();
-                break;
-            case 3: // Bunny -> index 1
-                if (objects3d_.size() > 1 && objects3d_[1])
-                    objects3d_[1]->Draw();
-                break;
-            case 4: // Fence -> index 3
-                if (objects3d_.size() > 3 && objects3d_[3])
-                    objects3d_[3]->Draw();
-                break;
-            case 5: // Checker -> index 2
-                if (objects3d_.size() > 2 && objects3d_[2])
-                    objects3d_[2]->Draw();
-                break;
-            case 6: // Sphere -> index 4 and 5 if present
-                if (objects3d_.size() > 4 && objects3d_[4])
-                    objects3d_[4]->Draw();
-                if (objects3d_.size() > 5 && objects3d_[5])
-                    objects3d_[5]->Draw();
-                if (objects3d_.size() > 6 && objects3d_[6])
-                    objects3d_[6]->Draw();
-                break;
-            default:
-                // その他（Particle/Sprite）はここでは扱わない
-                break;
-            }
-        }
-
-        // エフェクト再生中は描画モードに関係なくパーティクルを描画する
-        const bool shouldDrawParticles = sel == -1 || sel == 1 || sel == 7 || IsAnyEffectPlaying(); // パーティクル描画を行うか
-        if (shouldDrawParticles) {
-            if (ParticleManager::GetInstance()) {
-                ParticleManager::GetInstance()->Draw();
-            }
-        }
+    if (!ctx_.object3dCommon) {
+        return;
     }
 
-    // スプライト描画は Sprite モードまたは All のときに行う
+    ctx_.object3dCommon->SetCommonDrawSetting();
+    if (selectedDrawType == -1 || selectedDrawType == 7) {
+        DrawAllObjects3d();
+    } else {
+        DrawSelectedObjects3d(selectedDrawType);
+    }
+
+    DrawParticlesIfNeeded(selectedDrawType);
 }
 
 /// <summary>

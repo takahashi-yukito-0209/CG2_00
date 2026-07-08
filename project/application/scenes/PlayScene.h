@@ -310,6 +310,32 @@ private:
     /// シーン内の3D要素を描画する
     /// </summary>
     void DrawSceneContent();
+
+    /// <summary>
+    /// 指定した番号の3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawObject3dAtIndex(size_t objectIndex);
+
+    /// <summary>
+    /// すべての3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawAllObjects3d();
+
+    /// <summary>
+    /// 選択中の描画種別に対応する3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawSelectedObjects3d(int selectedDrawType);
+
+    /// <summary>
+    /// パーティクルを描画する必要があるか判定する。
+    /// </summary>
+    bool ShouldDrawParticles(int selectedDrawType) const;
+
+    /// <summary>
+    /// 必要な場合だけパーティクルを描画する。
+    /// </summary>
+    void DrawParticlesIfNeeded(int selectedDrawType);
+
     /// <summary>
     /// 3D空間とパーティクルを描画する
     /// </summary>
