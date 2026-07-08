@@ -35,6 +35,51 @@ void TimeStopEffect::ResetSettings()
 }
 
 /// <summary>
+/// 時間停止開始時の歪みポストエフェクトを設定する。
+/// </summary>
+void TimeStopEffect::ConfigureDistortionPostProcess(PostProcess& postProcess, const Vector2& effectCenter)
+{
+    postProcess.SetDistortionCenter(effectCenter);
+    postProcess.SetRadialBlurCenter(effectCenter);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetEffectType(PostEffectType::Distortion);
+}
+
+/// <summary>
+/// 開始フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyEnteringPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionStrength(-settings_.distortionStrength * progress);
+    postProcess.SetDistortionProgress(progress);
+}
+
+/// <summary>
+/// 停止フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyStoppedPostProcess(PostProcess& postProcess, bool resetDistortionStrength)
+{
+    postProcess.SetEffectType(PostEffectType::Grayscale);
+    if (resetDistortionStrength) {
+        postProcess.SetDistortionStrength(0.0f);
+    }
+}
+
+/// <summary>
+/// 再開フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyReleasingPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - progress));
+    postProcess.SetDistortionProgress(progress);
+}
+
+/// <summary>
 /// 時間停止エフェクトを開始する
 /// </summary>
 void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter)
@@ -43,13 +88,7 @@ void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter
     phase_ = TimeStopPhase::Entering;
     phaseTime_ = 0.0f;
 
-    postProcess.SetDistortionCenter(effectCenter);
-    postProcess.SetRadialBlurCenter(effectCenter);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
-    postProcess.SetEffectType(PostEffectType::Distortion);
+    ConfigureDistortionPostProcess(postProcess, effectCenter);
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 開始演出を発生させるパーティクル管理
     if (particleManager) {
@@ -76,15 +115,12 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     case TimeStopPhase::Entering: {
         const float duration = (std::max)(settings_.enterDuration, kMinimumEffectDuration); // 開始演出時間
         const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 開始演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionStrength(-settings_.distortionStrength * progress);
-        postProcess.SetDistortionProgress(progress);
+        ApplyEnteringPostProcess(postProcess, progress);
 
         if (progress >= 1.0f) {
             phase_ = TimeStopPhase::Stopped;
             phaseTime_ = 0.0f;
-            postProcess.SetEffectType(PostEffectType::Grayscale);
-            postProcess.SetDistortionStrength(0.0f);
+            ApplyStoppedPostProcess(postProcess, true);
             if (particleManager) {
                 particleManager->EmitRingEffect(
                     "Ring",
@@ -96,7 +132,7 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     }
 
     case TimeStopPhase::Stopped:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyStoppedPostProcess(postProcess, false);
         if (phaseTime_ >= settings_.stopDuration) {
             phase_ = TimeStopPhase::Releasing;
             phaseTime_ = 0.0f;
@@ -116,9 +152,7 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     case TimeStopPhase::Releasing: {
         const float duration = (std::max)(settings_.releaseDuration, kMinimumEffectDuration); // 再開演出時間
         const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 再開演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - progress));
-        postProcess.SetDistortionProgress(progress);
+        ApplyReleasingPostProcess(postProcess, progress);
 
         if (progress >= 1.0f) {
             phase_ = TimeStopPhase::Idle;

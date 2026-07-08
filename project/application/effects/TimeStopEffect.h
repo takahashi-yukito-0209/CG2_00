@@ -79,6 +79,26 @@ private:
     /// </summary>
     const char* GetPhaseName() const;
 
+    /// <summary>
+    /// 時間停止開始時の歪みポストエフェクトを設定する。
+    /// </summary>
+    void ConfigureDistortionPostProcess(MyEngine::PostProcess& postProcess, const Math::Vector2& effectCenter);
+
+    /// <summary>
+    /// 開始フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyEnteringPostProcess(MyEngine::PostProcess& postProcess, float progress);
+
+    /// <summary>
+    /// 停止フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyStoppedPostProcess(MyEngine::PostProcess& postProcess, bool resetDistortionStrength);
+
+    /// <summary>
+    /// 再開フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyReleasingPostProcess(MyEngine::PostProcess& postProcess, float progress);
+
     TimeStopPhase phase_ = TimeStopPhase::Idle; // 現在の時間停止状態
     float phaseTime_ = 0.0f; // 現在フェーズでの経過時間
     TimeStopSettings settings_; // 時間停止の調整値
