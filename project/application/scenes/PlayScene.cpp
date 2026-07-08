@@ -385,43 +385,81 @@ void PlayScene::Initialize(const SceneContext& ctx)
 }
 
 /// <summary>
-/// 終了処理を行う
+/// ポストプロセス用リソースを解放する。
 /// </summary>
-void PlayScene::Finalize()
+void PlayScene::FinalizePostProcessTargets()
 {
-    std::cout << "PlayScene Finalize\n";
-    StopCameraShake();
-
     sceneRenderTarget_.Finalize();
     postProcessIntermediateTarget_.Finalize();
     finalRenderTarget_.Finalize();
     dissolveMaskSrvIndex_ = UINT32_MAX;
     postProcess_.Finalize();
+}
 
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Finalize();
+/// <summary>
+/// ParticleManagerを解放する。
+/// </summary>
+void PlayScene::FinalizeParticleManager()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 解放対象のパーティクル管理
+    if (particleManager) {
+        particleManager->Finalize();
     }
+}
 
+/// <summary>
+/// シーンが保持している表示用オブジェクトを解放する。
+/// </summary>
+void PlayScene::ReleaseSceneObjects()
+{
     sprites_.clear();
     objects3d_.clear();
     temporalAfterimageSprites_.clear();
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
     timeReversalConvergenceSprite_.reset();
-    timeReversalEffect_.ResetState();
+}
 
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->SetParticlePlane(nullptr);
+/// <summary>
+/// パーティクル描画用オブジェクトを解放する。
+/// </summary>
+void PlayScene::ReleaseParticleObjects()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画オブジェクトの参照元
+    if (particleManager) {
+        particleManager->SetParticlePlane(nullptr);
     }
 
     particlePlane_.reset();
     particleRing_.reset();
     particleCylinder_.reset();
+}
+
+/// <summary>
+/// SkyBoxを解放する。
+/// </summary>
+void PlayScene::ReleaseSkyBox()
+{
     if (skybox_) {
         skybox_->Finalize();
         skybox_.reset();
     }
+}
 
+/// <summary>
+/// 終了処理を行う。
+/// </summary>
+void PlayScene::Finalize()
+{
+    std::cout << "PlayScene Finalize\n";
+    StopCameraShake();
+
+    FinalizePostProcessTargets();
+    FinalizeParticleManager();
+    ReleaseSceneObjects();
+    timeReversalEffect_.ResetState();
+    ReleaseParticleObjects();
+    ReleaseSkyBox();
     temporalRiftEffect_.ResetState(ctx_.camera);
     timeStopEffect_.ResetState();
     ctx_ = {};

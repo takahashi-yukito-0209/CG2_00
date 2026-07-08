@@ -238,6 +238,31 @@ private:
     void StopCameraShake();
 
     /// <summary>
+    /// ポストプロセス用リソースを解放する。
+    /// </summary>
+    void FinalizePostProcessTargets();
+
+    /// <summary>
+    /// ParticleManagerを解放する。
+    /// </summary>
+    void FinalizeParticleManager();
+
+    /// <summary>
+    /// シーンが保持している表示用オブジェクトを解放する。
+    /// </summary>
+    void ReleaseSceneObjects();
+
+    /// <summary>
+    /// パーティクル描画用オブジェクトを解放する。
+    /// </summary>
+    void ReleaseParticleObjects();
+
+    /// <summary>
+    /// SkyBoxを解放する。
+    /// </summary>
+    void ReleaseSkyBox();
+
+    /// <summary>
     /// パーティクルエミッターとParticleManagerを更新する。
     /// </summary>
     void UpdateParticleSystems(float deltaTime);
