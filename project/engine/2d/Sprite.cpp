@@ -27,6 +27,12 @@ constexpr float kImGuiTextureSizeMin = 1.0f; // テクスチャサイズの最�
 constexpr float kImGuiTextureSizeMax = 8192.0f; // テクスチャサイズの最大値
 constexpr size_t kLogBufferSize = 256; // ログメッセージ作成用バッファサイズ
 constexpr size_t kTexturePathInputBufferSize = 256; // ImGuiで入力するテクスチャパスの最大長
+constexpr uint32_t kSpriteIndexCount = 6; // スプライト描画に使用するインデックス数
+constexpr float kInitialSpriteVertexWidth = 640.0f; // 初期頂点配置で使用する横幅
+constexpr float kInitialSpriteVertexHeight = 360.0f; // 初期頂点配置で使用する高さ
+constexpr float kFallbackRenderSize = 1.0f; // 描画サイズが取得できない場合の最小値
+constexpr float kOrthographicNearZ = 0.0f; // スプライト用正射影のnear値
+constexpr float kOrthographicFarZ = 100.0f; // スプライト用正射影のfar値
 }
 /// <summary>
 /// スプライト描画に必要なリソースを生成し、初期テクスチャを設定する
@@ -60,25 +66,25 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         }
     }
 
-    vertexData_[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[0].position = { 0.0f, kInitialSpriteVertexHeight, 0.0f, 1.0f };
     vertexData_[0].texcoord = { 0.0f, 1.0f };
     vertexData_[0].normal = { 0.0f, 0.0f, -1.0f };
     vertexData_[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
     vertexData_[1].texcoord = { 0.0f, 0.0f };
     vertexData_[1].normal = { 0.0f, 0.0f, -1.0f };
-    vertexData_[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[2].position = { kInitialSpriteVertexWidth, kInitialSpriteVertexHeight, 0.0f, 1.0f };
     vertexData_[2].texcoord = { 1.0f, 1.0f };
     vertexData_[2].normal = { 0.0f, 0.0f, -1.0f };
-    vertexData_[3].position = { 640.0f, 0.0f, 0.0f, 1.0f };
+    vertexData_[3].position = { kInitialSpriteVertexWidth, 0.0f, 0.0f, 1.0f };
     vertexData_[3].texcoord = { 1.0f, 0.0f };
     vertexData_[3].normal = { 0.0f, 0.0f, -1.0f };
     // IndexResourceSpriteの生成
     // ローカル変数 -> メンバ変数への代入
-    indexResource_ = dxCommon->CreateBufferResource(sizeof(uint32_t) * 6);
+    indexResource_ = dxCommon->CreateBufferResource(sizeof(uint32_t) * kSpriteIndexCount);
 
     // IndexBufferViewの生成
     indexBufferView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
-    indexBufferView_.SizeInBytes = sizeof(uint32_t) * 6;
+    indexBufferView_.SizeInBytes = sizeof(uint32_t) * kSpriteIndexCount;
     indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
 
     // インデックスリソースにデータを書き込むポインタを取得し、メンバ変数に代入
@@ -283,19 +289,19 @@ void Sprite::Update()
 
     // View/Projection行列の作成（2Dスプライト用）
     Matrix4x4 viewMatrix = MathUtil::MakeIdentity4x4();
-    float renderWidth = 1.0f; // 現在の描画幅
-    float renderHeight = 1.0f; // 現在の描画高さ
+    float renderWidth = kFallbackRenderSize; // 現在の描画幅
+    float renderHeight = kFallbackRenderSize; // 現在の描画高さ
     if (spriteCommon_ && spriteCommon_->GetDxCommon()) {
         renderWidth = spriteCommon_->GetDxCommon()->GetRenderWidth();
         renderHeight = spriteCommon_->GetDxCommon()->GetRenderHeight();
     }
     if (renderWidth <= 0.0f) {
-        renderWidth = 1.0f;
+        renderWidth = kFallbackRenderSize;
     }
     if (renderHeight <= 0.0f) {
-        renderHeight = 1.0f;
+        renderHeight = kFallbackRenderSize;
     }
-    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, renderWidth, renderHeight, 0.0f, 100.0f);
+    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, renderWidth, renderHeight, kOrthographicNearZ, kOrthographicFarZ);
 
     // WVP行列の計算と定数バッファへの書き込み
     Matrix4x4 wvpMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
@@ -396,8 +402,8 @@ void Sprite::Draw()
         Logger::Debug("Warning: Sprite::Draw has invalid textureIndex_, skipping SRV bind\n");
     }
 
-    // 描画！(インデックス数6)
-    dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    // インデックスバッファに設定した要素数で描画する
+    dxCommon->GetCommandList()->DrawIndexedInstanced(kSpriteIndexCount, 1, 0, 0, 0);
 }
 
 /// <summary>
