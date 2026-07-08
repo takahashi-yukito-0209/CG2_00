@@ -58,6 +58,51 @@ void TimeReversalEffect::ResetSettings()
 }
 
 /// <summary>
+/// 時間逆行開始時のポストエフェクト状態を設定する。
+/// </summary>
+void TimeReversalEffect::ConfigureInitialPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Copy);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+}
+
+/// <summary>
+/// 巻き戻しフェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeReversalEffect::ApplyRewindingPostProcess(PostProcess& postProcess, float rewindRate)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
+    postProcess.SetDistortionProgress(rewindRate);
+}
+
+/// <summary>
+/// 収束フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeReversalEffect::ApplyConvergingPostProcess(PostProcess& postProcess, float convergenceRate)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(-settings_.distortionStrength * (1.0f - convergenceRate));
+    postProcess.SetDistortionProgress(convergenceRate);
+}
+
+/// <summary>
+/// 再生前のポストエフェクト状態へ戻す。
+/// </summary>
+void TimeReversalEffect::RestorePreviousPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(previousPostEffect_);
+    postProcess.SetDistortionStrength(0.0f);
+}
+
+/// <summary>
 /// 時間逆行エフェクトを開始する
 /// </summary>
 void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCount)
@@ -99,11 +144,7 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
         particles_.push_back(particle);
     }
 
-    postProcess.SetEffectType(PostEffectType::Copy);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
+    ConfigureInitialPostProcess(postProcess);
 }
 
 /// <summary>
@@ -140,11 +181,7 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
             };
             particle.elapsedTime = particle.lifeTime * (1.0f - rewindRate);
         }
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
-        postProcess.SetDistortionProgress(rewindRate);
+        ApplyRewindingPostProcess(postProcess, rewindRate);
         ApplyTransform(objects3d);
 
         if (rewindRate >= 1.0f) {
@@ -157,18 +194,13 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     if (phase_ == TimeReversalPhase::Converging) {
         const float convergenceDuration = (std::max)(settings_.convergenceDuration, kMinimumEffectDuration); // 収束演出時間
         const float convergenceRate = (std::clamp)(phaseTime_ / convergenceDuration, 0.0f, 1.0f); // 収束演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(-settings_.distortionStrength * (1.0f - convergenceRate));
-        postProcess.SetDistortionProgress(convergenceRate);
+        ApplyConvergingPostProcess(postProcess, convergenceRate);
 
         if (convergenceRate >= 1.0f) {
             phase_ = TimeReversalPhase::Idle;
             phaseTime_ = 0.0f;
             transformHistory_.clear();
-            postProcess.SetEffectType(previousPostEffect_);
-            postProcess.SetDistortionStrength(0.0f);
+            RestorePreviousPostProcess(postProcess);
         }
         return;
     }
