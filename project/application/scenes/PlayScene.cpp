@@ -66,47 +66,85 @@ void PlayScene::InitializeParticleObjects()
 }
 
 /// <summary>
-/// パーティクル管理とエミッターを初期化する
+/// ParticleManagerに使用するグループと描画オブジェクトを登録する。
 /// </summary>
-void PlayScene::InitializeParticleEffects()
+void PlayScene::InitializeParticleManager()
 {
-    // パーティクルマネージャー化とグループの作成
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
-        ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
-        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
-        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
-        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を管理するインスタンス
+    if (!particleManager) {
+        return;
     }
 
-    // パーティクルエミッターと発射
+    particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
+    particleManager->SetParticlePlane(particlePlane_.get());
+    particleManager->CreateParticleGroup("Circle", "circle.png");
+    particleManager->CreateParticleGroup("Checker", "uvChecker.png");
+    particleManager->CreateParticleGroup("Ball", "monsterBall.png");
+    particleManager->CreateParticleGroup("Hit", "circle2.png");
+    particleManager->CreateParticleGroup("Ring", "gradationLine.png");
+    particleManager->CreateParticleGroup("Cylinder", "gradationLine.png");
+    particleManager->SetParticleObject("Hit", particlePlane_.get());
+    particleManager->SetParticleObject("Ring", particleRing_.get());
+    particleManager->SetParticleObject("Cylinder", particleCylinder_.get());
+    particleManager->SetGroupBillboard("Cylinder", false);
+}
+
+/// <summary>
+/// ヒット演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeHitParticleEmitter()
+{
     pmEmitter_.groupName = "Hit";
     pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     pmEmitter_.count = 8;
     pmEmitter_.frequency = 1.0f;
     pmEmitter_.useHitEffect = true;
     pmEmitter_.Emit();
+}
 
+/// <summary>
+/// リング演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeRingParticleEmitter()
+{
     ringEmitter_.groupName = "Ring";
     ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     ringEmitter_.count = 1;
     ringEmitter_.frequency = 1.0f;
     ringEmitter_.useRingEffect = true;
     ringEmitter_.Emit();
+}
 
+/// <summary>
+/// 円柱演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeCylinderParticleEmitter()
+{
     cylinderEmitter_.groupName = "Cylinder";
     cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     cylinderEmitter_.count = 1;
     cylinderEmitter_.frequency = 1.0f;
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
+}
+
+/// <summary>
+/// パーティクルエミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeParticleEmitters()
+{
+    InitializeHitParticleEmitter();
+    InitializeRingParticleEmitter();
+    InitializeCylinderParticleEmitter();
+}
+
+/// <summary>
+/// パーティクル管理とエミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeParticleEffects()
+{
+    InitializeParticleManager();
+    InitializeParticleEmitters();
 }
 
 /// <summary>

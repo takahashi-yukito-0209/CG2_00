@@ -228,6 +228,31 @@ private:
     void InitializeParticleEffects();
 
     /// <summary>
+    /// ParticleManagerに使用するグループと描画オブジェクトを登録する。
+    /// </summary>
+    void InitializeParticleManager();
+
+    /// <summary>
+    /// ヒット演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeHitParticleEmitter();
+
+    /// <summary>
+    /// リング演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeRingParticleEmitter();
+
+    /// <summary>
+    /// 円柱演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeCylinderParticleEmitter();
+
+    /// <summary>
+    /// パーティクルエミッターを初期化する。
+    /// </summary>
+    void InitializeParticleEmitters();
+
+    /// <summary>
     /// 時間演出用スプライトを初期化する
     /// </summary>
     void InitializeTemporalEffectSprites();
