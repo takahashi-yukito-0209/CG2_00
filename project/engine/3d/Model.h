@@ -72,6 +72,11 @@ private: // メンバ変数
     D3D12_VERTEX_BUFFER_VIEW ResolveVertexBufferView(const Object3d* owner) const;
 
     /// <summary>
+    /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
+    /// </summary>
+    void InitializeModelResources();
+
+    /// <summary>
     /// モデル頂点データから頂点バッファを作成する
     /// </summary>
     void CreateVertexBuffer();

@@ -408,6 +408,22 @@ void Model::CreateVertexBuffer()
 }
 
 /// <summary>
+/// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
+/// </summary>
+void Model::InitializeModelResources()
+{
+    auto textureManager = TextureManager::GetInstance(); // テクスチャ管理
+    EnsureFallbackModelTextureLoaded(textureManager);
+
+    CreateVertexBuffer();
+
+    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデルマテリアルのSRV番号
+    if (materialTextureIndex != UINT32_MAX) {
+        textureIndex_ = materialTextureIndex;
+    }
+}
+
+/// <summary>
 /// モデルの初期化
 /// </summary>
 void Model::Initialize(ModelCommon* modelCommon)
@@ -418,16 +434,5 @@ void Model::Initialize(ModelCommon* modelCommon)
         return;
     }
 
-    // テクスチャ管理の取得とfallbackテクスチャの読み込み
-    auto texMgr = TextureManager::GetInstance(); // テクスチャ管理
-    EnsureFallbackModelTextureLoaded(texMgr);
-
-    // 頂点バッファの生成
-    CreateVertexBuffer();
-
-    // モデルマテリアルテクスチャの解決
-    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(texMgr, modelData_.material); // モデルマテリアルのSRV番号
-    if (materialTextureIndex != UINT32_MAX) {
-        textureIndex_ = materialTextureIndex;
-    }
+    InitializeModelResources();
 }
