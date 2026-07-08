@@ -100,6 +100,26 @@ public:
 
 private:
     /// <summary>
+    /// 指定された設定でレンダーターゲットを作成できるか確認する。
+    /// </summary>
+    static bool CanCreateRenderTarget(DirectXCommon* directXCommon, const RenderTargetDesc& desc);
+
+    /// <summary>
+    /// DirectXCommonにレンダーターゲット実体の作成を依頼する。
+    /// </summary>
+    bool CreateRenderTargetResource(DirectXCommon* directXCommon, const RenderTargetDesc& desc);
+
+    /// <summary>
+    /// 必要な場合だけカラーSRVを作成する。
+    /// </summary>
+    bool CreateColorSrvIfNeeded();
+
+    /// <summary>
+    /// 必要な場合だけ深度SRVを作成する。
+    /// </summary>
+    bool CreateDepthSrvIfNeeded();
+
+    /// <summary>
     /// 別インスタンスから所有権を移動する。
     /// </summary>
     void MoveFrom(RenderTarget& other) noexcept;
