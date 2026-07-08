@@ -72,6 +72,72 @@ void TemporalRiftEffect::ResetSettings()
 }
 
 /// <summary>
+/// 演出開始時のポストエフェクト状態を設定する。
+/// </summary>
+void TemporalRiftEffect::ConfigureInitialPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetRadialBlurCenter(screenUv_);
+    postProcess.SetDistortionCenter(screenUv_);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetRadialBlurWidth(settings_.compressBlurStart);
+    postProcess.SetRadialBlurSampleCount(static_cast<uint32_t>(settings_.blurSampleCount));
+}
+
+/// <summary>
+/// 圧縮フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyCompressPostProcess(PostProcess& postProcess, float progress, float blurWidth)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.compressDistortionStrength * progress);
+    postProcess.SetDistortionProgress(progress);
+    postProcess.SetRadialBlurWidth(blurWidth);
+}
+
+/// <summary>
+/// 停止表示フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyGrayscalePostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Grayscale);
+}
+
+/// <summary>
+/// 破砕フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyBurstPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.burstDistortionStrength * (1.0f - progress));
+    postProcess.SetDistortionProgress(progress);
+    postProcess.SetRadialBlurWidth(settings_.burstBlurStrength * (1.0f - progress));
+}
+
+/// <summary>
+/// 復帰フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyRecoverPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Copy);
+}
+
+/// <summary>
+/// 再生前のポストエフェクト状態へ戻す。
+/// </summary>
+void TemporalRiftEffect::RestorePreviousPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(previousPostEffect_);
+}
+
+/// <summary>
 /// 時空破砕エフェクトを開始する
 /// </summary>
 void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique_ptr<Object3d>>& objects3d, const Vector2& screenUv)
@@ -91,15 +157,7 @@ void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique
     phase_ = TemporalRiftPhase::Compress;
     phaseTime_ = 0.0f;
     cracksEmitted_ = 0;
-    postProcess.SetEffectType(PostEffectType::Distortion);
-    postProcess.SetRadialBlurCenter(screenUv_);
-    postProcess.SetDistortionCenter(screenUv_);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
-    postProcess.SetRadialBlurWidth(settings_.compressBlurStart);
-    postProcess.SetRadialBlurSampleCount(static_cast<uint32_t>(settings_.blurSampleCount));
+    ConfigureInitialPostProcess(postProcess);
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 圧縮予兆を生成するパーティクル管理
     if (particleManager) {
@@ -123,12 +181,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
         const float progress = (std::min)(phaseTime_ / compressDuration, 1.0f); // 圧縮演出の進行度
         const float blurWidth = settings_.compressBlurStart
             + (settings_.compressBlurEnd - settings_.compressBlurStart) * progress; // 現在のブラー幅
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.compressDistortionStrength * progress);
-        postProcess.SetDistortionProgress(progress);
-        postProcess.SetRadialBlurWidth(blurWidth);
+        ApplyCompressPostProcess(postProcess, progress, blurWidth);
 
         if (phaseTime_ >= compressDuration) {
             phase_ = TemporalRiftPhase::Freeze;
@@ -138,7 +191,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     }
 
     case TemporalRiftPhase::Freeze:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyGrayscalePostProcess(postProcess);
         if (phaseTime_ >= settings_.freezeDuration) {
             phase_ = TemporalRiftPhase::Crack;
             phaseTime_ = 0.0f;
@@ -146,7 +199,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
         break;
 
     case TemporalRiftPhase::Crack:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyGrayscalePostProcess(postProcess);
         EmitSpaceCracks();
         if (phaseTime_ >= settings_.crackDuration) {
             phase_ = TemporalRiftPhase::Burst;
@@ -159,12 +212,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     case TemporalRiftPhase::Burst: {
         const float burstDuration = (std::max)(settings_.burstDuration, kMinimumEffectDuration); // 破砕の衝撃を見せる時間
         const float progress = (std::min)(phaseTime_ / burstDuration, 1.0f); // 破砕演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.burstDistortionStrength * (1.0f - progress));
-        postProcess.SetDistortionProgress(progress);
-        postProcess.SetRadialBlurWidth(settings_.burstBlurStrength * (1.0f - progress));
+        ApplyBurstPostProcess(postProcess, progress);
 
         if (phaseTime_ >= burstDuration) {
             phase_ = TemporalRiftPhase::Recover;
@@ -174,10 +222,10 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     }
 
     case TemporalRiftPhase::Recover:
-        postProcess.SetEffectType(PostEffectType::Copy);
+        ApplyRecoverPostProcess(postProcess);
         if (phaseTime_ >= settings_.recoverDuration) {
             phase_ = TemporalRiftPhase::Idle;
-            postProcess.SetEffectType(previousPostEffect_);
+            RestorePreviousPostProcess(postProcess);
             phaseTime_ = 0.0f;
         }
         break;

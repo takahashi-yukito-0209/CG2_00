@@ -164,9 +164,39 @@ private:
     const char* GetPhaseName() const;
 
     /// <summary>
-    /// 破砕時のヒットストップとカメラシェイクを開始する
+    /// 破砕時のヒットストップとカメラシェイクを開始する。
     /// </summary>
     void StartImpact(MyEngine::Camera* camera);
+
+    /// <summary>
+    /// 演出開始時のポストエフェクト状態を設定する。
+    /// </summary>
+    void ConfigureInitialPostProcess(MyEngine::PostProcess& postProcess);
+
+    /// <summary>
+    /// 圧縮フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyCompressPostProcess(MyEngine::PostProcess& postProcess, float progress, float blurWidth);
+
+    /// <summary>
+    /// 停止表示フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyGrayscalePostProcess(MyEngine::PostProcess& postProcess);
+
+    /// <summary>
+    /// 破砕フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyBurstPostProcess(MyEngine::PostProcess& postProcess, float progress);
+
+    /// <summary>
+    /// 復帰フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyRecoverPostProcess(MyEngine::PostProcess& postProcess);
+
+    /// <summary>
+    /// 再生前のポストエフェクト状態へ戻す。
+    /// </summary>
+    void RestorePreviousPostProcess(MyEngine::PostProcess& postProcess);
 
     /// <summary>
     /// 空間亀裂を進行度に合わせて段階的に発生する
