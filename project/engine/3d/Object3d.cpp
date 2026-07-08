@@ -433,9 +433,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     // 引数で受け取ってメンバ変数に記録する
     this->object3dCommon_ = object3dCommon;
 
-    // Transformの初期化
-    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
+    InitializeTransformState();
 
     // マテリアル用リソース作成
     CreateMaterialResource();
@@ -458,6 +456,15 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     camera_ = object3dCommon->GetDefaultCamera();
 
     (void)imguiManager;
+}
+
+/// <summary>
+/// Transform の初期値を設定する。
+/// </summary>
+void Object3d::InitializeTransformState()
+{
+    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
+    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
 }
 
 /// <summary>

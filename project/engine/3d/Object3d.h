@@ -365,6 +365,11 @@ public: // メンバ関数
 
 private: // 内部関数
     // 初期化補助
+    /// <summary>
+    /// Transform の初期値を設定する。
+    /// </summary>
+    void InitializeTransformState();
+
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
     /// <summary>
     /// マテリアルの初期値をCPU側状態へ設定する。
