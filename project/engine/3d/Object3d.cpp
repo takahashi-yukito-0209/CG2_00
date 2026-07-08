@@ -609,6 +609,14 @@ void Object3d::CreateMaterialResource()
         materialResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterialData_[frameIndex]));
     }
 
+    InitializeMaterialState();
+}
+
+/// <summary>
+/// マテリアルの初期値をCPU側状態へ設定する。
+/// </summary>
+void Object3d::InitializeMaterialState()
+{
     materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
     materialData_->enableLighting = 1;
     materialData_->uvTransform = MathUtil::MakeIdentity4x4();

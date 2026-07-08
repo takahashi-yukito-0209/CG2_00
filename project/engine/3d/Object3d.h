@@ -10,8 +10,8 @@
 #include <vector>
 #include <wrl.h>
 
-#include "ModelCommon.h"
 #include "DirectXCommon.h"
+#include "ModelCommon.h"
 
 namespace MyEngine {
 
@@ -366,6 +366,10 @@ public: // メンバ関数
 private: // 内部関数
     // 初期化補助
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
+    /// <summary>
+    /// マテリアルの初期値をCPU側状態へ設定する。
+    /// </summary>
+    void InitializeMaterialState();
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
     /// <summary>
     /// Object3d側で明示指定されたテクスチャがあるか確認する
