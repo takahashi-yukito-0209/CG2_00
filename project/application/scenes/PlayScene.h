@@ -238,6 +238,16 @@ private:
     void InitializePostProcessTargets();
 
     /// <summary>
+    /// シーンで使用するテクスチャを読み込む。
+    /// </summary>
+    void LoadSceneTextures();
+
+    /// <summary>
+    /// 環境マップ用のSkyBoxを初期化する。
+    /// </summary>
+    void InitializeSkyBox();
+
+    /// <summary>
     /// 確認用スプライトを初期化する。
     /// </summary>
     void InitializeDemoSprites();

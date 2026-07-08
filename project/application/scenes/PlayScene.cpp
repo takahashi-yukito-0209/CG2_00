@@ -293,33 +293,51 @@ void PlayScene::InitializeSceneObjects()
     }
 }
 
+/// <summary>
+/// シーンで使用するテクスチャを読み込む。
+/// </summary>
+void PlayScene::LoadSceneTextures()
+{
+    if (!ctx_.textureManager) {
+        return;
+    }
+
+    ctx_.textureManager->LoadTexture("uvChecker.png");
+    ctx_.textureManager->LoadTexture("monsterBall.png");
+    ctx_.textureManager->LoadTexture("circle.png");
+    ctx_.textureManager->LoadTexture("gradationLine.png");
+    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+    ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
+}
+
+/// <summary>
+/// 環境マップ用のSkyBoxを初期化する。
+/// </summary>
+void PlayScene::InitializeSkyBox()
+{
+    if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
+        return;
+    }
+
+    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+    const uint32_t environmentMapSrvIndex = ctx_.textureManager->GetSrvIndex(kEnvironmentMapTextureName); // 環境マップのSRV番号
+    if (environmentMapSrvIndex == UINT32_MAX) {
+        return;
+    }
+
+    skybox_ = std::make_unique<SkyBox>();
+    skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, environmentMapSrvIndex);
+    if (ctx_.object3dCommon) {
+        ctx_.object3dCommon->SetEnvironmentMapSrvIndex(environmentMapSrvIndex);
+    }
+}
+
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
 
-    // テクスチャのロード
-    if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("uvChecker.png");
-        ctx_.textureManager->LoadTexture("monsterBall.png");
-        ctx_.textureManager->LoadTexture("circle.png");
-        ctx_.textureManager->LoadTexture("gradationLine.png");
-        // 環境マップ用DDSを読み込む（確認用）
-        ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
-    }
-
-    // SkyBox 初期化（ロード済みの cubemap を使用）
-    if (ctx_.textureManager && ctx_.srvManager && ctx_.directXCommon) {
-        uint32_t srvIdx = ctx_.textureManager->GetSrvIndex("rostock_laage_airport_4k.dds");
-        if (srvIdx != UINT32_MAX) {
-            // 環境マップ用のDDSがロードされていれば、それを使用してSkyBoxを初期化
-            skybox_ = std::make_unique<SkyBox>();
-            skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, srvIdx);
-            if (ctx_.object3dCommon) {
-                ctx_.object3dCommon->SetEnvironmentMapSrvIndex(srvIdx);
-            }
-        }
-    }
-
+    LoadSceneTextures();
+    InitializeSkyBox();
     InitializeDemoSprites();
     InitializeSceneObjects();
     InitializeParticleObjects();
