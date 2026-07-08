@@ -168,6 +168,16 @@ private:
     void DrawTimeReversalParticles();
 
     /// <summary>
+    /// エフェクト選択と再生操作用のImGuiを描画する。
+    /// </summary>
+    void DrawEffectControllerImGui();
+
+    /// <summary>
+    /// 選択中エフェクトの詳細ImGuiを描画する。
+    /// </summary>
+    void DrawSelectedEffectImGui();
+
+    /// <summary>
     /// ImGuiで選択中のエフェクトを開始する
     /// </summary>
     void StartSelectedEffect();
