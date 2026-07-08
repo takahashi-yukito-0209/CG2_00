@@ -518,15 +518,22 @@ PlayScene::PostProcessDrawContext PlayScene::BuildPostProcessDrawContext()
     drawContext.sourceSrvIndex = sceneRenderTarget_.GetColorSrvIndex();
     drawContext.finalEffectType = postProcess_.GetEffectType();
 
+    ApplyPostProcessPrePasses(drawContext);
+    drawContext.useFinalRenderTarget = CanUseFinalRenderTarget();
+    return drawContext;
+}
+
+/// <summary>
+/// 最終描画前に必要なポストプロセスの前段パスを適用する。
+/// </summary>
+void PlayScene::ApplyPostProcessPrePasses(PostProcessDrawContext& drawContext)
+{
     ApplyTemporalPostProcessChain(drawContext.sourceSrvIndex, drawContext.finalEffectType);
 
     drawContext.useGaussianFilter = CanUseGaussianFilter(drawContext.finalEffectType);
     if (drawContext.useGaussianFilter) {
         ApplyGaussianFirstPass(drawContext.sourceSrvIndex);
     }
-
-    drawContext.useFinalRenderTarget = CanUseFinalRenderTarget();
-    return drawContext;
 }
 
 /// <summary>

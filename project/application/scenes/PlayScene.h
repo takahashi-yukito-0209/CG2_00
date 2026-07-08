@@ -277,6 +277,11 @@ private:
     PostProcessDrawContext BuildPostProcessDrawContext();
 
     /// <summary>
+    /// 最終描画前に必要なポストプロセスの前段パスを適用する。
+    /// </summary>
+    void ApplyPostProcessPrePasses(PostProcessDrawContext& drawContext);
+
+    /// <summary>
     /// Scene View用RTが必要な場合だけ描画先を切り替える
     /// </summary>
     void BeginSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
