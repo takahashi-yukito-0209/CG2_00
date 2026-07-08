@@ -292,6 +292,11 @@ private:
     void EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
 
     /// <summary>
+    /// 現在の描画先へポストプロセス結果とスプライトを描画する
+    /// </summary>
+    void DrawPostProcessOutputToCurrentTarget(const PostProcessDrawContext& drawContext);
+
+    /// <summary>
     /// 作成済みのポストプロセス状態に従って最終結果を描画する
     /// </summary>
     void DrawPostProcessResult(const PostProcessDrawContext& drawContext);

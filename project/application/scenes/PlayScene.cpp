@@ -561,18 +561,24 @@ void PlayScene::EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget)
 }
 
 /// <summary>
-/// 作成済みのポストプロセス状態に従って最終結果を描画する
+/// 現在の描画先へポストプロセス結果とスプライトを描画する
 /// </summary>
-void PlayScene::DrawPostProcessResult(const PostProcessDrawContext& drawContext)
+void PlayScene::DrawPostProcessOutputToCurrentTarget(const PostProcessDrawContext& drawContext)
 {
-    BeginSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
-
     DrawFinalPostProcessPass(
         drawContext.sourceSrvIndex,
         drawContext.finalEffectType,
         drawContext.useGaussianFilter);
     DrawSprites();
+}
 
+/// <summary>
+/// 作成済みのポストプロセス状態に従って最終結果を描画する
+/// </summary>
+void PlayScene::DrawPostProcessResult(const PostProcessDrawContext& drawContext)
+{
+    BeginSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
+    DrawPostProcessOutputToCurrentTarget(drawContext);
     EndSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
 }
 
