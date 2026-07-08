@@ -387,7 +387,22 @@ private: // 内部関数
     bool UsesLoadedModelMaterialTexture() const;
 
     /// <summary>
-    /// Object3d側の明示テクスチャまたはメッシュ用fallbackを割り当てる
+    /// Object3d側で明示指定されたテクスチャを割り当てる。
+    /// </summary>
+    bool AssignExplicitTextureOverride();
+
+    /// <summary>
+    /// Model側のマテリアルテクスチャを使う状態に設定する。
+    /// </summary>
+    void AssignLoadedModelMaterialTexture();
+
+    /// <summary>
+    /// 既定テクスチャをfallbackとして割り当てる。
+    /// </summary>
+    bool AssignFallbackTexture();
+
+    /// <summary>
+    /// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる。
     /// </summary>
     void AssignTexture();
 

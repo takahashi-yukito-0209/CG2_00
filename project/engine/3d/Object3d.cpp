@@ -735,35 +735,68 @@ bool Object3d::UsesLoadedModelMaterialTexture() const
 }
 
 /// <summary>
-/// Object3d側の明示テクスチャまたはメッシュ用fallbackを割り当てる
+/// Object3d側で明示指定されたテクスチャを割り当てる。
+/// </summary>
+bool Object3d::AssignExplicitTextureOverride()
+{
+    if (!HasExplicitTextureOverride()) {
+        return false;
+    }
+
+    std::string resolvedTexturePath; // 解決後のテクスチャパス
+    const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
+
+    modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
+    modelData_.material.textureIndex = textureIndex;
+
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
+    Logger::Debug(buffer);
+    return true;
+}
+
+/// <summary>
+/// Model側のマテリアルテクスチャを使う状態に設定する。
+/// </summary>
+void Object3d::AssignLoadedModelMaterialTexture()
+{
+    modelData_.material.textureIndex = UINT32_MAX;
+    Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
+}
+
+/// <summary>
+/// 既定テクスチャをfallbackとして割り当てる。
+/// </summary>
+bool Object3d::AssignFallbackTexture()
+{
+    modelData_.material.textureIndex = ResolveFallbackTextureIndex();
+    if (modelData_.material.textureIndex == UINT32_MAX) {
+        return false;
+    }
+
+    modelData_.material.textureFilePath = kDefaultObjectTexturePath;
+
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
+    Logger::Debug(buffer);
+    return true;
+}
+
+/// <summary>
+/// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる。
 /// </summary>
 void Object3d::AssignTexture()
 {
-    if (HasExplicitTextureOverride()) {
-        std::string resolvedTexturePath; // モデルまたは明示指定から解決したテクスチャパス
-        const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
-
-        modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
-        modelData_.material.textureIndex = textureIndex;
-
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
-        Logger::Debug(buffer);
+    if (AssignExplicitTextureOverride()) {
         return;
     }
 
     if (UsesLoadedModelMaterialTexture()) {
-        modelData_.material.textureIndex = UINT32_MAX;
-        Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
+        AssignLoadedModelMaterialTexture();
         return;
     }
-    modelData_.material.textureIndex = ResolveFallbackTextureIndex();
-    if (modelData_.material.textureIndex != UINT32_MAX) {
-        modelData_.material.textureFilePath = kDefaultObjectTexturePath;
 
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
-        Logger::Debug(buffer);
+    if (AssignFallbackTexture()) {
         return;
     }
 
