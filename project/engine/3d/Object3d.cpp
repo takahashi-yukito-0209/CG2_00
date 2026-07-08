@@ -1130,9 +1130,25 @@ void Object3d::UpdateFrameResources()
     }
 
     const uint32_t frameIndex = object3dCommon_->GetDxCommon()->GetCurrentFrameIndex(); // 転送先フレーム番号
+    UploadMaterialFrameResource(frameIndex);
+    UploadTransformationMatrixFrameResource(frameIndex);
+}
+
+/// <summary>
+/// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+/// </summary>
+void Object3d::UploadMaterialFrameResource(uint32_t frameIndex)
+{
     if (mappedMaterialData_[frameIndex]) {
         *mappedMaterialData_[frameIndex] = materialState_;
     }
+}
+
+/// <summary>
+/// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+/// </summary>
+void Object3d::UploadTransformationMatrixFrameResource(uint32_t frameIndex)
+{
     if (mappedTransformationMatrixData_[frameIndex]) {
         *mappedTransformationMatrixData_[frameIndex] = transformationMatrixState_;
     }

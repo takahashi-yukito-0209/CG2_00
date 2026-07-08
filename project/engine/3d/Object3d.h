@@ -450,6 +450,16 @@ private: // 内部関数
     /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources(); // モデルデータ割り当て
+
+    /// <summary>
+    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+    /// </summary>
+    void UploadMaterialFrameResource(uint32_t frameIndex);
+
+    /// <summary>
+    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+    /// </summary>
+    void UploadTransformationMatrixFrameResource(uint32_t frameIndex);
 };
 
 } // namespace MyEngine
