@@ -26,6 +26,13 @@ using namespace Math;
 
 namespace {
 constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
+constexpr Vector2 kTemporalSpriteDefaultSize = { 1.0f, 1.0f }; // 時間演出スプライトの初期サイズ
+constexpr Vector4 kHiddenSpriteColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示状態にするスプライト色
+constexpr int kMaximumTemporalAfterimageCount = 8; // 時空破砕で保持できる最大残像数
+constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+constexpr std::array<float, 4> kSceneRenderTargetClearColor = { 0.53f, 0.71f, 0.82f, 1.0f }; // シーン描画RTのクリア色
+constexpr std::array<float, 4> kTransparentRenderTargetClearColor = { 0.0f, 0.0f, 0.0f, 1.0f }; // 中間RTと最終RTのクリア色
 }
 
 /// <summary>
@@ -152,22 +159,20 @@ void PlayScene::InitializeParticleEffects()
 /// </summary>
 void PlayScene::InitializeTemporalEffectSprites()
 {
-    constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
-    temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
-    for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
+    temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
+    for (int afterimageIndex = 0; afterimageIndex < kMaximumTemporalAfterimageCount; ++afterimageIndex) {
         auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
         afterimageSprite->Initialize(
             ctx_.spriteCommon,
             "circle2.png",
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
+        afterimageSprite->SetColor(kHiddenSpriteColor);
         afterimageSprite->Update();
         temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
-    constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
     timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
     for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
         auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
@@ -176,14 +181,13 @@ void PlayScene::InitializeTemporalEffectSprites()
             "circle2.png",
             ctx_.imguiManager);
         particleSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        particleSprite->SetSize({ 1.0f, 1.0f });
-        particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        particleSprite->SetSize(kTemporalSpriteDefaultSize);
+        particleSprite->SetColor(kHiddenSpriteColor);
         particleSprite->Update();
         timeReversalSprites_.push_back(std::move(particleSprite));
     }
 
-    constexpr int kMaximumRewindAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
-    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumRewindAfterimageCount; // 確保する残像スプライト総数
+    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount; // 確保する残像スプライト総数
     timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
     for (int afterimageIndex = 0;
         afterimageIndex < maximumRewindAfterimageSpriteCount;
@@ -194,8 +198,8 @@ void PlayScene::InitializeTemporalEffectSprites()
             "circle2.png",
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
+        afterimageSprite->SetColor(kHiddenSpriteColor);
         afterimageSprite->Update();
         timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
@@ -206,8 +210,8 @@ void PlayScene::InitializeTemporalEffectSprites()
         "circle2.png",
         ctx_.imguiManager);
     timeReversalConvergenceSprite_->SetAnchorPoint(kCenteredSpriteAnchor);
-    timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
-    timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    timeReversalConvergenceSprite_->SetSize(kTemporalSpriteDefaultSize);
+    timeReversalConvergenceSprite_->SetColor(kHiddenSpriteColor);
     timeReversalConvergenceSprite_->Update();
 }
 
@@ -229,7 +233,7 @@ void PlayScene::InitializePostProcessTargets()
     sceneRenderTargetDesc.createColorSrv = true;
     sceneRenderTargetDesc.createDepthSrv = true;
     sceneRenderTargetDesc.resizeWithWindow = true;
-    sceneRenderTargetDesc.clearColor = { 0.53f, 0.71f, 0.82f, 1.0f };
+    sceneRenderTargetDesc.clearColor = kSceneRenderTargetClearColor;
     sceneRenderTarget_.Initialize(directXCommon, sceneRenderTargetDesc);
 
     RenderTargetDesc intermediateTargetDesc {}; // ポストプロセス中間RT設定
@@ -240,7 +244,7 @@ void PlayScene::InitializePostProcessTargets()
     intermediateTargetDesc.createColorSrv = true;
     intermediateTargetDesc.createDepthSrv = false;
     intermediateTargetDesc.resizeWithWindow = true;
-    intermediateTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    intermediateTargetDesc.clearColor = kTransparentRenderTargetClearColor;
     postProcessIntermediateTarget_.Initialize(directXCommon, intermediateTargetDesc);
 
     RenderTargetDesc finalRenderTargetDesc {}; // Scene View表示用RT設定
@@ -251,7 +255,7 @@ void PlayScene::InitializePostProcessTargets()
     finalRenderTargetDesc.createColorSrv = true;
     finalRenderTargetDesc.createDepthSrv = false;
     finalRenderTargetDesc.resizeWithWindow = true;
-    finalRenderTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    finalRenderTargetDesc.clearColor = kTransparentRenderTargetClearColor;
     finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
 
     if (ctx_.textureManager) {
