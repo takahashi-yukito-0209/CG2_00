@@ -48,27 +48,60 @@ uint32_t ResolveModelMaterialTextureIndex(TextureManager* textureManager, const 
 }
 
 /// <summary>
-/// 描画時に使用するテクスチャ番号を決定する
+/// Object3d側で明示指定されたテクスチャ番号を取得する。
 /// </summary>
-uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
+uint32_t Model::ResolveOwnerTextureOverrideIndex(const Object3d* owner) const
 {
-    if (owner) {
-        const auto& ownerMaterial = owner->GetModelData().material; // Object3dで明示指定されたマテリアル
-        const bool hasOwnerTextureOverride = !ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX; // Object3d側の明示テクスチャが有効か
-        if (hasOwnerTextureOverride) {
-            return ownerMaterial.textureIndex;
-        }
+    if (!owner) {
+        return UINT32_MAX;
     }
 
-    if (textureIndex_ != UINT32_MAX) {
-        return textureIndex_;
+    const auto& ownerMaterial = owner->GetModelData().material; // Object3dで明示指定されたマテリアル
+    const bool hasOwnerTextureOverride = !ownerMaterial.textureFilePath.empty() && ownerMaterial.textureIndex != UINT32_MAX; // Object3d側の明示テクスチャが有効か
+    if (!hasOwnerTextureOverride) {
+        return UINT32_MAX;
     }
 
+    return ownerMaterial.textureIndex;
+}
+
+/// <summary>
+/// Model自身が保持しているテクスチャ番号を取得する。
+/// </summary>
+uint32_t Model::ResolveModelTextureIndex() const
+{
+    return textureIndex_;
+}
+
+/// <summary>
+/// fallbackテクスチャのSRV番号を取得する。
+/// </summary>
+uint32_t Model::ResolveFallbackTextureIndex() const
+{
     auto textureManager = TextureManager::GetInstance(); // fallbackテクスチャの取得元
     if (!textureManager) {
         return UINT32_MAX;
     }
+
     return textureManager->GetSrvIndex(kFallbackModelTexturePath);
+}
+
+/// <summary>
+/// 描画時に使用するテクスチャ番号を決定する。
+/// </summary>
+uint32_t Model::ResolveTextureIndex(const Object3d* owner) const
+{
+    const uint32_t ownerTextureIndex = ResolveOwnerTextureOverrideIndex(owner); // Object3d側の明示テクスチャSRV番号
+    if (ownerTextureIndex != UINT32_MAX) {
+        return ownerTextureIndex;
+    }
+
+    const uint32_t modelTextureIndex = ResolveModelTextureIndex(); // Model側のマテリアルテクスチャSRV番号
+    if (modelTextureIndex != UINT32_MAX) {
+        return modelTextureIndex;
+    }
+
+    return ResolveFallbackTextureIndex();
 }
 
 /// <summary>
