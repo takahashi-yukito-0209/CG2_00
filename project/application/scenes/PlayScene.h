@@ -178,6 +178,26 @@ private:
     bool IsAnyEffectPlaying() const;
 
     /// <summary>
+    /// エフェクト開始入力を処理する。
+    /// </summary>
+    void HandleEffectStartInput();
+
+    /// <summary>
+    /// 時間演出とポストプロセスの状態を更新する。
+    /// </summary>
+    void UpdateTemporalEffects(float deltaTime);
+
+    /// <summary>
+    /// 再生中エフェクトに対応するポストエフェクト中心を計算する。
+    /// </summary>
+    Math::Vector2 CalculatePostEffectCenter() const;
+
+    /// <summary>
+    /// ポストエフェクトの中心座標を更新する。
+    /// </summary>
+    void UpdatePostEffectCenters();
+
+    /// <summary>
     /// 時空破砕エフェクトの状態を更新する
     /// </summary>
     void UpdateTemporalRiftEffect(float deltaTime);

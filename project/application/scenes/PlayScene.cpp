@@ -428,46 +428,76 @@ void PlayScene::Finalize()
 }
 
 /// <summary>
-/// 更新処理
+/// エフェクト開始入力を処理する。
 /// </summary>
-void PlayScene::Update(float dt)
+void PlayScene::HandleEffectStartInput()
 {
-    InputManager* inputManager = InputManager::GetInstance(); // 時空破砕の発動入力を取得する入力管理
+    InputManager* inputManager = InputManager::GetInstance(); // エフェクト開始入力を取得する入力管理
     if (inputManager
         && inputManager->IsKeyJustPressed(DIK_R)
         && !IsAnyEffectPlaying()) {
         StartSelectedEffect();
     }
+}
 
-    const float effectDeltaTime = temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f ? 0.0f : dt; // ヒットストップを反映した演出時間
+/// <summary>
+/// 時間演出とポストプロセスの状態を更新する。
+/// </summary>
+void PlayScene::UpdateTemporalEffects(float deltaTime)
+{
+    const float effectDeltaTime = temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f ? 0.0f : deltaTime; // ヒットストップを反映した演出時間
     UpdateTimeReversalTransformHistory();
     UpdateTemporalRiftEffect(effectDeltaTime);
     UpdateTimeReversalEffect(effectDeltaTime);
-    UpdateTimeStopEffect(dt);
-    UpdateImpactResponse(dt);
+    UpdateTimeStopEffect(deltaTime);
+    UpdateImpactResponse(deltaTime);
     if (temporalRiftEffect_.GetHitStopRemainingTime() <= 0.0f) {
         UpdateTemporalAfterimages();
     }
-    postProcess_.Update(dt);
+    postProcess_.Update(deltaTime);
+}
 
-    // カメラの更新
+/// <summary>
+/// 再生中エフェクトに対応するポストエフェクト中心を計算する。
+/// </summary>
+Vector2 PlayScene::CalculatePostEffectCenter() const
+{
+    if (timeStopEffect_.IsPlaying()) {
+        return CalculateWorldScreenUv(timeStopEffect_.GetEffectPosition());
+    }
+    if (timeReversalEffect_.IsPlaying()) {
+        return CalculateWorldScreenUv(timeReversalEffect_.GetEffectPosition());
+    }
+
+    return temporalRiftEffect_.GetScreenUv();
+}
+
+/// <summary>
+/// ポストエフェクトの中心座標を更新する。
+/// </summary>
+void PlayScene::UpdatePostEffectCenters()
+{
+    temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
+    const Vector2 postEffectCenter = CalculatePostEffectCenter(); // 再生中エフェクトに対応する画面中心
+    postProcess_.SetRadialBlurCenter(postEffectCenter);
+    postProcess_.SetDistortionCenter(postEffectCenter);
+}
+
+/// <summary>
+/// 更新処理
+/// </summary>
+void PlayScene::Update(float dt)
+{
+    HandleEffectStartInput();
+    UpdateTemporalEffects(dt);
+
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
-    temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
-    const Vector2 postEffectCenter = timeStopEffect_.IsPlaying()
-        ? CalculateWorldScreenUv(timeStopEffect_.GetEffectPosition())
-        : (timeReversalEffect_.IsPlaying()
-                  ? CalculateWorldScreenUv(timeReversalEffect_.GetEffectPosition())
-                  : temporalRiftEffect_.GetScreenUv()); // 再生中のエフェクトに対応する画面中心
-    postProcess_.SetRadialBlurCenter(postEffectCenter);
-    postProcess_.SetDistortionCenter(postEffectCenter);
+    UpdatePostEffectCenters();
 
-    // パーティクルエミッターの更新とマネージャーの更新
     UpdateParticleSystems(dt);
-
     UpdateSceneObjects();
-
     UpdateDemoSprites();
 
     UpdateAfterimageSprites();
