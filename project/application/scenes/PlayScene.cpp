@@ -33,6 +33,21 @@ constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持�
 constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
 constexpr std::array<float, 4> kSceneRenderTargetClearColor = { 0.53f, 0.71f, 0.82f, 1.0f }; // シーン描画RTのクリア色
 constexpr std::array<float, 4> kTransparentRenderTargetClearColor = { 0.0f, 0.0f, 0.0f, 1.0f }; // 中間RTと最終RTのクリア色
+constexpr float kParticleRingOuterRadius = 1.0f; // パーティクルリングの外径
+constexpr float kParticleRingInnerRadius = 0.2f; // パーティクルリングの内径
+constexpr float kParticleCylinderRadius = 1.0f; // パーティクル円柱の半径
+constexpr float kParticleCylinderHeight = 1.0f; // パーティクル円柱の高さ
+constexpr float kParticleCylinderSubdivision = 1.0f; // パーティクル円柱の分割数
+constexpr Vector3 kEmitterDefaultPosition = { 0.0f, 0.0f, 0.0f }; // エミッターの初期位置
+constexpr int kHitEmitterParticleCount = 8; // ヒット演出で発生させる粒子数
+constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる粒子数
+constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
+constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
+constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
+constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
+constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
+constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 }
 
 /// <summary>
@@ -59,14 +74,14 @@ void PlayScene::InitializeParticleObjects()
 
     particleRing_ = std::make_unique<Object3d>();
     particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
+    particleRing_->SetMesh(PrimitiveFactory::CreateRing(kParticleRingOuterRadius, kParticleRingInnerRadius));
     particleRing_->SetTexture("gradationLine.png");
     particleRing_->SetEnableLighting(false);
     particleRing_->SetUseAlphaCutoutSampler(true);
 
     particleCylinder_ = std::make_unique<Object3d>();
     particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
+    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(kParticleCylinderRadius, kParticleCylinderHeight, kParticleCylinderSubdivision));
     particleCylinder_->SetTexture("gradationLine.png");
     particleCylinder_->SetEnableLighting(false);
     particleCylinder_->SetUseAlphaCutoutSampler(true);
@@ -102,9 +117,9 @@ void PlayScene::InitializeParticleManager()
 void PlayScene::InitializeHitParticleEmitter()
 {
     pmEmitter_.groupName = "Hit";
-    pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    pmEmitter_.count = 8;
-    pmEmitter_.frequency = 1.0f;
+    pmEmitter_.transform.translate = kEmitterDefaultPosition;
+    pmEmitter_.count = kHitEmitterParticleCount;
+    pmEmitter_.frequency = kEmitterDefaultFrequency;
     pmEmitter_.useHitEffect = true;
     pmEmitter_.Emit();
 }
@@ -115,9 +130,9 @@ void PlayScene::InitializeHitParticleEmitter()
 void PlayScene::InitializeRingParticleEmitter()
 {
     ringEmitter_.groupName = "Ring";
-    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    ringEmitter_.count = 1;
-    ringEmitter_.frequency = 1.0f;
+    ringEmitter_.transform.translate = kEmitterDefaultPosition;
+    ringEmitter_.count = kSingleEffectEmitterCount;
+    ringEmitter_.frequency = kEmitterDefaultFrequency;
     ringEmitter_.useRingEffect = true;
     ringEmitter_.Emit();
 }
@@ -128,9 +143,9 @@ void PlayScene::InitializeRingParticleEmitter()
 void PlayScene::InitializeCylinderParticleEmitter()
 {
     cylinderEmitter_.groupName = "Cylinder";
-    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    cylinderEmitter_.count = 1;
-    cylinderEmitter_.frequency = 1.0f;
+    cylinderEmitter_.transform.translate = kEmitterDefaultPosition;
+    cylinderEmitter_.count = kSingleEffectEmitterCount;
+    cylinderEmitter_.frequency = kEmitterDefaultFrequency;
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
 }
@@ -272,13 +287,12 @@ void PlayScene::InitializePostProcessTargets()
 /// </summary>
 void PlayScene::InitializeDemoSprites()
 {
-    constexpr uint32_t kSpriteCount = 5; // 作成する確認用スプライト数
     const std::array<std::string, 2> spriteNames = {
         "uvChecker",
         "monsterBall"
     }; // 確認用スプライトに使用するテクスチャ名
 
-    for (uint32_t spriteIndex = 0; spriteIndex < kSpriteCount; ++spriteIndex) {
+    for (uint32_t spriteIndex = 0; spriteIndex < kDemoSpriteCount; ++spriteIndex) {
         auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
         const std::string textureName = spriteNames[(spriteIndex / 2) == 0 ? 0 : 1] + ".png"; // 使用するテクスチャ名
         sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
@@ -298,10 +312,8 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
 
     const bool isCubeModel = modelFileName.find("cube") != std::string::npos || modelFileName.find("Cube") != std::string::npos; // 環境マップ確認用モデルか
     if (isCubeModel) {
-        constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
-        const Vector3 kCubeTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
         object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
-        object3d.SetTranslate(kCubeTranslate);
+        object3d.SetTranslate(kCubeInitialTranslate);
     }
 }
 
@@ -327,11 +339,8 @@ void PlayScene::InitializeSceneObjects()
         ApplySceneObjectInitialSettings(*object3d, modelFileName);
         objects3d_.push_back(std::move(object3d));
     }
-
-    constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
     if (objects3d_.size() > kTerrainObjectIndex && objects3d_[kTerrainObjectIndex]) {
-        const Vector3 kTerrainScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
-        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainScale);
+        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainInitialScale);
     }
 }
 
@@ -348,7 +357,6 @@ void PlayScene::LoadSceneTextures()
     ctx_.textureManager->LoadTexture("monsterBall.png");
     ctx_.textureManager->LoadTexture("circle.png");
     ctx_.textureManager->LoadTexture("gradationLine.png");
-    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
     ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
 }
 
@@ -360,8 +368,6 @@ void PlayScene::InitializeSkyBox()
     if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
         return;
     }
-
-    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
     const uint32_t environmentMapSrvIndex = ctx_.textureManager->GetSrvIndex(kEnvironmentMapTextureName); // 環境マップのSRV番号
     if (environmentMapSrvIndex == UINT32_MAX) {
         return;
