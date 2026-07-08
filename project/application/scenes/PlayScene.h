@@ -168,6 +168,16 @@ private:
     void DrawTimeReversalParticles();
 
     /// <summary>
+    /// エフェクト選択と再生操作用のImGuiを描画する。
+    /// </summary>
+    void DrawEffectControllerImGui();
+
+    /// <summary>
+    /// 選択中エフェクトの詳細ImGuiを描画する。
+    /// </summary>
+    void DrawSelectedEffectImGui();
+
+    /// <summary>
     /// ImGuiで選択中のエフェクトを開始する
     /// </summary>
     void StartSelectedEffect();
@@ -176,6 +186,26 @@ private:
     /// いずれかのエフェクトが再生中か確認する
     /// </summary>
     bool IsAnyEffectPlaying() const;
+
+    /// <summary>
+    /// エフェクト開始入力を処理する。
+    /// </summary>
+    void HandleEffectStartInput();
+
+    /// <summary>
+    /// 時間演出とポストプロセスの状態を更新する。
+    /// </summary>
+    void UpdateTemporalEffects(float deltaTime);
+
+    /// <summary>
+    /// 再生中エフェクトに対応するポストエフェクト中心を計算する。
+    /// </summary>
+    Math::Vector2 CalculatePostEffectCenter() const;
+
+    /// <summary>
+    /// ポストエフェクトの中心座標を更新する。
+    /// </summary>
+    void UpdatePostEffectCenters();
 
     /// <summary>
     /// 時空破砕エフェクトの状態を更新する
@@ -218,6 +248,46 @@ private:
     void StopCameraShake();
 
     /// <summary>
+    /// ポストプロセス用リソースを解放する。
+    /// </summary>
+    void FinalizePostProcessTargets();
+
+    /// <summary>
+    /// ParticleManagerを解放する。
+    /// </summary>
+    void FinalizeParticleManager();
+
+    /// <summary>
+    /// シーンが保持している表示用オブジェクトを解放する。
+    /// </summary>
+    void ReleaseSceneObjects();
+
+    /// <summary>
+    /// パーティクル描画用オブジェクトを解放する。
+    /// </summary>
+    void ReleaseParticleObjects();
+
+    /// <summary>
+    /// SkyBoxを解放する。
+    /// </summary>
+    void ReleaseSkyBox();
+
+    /// <summary>
+    /// パーティクルエミッターとParticleManagerを更新する。
+    /// </summary>
+    void UpdateParticleSystems(float deltaTime);
+
+    /// <summary>
+    /// シーン内の3Dオブジェクトを更新する。
+    /// </summary>
+    void UpdateSceneObjects();
+
+    /// <summary>
+    /// 確認用スプライトを更新する。
+    /// </summary>
+    void UpdateDemoSprites();
+
+    /// <summary>
     /// パーティクル描画用オブジェクトを初期化する
     /// </summary>
     void InitializeParticleObjects();
@@ -228,6 +298,31 @@ private:
     void InitializeParticleEffects();
 
     /// <summary>
+    /// ParticleManagerに使用するグループと描画オブジェクトを登録する。
+    /// </summary>
+    void InitializeParticleManager();
+
+    /// <summary>
+    /// ヒット演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeHitParticleEmitter();
+
+    /// <summary>
+    /// リング演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeRingParticleEmitter();
+
+    /// <summary>
+    /// 円柱演出用エミッターを初期化する。
+    /// </summary>
+    void InitializeCylinderParticleEmitter();
+
+    /// <summary>
+    /// パーティクルエミッターを初期化する。
+    /// </summary>
+    void InitializeParticleEmitters();
+
+    /// <summary>
     /// 時間演出用スプライトを初期化する
     /// </summary>
     void InitializeTemporalEffectSprites();
@@ -236,6 +331,16 @@ private:
     /// ポストプロセス用レンダーターゲットを初期化する
     /// </summary>
     void InitializePostProcessTargets();
+
+    /// <summary>
+    /// シーンで使用するテクスチャを読み込む。
+    /// </summary>
+    void LoadSceneTextures();
+
+    /// <summary>
+    /// 環境マップ用のSkyBoxを初期化する。
+    /// </summary>
+    void InitializeSkyBox();
 
     /// <summary>
     /// 確認用スプライトを初期化する。

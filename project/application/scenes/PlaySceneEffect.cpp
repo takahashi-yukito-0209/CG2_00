@@ -54,13 +54,11 @@ Vector2 CalculateScreenUvFromWorldPosition(const Camera* camera, const Vector3& 
 }
 
 /// <summary>
-/// エフェクト操作用のImGuiを描画する
+/// エフェクト選択と再生操作用のImGuiを描画する。
 /// </summary>
-void PlayScene::DrawImGui()
+void PlayScene::DrawEffectControllerImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Begin("Effect Controller");
-
     int selectedEffectIndex = static_cast<int>(selectedEffectType_); // ImGuiで編集中のエフェクト番号
     const char* effectNames[] = {
         "Dimensional Shatter",
@@ -86,23 +84,38 @@ void PlayScene::DrawImGui()
         ImGui::Button("Play Effect");
         ImGui::EndDisabled();
     }
+#endif
+}
 
-    if (selectedEffectType_ == EffectType::DimensionalShatter) {
+/// <summary>
+/// 選択中エフェクトの詳細ImGuiを描画する。
+/// </summary>
+void PlayScene::DrawSelectedEffectImGui()
+{
+#ifdef USE_IMGUI
+    switch (selectedEffectType_) {
+    case EffectType::DimensionalShatter:
         temporalRiftEffect_.DrawImGui();
-        ImGui::End();
-        return;
-    }
-    if (selectedEffectType_ == EffectType::TimeStop) {
+        break;
+    case EffectType::TimeStop:
         timeStopEffect_.DrawImGui();
-        ImGui::End();
-        return;
-    }
-    if (selectedEffectType_ == EffectType::TimeReversal) {
+        break;
+    case EffectType::TimeReversal:
         timeReversalEffect_.DrawImGui();
-        ImGui::End();
-        return;
+        break;
     }
+#endif
+}
 
+/// <summary>
+/// エフェクト操作用のImGuiを描画する。
+/// </summary>
+void PlayScene::DrawImGui()
+{
+#ifdef USE_IMGUI
+    ImGui::Begin("Effect Controller");
+    DrawEffectControllerImGui();
+    DrawSelectedEffectImGui();
     ImGui::End();
 #endif
 }

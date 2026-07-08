@@ -31,6 +31,29 @@ bool RenderTarget::Initialize(DirectXCommon* directXCommon, const RenderTargetDe
 {
     Finalize();
 
+    if (!CanCreateRenderTarget(directXCommon, desc)) {
+        return false;
+    }
+    if (!CreateRenderTargetResource(directXCommon, desc)) {
+        return false;
+    }
+    if (!CreateColorSrvIfNeeded()) {
+        Finalize();
+        return false;
+    }
+    if (!CreateDepthSrvIfNeeded()) {
+        Finalize();
+        return false;
+    }
+
+    return true;
+}
+
+/// <summary>
+/// 指定された設定でレンダーターゲットを作成できるか確認する。
+/// </summary>
+bool RenderTarget::CanCreateRenderTarget(DirectXCommon* directXCommon, const RenderTargetDesc& desc)
+{
     if (!directXCommon || desc.width == 0 || desc.height == 0 || desc.format == DXGI_FORMAT_UNKNOWN) {
         return false;
     }
@@ -38,6 +61,14 @@ bool RenderTarget::Initialize(DirectXCommon* directXCommon, const RenderTargetDe
         return false;
     }
 
+    return true;
+}
+
+/// <summary>
+/// DirectXCommonにレンダーターゲット実体の作成を依頼する。
+/// </summary>
+bool RenderTarget::CreateRenderTargetResource(DirectXCommon* directXCommon, const RenderTargetDesc& desc)
+{
     directXCommon_ = directXCommon;
     desc_ = desc;
     handle_ = directXCommon_->CreateRenderTarget(
@@ -53,23 +84,33 @@ bool RenderTarget::Initialize(DirectXCommon* directXCommon, const RenderTargetDe
         return false;
     }
 
-    if (desc_.createColorSrv) {
-        colorSrvIndex_ = directXCommon_->CreateRenderTargetSRV(handle_);
-        if (colorSrvIndex_ == UINT32_MAX) {
-            Finalize();
-            return false;
-        }
-    }
-
-    if (desc_.createDepthSrv) {
-        depthSrvIndex_ = directXCommon_->CreateRenderTargetDepthSRV(handle_);
-        if (depthSrvIndex_ == UINT32_MAX) {
-            Finalize();
-            return false;
-        }
-    }
-
     return true;
+}
+
+/// <summary>
+/// 必要な場合だけカラーSRVを作成する。
+/// </summary>
+bool RenderTarget::CreateColorSrvIfNeeded()
+{
+    if (!desc_.createColorSrv) {
+        return true;
+    }
+
+    colorSrvIndex_ = directXCommon_->CreateRenderTargetSRV(handle_);
+    return colorSrvIndex_ != UINT32_MAX;
+}
+
+/// <summary>
+/// 必要な場合だけ深度SRVを作成する。
+/// </summary>
+bool RenderTarget::CreateDepthSrvIfNeeded()
+{
+    if (!desc_.createDepthSrv) {
+        return true;
+    }
+
+    depthSrvIndex_ = directXCommon_->CreateRenderTargetDepthSRV(handle_);
+    return depthSrvIndex_ != UINT32_MAX;
 }
 
 void RenderTarget::Finalize()

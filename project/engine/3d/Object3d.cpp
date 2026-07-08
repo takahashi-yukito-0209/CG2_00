@@ -426,6 +426,22 @@ static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, c
 }
 
 /// <summary>
+/// Assimp でモデルファイルを読み込み、Object3d 用のモデルデータを構築する。
+/// </summary>
+static bool TryLoadModelDataFromAssimpFile(const std::string& fullPath, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+{
+    Assimp::Importer importer; // Assimp の読み込み管理
+    const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimp が読み込んだシーン
+
+    if (!ValidateAssimpScene(scene, fullPath)) {
+        return false;
+    }
+
+    modelData = BuildModelDataFromAssimpScene(scene, modelPath);
+    return true;
+}
+
+/// <summary>
 /// Object3d の初期化
 /// </summary>
 void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager)
@@ -1114,14 +1130,9 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
         return *cachedModelData;
     }
 
-    Assimp::Importer importer; // Assimp の読み込み管理
-    const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimp が読み込んだシーン
-
-    if (!ValidateAssimpScene(scene, fullPath)) {
+    if (!TryLoadModelDataFromAssimpFile(fullPath, objPath, modelData)) {
         return modelData;
     }
-
-    modelData = BuildModelDataFromAssimpScene(scene, objPath); // Assimp シーンからモデルデータを構築
 
     LogResolvedModelTexturePath(modelData);
     return FinalizeLoadedModelData(cacheKey, modelData);

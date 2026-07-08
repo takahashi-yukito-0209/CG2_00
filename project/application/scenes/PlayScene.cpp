@@ -66,47 +66,85 @@ void PlayScene::InitializeParticleObjects()
 }
 
 /// <summary>
-/// パーティクル管理とエミッターを初期化する
+/// ParticleManagerに使用するグループと描画オブジェクトを登録する。
 /// </summary>
-void PlayScene::InitializeParticleEffects()
+void PlayScene::InitializeParticleManager()
 {
-    // パーティクルマネージャー化とグループの作成
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
-        ParticleManager::GetInstance()->SetParticlePlane(particlePlane_.get());
-        ParticleManager::GetInstance()->CreateParticleGroup("Circle", "circle.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Checker", "uvChecker.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ball", "monsterBall.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Hit", "circle2.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Ring", "gradationLine.png");
-        ParticleManager::GetInstance()->CreateParticleGroup("Cylinder", "gradationLine.png");
-        ParticleManager::GetInstance()->SetParticleObject("Hit", particlePlane_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Ring", particleRing_.get());
-        ParticleManager::GetInstance()->SetParticleObject("Cylinder", particleCylinder_.get());
-        ParticleManager::GetInstance()->SetGroupBillboard("Cylinder", false);
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を管理するインスタンス
+    if (!particleManager) {
+        return;
     }
 
-    // パーティクルエミッターと発射
+    particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
+    particleManager->SetParticlePlane(particlePlane_.get());
+    particleManager->CreateParticleGroup("Circle", "circle.png");
+    particleManager->CreateParticleGroup("Checker", "uvChecker.png");
+    particleManager->CreateParticleGroup("Ball", "monsterBall.png");
+    particleManager->CreateParticleGroup("Hit", "circle2.png");
+    particleManager->CreateParticleGroup("Ring", "gradationLine.png");
+    particleManager->CreateParticleGroup("Cylinder", "gradationLine.png");
+    particleManager->SetParticleObject("Hit", particlePlane_.get());
+    particleManager->SetParticleObject("Ring", particleRing_.get());
+    particleManager->SetParticleObject("Cylinder", particleCylinder_.get());
+    particleManager->SetGroupBillboard("Cylinder", false);
+}
+
+/// <summary>
+/// ヒット演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeHitParticleEmitter()
+{
     pmEmitter_.groupName = "Hit";
     pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     pmEmitter_.count = 8;
     pmEmitter_.frequency = 1.0f;
     pmEmitter_.useHitEffect = true;
     pmEmitter_.Emit();
+}
 
+/// <summary>
+/// リング演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeRingParticleEmitter()
+{
     ringEmitter_.groupName = "Ring";
     ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     ringEmitter_.count = 1;
     ringEmitter_.frequency = 1.0f;
     ringEmitter_.useRingEffect = true;
     ringEmitter_.Emit();
+}
 
+/// <summary>
+/// 円柱演出用エミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeCylinderParticleEmitter()
+{
     cylinderEmitter_.groupName = "Cylinder";
     cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
     cylinderEmitter_.count = 1;
     cylinderEmitter_.frequency = 1.0f;
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
+}
+
+/// <summary>
+/// パーティクルエミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeParticleEmitters()
+{
+    InitializeHitParticleEmitter();
+    InitializeRingParticleEmitter();
+    InitializeCylinderParticleEmitter();
+}
+
+/// <summary>
+/// パーティクル管理とエミッターを初期化する。
+/// </summary>
+void PlayScene::InitializeParticleEffects()
+{
+    InitializeParticleManager();
+    InitializeParticleEmitters();
 }
 
 /// <summary>
@@ -293,33 +331,51 @@ void PlayScene::InitializeSceneObjects()
     }
 }
 
+/// <summary>
+/// シーンで使用するテクスチャを読み込む。
+/// </summary>
+void PlayScene::LoadSceneTextures()
+{
+    if (!ctx_.textureManager) {
+        return;
+    }
+
+    ctx_.textureManager->LoadTexture("uvChecker.png");
+    ctx_.textureManager->LoadTexture("monsterBall.png");
+    ctx_.textureManager->LoadTexture("circle.png");
+    ctx_.textureManager->LoadTexture("gradationLine.png");
+    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+    ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
+}
+
+/// <summary>
+/// 環境マップ用のSkyBoxを初期化する。
+/// </summary>
+void PlayScene::InitializeSkyBox()
+{
+    if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
+        return;
+    }
+
+    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+    const uint32_t environmentMapSrvIndex = ctx_.textureManager->GetSrvIndex(kEnvironmentMapTextureName); // 環境マップのSRV番号
+    if (environmentMapSrvIndex == UINT32_MAX) {
+        return;
+    }
+
+    skybox_ = std::make_unique<SkyBox>();
+    skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, environmentMapSrvIndex);
+    if (ctx_.object3dCommon) {
+        ctx_.object3dCommon->SetEnvironmentMapSrvIndex(environmentMapSrvIndex);
+    }
+}
+
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
 
-    // テクスチャのロード
-    if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("uvChecker.png");
-        ctx_.textureManager->LoadTexture("monsterBall.png");
-        ctx_.textureManager->LoadTexture("circle.png");
-        ctx_.textureManager->LoadTexture("gradationLine.png");
-        // 環境マップ用DDSを読み込む（確認用）
-        ctx_.textureManager->LoadTexture("rostock_laage_airport_4k.dds");
-    }
-
-    // SkyBox 初期化（ロード済みの cubemap を使用）
-    if (ctx_.textureManager && ctx_.srvManager && ctx_.directXCommon) {
-        uint32_t srvIdx = ctx_.textureManager->GetSrvIndex("rostock_laage_airport_4k.dds");
-        if (srvIdx != UINT32_MAX) {
-            // 環境マップ用のDDSがロードされていれば、それを使用してSkyBoxを初期化
-            skybox_ = std::make_unique<SkyBox>();
-            skybox_->Initialize(ctx_.directXCommon, ctx_.srvManager, srvIdx);
-            if (ctx_.object3dCommon) {
-                ctx_.object3dCommon->SetEnvironmentMapSrvIndex(srvIdx);
-            }
-        }
-    }
-
+    LoadSceneTextures();
+    InitializeSkyBox();
     InitializeDemoSprites();
     InitializeSceneObjects();
     InitializeParticleObjects();
@@ -329,46 +385,140 @@ void PlayScene::Initialize(const SceneContext& ctx)
 }
 
 /// <summary>
-/// 終了処理を行う
+/// ポストプロセス用リソースを解放する。
 /// </summary>
-void PlayScene::Finalize()
+void PlayScene::FinalizePostProcessTargets()
 {
-    std::cout << "PlayScene Finalize\n";
-    StopCameraShake();
-
     sceneRenderTarget_.Finalize();
     postProcessIntermediateTarget_.Finalize();
     finalRenderTarget_.Finalize();
     dissolveMaskSrvIndex_ = UINT32_MAX;
     postProcess_.Finalize();
+}
 
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Finalize();
+/// <summary>
+/// ParticleManagerを解放する。
+/// </summary>
+void PlayScene::FinalizeParticleManager()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // 解放対象のパーティクル管理
+    if (particleManager) {
+        particleManager->Finalize();
     }
+}
 
+/// <summary>
+/// シーンが保持している表示用オブジェクトを解放する。
+/// </summary>
+void PlayScene::ReleaseSceneObjects()
+{
     sprites_.clear();
     objects3d_.clear();
     temporalAfterimageSprites_.clear();
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
     timeReversalConvergenceSprite_.reset();
-    timeReversalEffect_.ResetState();
+}
 
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->SetParticlePlane(nullptr);
+/// <summary>
+/// パーティクル描画用オブジェクトを解放する。
+/// </summary>
+void PlayScene::ReleaseParticleObjects()
+{
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画オブジェクトの参照元
+    if (particleManager) {
+        particleManager->SetParticlePlane(nullptr);
     }
 
     particlePlane_.reset();
     particleRing_.reset();
     particleCylinder_.reset();
+}
+
+/// <summary>
+/// SkyBoxを解放する。
+/// </summary>
+void PlayScene::ReleaseSkyBox()
+{
     if (skybox_) {
         skybox_->Finalize();
         skybox_.reset();
     }
+}
 
+/// <summary>
+/// 終了処理を行う。
+/// </summary>
+void PlayScene::Finalize()
+{
+    std::cout << "PlayScene Finalize\n";
+    StopCameraShake();
+
+    FinalizePostProcessTargets();
+    FinalizeParticleManager();
+    ReleaseSceneObjects();
+    timeReversalEffect_.ResetState();
+    ReleaseParticleObjects();
+    ReleaseSkyBox();
     temporalRiftEffect_.ResetState(ctx_.camera);
     timeStopEffect_.ResetState();
     ctx_ = {};
+}
+
+/// <summary>
+/// エフェクト開始入力を処理する。
+/// </summary>
+void PlayScene::HandleEffectStartInput()
+{
+    InputManager* inputManager = InputManager::GetInstance(); // エフェクト開始入力を取得する入力管理
+    if (inputManager
+        && inputManager->IsKeyJustPressed(DIK_R)
+        && !IsAnyEffectPlaying()) {
+        StartSelectedEffect();
+    }
+}
+
+/// <summary>
+/// 時間演出とポストプロセスの状態を更新する。
+/// </summary>
+void PlayScene::UpdateTemporalEffects(float deltaTime)
+{
+    const float effectDeltaTime = temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f ? 0.0f : deltaTime; // ヒットストップを反映した演出時間
+    UpdateTimeReversalTransformHistory();
+    UpdateTemporalRiftEffect(effectDeltaTime);
+    UpdateTimeReversalEffect(effectDeltaTime);
+    UpdateTimeStopEffect(deltaTime);
+    UpdateImpactResponse(deltaTime);
+    if (temporalRiftEffect_.GetHitStopRemainingTime() <= 0.0f) {
+        UpdateTemporalAfterimages();
+    }
+    postProcess_.Update(deltaTime);
+}
+
+/// <summary>
+/// 再生中エフェクトに対応するポストエフェクト中心を計算する。
+/// </summary>
+Vector2 PlayScene::CalculatePostEffectCenter() const
+{
+    if (timeStopEffect_.IsPlaying()) {
+        return CalculateWorldScreenUv(timeStopEffect_.GetEffectPosition());
+    }
+    if (timeReversalEffect_.IsPlaying()) {
+        return CalculateWorldScreenUv(timeReversalEffect_.GetEffectPosition());
+    }
+
+    return temporalRiftEffect_.GetScreenUv();
+}
+
+/// <summary>
+/// ポストエフェクトの中心座標を更新する。
+/// </summary>
+void PlayScene::UpdatePostEffectCenters()
+{
+    temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
+    const Vector2 postEffectCenter = CalculatePostEffectCenter(); // 再生中エフェクトに対応する画面中心
+    postProcess_.SetRadialBlurCenter(postEffectCenter);
+    postProcess_.SetDistortionCenter(postEffectCenter);
 }
 
 /// <summary>
@@ -376,65 +526,67 @@ void PlayScene::Finalize()
 /// </summary>
 void PlayScene::Update(float dt)
 {
-    InputManager* inputManager = InputManager::GetInstance(); // 時空破砕の発動入力を取得する入力管理
-    if (inputManager
-        && inputManager->IsKeyJustPressed(DIK_R)
-        && !IsAnyEffectPlaying()) {
-        StartSelectedEffect();
-    }
+    HandleEffectStartInput();
+    UpdateTemporalEffects(dt);
 
-    const float effectDeltaTime = temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f ? 0.0f : dt; // ヒットストップを反映した演出時間
-    UpdateTimeReversalTransformHistory();
-    UpdateTemporalRiftEffect(effectDeltaTime);
-    UpdateTimeReversalEffect(effectDeltaTime);
-    UpdateTimeStopEffect(dt);
-    UpdateImpactResponse(dt);
-    if (temporalRiftEffect_.GetHitStopRemainingTime() <= 0.0f) {
-        UpdateTemporalAfterimages();
-    }
-    postProcess_.Update(dt);
-
-    // カメラの更新
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
-    temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
-    const Vector2 postEffectCenter = timeStopEffect_.IsPlaying()
-        ? CalculateWorldScreenUv(timeStopEffect_.GetEffectPosition())
-        : (timeReversalEffect_.IsPlaying()
-                  ? CalculateWorldScreenUv(timeReversalEffect_.GetEffectPosition())
-                  : temporalRiftEffect_.GetScreenUv()); // 再生中のエフェクトに対応する画面中心
-    postProcess_.SetRadialBlurCenter(postEffectCenter);
-    postProcess_.SetDistortionCenter(postEffectCenter);
+    UpdatePostEffectCenters();
 
-    // パーティクルエミッターの更新とマネージャーの更新
-    const float particleDeltaTime = (temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f || IsTimeStopped()) ? 0.0f : dt; // ヒットストップを反映したパーティクル時間
-    pmEmitter_.Update(particleDeltaTime);
-    ringEmitter_.Update(particleDeltaTime);
-    cylinderEmitter_.Update(particleDeltaTime);
-    if (ParticleManager::GetInstance()) {
-        ParticleManager::GetInstance()->Update(particleDeltaTime);
-    }
-
-    // オブジェクトの更新
-    for (auto& o : objects3d_) {
-        if (o) {
-            if (ctx_.camera) {
-                o->Update(ctx_.camera->GetViewMatrix(), ctx_.camera->GetProjectionMatrix());
-            }
-        }
-    }
-
-    // スプライトの更新
-    for (auto& s : sprites_) {
-        if (s)
-            s->Update();
-    }
+    UpdateParticleSystems(dt);
+    UpdateSceneObjects();
+    UpdateDemoSprites();
 
     UpdateAfterimageSprites();
     UpdateTimeReversalSprites();
 }
 
+/// <summary>
+/// パーティクルエミッターとParticleManagerを更新する。
+/// </summary>
+void PlayScene::UpdateParticleSystems(float deltaTime)
+{
+    const float particleDeltaTime = (temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f || IsTimeStopped()) ? 0.0f : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
+    pmEmitter_.Update(particleDeltaTime);
+    ringEmitter_.Update(particleDeltaTime);
+    cylinderEmitter_.Update(particleDeltaTime);
+
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を更新する管理クラス
+    if (particleManager) {
+        particleManager->Update(particleDeltaTime);
+    }
+}
+
+/// <summary>
+/// シーン内の3Dオブジェクトを更新する。
+/// </summary>
+void PlayScene::UpdateSceneObjects()
+{
+    if (!ctx_.camera) {
+        return;
+    }
+
+    const Matrix4x4 viewMatrix = ctx_.camera->GetViewMatrix(); // 3Dオブジェクト更新に使用するビュー行列
+    const Matrix4x4 projectionMatrix = ctx_.camera->GetProjectionMatrix(); // 3Dオブジェクト更新に使用する射影行列
+    for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
+        if (object3d) {
+            object3d->Update(viewMatrix, projectionMatrix);
+        }
+    }
+}
+
+/// <summary>
+/// 確認用スプライトを更新する。
+/// </summary>
+void PlayScene::UpdateDemoSprites()
+{
+    for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
+        if (sprite) {
+            sprite->Update();
+        }
+    }
+}
 /// <summary>
 /// 描画処理を行う
 /// </summary>
@@ -652,7 +804,7 @@ void PlayScene::DrawObject3dAtIndex(size_t objectIndex)
 /// </summary>
 void PlayScene::DrawAllObjects3d()
 {
-    for (auto& object3d : objects3d_) {
+    for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
         if (object3d) {
             object3d->Draw();
         }
@@ -752,7 +904,7 @@ void PlayScene::DrawSprites()
 
     if (selectedDrawType == -1 || selectedDrawType == 2 || selectedDrawType == 7) {
         ctx_.spriteCommon->SetCommonDrawSetting();
-        for (auto& sprite : sprites_) {
+        for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
             if (sprite) {
                 sprite->Draw();
             }

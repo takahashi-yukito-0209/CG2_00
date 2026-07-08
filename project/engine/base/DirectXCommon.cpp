@@ -49,6 +49,82 @@ struct RenderTargetInternal {
 };
 } // namespace MyEngine
 
+namespace {
+/// <summary>
+/// オフスクリーン用カラーバッファのリソース設定を作成する。
+/// </summary>
+D3D12_RESOURCE_DESC CreateRenderTargetResourceDesc(uint32_t width, uint32_t height, DXGI_FORMAT format)
+{
+    D3D12_RESOURCE_DESC desc = {}; // カラーバッファ用リソース設定
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    return desc;
+}
+
+/// <summary>
+/// GPU用デフォルトヒープの設定を作成する。
+/// </summary>
+D3D12_HEAP_PROPERTIES CreateDefaultHeapProperties()
+{
+    D3D12_HEAP_PROPERTIES heapProps = {}; // GPU用デフォルトヒープ設定
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProps.CreationNodeMask = 1;
+    heapProps.VisibleNodeMask = 1;
+    return heapProps;
+}
+
+/// <summary>
+/// カラーバッファのクリア値を作成する。
+/// </summary>
+D3D12_CLEAR_VALUE CreateRenderTargetClearValue(DXGI_FORMAT format, const std::array<float, 4>& clearColor)
+{
+    D3D12_CLEAR_VALUE clearValue = {}; // カラーバッファ用クリア値
+    clearValue.Format = format;
+    clearValue.Color[0] = clearColor[0];
+    clearValue.Color[1] = clearColor[1];
+    clearValue.Color[2] = clearColor[2];
+    clearValue.Color[3] = clearColor[3];
+    return clearValue;
+}
+
+/// <summary>
+/// 深度ステンシルバッファのリソース設定を作成する。
+/// </summary>
+D3D12_RESOURCE_DESC CreateDepthStencilResourceDesc(uint32_t width, uint32_t height)
+{
+    D3D12_RESOURCE_DESC desc = {}; // 深度ステンシル用リソース設定
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    return desc;
+}
+
+/// <summary>
+/// 深度ステンシルバッファのクリア値を作成する。
+/// </summary>
+D3D12_CLEAR_VALUE CreateDepthStencilClearValue()
+{
+    D3D12_CLEAR_VALUE clearValue = {}; // 深度ステンシル用クリア値
+    clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    clearValue.DepthStencil.Depth = 1.0f;
+    clearValue.DepthStencil.Stencil = 0;
+    return clearValue;
+}
+} // namespace
+
 DirectXCommon::~DirectXCommon() = default;
 
 // ----------------------------------------------------------------------
@@ -332,31 +408,10 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     rt->useDepth = useDepth;
     rt->resizeWithWindow = resizeWithWindow;
 
-    // レンダーターゲット用のテクスチャリソースを作成
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Width = width;
-    desc.Height = height;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.Format = format;
-    desc.SampleDesc.Count = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-    // ヒーププロパティの設定
-    D3D12_HEAP_PROPERTIES heapProps = {};
-    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-    heapProps.CreationNodeMask = 1;
-    heapProps.VisibleNodeMask = 1;
-
-    // クリア値の設定
-    D3D12_CLEAR_VALUE clearValue = {};
-    clearValue.Format = format;
-    clearValue.Color[0] = clearColor[0];
-    clearValue.Color[1] = clearColor[1];
-    clearValue.Color[2] = clearColor[2];
-    clearValue.Color[3] = clearColor[3];
+    // レンダーターゲット用のリソース設定を作成
+    D3D12_RESOURCE_DESC desc = CreateRenderTargetResourceDesc(width, height, format);
+    D3D12_HEAP_PROPERTIES heapProps = CreateDefaultHeapProperties();
+    D3D12_CLEAR_VALUE clearValue = CreateRenderTargetClearValue(format, clearColor);
 
     // リソースの生成
     HRESULT hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&rt->colorResource));
@@ -388,23 +443,9 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     device_->CreateRenderTargetView(rt->colorResource.Get(), &rtvViewDesc, rt->rtvHandle);
 
     if (useDepth) {
-        // 深度ステンシルバッファも必要な場合は、同様にリソースとDSVを作成
-        D3D12_RESOURCE_DESC ddesc = {};
-        ddesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        ddesc.Width = width;
-        ddesc.Height = height;
-        ddesc.DepthOrArraySize = 1;
-        ddesc.MipLevels = 1;
-        ddesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-        ddesc.SampleDesc.Count = 1;
-        ddesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        ddesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-        // 深度ステンシルバッファのクリア値
-        D3D12_CLEAR_VALUE dclear = {};
-        dclear.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        dclear.DepthStencil.Depth = 1.0f;
-        dclear.DepthStencil.Stencil = 0;
+        // 深度ステンシル用のリソース設定を作成
+        D3D12_RESOURCE_DESC ddesc = CreateDepthStencilResourceDesc(width, height);
+        D3D12_CLEAR_VALUE dclear = CreateDepthStencilClearValue();
 
         // 深度ステンシルバッファのリソースを生成
         hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &ddesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &dclear, IID_PPV_ARGS(&rt->depthResource));
