@@ -225,6 +225,74 @@ void PlayScene::InitializePostProcessTargets()
     postProcess_.SetEffectType(PostEffectType::Copy);
 }
 
+/// <summary>
+/// 確認用スプライトを初期化する。
+/// </summary>
+void PlayScene::InitializeDemoSprites()
+{
+    constexpr uint32_t kSpriteCount = 5; // 作成する確認用スプライト数
+    const std::array<std::string, 2> spriteNames = {
+        "uvChecker",
+        "monsterBall"
+    }; // 確認用スプライトに使用するテクスチャ名
+
+    for (uint32_t spriteIndex = 0; spriteIndex < kSpriteCount; ++spriteIndex) {
+        auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
+        const std::string textureName = spriteNames[(spriteIndex / 2) == 0 ? 0 : 1] + ".png"; // 使用するテクスチャ名
+        sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
+        sprites_.push_back(std::move(sprite));
+    }
+}
+
+/// <summary>
+/// 3Dオブジェクトの初期設定を適用する。
+/// </summary>
+void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::string& modelFileName)
+{
+    const bool isFenceModel = modelFileName.find("fence") != std::string::npos; // アルファ抜き用サンプラーが必要なモデルか
+    if (isFenceModel) {
+        object3d.SetUseAlphaCutoutSampler(true);
+    }
+
+    const bool isCubeModel = modelFileName.find("cube") != std::string::npos || modelFileName.find("Cube") != std::string::npos; // 環境マップ確認用モデルか
+    if (isCubeModel) {
+        constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
+        const Vector3 kCubeTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
+        object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
+        object3d.SetTranslate(kCubeTranslate);
+    }
+}
+
+/// <summary>
+/// シーンで使用する3Dオブジェクトを初期化する。
+/// </summary>
+void PlayScene::InitializeSceneObjects()
+{
+    const std::vector<std::string> modelFileNames = {
+        "plane/plane.gltf",
+        "bunny/bunny.obj",
+        "teapot/teapot.obj",
+        "fence/fence.obj",
+        "sphere/sphere.gltf",
+        "terrain/terrain.obj",
+        "cube/Cube.obj"
+    }; // シーンで生成するモデルファイル名
+
+    for (const std::string& modelFileName : modelFileNames) {
+        auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
+        object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+        object3d->SetModel(modelFileName);
+        ApplySceneObjectInitialSettings(*object3d, modelFileName);
+        objects3d_.push_back(std::move(object3d));
+    }
+
+    constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
+    if (objects3d_.size() > kTerrainObjectIndex && objects3d_[kTerrainObjectIndex]) {
+        const Vector3 kTerrainScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainScale);
+    }
+}
+
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
@@ -252,49 +320,8 @@ void PlayScene::Initialize(const SceneContext& ctx)
         }
     }
 
-    // スプライトの作成
-    const uint32_t kSpriteCount = 5;
-    // 2種類のテクスチャを交互に使用してスプライトを作成
-    std::array<std::string, 2> spriteNames = {
-        "uvChecker",
-        "monsterBall"
-    };
-
-    // 2種類のテクスチャファイル名を配列で管理
-    for (uint32_t i = 0; i < kSpriteCount; ++i) {
-        auto sprite = std::make_unique<Sprite>();
-        sprite->Initialize(ctx_.spriteCommon, spriteNames[(i / 2) == 0 ? 0 : 1] + ".png", ctx_.imguiManager);
-        sprites_.push_back(std::move(sprite));
-    }
-
-    // モデルルファイル名の配列を作成
-    std::vector<std::string> modelFileNames = {
-        "plane/plane.gltf",
-        "bunny/bunny.obj",
-        "teapot/teapot.obj",
-        "fence/fence.obj",
-        "sphere/sphere.gltf",
-        "terrain/terrain.obj",
-        "cube/Cube.obj"
-    };
-
-    for (size_t i = 0; i < modelFileNames.size(); ++i) {
-        auto obj = std::make_unique<Object3d>();
-        // Object3d の初期化とモデルのセット
-        obj->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        obj->SetModel(modelFileNames[i]);
-        if (modelFileNames[i].find("fence") != std::string::npos) {
-            obj->SetUseAlphaCutoutSampler(true);
-        }
-        if (modelFileNames[i].find("cube") != std::string::npos || modelFileNames[i].find("Cube") != std::string::npos) {
-            obj->SetEnvironmentCoefficient(0.85f);
-            obj->SetTranslate({ 3.0f, 0.0f, 0.0f });
-        }
-        objects3d_.push_back(std::move(obj));
-    }
-
-    objects3d_[5]->SetScale({ 5.0f, 5.0f, 5.0f }); // terrain を大きくする
-
+    InitializeDemoSprites();
+    InitializeSceneObjects();
     InitializeParticleObjects();
     InitializeParticleEffects();
     InitializeTemporalEffectSprites();

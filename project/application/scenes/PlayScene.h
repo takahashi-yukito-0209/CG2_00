@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 // 前方宣言
@@ -236,6 +237,20 @@ private:
     /// </summary>
     void InitializePostProcessTargets();
 
+    /// <summary>
+    /// 確認用スプライトを初期化する。
+    /// </summary>
+    void InitializeDemoSprites();
+
+    /// <summary>
+    /// 3Dオブジェクトの初期設定を適用する。
+    /// </summary>
+    void ApplySceneObjectInitialSettings(MyEngine::Object3d& object3d, const std::string& modelFileName);
+
+    /// <summary>
+    /// シーンで使用する3Dオブジェクトを初期化する。
+    /// </summary>
+    void InitializeSceneObjects();
 
     /// <summary>
     /// ポストプロセス描画が利用できるか判定する
