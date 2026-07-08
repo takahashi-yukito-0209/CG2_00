@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 // 前方宣言
@@ -236,6 +237,20 @@ private:
     /// </summary>
     void InitializePostProcessTargets();
 
+    /// <summary>
+    /// 確認用スプライトを初期化する。
+    /// </summary>
+    void InitializeDemoSprites();
+
+    /// <summary>
+    /// 3Dオブジェクトの初期設定を適用する。
+    /// </summary>
+    void ApplySceneObjectInitialSettings(MyEngine::Object3d& object3d, const std::string& modelFileName);
+
+    /// <summary>
+    /// シーンで使用する3Dオブジェクトを初期化する。
+    /// </summary>
+    void InitializeSceneObjects();
 
     /// <summary>
     /// ポストプロセス描画が利用できるか判定する
@@ -277,6 +292,11 @@ private:
     PostProcessDrawContext BuildPostProcessDrawContext();
 
     /// <summary>
+    /// 最終描画前に必要なポストプロセスの前段パスを適用する。
+    /// </summary>
+    void ApplyPostProcessPrePasses(PostProcessDrawContext& drawContext);
+
+    /// <summary>
     /// Scene View用RTが必要な場合だけ描画先を切り替える
     /// </summary>
     void BeginSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
@@ -285,6 +305,11 @@ private:
     /// Scene View用RTへ描画していた場合だけ描画先を戻す
     /// </summary>
     void EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget);
+
+    /// <summary>
+    /// 現在の描画先へポストプロセス結果とスプライトを描画する
+    /// </summary>
+    void DrawPostProcessOutputToCurrentTarget(const PostProcessDrawContext& drawContext);
 
     /// <summary>
     /// 作成済みのポストプロセス状態に従って最終結果を描画する
@@ -300,6 +325,32 @@ private:
     /// シーン内の3D要素を描画する
     /// </summary>
     void DrawSceneContent();
+
+    /// <summary>
+    /// 指定した番号の3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawObject3dAtIndex(size_t objectIndex);
+
+    /// <summary>
+    /// すべての3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawAllObjects3d();
+
+    /// <summary>
+    /// 選択中の描画種別に対応する3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawSelectedObjects3d(int selectedDrawType);
+
+    /// <summary>
+    /// パーティクルを描画する必要があるか判定する。
+    /// </summary>
+    bool ShouldDrawParticles(int selectedDrawType) const;
+
+    /// <summary>
+    /// 必要な場合だけパーティクルを描画する。
+    /// </summary>
+    void DrawParticlesIfNeeded(int selectedDrawType);
+
     /// <summary>
     /// 3D空間とパーティクルを描画する
     /// </summary>

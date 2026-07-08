@@ -30,6 +30,7 @@ using namespace Math;
 namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
+constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
 
 /// <summary>
@@ -104,6 +105,22 @@ Object3d::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const O
     }
 
     return modelData;
+}
+
+/// <summary>
+/// モデルファイルの読み込みに使用するフルパス文字列を作成する。
+/// </summary>
+std::string BuildModelFilePath(const std::string& directoryPath, const std::string& filename)
+{
+    return directoryPath + "/" + filename;
+}
+
+/// <summary>
+/// Assimp を使用してモデルファイルを読み込む。
+/// </summary>
+const aiScene* ReadAssimpScene(Assimp::Importer& importer, const std::string& fullPath)
+{
+    return importer.ReadFile(fullPath.c_str(), kAssimpLoadFlags);
 }
 
 /// <summary>
@@ -197,21 +214,76 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
 }
 
 /// <summary>
+/// Assimp のモデルファイル読み込み失敗を警告ログへ出力する。
+/// </summary>
+void LogAssimpLoadFailure(const std::string& fullPath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
+/// Assimp シーンにメッシュが存在しないことを警告ログへ出力する。
+/// </summary>
+void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
+/// MTL ファイルを開けなかったことを警告ログへ出力する。
+/// </summary>
+void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std::string& filename)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
+    Logger::Warn(buffer);
+}
+
+/// <summary>
+/// MTL ファイルから取得した diffuse テクスチャパスをログへ出力する。
+/// </summary>
+void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
+{
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "LoadMaterialTemplateFile: map_Kd -> %s\n", textureFilePath.c_str());
+    Logger::Debug(buffer);
+}
+
+/// <summary>
+/// MTL ファイルの1行を読み取り、対応するマテリアル情報へ反映する。
+/// </summary>
+void ApplyMaterialTemplateLine(const std::string& line, const std::string& directoryPath, Object3d::MaterialData& materialData)
+{
+    std::istringstream lineStream(line); // MTL ファイルから読んだ1行の解析用ストリーム
+    std::string identifier; // 行頭の識別子
+    lineStream >> identifier;
+
+    if (identifier != "map_Kd") {
+        return;
+    }
+
+    std::string textureFilename; // MTL に記述されたテクスチャファイル名
+    lineStream >> textureFilename;
+    materialData.textureFilePath = directoryPath + "/" + textureFilename;
+    LogMaterialTemplateTexturePath(materialData.textureFilePath);
+}
+
+/// <summary>
 /// Assimp で読み込んだシーンがモデルデータとして使用可能か確認する
 /// </summary>
 bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 {
     if (!scene) {
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
-        Logger::Warn(buffer);
+        LogAssimpLoadFailure(fullPath);
         return false;
     }
 
     if (!scene->HasMeshes()) {
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
-        Logger::Warn(buffer);
+        LogAssimpSceneHasNoMeshes(fullPath);
         return false;
     }
 
@@ -219,17 +291,60 @@ bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 }
 
 /// <summary>
-/// Assimp の全メッシュを Object3d 用の頂点データへ展開する
+/// Assimp メッシュが頂点展開に必要な法線を持つか確認する。
+/// </summary>
+bool HasRequiredMeshNormals(const aiMesh* mesh, uint32_t meshIndex)
+{
+    if (mesh->HasNormals()) {
+        return true;
+    }
+
+    char buffer[256]; // ログ出力用バッファ
+    sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
+    Logger::Warn(buffer);
+    return false;
+}
+
+/// <summary>
+/// Assimp の頂点情報を Object3d 用の頂点データへ変換する。
+/// </summary>
+Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint32_t vertexIndex, bool hasTextureCoords)
+{
+    const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
+    const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
+    aiVector3D texcoord(0, 0, 0); // Assimp 側のテクスチャ座標
+    if (hasTextureCoords) {
+        texcoord = mesh->mTextureCoords[0][vertexIndex];
+    }
+
+    Object3d::VertexData vertexData; // ModelData に追加する頂点データ
+    vertexData.position = { -position.x, position.y, position.z, 1.0f };
+    vertexData.texcoord = { texcoord.x, texcoord.y };
+    vertexData.normal = { -normal.x, normal.y, normal.z };
+    return vertexData;
+}
+
+/// <summary>
+/// Assimp の三角形面を Object3d 用の頂点配列へ追加する。
+/// </summary>
+void AppendFaceVerticesToModelData(const aiMesh* mesh, const aiFace& face, bool hasTextureCoords, Object3d::ModelData& modelData)
+{
+    for (uint32_t element = 0; element < 3; ++element) {
+        const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
+        const Object3d::VertexData vertexData = ConvertAssimpVertexToObjectVertex(mesh, vertexIndex, hasTextureCoords); // 追加する頂点データ
+        modelData.vertices.push_back(vertexData);
+    }
+}
+
+/// <summary>
+/// Assimp の全メッシュを Object3d 用の頂点データへ展開する。
 /// </summary>
 void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& modelData)
 {
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh* mesh = scene->mMeshes[meshIndex]; // 展開対象のメッシュ
 
-        if (!mesh->HasNormals()) {
-            char buffer[256]; // ログ出力用バッファ
-            sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
-            Logger::Warn(buffer);
+        if (!HasRequiredMeshNormals(mesh, meshIndex)) {
             continue;
         }
 
@@ -241,22 +356,7 @@ void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& mo
                 continue;
             }
 
-            for (uint32_t element = 0; element < 3; ++element) {
-                const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
-                const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
-                const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
-                aiVector3D texcoord(0, 0, 0); // Assimp 側のテクスチャ座標
-                if (hasTextureCoords) {
-                    texcoord = mesh->mTextureCoords[0][vertexIndex];
-                }
-
-                Object3d::VertexData vertexData; // ModelData に追加する頂点データ
-                vertexData.position = { -position.x, position.y, position.z, 1.0f };
-                vertexData.texcoord = { texcoord.x, texcoord.y };
-                vertexData.normal = { -normal.x, normal.y, normal.z };
-
-                modelData.vertices.push_back(vertexData);
-            }
+            AppendFaceVerticesToModelData(mesh, face, hasTextureCoords, modelData);
         }
     }
 }
@@ -304,6 +404,28 @@ static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& m
 }
 
 /// <summary>
+/// Assimp シーンから解決したテクスチャパスをモデルデータのマテリアルへ設定する。
+/// </summary>
+void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+{
+    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, modelPath);
+}
+
+/// <summary>
+/// Assimp のシーンから Object3d 用のモデルデータを構築する
+/// </summary>
+static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, const std::filesystem::path& modelPath)
+{
+    Object3d::ModelData modelData; // 構築するモデルデータ
+
+    ReadRootNodeToModelData(scene, modelData);
+    AppendMeshVerticesToModelData(scene, modelData);
+    ReadMaterialTexturePathToModelData(scene, modelPath, modelData);
+
+    return modelData;
+}
+
+/// <summary>
 /// Object3d の初期化
 /// </summary>
 void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager)
@@ -311,9 +433,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     // 引数で受け取ってメンバ変数に記録する
     this->object3dCommon_ = object3dCommon;
 
-    // Transformの初期化
-    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
+    InitializeTransformState();
 
     // マテリアル用リソース作成
     CreateMaterialResource();
@@ -336,6 +456,15 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     camera_ = object3dCommon->GetDefaultCamera();
 
     (void)imguiManager;
+}
+
+/// <summary>
+/// Transform の初期値を設定する。
+/// </summary>
+void Object3d::InitializeTransformState()
+{
+    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
+    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
 }
 
 /// <summary>
@@ -463,31 +592,13 @@ Object3d::MaterialData Object3d::LoadMaterialTemplateFile(const std::string& dir
     // 2.ファイルを開く
     std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
     if (!file.is_open()) {
-        char buf[256];
-        sprintf_s(buf, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
-        Logger::Warn(buf);
+        LogMaterialTemplateOpenFailure(directoryPath, filename);
         return materialData;
     }
 
     // 3.実際にファイルを読み、MaterialDataを構築していく
     while (std::getline(file, line)) {
-        std::string identifier;
-        std::istringstream s(line);
-        s >> identifier;
-
-        // identifierに応じた処理
-        if (identifier == "map_Kd") {
-            std::string textureFilename;
-            s >> textureFilename;
-            // 連結してファイルパスにする
-            materialData.textureFilePath = directoryPath + "/" + textureFilename;
-            // ログ出力: mtlで指定されたテクスチャパス
-            {
-                char buf[256];
-                sprintf_s(buf, "LoadMaterialTemplateFile: map_Kd -> %s\n", materialData.textureFilePath.c_str());
-                Logger::Debug(buf);
-            }
-        }
+        ApplyMaterialTemplateLine(line, directoryPath, materialData);
     }
 
     // 4.MaterialDataを返す
@@ -505,6 +616,14 @@ void Object3d::CreateMaterialResource()
         materialResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterialData_[frameIndex]));
     }
 
+    InitializeMaterialState();
+}
+
+/// <summary>
+/// マテリアルの初期値をCPU側状態へ設定する。
+/// </summary>
+void Object3d::InitializeMaterialState()
+{
     materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
     materialData_->enableLighting = 1;
     materialData_->uvTransform = MathUtil::MakeIdentity4x4();
@@ -677,6 +796,14 @@ uint32_t Object3d::ResolveFallbackTextureIndex() const
 }
 
 /// <summary>
+/// 非モデル描画で使用する頂点数を取得する
+/// </summary>
+uint32_t Object3d::GetDrawVertexCount() const
+{
+    return static_cast<uint32_t>(modelData_.vertices.size());
+}
+
+/// <summary>
 /// マテリアルCBVを描画用ルートパラメータへ設定する
 /// </summary>
 bool Object3d::BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
@@ -699,6 +826,75 @@ bool Object3d::BindMaterialResource(ID3D12GraphicsCommandList* commandList, cons
 
     commandList->SetGraphicsRootConstantBufferView(0, materialAddress);
     return true;
+}
+
+/// <summary>
+/// 座標変換行列CBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindTransformationMatrixResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
+{
+    auto transformationResource = GetTransformationMatrixResource(); // 現在のフレームで使用する座標変換行列CBV
+    if (!commandList || !transformationResource) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: transformation matrix resource is null\n");
+        }
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS transformationAddress = transformationResource->GetGPUVirtualAddress(); // 座標変換行列CBVのGPUアドレス
+    commandList->SetGraphicsRootConstantBufferView(1, transformationAddress);
+    return true;
+}
+
+/// <summary>
+/// 平行光源CBVを描画用ルートパラメータへ設定する
+/// </summary>
+bool Object3d::BindDirectionalLightResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const
+{
+    if (!commandList) {
+        return false;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源CBVのGPUアドレス
+    if (lightAddress == 0) {
+        if (logContext) {
+            Logger::Debug(std::string(logContext) + " skipped: directional light GPU address is null\n");
+        }
+        return false;
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(3, lightAddress);
+    return true;
+}
+
+/// <summary>
+/// カメラCBVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindCameraResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS cameraAddress = object3dCommon_->GetCameraGPUAddress(); // カメラCBVのGPUアドレス
+    if (cameraAddress != 0) {
+        commandList->SetGraphicsRootConstantBufferView(6, cameraAddress);
+    }
+}
+
+/// <summary>
+/// 点光源CBVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindPointLightResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS pointLightAddress = object3dCommon_->GetPointLightsGPUAddress(); // 点光源CBVのGPUアドレス
+    if (pointLightAddress != 0) {
+        commandList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
+    }
 }
 
 /// <summary>
@@ -730,6 +926,66 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
     }
 
     commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    return true;
+}
+
+/// <summary>
+/// インスタンシング用SRVを描画用ルートパラメータへ設定する
+/// </summary>
+void Object3d::BindInstancingResource(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!commandList) {
+        return;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
+    if (instancingSrvHandle.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(4, instancingSrvHandle);
+    }
+}
+
+/// <summary>
+/// 非モデル通常描画で使用する共通リソースを設定する
+/// </summary>
+bool Object3d::BindNonModelDrawResources(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!BindMaterialResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    if (!BindTransformationMatrixResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    if (!BindDirectionalLightResource(commandList, "Object3d::Draw")) {
+        return false;
+    }
+
+    BindPointLightResource(commandList);
+    BindCameraResource(commandList);
+
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(commandList, textureIndex, "Object3d::Draw");
+    return true;
+}
+
+/// <summary>
+/// 非モデルインスタンシング描画で使用する共通リソースを設定する
+/// </summary>
+bool Object3d::BindNonModelInstancedDrawResources(ID3D12GraphicsCommandList* commandList) const
+{
+    if (!BindMaterialResource(commandList, nullptr)) {
+        return false;
+    }
+
+    BindTransformationMatrixResource(commandList, nullptr);
+    BindDirectionalLightResource(commandList, nullptr);
+    BindCameraResource(commandList);
+    BindPointLightResource(commandList);
+
+    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
+    BindTexture(commandList, textureIndex, "Object3d::DrawInstanced");
+    BindInstancingResource(commandList);
     return true;
 }
 
@@ -803,50 +1059,12 @@ void Object3d::Draw()
     // VBVを設定
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    // マテリアルCBVをルートパラメータ0に設定する
-    if (!BindMaterialResource(cmdList, "Object3d::Draw")) {
+    // 非モデル通常描画で使用する共通リソースを設定する
+    if (!BindNonModelDrawResources(cmdList)) {
         return;
     }
-
-    // 座標変換行列CBV (必須)
-    if (!GetTransformationMatrixResource()) {
-        Logger::Debug("Object3d::Draw skipped: transformationMatrixResource_ is null\n");
-        return;
-    }
-
-    // GPU仮想アドレスを取得してルートパラメータ1にセット
-    auto wvpAddr = GetTransformationMatrixResource()->GetGPUVirtualAddress();
-    // ルートパラメータ1に座標変換行列CBVをセット
-    cmdList->SetGraphicsRootConstantBufferView(1, wvpAddr);
-
-    // 光源CBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS lightAddr = object3dCommon_->GetDirectionalLightGPUAddress();
-    // 光源CBVが利用できない場合は描画をスキップしてログを出す
-    if (lightAddr == 0) {
-        Logger::Debug("Object3d::Draw skipped: directional light GPU address is null\n");
-        return;
-    }
-    // ルートパラメータ3に光源CBVをセット
-    cmdList->SetGraphicsRootConstantBufferView(3, lightAddr);
-
-    // 点光源CBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS plAddr = object3dCommon_->GetPointLightsGPUAddress();
-    // 点光源CBVが利用できない場合はログを出すが描画は続行する（点光源なしで描画する）
-    if (plAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(7, plAddr);
-    }
-
-    // カメラCBV (Object3dCommon で共有されている)
-    D3D12_GPU_VIRTUAL_ADDRESS camAddr = object3dCommon_->GetCameraGPUAddress();
-    // カメラCBVが利用できない場合はログを出すが描画は続行する（カメラ位置なしで描画する）
-    if (camAddr != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(6, camAddr);
-    }
-
-    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(cmdList, textureIndex, "Object3d::Draw");
     // 描画コマンド
-    cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), 1, 0, 0);
+    cmdList->DrawInstanced(GetDrawVertexCount(), 1, 0, 0);
 }
 
 /// <summary>
@@ -864,7 +1082,7 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
         return;
     }
 
-    if (vertexBufferView_.SizeInBytes == 0 || modelData_.vertices.empty()) {
+    if (vertexBufferView_.SizeInBytes == 0 || GetDrawVertexCount() == 0) {
         return;
     }
 
@@ -875,38 +1093,11 @@ void Object3d::DrawInstanced(uint32_t instanceCount)
 
     cmdList->IASetVertexBuffers(0, 1, &vertexBufferView_);
 
-    if (!BindMaterialResource(cmdList, nullptr)) {
+    if (!BindNonModelInstancedDrawResources(cmdList)) {
         return;
     }
 
-    if (GetTransformationMatrixResource()) {
-        cmdList->SetGraphicsRootConstantBufferView(1, GetTransformationMatrixResource()->GetGPUVirtualAddress());
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS lightAddress = object3dCommon_->GetDirectionalLightGPUAddress(); // 平行光源のGPUアドレス
-    if (lightAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(3, lightAddress);
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS cameraAddress = object3dCommon_->GetCameraGPUAddress(); // カメラ情報のGPUアドレス
-    if (cameraAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(6, cameraAddress);
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS pointLightAddress = object3dCommon_->GetPointLightsGPUAddress(); // 点光源のGPUアドレス
-    if (pointLightAddress != 0) {
-        cmdList->SetGraphicsRootConstantBufferView(7, pointLightAddress);
-    }
-
-    const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(cmdList, textureIndex, "Object3d::DrawInstanced");
-
-    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandle = object3dCommon_->GetInstancingSrvGPUHandle(); // インスタンシング用SRV
-    if (instancingSrvHandle.ptr != 0) {
-        cmdList->SetGraphicsRootDescriptorTable(4, instancingSrvHandle);
-    }
-
-    cmdList->DrawInstanced(static_cast<UINT>(modelData_.vertices.size()), instanceCount, 0, 0);
+    cmdList->DrawInstanced(GetDrawVertexCount(), instanceCount, 0, 0);
 }
 
 /// <summary>
@@ -916,28 +1107,21 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
 {
     ModelData modelData; // 構築するModelData
 
-    // フルパスとディレクトリを用意
-    std::string fullPath = directoryPath + "/" + filename;
-    std::filesystem::path objPath(fullPath);
+    const std::string fullPath = BuildModelFilePath(directoryPath, filename); // モデルファイルのフルパス
+    const std::filesystem::path objPath(fullPath); // filesystem 操作用のモデルパス
     const std::string cacheKey = MakeModelDataCacheKey(fullPath); // モデルデータキャッシュの検索キー
     if (const ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
         return *cachedModelData;
     }
 
-    // Assimp を使って読み込む
-    Assimp::Importer importer;
-    // 読み込み時のオプションを指定してファイルを読み込む
-    const aiScene* scene = importer.ReadFile(fullPath.c_str(),
-        aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder);
+    Assimp::Importer importer; // Assimp の読み込み管理
+    const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimp が読み込んだシーン
 
     if (!ValidateAssimpScene(scene, fullPath)) {
         return modelData;
     }
 
-    ReadRootNodeToModelData(scene, modelData); // Assimp のルートノードを読み込む
-
-    AppendMeshVerticesToModelData(scene, modelData); // Assimp のメッシュを頂点データへ展開
-    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, objPath); // モデルに割り当てるテクスチャパス
+    modelData = BuildModelDataFromAssimpScene(scene, objPath); // Assimp シーンからモデルデータを構築
 
     LogResolvedModelTexturePath(modelData);
     return FinalizeLoadedModelData(cacheKey, modelData);
@@ -953,9 +1137,25 @@ void Object3d::UpdateFrameResources()
     }
 
     const uint32_t frameIndex = object3dCommon_->GetDxCommon()->GetCurrentFrameIndex(); // 転送先フレーム番号
+    UploadMaterialFrameResource(frameIndex);
+    UploadTransformationMatrixFrameResource(frameIndex);
+}
+
+/// <summary>
+/// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+/// </summary>
+void Object3d::UploadMaterialFrameResource(uint32_t frameIndex)
+{
     if (mappedMaterialData_[frameIndex]) {
         *mappedMaterialData_[frameIndex] = materialState_;
     }
+}
+
+/// <summary>
+/// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+/// </summary>
+void Object3d::UploadTransformationMatrixFrameResource(uint32_t frameIndex)
+{
     if (mappedTransformationMatrixData_[frameIndex]) {
         *mappedTransformationMatrixData_[frameIndex] = transformationMatrixState_;
     }

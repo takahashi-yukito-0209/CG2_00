@@ -10,8 +10,8 @@
 #include <vector>
 #include <wrl.h>
 
-#include "ModelCommon.h"
 #include "DirectXCommon.h"
+#include "ModelCommon.h"
 
 namespace MyEngine {
 
@@ -365,7 +365,16 @@ public: // メンバ関数
 
 private: // 内部関数
     // 初期化補助
+    /// <summary>
+    /// Transform の初期値を設定する。
+    /// </summary>
+    void InitializeTransformState();
+
     void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
+    /// <summary>
+    /// マテリアルの初期値をCPU側状態へ設定する。
+    /// </summary>
+    void InitializeMaterialState();
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
     /// <summary>
     /// Object3d側で明示指定されたテクスチャがあるか確認する
@@ -393,9 +402,34 @@ private: // 内部関数
     uint32_t ResolveFallbackTextureIndex() const;
 
     /// <summary>
+    /// 非モデル描画で使用する頂点数を取得する
+    /// </summary>
+    uint32_t GetDrawVertexCount() const;
+
+    /// <summary>
     /// マテリアルCBVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindMaterialResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
+
+    /// <summary>
+    /// 座標変換行列CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindTransformationMatrixResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
+
+    /// <summary>
+    /// 平行光源CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    bool BindDirectionalLightResource(ID3D12GraphicsCommandList* commandList, const char* logContext) const;
+
+    /// <summary>
+    /// カメラCBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindCameraResource(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
+    /// 点光源CBVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindPointLightResource(ID3D12GraphicsCommandList* commandList) const;
 
     /// <summary>
     /// 指定されたテクスチャ番号のSRVを描画用ルートパラメータへ設定する
@@ -403,9 +437,34 @@ private: // 内部関数
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
 
     /// <summary>
+    /// インスタンシング用SRVを描画用ルートパラメータへ設定する
+    /// </summary>
+    void BindInstancingResource(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
+    /// 非モデル通常描画で使用する共通リソースを設定する
+    /// </summary>
+    bool BindNonModelDrawResources(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
+    /// 非モデルインスタンシング描画で使用する共通リソースを設定する
+    /// </summary>
+    bool BindNonModelInstancedDrawResources(ID3D12GraphicsCommandList* commandList) const;
+
+    /// <summary>
     /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources(); // モデルデータ割り当て
+
+    /// <summary>
+    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+    /// </summary>
+    void UploadMaterialFrameResource(uint32_t frameIndex);
+
+    /// <summary>
+    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+    /// </summary>
+    void UploadTransformationMatrixFrameResource(uint32_t frameIndex);
 };
 
 } // namespace MyEngine
