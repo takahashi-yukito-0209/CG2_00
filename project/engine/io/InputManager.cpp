@@ -10,12 +10,15 @@
 using namespace MyEngine;
 
 namespace {
+constexpr size_t kInputLogBufferSize = 256; // 入力初期化ログ用バッファサイズ
+constexpr uint8_t kInputPressedMask = 0x80; // DirectInputの押下状態を示すビット
+
 /// <summary>
 /// DirectInput初期化時の失敗内容をログへ出力する
 /// </summary>
 void LogDirectInputInitializeFailure(const char* step, HRESULT hr)
 {
-    char message[256] = {}; // ログへ出力するエラー内容
+    char message[kInputLogBufferSize] = {}; // ログへ出力するエラー内容
     sprintf_s(message, "InputManager::Initialize failed at %s. HRESULT=0x%08X\n", step, static_cast<unsigned int>(hr));
     Logger::Error(message);
 }
@@ -157,8 +160,8 @@ void InputManager::Update()
 /// </summary>
 bool InputManager::IsKeyPressed(uint8_t key) const
 {
-    // キーが押されている場合、最上位ビット（0x80）がセットされる
-    return keys_[key] & 0x80;
+    // キーが押されている場合、押下状態ビットがセットされる
+    return keys_[key] & kInputPressedMask;
 }
 
 /// <summary>
@@ -166,8 +169,8 @@ bool InputManager::IsKeyPressed(uint8_t key) const
 /// </summary>
 bool InputManager::IsKeyReleased(uint8_t key) const
 {
-    // キーが離されている場合、最上位ビット（0x80）がセットされない
-    return !(keys_[key] & 0x80);
+    // キーが離されている場合、押下状態ビットがセットされない
+    return !(keys_[key] & kInputPressedMask);
 }
 
 /// <summary>
@@ -175,8 +178,9 @@ bool InputManager::IsKeyReleased(uint8_t key) const
 /// </summary>
 bool InputManager::IsKeyJustPressed(uint8_t key) const
 {
-    //// 前フレームでは押されていて、現在は離されている場合に true を返す
-    return !(preKeys_[key] & 0x80) && (keys_[key] & 0x80);
+    // 前フレームでは押されていなくて、現在は押されている場合に true を返す
+    return !(preKeys_[key] & kInputPressedMask)
+        && (keys_[key] & kInputPressedMask);
 }
 
 /// <summary>
@@ -185,7 +189,8 @@ bool InputManager::IsKeyJustPressed(uint8_t key) const
 bool InputManager::IsKeyJustReleased(uint8_t key) const
 {
     // 前フレームでは押されていて、現在は離されている場合に true を返す
-    return (preKeys_[key] & 0x80) && !(keys_[key] & 0x80);
+    return (preKeys_[key] & kInputPressedMask)
+        && !(keys_[key] & kInputPressedMask);
 }
 
 // ------------------------
@@ -206,8 +211,8 @@ bool InputManager::IsValidMouseButton(int button) const
 /// </summary>
 bool InputManager::IsMouseButtonPressed(int button) const
 {
-    // 指定されたボタンの状態をチェック。最上位ビット（0x80）がセットされている場合は押されている
-    return IsValidMouseButton(button) && (mouseState_.rgbButtons[button] & 0x80);
+    // 指定されたボタンの状態をチェック。押下状態ビットがセットされている場合は押されている
+    return IsValidMouseButton(button) && (mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
 /// <summary>
@@ -215,8 +220,8 @@ bool InputManager::IsMouseButtonPressed(int button) const
 /// </summary>
 bool InputManager::IsMouseButtonReleased(int button) const
 {
-    // 指定されたボタンの状態をチェック。最上位ビット（0x80）がセットされていない場合は離されている
-    return !IsValidMouseButton(button) || !(mouseState_.rgbButtons[button] & 0x80);
+    // 指定されたボタンの状態をチェック。押下状態ビットがセットされていない場合は離されている
+    return !IsValidMouseButton(button) || !(mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
 /// <summary>
@@ -225,7 +230,9 @@ bool InputManager::IsMouseButtonReleased(int button) const
 bool InputManager::IsMouseButtonJustPressed(int button) const
 {
     // 前フレームの状態と現在の状態を比較して、前フレームでは押されていなくて、現在は押されている場合に true を返す
-    return IsValidMouseButton(button) && !(preMouseState_.rgbButtons[button] & 0x80) && (mouseState_.rgbButtons[button] & 0x80);
+    return IsValidMouseButton(button)
+        && !(preMouseState_.rgbButtons[button] & kInputPressedMask)
+        && (mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
 /// <summary>
@@ -234,7 +241,9 @@ bool InputManager::IsMouseButtonJustPressed(int button) const
 bool InputManager::IsMouseButtonJustReleased(int button) const
 {
     // 前フレームの状態と現在の状態を比較して、前フレームでは押されていて、現在は離されている場合に true を返す
-    return IsValidMouseButton(button) && (preMouseState_.rgbButtons[button] & 0x80) && !(mouseState_.rgbButtons[button] & 0x80);
+    return IsValidMouseButton(button)
+        && (preMouseState_.rgbButtons[button] & kInputPressedMask)
+        && !(mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
 /// <summary>
