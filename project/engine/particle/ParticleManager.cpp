@@ -36,7 +36,16 @@ constexpr float kHitStartScaleYRate = 0.15f; // ヒットエフェクト開始�
 constexpr float kHitEndScaleX = 0.045f; // ヒットエフェクト終了時の横幅
 constexpr float kParticleScaleZ = 1.0f; // パーティクルのZスケール
 constexpr float kHitLifeTime = 0.6f; // ヒットエフェクトの寿命
+constexpr float kSpaceCrackStartWidthRate = 0.15f; // 空間亀裂開始時の幅倍率
+constexpr float kSpaceCrackStartLengthRate = 0.2f; // 空間亀裂開始時の長さ倍率
+constexpr float kSpaceCrackLifeTimeMin = 0.01f; // 空間亀裂寿命の最小値
 constexpr float kParticleTimeStart = 0.0f; // パーティクル経過時間の初期値
+constexpr float kParticleRateMin = 0.0f; // パーティクル進行率の最小値
+constexpr float kParticleRateMax = 1.0f; // パーティクル進行率の最大値
+constexpr float kParticleFadeAlphaBase = 1.0f; // フェードアウト透明度の基準値
+constexpr float kParticleLifeTimeCheckMin = 0.0f; // 寿命率計算を行う寿命の下限
+constexpr float kDampingEnabledThreshold = 0.0f; // 減衰を適用する下限値
+constexpr float kBoundsCenterRate = 0.5f; // 範囲の中心位置を求める倍率
 constexpr Vector3 kParticleZeroVector = { 0.0f, 0.0f, 0.0f }; // パーティクルのゼロベクトル
 constexpr Vector3 kHitColorRgb = { 1.0f, 1.0f, 1.0f }; // ヒットエフェクトの基本色
 constexpr Vector3 kRingStartScale = { 0.2f, 0.2f, kParticleScaleZ }; // Ringエフェクト開始時のスケール
@@ -47,6 +56,17 @@ constexpr Vector3 kCylinderStartScale = { 0.35f, 0.7f, 0.35f }; // Cylinderエ�
 constexpr Vector3 kCylinderEndScale = { 1.2f, 0.9f, 1.2f }; // Cylinderエフェクト終了時のスケール
 constexpr Vector4 kCylinderColor = { 0.55f, 0.75f, 1.0f, 0.55f }; // Cylinderエフェクトの色
 constexpr float kCylinderLifeTime = 1.0f; // Cylinderエフェクトの寿命
+constexpr float kRiftRingScaleOffsetStep = 0.08f; // Riftリングごとのスケール差
+constexpr float kRiftRingLifeOffsetStep = 0.04f; // Riftリングごとの寿命差
+constexpr float kRiftRingLifeTimeMin = 0.01f; // Riftリング寿命の最小値
+constexpr float kRiftRingSpawnDelayStep = 0.001f; // Riftリングごとの発生時間差
+constexpr float kRiftFragmentLengthMin = 0.45f; // Rift破片の最小長さ
+constexpr float kRiftFragmentLengthMax = 1.15f; // Rift破片の最大長さ
+constexpr float kRiftFragmentStartWidth = 0.025f; // Rift破片開始時の幅
+constexpr float kRiftFragmentEndWidth = 0.01f; // Rift破片終了時の幅
+constexpr float kRiftFragmentEndLengthRate = 0.35f; // Rift破片終了時の長さ倍率
+constexpr float kRiftFragmentLifeTimeMin = 0.01f; // Rift破片寿命の最小値
+constexpr float kRiftFragmentRotationOffset = std::numbers::pi_v<float> * 0.5f; // Rift破片の向き補正
 }
 
 /// <summary>
@@ -227,13 +247,13 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, uin
         particle.transform.scale = { rsx(rng_), rsy(rng_), rsz(rng_) };
         particle.startScale = particle.transform.scale;
         particle.endScale = particle.transform.scale;
-        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.rotate = kParticleZeroVector;
         particle.transform.translate = { position.x + rx(rng_), position.y + ry(rng_), position.z + rz(rng_) };
         particle.velocity = { rvx(rng_), rvy(rng_), rvz(rng_) };
         particle.color = { rcx(rng_), rcy(rng_), rcz(rng_), rca(rng_) };
         particle.startColor = particle.color;
         particle.lifeTime = lifeDist(rng_);
-        particle.currentTime = 0.0f;
+        particle.currentTime = kParticleTimeStart;
         particle.spawnTime = globalTime_;
 
         particles.push_back(particle);
@@ -321,16 +341,16 @@ void ParticleManager::EmitSpaceCrack(
     groupIterator->second.particles.reserve(groupIterator->second.particles.size() + emitCount);
 
     PM_CpuParticle particle {}; // 生成する空間亀裂パーティクル
-    particle.startScale = { width * 0.15f, length * 0.2f, 1.0f };
-    particle.endScale = { width, length, 1.0f };
+    particle.startScale = { width * kSpaceCrackStartWidthRate, length * kSpaceCrackStartLengthRate, kParticleScaleZ };
+    particle.endScale = { width, length, kParticleScaleZ };
     particle.transform.scale = particle.startScale;
     particle.transform.rotate = { 0.0f, 0.0f, rotationZ };
     particle.transform.translate = position;
-    particle.velocity = { 0.0f, 0.0f, 0.0f };
+    particle.velocity = kParticleZeroVector;
     particle.color = color;
     particle.startColor = color;
-    particle.lifeTime = (std::max)(lifeTime, 0.01f);
-    particle.currentTime = 0.0f;
+    particle.lifeTime = (std::max)(lifeTime, kSpaceCrackLifeTimeMin);
+    particle.currentTime = kParticleTimeStart;
     particle.spawnTime = globalTime_;
     particle.useScaleOverLife = true;
     particle.useFadeOut = true;
@@ -440,16 +460,28 @@ void ParticleManager::EmitRiftRing(
     particles.reserve(particles.size() + emitCount);
 
     for (uint32_t ringIndex = 0; ringIndex < emitCount; ++ringIndex) {
-        const float scaleOffset = static_cast<float>(ringIndex) * 0.08f; // 同時生成リングの大きさ差
+        const float scaleOffset = static_cast<float>(ringIndex)
+            * kRiftRingScaleOffsetStep; // 同時生成リングの大きさ差
         PM_CpuParticle particle {}; // 生成するリングパーティクル
-        particle.startScale = { startScale + scaleOffset, startScale + scaleOffset, 1.0f };
-        particle.endScale = { endScale + scaleOffset, endScale + scaleOffset, 1.0f };
+        particle.startScale = {
+            startScale + scaleOffset,
+            startScale + scaleOffset,
+            kParticleScaleZ
+        };
+        particle.endScale = {
+            endScale + scaleOffset,
+            endScale + scaleOffset,
+            kParticleScaleZ
+        };
         particle.transform.scale = particle.startScale;
         particle.transform.translate = position;
         particle.color = color;
         particle.startColor = color;
-        particle.lifeTime = (std::max)(lifeTime + static_cast<float>(ringIndex) * 0.04f, 0.01f);
-        particle.spawnTime = globalTime_ + static_cast<float>(ringIndex) * 0.001f;
+        particle.lifeTime = (std::max)(
+            lifeTime + static_cast<float>(ringIndex) * kRiftRingLifeOffsetStep,
+            kRiftRingLifeTimeMin);
+        particle.spawnTime = globalTime_
+            + static_cast<float>(ringIndex) * kRiftRingSpawnDelayStep;
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
         particles.push_back(particle);
@@ -485,22 +517,22 @@ void ParticleManager::EmitRiftFragments(
     const float maxSpeed = (std::max)(minimumSpeed, maximumSpeed); // 破片の最高速度
     std::uniform_real_distribution<float> angleDistribution(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // 放射方向
     std::uniform_real_distribution<float> speedDistribution(minSpeed, maxSpeed); // 放出速度
-    std::uniform_real_distribution<float> lengthDistribution(0.45f, 1.15f); // 破片の長さ
+    std::uniform_real_distribution<float> lengthDistribution(kRiftFragmentLengthMin, kRiftFragmentLengthMax); // 破片の長さ
 
     for (uint32_t fragmentIndex = 0; fragmentIndex < emitCount; ++fragmentIndex) {
         const float angle = angleDistribution(rng_); // 現在の破片方向
         const float speed = speedDistribution(rng_); // 現在の破片速度
         const float length = lengthDistribution(rng_); // 現在の破片長さ
         PM_CpuParticle particle {}; // 生成する破片パーティクル
-        particle.startScale = { 0.025f, length, 1.0f };
-        particle.endScale = { 0.01f, length * 0.35f, 1.0f };
+        particle.startScale = { kRiftFragmentStartWidth, length, kParticleScaleZ };
+        particle.endScale = { kRiftFragmentEndWidth, length * kRiftFragmentEndLengthRate, kParticleScaleZ };
         particle.transform.scale = particle.startScale;
-        particle.transform.rotate = { 0.0f, 0.0f, angle - std::numbers::pi_v<float> * 0.5f };
+        particle.transform.rotate = { 0.0f, 0.0f, angle - kRiftFragmentRotationOffset };
         particle.transform.translate = position;
         particle.velocity = { std::cos(angle) * speed, std::sin(angle) * speed, 0.0f };
         particle.color = color;
         particle.startColor = color;
-        particle.lifeTime = (std::max)(lifeTime, 0.01f);
+        particle.lifeTime = (std::max)(lifeTime, kRiftFragmentLifeTimeMin);
         particle.spawnTime = globalTime_;
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
@@ -537,8 +569,8 @@ void ParticleManager::Update(float dt)
                 particle.velocity.z += gravity_.z * dt;
             }
 
-            if (damping_ > 0.0f) {
-                const float dampingRate = std::clamp(1.0f - damping_ * dt, 0.0f, 1.0f); // 減衰率
+            if (damping_ > kDampingEnabledThreshold) {
+                const float dampingRate = std::clamp(kParticleRateMax - damping_ * dt, kParticleRateMin, kParticleRateMax); // 減衰率
                 particle.velocity.x *= dampingRate;
                 particle.velocity.y *= dampingRate;
                 particle.velocity.z *= dampingRate;
@@ -549,7 +581,7 @@ void ParticleManager::Update(float dt)
             particle.transform.translate.z += particle.velocity.z * dt;
 
             particle.currentTime += dt;
-            const float lifeRate = particle.lifeTime > 0.0f ? std::clamp(particle.currentTime / particle.lifeTime, 0.0f, 1.0f) : 1.0f; // 寿命の進行率
+            const float lifeRate = particle.lifeTime > kParticleLifeTimeCheckMin ? std::clamp(particle.currentTime / particle.lifeTime, kParticleRateMin, kParticleRateMax) : kParticleRateMax; // 寿命の進行率
             if (particle.useScaleOverLife) {
                 const float scaleRate = std::sin(lifeRate * std::numbers::pi_v<float>); // 中間で最大になる倍率
                 particle.transform.scale.x = particle.startScale.x + (particle.endScale.x - particle.startScale.x) * scaleRate;
@@ -557,7 +589,7 @@ void ParticleManager::Update(float dt)
                 particle.transform.scale.z = particle.startScale.z + (particle.endScale.z - particle.startScale.z) * scaleRate;
             }
             if (particle.useFadeOut) {
-                particle.color.w = particle.startColor.w * (1.0f - lifeRate);
+                particle.color.w = particle.startColor.w * (kParticleFadeAlphaBase - lifeRate);
             }
 
             if (particle.currentTime < particle.lifeTime) {
@@ -707,7 +739,7 @@ void ParticleManager::SetColorRange(const Vector4& mn, const Vector4& mx)
 
 void ParticleManager::SetGravityEnabled(bool enabled) { gravityEnabled_ = enabled; }
 void ParticleManager::SetGravity(const Vector3& g) { gravity_ = g; }
-void ParticleManager::SetDamping(float d) { damping_ = d < 0.0f ? 0.0f : d; }
+void ParticleManager::SetDamping(float d) { damping_ = d < kDampingEnabledThreshold ? kDampingEnabledThreshold : d; }
 
 /// <summary>
 /// ImGuiでパーティクル設定を編集する
@@ -840,9 +872,9 @@ void ParticleManager::DrawImGui()
                     }
 
                     const Vector3 centerPosition {
-                        (minimumPosition.x + maximumPosition.x) * 0.5f,
-                        (minimumPosition.y + maximumPosition.y) * 0.5f,
-                        (minimumPosition.z + maximumPosition.z) * 0.5f
+                        (minimumPosition.x + maximumPosition.x) * kBoundsCenterRate,
+                        (minimumPosition.y + maximumPosition.y) * kBoundsCenterRate,
+                        (minimumPosition.z + maximumPosition.z) * kBoundsCenterRate
                     }; // グループ全体の中心座標
 
                     ImGui::Text("Center = %.2f, %.2f, %.2f", centerPosition.x, centerPosition.y, centerPosition.z);

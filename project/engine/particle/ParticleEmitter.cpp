@@ -16,6 +16,8 @@ constexpr int kImGuiCountMax = 1000; // 発生数の最大値
 constexpr float kImGuiFrequencyStep = 0.01f; // 発生間隔の調整幅
 constexpr float kImGuiFrequencyMin = 0.0f; // 発生間隔の最小値
 constexpr float kImGuiFrequencyMax = 100.0f; // 発生間隔の最大値
+constexpr float kAlwaysEmitFrequencyThreshold = 0.0f; // 毎フレーム発生に切り替える発生間隔の下限
+constexpr float kEmitterElapsedTimeStart = 0.0f; // 発生経過時間の初期値
 } // namespace
 
 #ifdef USE_IMGUI
@@ -51,11 +53,11 @@ void ParticleEmitter::Update(float deltaTime)
     // 経過時間を加算
     elapsed += deltaTime;
     // 発生間隔が0以下なら毎フレーム発生
-    if (frequency <= 0.0f) {
+    if (frequency <= kAlwaysEmitFrequencyThreshold) {
         if (count) {
             Emit();
         }
-        elapsed = 0.0f;
+        elapsed = kEmitterElapsedTimeStart;
         return;
     }
     // 発生間隔を超えたら発生させる
