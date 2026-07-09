@@ -22,6 +22,24 @@ constexpr UINT kLinearWrapSamplerRegister = 0; // 線形ラップサンプラー
 constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
 constexpr float kSamplerMipLodBias = 0.0f; // サンプラーのミップLODバイアス
 constexpr float kSamplerMinLod = 0.0f; // サンプラーの最小LOD
+constexpr float kImGuiLightIntensityMin = 0.0f; // ライト強度の最小値
+constexpr float kImGuiLightIntensityMax = 10.0f; // ライト強度の最大値
+constexpr float kImGuiLightPositionStep = 0.1f; // ライト位置の調整幅
+constexpr float kImGuiLightDirectionStep = 0.05f; // ライト方向の調整幅
+constexpr float kImGuiLightRadiusMin = 0.0f; // 点光源半径の最小値
+constexpr float kImGuiLightRadiusMax = 100.0f; // 点光源半径の最大値
+constexpr float kImGuiLightDecayMin = 0.0f; // ライト減衰率の最小値
+constexpr float kImGuiLightDecayMax = 10.0f; // ライト減衰率の最大値
+constexpr float kRadiansToDegrees = 57.29577951308232f; // ラジアンから度数へ変換する倍率
+constexpr float kDegreesToRadians = 0.017453292519943295f; // 度数からラジアンへ変換する倍率
+constexpr float kCosClampMin = -1.0f; // acos前に使用するcos値の最小値
+constexpr float kCosClampMax = 1.0f; // acos前に使用するcos値の最大値
+constexpr float kImGuiConeAngleMin = 0.1f; // スポットライト角度の最小値
+constexpr float kImGuiConeAngleMax = 179.0f; // スポットライト角度の最大値
+constexpr float kImGuiFalloffAngleMin = 0.0f; // フォールオフ開始角度の最小値
+constexpr float kDirectionNormalizeEpsilon = 1e-6f; // ライト方向を正規化する最小長さ
+constexpr float kImGuiCameraTranslateStep = 0.1f; // カメラ位置の調整幅
+constexpr float kImGuiCameraRotateStep = 0.01f; // カメラ回転の調整幅
 /// <summary>
 /// ブレンドモードがPSO配列の範囲内か確認する
 /// </summary>
@@ -247,7 +265,7 @@ void Object3dCommon::DrawImGui()
                 directionalLightData_->color.z = color[2];
             }
             float intensity = directionalLightData_->intensity;
-            if (ImGui::SliderFloat("Intensity", &intensity, 0.0f, 10.0f)) {
+            if (ImGui::SliderFloat("Intensity", &intensity, kImGuiLightIntensityMin, kImGuiLightIntensityMax)) {
                 directionalLightData_->intensity = intensity;
             }
             // Point lights UI
@@ -264,7 +282,7 @@ void Object3dCommon::DrawImGui()
                             }
 
                             float pos[3] = { pointLightsData_[i].position.x, pointLightsData_[i].position.y, pointLightsData_[i].position.z };
-                            if (ImGui::DragFloat3("Position", pos, 0.1f)) {
+                            if (ImGui::DragFloat3("Position", pos, kImGuiLightPositionStep)) {
                                 pointLightsData_[i].position.x = pos[0];
                                 pointLightsData_[i].position.y = pos[1];
                                 pointLightsData_[i].position.z = pos[2];
@@ -278,17 +296,17 @@ void Object3dCommon::DrawImGui()
                             }
 
                             float pIntensity = pointLightsData_[i].color.w;
-                            if (ImGui::SliderFloat("Intensity", &pIntensity, 0.0f, 10.0f)) {
+                            if (ImGui::SliderFloat("Intensity", &pIntensity, kImGuiLightIntensityMin, kImGuiLightIntensityMax)) {
                                 pointLightsData_[i].color.w = pIntensity;
                             }
 
                             float radius = pointLightsData_[i].radius;
-                            if (ImGui::SliderFloat("Radius", &radius, 0.0f, 100.0f)) {
+                            if (ImGui::SliderFloat("Radius", &radius, kImGuiLightRadiusMin, kImGuiLightRadiusMax)) {
                                 pointLightsData_[i].radius = radius;
                             }
 
                             float decay = pointLightsData_[i].decay;
-                            if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                            if (ImGui::SliderFloat("Decay", &decay, kImGuiLightDecayMin, kImGuiLightDecayMax)) {
                                 pointLightsData_[i].decay = decay;
                             }
                         }
@@ -309,17 +327,17 @@ void Object3dCommon::DrawImGui()
                     }
 
                     float spos[3] = { spotLightData_->position.x, spotLightData_->position.y, spotLightData_->position.z };
-                    if (ImGui::DragFloat3("Position", spos, 0.1f)) {
+                    if (ImGui::DragFloat3("Position", spos, kImGuiLightPositionStep)) {
                         spotLightData_->position.x = spos[0];
                         spotLightData_->position.y = spos[1];
                         spotLightData_->position.z = spos[2];
                     }
 
                     float sdir[3] = { spotLightData_->direction.x, spotLightData_->direction.y, spotLightData_->direction.z };
-                    if (ImGui::DragFloat3("Direction", sdir, 0.05f)) {
+                    if (ImGui::DragFloat3("Direction", sdir, kImGuiLightDirectionStep)) {
                         // normalize direction if possible
                         float len = sqrtf(sdir[0] * sdir[0] + sdir[1] * sdir[1] + sdir[2] * sdir[2]);
-                        if (len > 1e-6f) {
+                        if (len > kDirectionNormalizeEpsilon) {
                             spotLightData_->direction.x = sdir[0] / len;
                             spotLightData_->direction.y = sdir[1] / len;
                             spotLightData_->direction.z = sdir[2] / len;
@@ -334,30 +352,30 @@ void Object3dCommon::DrawImGui()
                     }
 
                     float sIntensity = spotLightData_->color.w;
-                    if (ImGui::SliderFloat("Intensity", &sIntensity, 0.0f, 10.0f)) {
+                    if (ImGui::SliderFloat("Intensity", &sIntensity, kImGuiLightIntensityMin, kImGuiLightIntensityMax)) {
                         spotLightData_->color.w = sIntensity;
                     }
 
                     float distance = spotLightData_->distance;
-                    if (ImGui::SliderFloat("Distance", &distance, 0.0f, 100.0f)) {
+                    if (ImGui::SliderFloat("Distance", &distance, kImGuiLightRadiusMin, kImGuiLightRadiusMax)) {
                         spotLightData_->distance = distance;
                     }
 
                     float decay = spotLightData_->decay;
-                    if (ImGui::SliderFloat("Decay", &decay, 0.0f, 10.0f)) {
+                    if (ImGui::SliderFloat("Decay", &decay, kImGuiLightDecayMin, kImGuiLightDecayMax)) {
                         spotLightData_->decay = decay;
                     }
 
                     // Cone angle editing (convert between cos and degrees for usability)
-                    const float rad2deg = 57.29577951308232f;
-                    const float deg2rad = 0.017453292519943295f;
-                    float angleDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosAngle))) * rad2deg;
-                    if (ImGui::SliderFloat("Cone Angle (deg)", &angleDeg, 0.1f, 179.0f)) {
+                    const float rad2deg = kRadiansToDegrees;
+                    const float deg2rad = kDegreesToRadians;
+                    float angleDeg = acosf(fmaxf(kCosClampMin, fminf(kCosClampMax, spotLightData_->cosAngle))) * rad2deg;
+                    if (ImGui::SliderFloat("Cone Angle (deg)", &angleDeg, kImGuiConeAngleMin, kImGuiConeAngleMax)) {
                         spotLightData_->cosAngle = cosf(angleDeg * deg2rad);
                     }
 
-                    float falloffDeg = acosf(fmaxf(-1.0f, fminf(1.0f, spotLightData_->cosFalloffStart))) * rad2deg;
-                    if (ImGui::SliderFloat("Falloff Start (deg)", &falloffDeg, 0.0f, angleDeg)) {
+                    float falloffDeg = acosf(fmaxf(kCosClampMin, fminf(kCosClampMax, spotLightData_->cosFalloffStart))) * rad2deg;
+                    if (ImGui::SliderFloat("Falloff Start (deg)", &falloffDeg, kImGuiFalloffAngleMin, angleDeg)) {
                         spotLightData_->cosFalloffStart = cosf(falloffDeg * deg2rad);
                     }
                 } else {
@@ -389,11 +407,11 @@ void Object3dCommon::DrawCameraImGui()
     if (ImGui::CollapsingHeader("Main Camera")) {
         if (defaultCamera_) {
             auto t = defaultCamera_->GetTranslate();
-            if (ImGui::DragFloat3("Translate", &t.x, 0.1f)) {
+            if (ImGui::DragFloat3("Translate", &t.x, kImGuiCameraTranslateStep)) {
                 defaultCamera_->SetTranslate(t);
             }
             auto r = defaultCamera_->GetRotate();
-            if (ImGui::DragFloat3("Rotate", &r.x, 0.01f)) {
+            if (ImGui::DragFloat3("Rotate", &r.x, kImGuiCameraRotateStep)) {
                 defaultCamera_->SetRotate(r);
             }
         } else {
@@ -407,12 +425,12 @@ void Object3dCommon::DrawCameraImGui()
             // DebugCamera uses Math::Vector3 for translation/rotation
             Math::Vector3 dt = debugCamera_->GetTranslation();
             float dt_arr[3] = { dt.x, dt.y, dt.z };
-            if (ImGui::DragFloat3("Debug Translate", dt_arr, 0.1f)) {
+            if (ImGui::DragFloat3("Debug Translate", dt_arr, kImGuiCameraTranslateStep)) {
                 debugCamera_->SetTranslation({ dt_arr[0], dt_arr[1], dt_arr[2] });
             }
             Math::Vector3 dr = debugCamera_->GetRotation();
             float dr_arr[3] = { dr.x, dr.y, dr.z };
-            if (ImGui::DragFloat3("Debug Rotate", dr_arr, 0.01f)) {
+            if (ImGui::DragFloat3("Debug Rotate", dr_arr, kImGuiCameraRotateStep)) {
                 debugCamera_->SetRotation({ dr_arr[0], dr_arr[1], dr_arr[2] });
             }
         } else {
