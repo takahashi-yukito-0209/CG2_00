@@ -48,6 +48,11 @@ constexpr Vector3 kDefaultEffectPosition = { 0.0f, 1.0f, 0.0f }; // エフェク
 constexpr Vector4 kHiddenAfterimageColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示時の残像色
 constexpr int kCrackRevealCountOffset = 1; // 進行率から亀裂表示数へ変換する加算数
 constexpr int kBranchRateDenominatorMin = 1; // 枝分かれ率計算に使用する分母の最小値
+constexpr int kMinimumBurstEmitCount = 0; // 破砕時に発生させる数の最小値
+constexpr uint32_t kInnerRingCountBias = 1u; // 奇数リング数を内側へ寄せる加算値
+constexpr const char* kRingParticleGroupName = "Ring"; // リング用パーティクルグループ名
+constexpr const char* kHitParticleGroupName = "Hit"; // 亀裂と破片用パーティクルグループ名
+constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱用パーティクルグループ名
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
 constexpr int kMaximumCrackPatternCount = 7; // 定義済みの亀裂パターン数
 constexpr int kCrackWidthVariationCycle = 2; // 亀裂幅の変化周期
@@ -237,7 +242,7 @@ void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 圧縮予兆を生成するパーティクル管理
     if (particleManager) {
-        particleManager->EmitCylinderEffect("Cylinder", effectPosition_, kStartCylinderCount);
+        particleManager->EmitCylinderEffect(kCylinderParticleGroupName, effectPosition_, kStartCylinderCount);
     }
 }
 
@@ -687,7 +692,7 @@ void TemporalRiftEffect::EmitSpaceCracks()
         crackColor.z = (std::min)(crackColor.z + branchRate * kCrackBlueBoost, kEffectProgressMax);
 
         particleManager->EmitSpaceCrack(
-            "Hit",
+            kHitParticleGroupName,
             crackPosition,
             kCrackAngles[crackIndex],
             crackLength,
@@ -708,11 +713,11 @@ void TemporalRiftEffect::EmitRiftBurst()
         return;
     }
 
-    const uint32_t totalRingCount = static_cast<uint32_t>((std::max)(settings_.ringCount, 0)); // 生成するリング総数
-    const uint32_t innerRingCount = (totalRingCount + 1u) / kRingColorGroupCount; // 青色の内側リング数
+    const uint32_t totalRingCount = static_cast<uint32_t>((std::max)(settings_.ringCount, kMinimumBurstEmitCount)); // 生成するリング総数
+    const uint32_t innerRingCount = (totalRingCount + kInnerRingCountBias) / kRingColorGroupCount; // 青色の内側リング数
     const uint32_t outerRingCount = totalRingCount / kRingColorGroupCount; // 紫色の外側リング数
     particleManager->EmitRiftRing(
-        "Ring",
+        kRingParticleGroupName,
         effectPosition_,
         innerRingCount,
         settings_.innerRingColor,
@@ -720,7 +725,7 @@ void TemporalRiftEffect::EmitRiftBurst()
         kInnerRingEndRadius,
         kInnerRingLifeTime);
     particleManager->EmitRiftRing(
-        "Ring",
+        kRingParticleGroupName,
         effectPosition_,
         outerRingCount,
         settings_.outerRingColor,
@@ -728,9 +733,9 @@ void TemporalRiftEffect::EmitRiftBurst()
         kOuterRingEndRadius,
         kOuterRingLifeTime);
     particleManager->EmitRiftFragments(
-        "Hit",
+        kHitParticleGroupName,
         effectPosition_,
-        static_cast<uint32_t>((std::max)(settings_.fragmentCount, 0)),
+        static_cast<uint32_t>((std::max)(settings_.fragmentCount, kMinimumBurstEmitCount)),
         settings_.fragmentColor,
         settings_.fragmentMinSpeed,
         settings_.fragmentMaxSpeed,
