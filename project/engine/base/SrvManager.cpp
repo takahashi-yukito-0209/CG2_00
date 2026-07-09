@@ -7,6 +7,10 @@
 
 using namespace MyEngine;
 
+namespace {
+constexpr uint32_t kReservedSrvIndexForImGui = 0; // ImGui用に予約するSRVインデックス
+constexpr uint32_t kFirstUsableSrvIndex = 1; // 通常割り当てを開始するSRVインデックス
+} // namespace
 /// <summary>
 /// 初期化処理
 /// </summary>
@@ -21,7 +25,7 @@ void SrvManager::Initialize(DirectXCommon* dxCommon)
     descriptorHeap_ = dxCommon_->GetSrvDescriptorHeap();
     descriptorSize_ = dxCommon_->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     // 0番はImGui用に予約されているため、SRVの割り当ては1から開始する
-    useIndex_ = 1;
+    useIndex_ = kFirstUsableSrvIndex;
 }
 
 /// <summary>
@@ -34,7 +38,7 @@ void SrvManager::Finalize()
     dxCommon_ = nullptr;
     descriptorHeap_.Reset();
     descriptorSize_ = 0;
-    useIndex_ = 0;
+    useIndex_ = kReservedSrvIndexForImGui;
     freeList_.clear();
     allocatedSet_.clear();
 }
@@ -59,7 +63,7 @@ uint32_t SrvManager::Allocate()
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提とする
     assert(CanAllocate()); // 上限未満であることを前提とする
     // フリーリストに解放済みインデックスがあれば再利用
-    uint32_t index = 0;
+    uint32_t index = kReservedSrvIndexForImGui;
     if (!freeList_.empty()) {
         index = freeList_.back();
         freeList_.pop_back();
@@ -80,7 +84,7 @@ uint32_t SrvManager::Allocate()
 void SrvManager::Free(uint32_t index)
 {
     // 0 は ImGui 予約で解放禁止
-    if (index == 0)
+    if (index == kReservedSrvIndexForImGui)
         return;
 
     // 範囲外チェック
@@ -161,7 +165,7 @@ void SrvManager::InitImGui()
     init_info.Device = dxCommon_->GetDevice();
     // ImGuiのバックエンドがテクスチャアップロードに使用するコマンドキュー
     init_info.CommandQueue = dxCommon_->GetCommandQueue();
-    init_info.NumFramesInFlight = 2; // フレームインフライト数（例: 2）
+    init_info.NumFramesInFlight = DirectXCommon::kFrameCount; // フレームインフライト数
     init_info.RTVFormat = dxCommon_->GetSwapChainFormat();
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     init_info.UserData = this;
