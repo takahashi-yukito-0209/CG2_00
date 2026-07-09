@@ -27,6 +27,18 @@ constexpr float kImGuiPhysicsMin = -100.0f; // 物理系値の最小値
 constexpr float kImGuiPhysicsMax = 100.0f; // 物理系値の最大値
 constexpr float kImGuiDampingMin = 0.0f; // 減衰率の最小値
 constexpr float kImGuiDampingMax = 100.0f; // 減衰率の最大値
+constexpr float kHitLengthMin = 0.9f; // ヒットエフェクトの最小長さ
+constexpr float kHitLengthMax = 1.8f; // ヒットエフェクトの最大長さ
+constexpr float kHitAlphaMin = 0.75f; // ヒットエフェクト透明度の最小値
+constexpr float kHitAlphaMax = 1.0f; // ヒットエフェクト透明度の最大値
+constexpr float kHitStartScaleX = 0.01f; // ヒットエフェクト開始時の横幅
+constexpr float kHitStartScaleYRate = 0.15f; // ヒットエフェクト開始時の縦幅係数
+constexpr float kHitEndScaleX = 0.045f; // ヒットエフェクト終了時の横幅
+constexpr float kParticleScaleZ = 1.0f; // パーティクルのZスケール
+constexpr float kHitLifeTime = 0.6f; // ヒットエフェクトの寿命
+constexpr float kParticleTimeStart = 0.0f; // パーティクル経過時間の初期値
+constexpr Vector3 kParticleZeroVector = { 0.0f, 0.0f, 0.0f }; // パーティクルのゼロベクトル
+constexpr Vector3 kHitColorRgb = { 1.0f, 1.0f, 1.0f }; // ヒットエフェクトの基本色
 }
 
 /// <summary>
@@ -239,24 +251,35 @@ void ParticleManager::EmitHitEffect(const std::string& name, const Vector3& posi
     particles.reserve(particles.size() + emitCount);
 
     std::uniform_real_distribution<float> rotateDist(-std::numbers::pi_v<float>, std::numbers::pi_v<float>); // Z回転範囲
-    std::uniform_real_distribution<float> scaleYDist(0.9f, 1.8f); // 縦方向スケール範囲
-    std::uniform_real_distribution<float> alphaDist(0.75f, 1.0f); // 透明度範囲
+    std::uniform_real_distribution<float> scaleYDist(
+        kHitLengthMin,
+        kHitLengthMax); // 縦方向スケール範囲
+    std::uniform_real_distribution<float> alphaDist(kHitAlphaMin, kHitAlphaMax); // 透明度範囲
 
     for (uint32_t i = 0; i < emitCount; ++i) {
         const float length = scaleYDist(rng_); // 光の筋の最大長さ
         const float alpha = alphaDist(rng_); // 発生時の透明度
 
         PM_CpuParticle particle {}; // 生成するパーティクル
-        particle.startScale = { 0.01f, length * 0.15f, 1.0f };
-        particle.endScale = { 0.045f, length, 1.0f };
+        particle.startScale = {
+            kHitStartScaleX,
+            length * kHitStartScaleYRate,
+            kParticleScaleZ
+        };
+        particle.endScale = { kHitEndScaleX, length, kParticleScaleZ };
         particle.transform.scale = particle.startScale;
         particle.transform.rotate = { 0.0f, 0.0f, rotateDist(rng_) };
         particle.transform.translate = position;
-        particle.velocity = { 0.0f, 0.0f, 0.0f };
-        particle.color = { 1.0f, 1.0f, 1.0f, alpha };
+        particle.velocity = kParticleZeroVector;
+        particle.color = {
+            kHitColorRgb.x,
+            kHitColorRgb.y,
+            kHitColorRgb.z,
+            alpha
+        };
         particle.startColor = particle.color;
-        particle.lifeTime = 0.6f;
-        particle.currentTime = 0.0f;
+        particle.lifeTime = kHitLifeTime;
+        particle.currentTime = kParticleTimeStart;
         particle.spawnTime = globalTime_;
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
