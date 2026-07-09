@@ -14,6 +14,14 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
+constexpr uint32_t kDefaultInstancingCount = 100; // インスタンシング用の既定最大数
+constexpr size_t kObjectLogBufferSize = 256; // Object3dCommonのログ用バッファサイズ
+constexpr UINT kObjectRenderTargetCount = 1; // 3D描画で使用するRT数
+constexpr UINT kObjectSampleCount = 1; // 3D描画のマルチサンプル数
+constexpr UINT kLinearWrapSamplerRegister = 0; // 線形ラップサンプラーのレジスタ番号
+constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
+constexpr float kSamplerMipLodBias = 0.0f; // サンプラーのミップLODバイアス
+constexpr float kSamplerMinLod = 0.0f; // サンプラーの最小LOD
 /// <summary>
 /// ブレンドモードがPSO配列の範囲内か確認する
 /// </summary>
@@ -55,7 +63,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
         directionalLightData_->intensity = 1.0f;
         // デバッグログ
         {
-            char buf[256];
+            char buf[kObjectLogBufferSize];
             sprintf_s(buf, "DEBUG DirectionalLight default: color=(%f,%f,%f) dir=(%f,%f,%f) intensity=%f\n",
                 directionalLightData_->color.x, directionalLightData_->color.y, directionalLightData_->color.z,
                 directionalLightData_->direction.x, directionalLightData_->direction.y, directionalLightData_->direction.z,
@@ -148,25 +156,24 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
 
     // インスタンシング用リソースの作成（構造化バッファ + SRV）
-    const uint32_t kNumInstance = 100; // パーティクルデモ用に最大インスタンス数を増加
-    kNumInstance_ = kNumInstance;
+    kNumInstance_ = kDefaultInstancingCount;
 
-    // TransformationMatrix[kNumInstance] を格納する構造化バッファ向けのGPU可視SRVを作成
+    // TransformationMatrix[kDefaultInstancingCount] を格納する構造化バッファ向けのGPU可視SRVを作成
     D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc {};
     instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN; // 構造化バッファ
     instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER; // バッファビュー
     instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // バッファの先頭から使用
     instancingSrvDesc.Buffer.FirstElement = 0; // バッファの先頭から
-    instancingSrvDesc.Buffer.NumElements = kNumInstance; // kNumInstance分の構造体を格納
+    instancingSrvDesc.Buffer.NumElements = kDefaultInstancingCount; // kDefaultInstancingCount分の構造体を格納
     instancingSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix); // 1インスタンス分のサイズ
     instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE; // フラグは特に必要ないため NONE
 
     // インスタンスデータを格納するため、UPLOADヒープに既定サイズのバッファリソースを作成
-    size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kNumInstance;
+    size_t instancingBufferSize = sizeof(Object3d::TransformationMatrix) * kDefaultInstancingCount;
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
         instancingResources_[frameIndex] = dxCommon_->CreateBufferResource(instancingBufferSize);
         instancingResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_[frameIndex]));
-        for (uint32_t instanceIndex = 0; instanceIndex < kNumInstance; ++instanceIndex) {
+        for (uint32_t instanceIndex = 0; instanceIndex < kDefaultInstancingCount; ++instanceIndex) {
             instancingData_[frameIndex][instanceIndex].WVP = MathUtil::MakeIdentity4x4();
             instancingData_[frameIndex][instanceIndex].World = MathUtil::MakeIdentity4x4();
             instancingData_[frameIndex][instanceIndex].color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -187,7 +194,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
     // デバッグログ
     {
-        char buf[256];
+        char buf[kObjectLogBufferSize];
         sprintf_s(buf, "Object3dCommon::Initialize: created instancingResource size=%zu srvIndex=%u srvGPU=0x%016llX\n",
             instancingBufferSize, instancingSrvIndices_[0], static_cast<unsigned long long>(instancingSrvHandlesGPU_[0].ptr));
         Logger::Log(buf);
@@ -711,9 +718,9 @@ void Object3dCommon::CreateRootSignature()
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // W方向はラップ
     staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わないのでNEVER
     staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ミップレベルの最大値は無限大（利用可能な最大ミップレベルまで使用）
-    staticSamplers[0].MipLODBias = 0.0f; // ミップレベルのバイアスはなし
-    staticSamplers[0].MinLOD = 0.0f; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
-    staticSamplers[0].ShaderRegister = 0; // シェーダーで s0 にバインドされる
+    staticSamplers[0].MipLODBias = kSamplerMipLodBias; // ミップレベルのバイアスはなし
+    staticSamplers[0].MinLOD = kSamplerMinLod; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
+    staticSamplers[0].ShaderRegister = kLinearWrapSamplerRegister; // シェーダーで s0 にバインドされる
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用
 
     // s1: ポイントフィルタ + クランプ（アルファカットアウトテクスチャのブリーディングを防ぐために有用）
@@ -723,9 +730,9 @@ void Object3dCommon::CreateRootSignature()
     staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // W方向はクランプ
     staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わないのでNEVER
     staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX; // ミップレベルの最大値は無限大（利用可能な最大ミップレベルまで使用）
-    staticSamplers[1].MipLODBias = 0.0f; // ミップレベルのバイアスはなし
-    staticSamplers[1].MinLOD = 0.0f; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
-    staticSamplers[1].ShaderRegister = 1; // シェーダーで s1 にバインドされる
+    staticSamplers[1].MipLODBias = kSamplerMipLodBias; // ミップレベルのバイアスはなし
+    staticSamplers[1].MinLOD = kSamplerMinLod; // ミップレベルの最小値は0（最も高解像度のミップレベルから使用）
+    staticSamplers[1].ShaderRegister = kPointClampSamplerRegister; // シェーダーで s1 にバインドされる
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用
 
     // ルートシグネチャの説明にスタティックサンプラーをセット
@@ -968,12 +975,12 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
     graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
     graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
     // 書き込むRTVの情報
-    graphicsPipelineStateDesc.NumRenderTargets = 1;
+    graphicsPipelineStateDesc.NumRenderTargets = kObjectRenderTargetCount;
     graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     // 利用するトポロジ（形状）のタイプ。三角形
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）
-    graphicsPipelineStateDesc.SampleDesc.Count = 1;
+    graphicsPipelineStateDesc.SampleDesc.Count = kObjectSampleCount;
     graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
     // DepthStencilStateの設定
@@ -1028,10 +1035,10 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
         particleRenderTargetBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         instDesc.BlendState = particleBlendDesc;
         instDesc.RasterizerState = rasterizerDesc; // ラスタライザーステートも共通
-        instDesc.NumRenderTargets = 1; // 書き込むRTVの情報
+        instDesc.NumRenderTargets = kObjectRenderTargetCount; // 書き込むRTVの情報
         instDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat(); // 書き込むRTVの情報
         instDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; // 利用するトポロジ（形状）のタイプ。三角形
-        instDesc.SampleDesc.Count = 1; // どのように画面に色を打ち込むかの設定（気にしなくて良い）
+        instDesc.SampleDesc.Count = kObjectSampleCount; // どのように画面に色を打ち込むかの設定（気にしなくて良い）
         instDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK; // ここまでは共通の設定
         D3D12_DEPTH_STENCIL_DESC particleDepthStencilDesc = depthStencilDesc; // パーティクル専用の深度設定
         particleDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
@@ -1041,7 +1048,7 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
         HRESULT r = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&instDesc, IID_PPV_ARGS(&instancingPipelineState_));
         // インスタンシング用PSOの生成に失敗した場合は、エラーログを出力して、インスタンシング用PSOをリセットする
         if (FAILED(r)) {
-            char buf[256];
+            char buf[kObjectLogBufferSize];
             sprintf_s(buf, "Object3dCommon::CreateGraphicsPipeline: failed to create instancing PSO hr=0x%08X\n", static_cast<unsigned int>(r));
             Logger::Log(buf);
             instancingPipelineState_.Reset();
