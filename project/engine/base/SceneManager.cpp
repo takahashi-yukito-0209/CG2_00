@@ -1,9 +1,13 @@
 #include "SceneManager.h"
 #include "../utility/Logger.h"
 #include <utility>
+#include <cstddef>
+
+namespace {
+constexpr size_t kSceneChangeLogBufferSize = 256; // シーン切り替えログ用バッファサイズ
+} // namespace
 
 namespace MyEngine {
-
 /// <summary>
 /// デストラクタ: 現在のシーンがあればFinalizeを呼び出してクリーンアップする
 /// </summary>
@@ -110,7 +114,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene)
             const std::string cur = current_->GetName();
             const std::string nxt = newScene->GetName();
             if (cur == nxt) {
-                char buf[256];
+                char buf[kSceneChangeLogBufferSize];
                 sprintf_s(buf, "SceneManager::ChangeScene: request to change to same scene '%s' ignored\n", cur.c_str());
                 Logger::Log(buf);
                 return;

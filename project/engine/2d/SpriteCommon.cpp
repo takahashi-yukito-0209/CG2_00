@@ -8,6 +8,14 @@
 using namespace MyEngine;
 
 namespace {
+constexpr UINT kSpriteRenderTargetCount = 1; // スプライト描画で使用するRT数
+constexpr UINT kSpriteSampleCount = 1; // スプライト描画のマルチサンプル数
+constexpr size_t kPipelineLogBufferSize = 512; // PSO生成ログ用バッファサイズ
+constexpr size_t kDeviceRemovedLogBufferSize = 256; // デバイス削除理由ログ用バッファサイズ
+constexpr UINT kLinearWrapSamplerRegister = 0; // 線形ラップサンプラーのレジスタ番号
+constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
+constexpr float kSamplerMipLodBias = 0.0f; // サンプラーのミップLODバイアス
+constexpr float kSamplerMinLod = 0.0f; // サンプラーの最小LOD
 /// <summary>
 /// ブレンドモードがPSO配列の範囲内か確認する
 /// </summary>
@@ -175,9 +183,9 @@ void SpriteCommon::CreateRootSignature()
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // W座標はラップ
     staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わない
     staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ミップマップは最大レベルまで使う
-    staticSamplers[0].MipLODBias = 0.0f; // ミップマップレベルのバイアスはなし
-    staticSamplers[0].MinLOD = 0.0f; // ミップマップレベルの最小値は0
-    staticSamplers[0].ShaderRegister = 0; // シェーダーのレジスタ0にバインドする
+    staticSamplers[0].MipLODBias = kSamplerMipLodBias; // ミップマップレベルのバイアスはなし
+    staticSamplers[0].MinLOD = kSamplerMinLod; // ミップマップレベルの最小値は0
+    staticSamplers[0].ShaderRegister = kLinearWrapSamplerRegister; // シェーダーのレジスタ0にバインドする
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
 
     // s1: ポイントフィルタ + クランプ
@@ -187,9 +195,9 @@ void SpriteCommon::CreateRootSignature()
     staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // W座標はクランプ
     staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較は使わない
     staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX; // ミップマップは最大レベルまで使う
-    staticSamplers[1].MipLODBias = 0.0f; // ミップマップレベルのバイアスはなし
-    staticSamplers[1].MinLOD = 0.0f; // ミップマップレベルの最小値は0
-    staticSamplers[1].ShaderRegister = 1; // シェーダーのレジスタ1にバインドする
+    staticSamplers[1].MipLODBias = kSamplerMipLodBias; // ミップマップレベルのバイアスはなし
+    staticSamplers[1].MinLOD = kSamplerMinLod; // ミップマップレベルの最小値は0
+    staticSamplers[1].ShaderRegister = kPointClampSamplerRegister; // シェーダーのレジスタ1にバインドする
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーで使用することを明示
 
     descriptionRootSignature.pStaticSamplers = staticSamplers; // スタティックサンプラー配列へのポインタ
@@ -340,12 +348,12 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
     graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
     graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
     // 書き込むRTVの情報
-    graphicsPipelineStateDesc.NumRenderTargets = 1;
+    graphicsPipelineStateDesc.NumRenderTargets = kSpriteRenderTargetCount;
     graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     // 利用するトロポジ（形状）のタイプ。三角形
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     // どのように画面に色を打ち込むかの設定（気にしなくて良い）
-    graphicsPipelineStateDesc.SampleDesc.Count = 1;
+    graphicsPipelineStateDesc.SampleDesc.Count = kSpriteSampleCount;
     graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
     // DepthStencilStateの設定
@@ -363,7 +371,7 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
 
     // PSO生成前のデバッグ情報
     {
-        char buf[512];
+        char buf[kPipelineLogBufferSize];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: creating PSO. device=%p rootSig=%p VS_sz=%zu PS_sz=%zu RTVFormat=%d DSVFormat=%d\n",
             dxCommon_->GetDevice(),
             rootSignature_.Get(),
@@ -379,14 +387,14 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates_[modeIndex]));
     // PSO生成後のデバッグ情報
     if (FAILED(hr) || !graphicsPipelineStates_[modeIndex]) {
-        char buf[512];
+        char buf[kPipelineLogBufferSize];
         sprintf_s(buf, "SpriteCommon::CreateGraphicsPipeline: CreateGraphicsPipelineState failed. hr=0x%08X\n", static_cast<unsigned int>(hr));
         Logger::Log(buf);
 
         // デバイスが削除理由を返す場合はそれもログ出力
         HRESULT removedHr = dxCommon_->GetDevice()->GetDeviceRemovedReason();
         if (removedHr != S_OK) {
-            char buf2[256];
+            char buf2[kDeviceRemovedLogBufferSize];
             sprintf_s(buf2, "SpriteCommon::CreateGraphicsPipeline: DeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(removedHr));
             Logger::Log(buf2);
         }

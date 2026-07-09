@@ -143,6 +143,26 @@ private:
     /// </summary>
     void StartConvergence();
 
+    /// <summary>
+    /// 時間逆行開始時のポストエフェクト状態を設定する。
+    /// </summary>
+    void ConfigureInitialPostProcess(MyEngine::PostProcess& postProcess);
+
+    /// <summary>
+    /// 巻き戻しフェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyRewindingPostProcess(MyEngine::PostProcess& postProcess, float rewindRate);
+
+    /// <summary>
+    /// 収束フェーズのポストエフェクト状態を反映する。
+    /// </summary>
+    void ApplyConvergingPostProcess(MyEngine::PostProcess& postProcess, float convergenceRate);
+
+    /// <summary>
+    /// 再生前のポストエフェクト状態へ戻す。
+    /// </summary>
+    void RestorePreviousPostProcess(MyEngine::PostProcess& postProcess);
+
     TimeReversalPhase phase_ = TimeReversalPhase::Idle; // 現在の時間逆行状態
     float phaseTime_ = 0.0f; // 現在フェーズでの経過時間
     TimeReversalSettings settings_; // 時間逆行の調整値

@@ -14,6 +14,26 @@ using namespace MyEngine;
 namespace {
 constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
+constexpr float kImGuiShortDurationStep = 0.01f; // 短い時間設定の調整幅
+constexpr float kImGuiStopDurationStep = 0.05f; // 停止時間設定の調整幅
+constexpr float kImGuiMinimumShortDuration = 0.01f; // 短い時間設定の最小値
+constexpr float kImGuiMinimumStopDuration = 0.05f; // 停止時間設定の最小値
+constexpr float kImGuiMaximumShortDuration = 3.0f; // 短い時間設定の最大値
+constexpr float kImGuiMaximumStopDuration = 10.0f; // 停止時間設定の最大値
+constexpr float kImGuiDistortionStrengthStep = 0.001f; // 歪み強度の調整幅
+constexpr float kImGuiDistortionStrengthMin = 0.0f; // 歪み強度の最小値
+constexpr float kImGuiDistortionStrengthMax = 0.2f; // 歪み強度の最大値
+constexpr float kImGuiDistortionRadiusStep = 0.01f; // 歪み範囲の調整幅
+constexpr float kImGuiDistortionRadiusMin = 0.05f; // 歪み範囲の最小値
+constexpr float kImGuiDistortionRadiusMax = 1.5f; // 歪み範囲の最大値
+constexpr float kImGuiDistortionWaveStep = 0.1f; // 歪み波数の調整幅
+constexpr float kImGuiDistortionWaveMin = 1.0f; // 歪み波数の最小値
+constexpr float kImGuiDistortionWaveMax = 12.0f; // 歪み波数の最大値
+constexpr int kImGuiRingCountMin = 0; // リング数の最小値
+constexpr int kImGuiRingCountMax = 8; // リング数の最大値
+constexpr int kImGuiFragmentCountMin = 0; // 破片数の最小値
+constexpr int kImGuiFragmentCountMax = 64; // 破片数の最大値
+constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 }
 
 /// <summary>
@@ -35,6 +55,51 @@ void TimeStopEffect::ResetSettings()
 }
 
 /// <summary>
+/// 時間停止開始時の歪みポストエフェクトを設定する。
+/// </summary>
+void TimeStopEffect::ConfigureDistortionPostProcess(PostProcess& postProcess, const Vector2& effectCenter)
+{
+    postProcess.SetDistortionCenter(effectCenter);
+    postProcess.SetRadialBlurCenter(effectCenter);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetEffectType(PostEffectType::Distortion);
+}
+
+/// <summary>
+/// 開始フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyEnteringPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionStrength(-settings_.distortionStrength * progress);
+    postProcess.SetDistortionProgress(progress);
+}
+
+/// <summary>
+/// 停止フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyStoppedPostProcess(PostProcess& postProcess, bool resetDistortionStrength)
+{
+    postProcess.SetEffectType(PostEffectType::Grayscale);
+    if (resetDistortionStrength) {
+        postProcess.SetDistortionStrength(0.0f);
+    }
+}
+
+/// <summary>
+/// 再開フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeStopEffect::ApplyReleasingPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - progress));
+    postProcess.SetDistortionProgress(progress);
+}
+
+/// <summary>
 /// 時間停止エフェクトを開始する
 /// </summary>
 void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter)
@@ -43,13 +108,7 @@ void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter
     phase_ = TimeStopPhase::Entering;
     phaseTime_ = 0.0f;
 
-    postProcess.SetDistortionCenter(effectCenter);
-    postProcess.SetRadialBlurCenter(effectCenter);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
-    postProcess.SetEffectType(PostEffectType::Distortion);
+    ConfigureDistortionPostProcess(postProcess, effectCenter);
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 開始演出を発生させるパーティクル管理
     if (particleManager) {
@@ -76,15 +135,12 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     case TimeStopPhase::Entering: {
         const float duration = (std::max)(settings_.enterDuration, kMinimumEffectDuration); // 開始演出時間
         const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 開始演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionStrength(-settings_.distortionStrength * progress);
-        postProcess.SetDistortionProgress(progress);
+        ApplyEnteringPostProcess(postProcess, progress);
 
         if (progress >= 1.0f) {
             phase_ = TimeStopPhase::Stopped;
             phaseTime_ = 0.0f;
-            postProcess.SetEffectType(PostEffectType::Grayscale);
-            postProcess.SetDistortionStrength(0.0f);
+            ApplyStoppedPostProcess(postProcess, true);
             if (particleManager) {
                 particleManager->EmitRingEffect(
                     "Ring",
@@ -96,7 +152,7 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     }
 
     case TimeStopPhase::Stopped:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyStoppedPostProcess(postProcess, false);
         if (phaseTime_ >= settings_.stopDuration) {
             phase_ = TimeStopPhase::Releasing;
             phaseTime_ = 0.0f;
@@ -116,9 +172,7 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     case TimeStopPhase::Releasing: {
         const float duration = (std::max)(settings_.releaseDuration, kMinimumEffectDuration); // 再開演出時間
         const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 再開演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - progress));
-        postProcess.SetDistortionProgress(progress);
+        ApplyReleasingPostProcess(postProcess, progress);
 
         if (progress >= 1.0f) {
             phase_ = TimeStopPhase::Idle;
@@ -144,18 +198,18 @@ void TimeStopEffect::DrawImGui()
     }
 
     if (ImGui::CollapsingHeader("Time Stop Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Enter Duration", &settings_.enterDuration, 0.01f, 0.01f, 3.0f, "%.2f sec");
-        ImGui::DragFloat("Stop Duration", &settings_.stopDuration, 0.05f, 0.05f, 10.0f, "%.2f sec");
-        ImGui::DragFloat("Release Duration", &settings_.releaseDuration, 0.01f, 0.01f, 3.0f, "%.2f sec");
+        ImGui::DragFloat("Enter Duration", &settings_.enterDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
+        ImGui::DragFloat("Stop Duration", &settings_.stopDuration, kImGuiStopDurationStep, kImGuiMinimumStopDuration, kImGuiMaximumStopDuration, "%.2f sec");
+        ImGui::DragFloat("Release Duration", &settings_.releaseDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
         ImGui::SeparatorText("Distortion");
-        ImGui::DragFloat("Stop Distortion Strength", &settings_.distortionStrength, 0.001f, 0.0f, 0.2f, "%.3f");
-        ImGui::DragFloat("Stop Distortion Radius", &settings_.distortionRadius, 0.01f, 0.05f, 1.5f, "%.2f");
-        ImGui::DragFloat("Stop Distortion Waves", &settings_.distortionWaveCount, 0.1f, 1.0f, 12.0f, "%.1f");
+        ImGui::DragFloat("Stop Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
+        ImGui::DragFloat("Stop Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        ImGui::DragFloat("Stop Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
         ImGui::SeparatorText("Particles");
-        ImGui::SliderInt("Start Ring Count", &settings_.startRingCount, 0, 8);
-        ImGui::SliderInt("Release Ring Count", &settings_.releaseRingCount, 0, 8);
-        ImGui::SliderInt("Release Fragment Count", &settings_.releaseFragmentCount, 0, 64);
-        ImGui::DragFloat3("Time Stop Position", &settings_.effectPosition.x, 0.05f);
+        ImGui::SliderInt("Start Ring Count", &settings_.startRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        ImGui::SliderInt("Release Ring Count", &settings_.releaseRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        ImGui::SliderInt("Release Fragment Count", &settings_.releaseFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+        ImGui::DragFloat3("Time Stop Position", &settings_.effectPosition.x, kImGuiPositionStep);
     }
 #endif
 }

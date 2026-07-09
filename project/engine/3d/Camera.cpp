@@ -3,15 +3,25 @@
 using namespace Math;
 using namespace MyEngine;
 
+namespace {
+constexpr Vector3 kDefaultScale = { 1.0f, 1.0f, 1.0f }; // 初期スケール
+constexpr Vector3 kDefaultRotation = { 0.0f, 0.0f, 0.0f }; // 初期回転
+constexpr Vector3 kDefaultTranslation = { 0.0f, 0.0f, 0.0f }; // 初期位置
+constexpr float kDefaultFovY = 0.45f; // 初期視野角
+constexpr float kDefaultAspectRatio = 16.0f / 9.0f; // 初期アスペクト比
+constexpr float kDefaultNearClip = 0.1f; // 初期ニアクリップ距離
+constexpr float kDefaultFarClip = 1000.0f; // 初期ファークリップ距離
+} // namespace
+
 /// <summary>
 /// コンストラクタ：カメラの変換情報を初期化し、ワールド・ビュー・プロジェクション行列を計算
 /// </summary>
 Camera::Camera()
-    : transform_ { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } }
-    , fovY_(0.45f)
-    , aspectRatio_(16.0f / 9.0f)
-    , nearClip_(0.1f)
-    , farClip_(1000.0f)
+    : transform_ { kDefaultScale, kDefaultRotation, kDefaultTranslation }
+    , fovY_(kDefaultFovY)
+    , aspectRatio_(kDefaultAspectRatio)
+    , nearClip_(kDefaultNearClip)
+    , farClip_(kDefaultFarClip)
     , worldMatrix_ {}
     , viewMatrix_ {}
     , projectionMatrix_ {}

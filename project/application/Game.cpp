@@ -78,6 +78,8 @@ constexpr float kInitialDebugCameraHeight = 720.0f; // デバッグカメラの�
 constexpr float kDefaultCameraRotateSpeed = 0.01f; // 通常カメラのマウス回転速度
 constexpr float kDefaultCameraZoomSpeed = 0.1f; // 通常カメラのホイール移動速度
 constexpr float kFixedDeltaTime = 1.0f / 60.0f; // 固定更新のデルタタイム
+constexpr size_t kLogDateBufferSize = 32; // ログファイル日時文字列のバッファサイズ
+constexpr size_t kDebugCameraLogBufferSize = 128; // デバッグカメラログ用バッファサイズ
 }
 
 Game::Game()
@@ -181,7 +183,7 @@ void Game::SetupLogFile()
     std::time_t now_c = std::time(nullptr); // 現在の時刻を取得
     struct tm local_tm; // ローカルタイムに変換するための構造体
     localtime_s(&local_tm, &now_c); // 現在の時刻をローカルタイムに変換
-    char dateBuf[32]; // 日付と時刻を "YYYYMMDD_HHMMSS" 形式の文字列にフォーマットするためのバッファ
+    char dateBuf[kLogDateBufferSize]; // 日付と時刻を "YYYYMMDD_HHMMSS" 形式の文字列にフォーマットするためのバッファ
     std::strftime(dateBuf, sizeof(dateBuf), "%Y%m%d_%H%M%S", &local_tm); // 日付と時刻を "YYYYMMDD_HHMMSS" 形式の文字列にフォーマット
     std::string dateString(dateBuf); // フォーマットした日付と時刻を std::string に変換
     std::string logFilePath = std::string("logs/") + dateString + ".log"; // ログファイルのパスを "logs/YYYYMMDD_HHMMSS.log" 形式で作成
@@ -553,12 +555,12 @@ void Game::Update()
         if (impl_->object3dCommon) {
             bool cur = impl_->object3dCommon->GetUseDebugCameraForRender();
             impl_->object3dCommon->SetUseDebugCameraForRender(!cur);
-            char buf[128];
+            char buf[kDebugCameraLogBufferSize];
             sprintf_s(buf, "Debug camera for render: %s\n", !cur ? "ON" : "OFF");
             Logger::Log(buf);
         } else {
             impl_->useDebugCameraForRender = !impl_->useDebugCameraForRender;
-            char buf[128];
+            char buf[kDebugCameraLogBufferSize];
             sprintf_s(buf, "Debug camera for render: %s\n", impl_->useDebugCameraForRender ? "ON" : "OFF");
             Logger::Log(buf);
         }

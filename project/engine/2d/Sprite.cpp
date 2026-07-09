@@ -7,11 +7,33 @@
 #include "Logger.h"
 #include "TextureManager.h"
 #include "mathUtility.h"
+#include <cstddef>
 #include <cstdio>
 
 using namespace MyEngine;
 using namespace Math;
 
+namespace {
+constexpr const char* kFallbackTexturePath = "resources/uvChecker.png"; // 読み込み失敗時に使用するフォールバックテクスチャ
+constexpr const char* kNoTextureLabel = "No Texture"; // ImGui表示用の未設定テクスチャ名
+constexpr float kImGuiPositionStep = 0.1f; // 位置調整の刻み幅
+constexpr float kImGuiRotationStep = 0.01f; // 回転調整の刻み幅
+constexpr float kImGuiSizeStep = 0.1f; // サイズ調整の刻み幅
+constexpr float kImGuiAnchorStep = 0.01f; // アンカー調整の刻み幅
+constexpr float kImGuiAnchorMin = 0.0f; // アンカー値の最小値
+constexpr float kImGuiAnchorMax = 1.0f; // アンカー値の最大値
+constexpr float kImGuiTextureCoordStep = 1.0f; // テクスチャ座標調整の刻み幅
+constexpr float kImGuiTextureSizeMin = 1.0f; // テクスチャサイズの最小値
+constexpr float kImGuiTextureSizeMax = 8192.0f; // テクスチャサイズの最大値
+constexpr size_t kLogBufferSize = 256; // ログメッセージ作成用バッファサイズ
+constexpr size_t kTexturePathInputBufferSize = 256; // ImGuiで入力するテクスチャパスの最大長
+constexpr uint32_t kSpriteIndexCount = 6; // スプライト描画に使用するインデックス数
+constexpr float kInitialSpriteVertexWidth = 640.0f; // 初期頂点配置で使用する横幅
+constexpr float kInitialSpriteVertexHeight = 360.0f; // 初期頂点配置で使用する高さ
+constexpr float kFallbackRenderSize = 1.0f; // 描画サイズが取得できない場合の最小値
+constexpr float kOrthographicNearZ = 0.0f; // スプライト用正射影のnear値
+constexpr float kOrthographicFarZ = 100.0f; // スプライト用正射影のfar値
+}
 /// <summary>
 /// スプライト描画に必要なリソースを生成し、初期テクスチャを設定する
 /// </summary>
@@ -44,25 +66,25 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
         }
     }
 
-    vertexData_[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[0].position = { 0.0f, kInitialSpriteVertexHeight, 0.0f, 1.0f };
     vertexData_[0].texcoord = { 0.0f, 1.0f };
     vertexData_[0].normal = { 0.0f, 0.0f, -1.0f };
     vertexData_[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
     vertexData_[1].texcoord = { 0.0f, 0.0f };
     vertexData_[1].normal = { 0.0f, 0.0f, -1.0f };
-    vertexData_[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
+    vertexData_[2].position = { kInitialSpriteVertexWidth, kInitialSpriteVertexHeight, 0.0f, 1.0f };
     vertexData_[2].texcoord = { 1.0f, 1.0f };
     vertexData_[2].normal = { 0.0f, 0.0f, -1.0f };
-    vertexData_[3].position = { 640.0f, 0.0f, 0.0f, 1.0f };
+    vertexData_[3].position = { kInitialSpriteVertexWidth, 0.0f, 0.0f, 1.0f };
     vertexData_[3].texcoord = { 1.0f, 0.0f };
     vertexData_[3].normal = { 0.0f, 0.0f, -1.0f };
     // IndexResourceSpriteの生成
     // ローカル変数 -> メンバ変数への代入
-    indexResource_ = dxCommon->CreateBufferResource(sizeof(uint32_t) * 6);
+    indexResource_ = dxCommon->CreateBufferResource(sizeof(uint32_t) * kSpriteIndexCount);
 
     // IndexBufferViewの生成
     indexBufferView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
-    indexBufferView_.SizeInBytes = sizeof(uint32_t) * 6;
+    indexBufferView_.SizeInBytes = sizeof(uint32_t) * kSpriteIndexCount;
     indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
 
     // インデックスリソースにデータを書き込むポインタを取得し、メンバ変数に代入
@@ -106,18 +128,18 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
     uint32_t idx = TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath);
     if (idx == UINT32_MAX) {
         // 指定が未ロード/不明なら既定のチェッカーテクスチャへフォールバックし、SRV絶対インデックスを使用
-        uint32_t srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
+        uint32_t srvIdx = TextureManager::GetInstance()->GetSrvIndex(kFallbackTexturePath);
 
         // まだチェッカーテクスチャがロードされていない場合はロードしてSRVを確保
         if (srvIdx == UINT32_MAX) {
-            TextureManager::GetInstance()->LoadTexture("resources/uvChecker.png");
-            srvIdx = TextureManager::GetInstance()->GetSrvIndex("resources/uvChecker.png");
+            TextureManager::GetInstance()->LoadTexture(kFallbackTexturePath);
+            srvIdx = TextureManager::GetInstance()->GetSrvIndex(kFallbackTexturePath);
         }
 
         // フォールバックのSRVインデックスを使用
         textureIndex_ = srvIdx;
-        textureFilePath_ = "resources/uvChecker.png"; // 実際に使用するフォールバックテクスチャ名
-        char buf[256];
+        textureFilePath_ = kFallbackTexturePath; // 実際に使用するフォールバックテクスチャ名
+        char buf[kLogBufferSize];
         sprintf_s(buf, "Warning: Sprite texture not found (%s). Falling back to uvChecker srvIndex=%u\n", textureFilePath.c_str(), srvIdx);
         Logger::Warn(buf);
 
@@ -144,14 +166,14 @@ Sprite::~Sprite()
 void Sprite::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Text("Sprite : %s", textureFilePath_.empty() ? "No Texture" : textureFilePath_.c_str());
+    ImGui::Text("Sprite : %s", textureFilePath_.empty() ? kNoTextureLabel : textureFilePath_.c_str());
     Vector2 pos = GetPosition();
-    if (ImGui::DragFloat2("Position", &pos.x, 0.1f)) {
+    if (ImGui::DragFloat2("Position", &pos.x, kImGuiPositionStep)) {
         SetPosition(pos);
     }
 
     float rot = GetRotation();
-    if (ImGui::DragFloat("Rotation", &rot, 0.01f)) {
+    if (ImGui::DragFloat("Rotation", &rot, kImGuiRotationStep)) {
         SetRotation(rot);
     }
 
@@ -161,12 +183,12 @@ void Sprite::DrawImGui()
     }
 
     Vector2 size = GetSize();
-    if (ImGui::DragFloat2("Size", &size.x, 0.1f)) {
+    if (ImGui::DragFloat2("Size", &size.x, kImGuiSizeStep)) {
         SetSize(size);
     }
 
     Vector2 anchor = GetAnchorPoint();
-    if (ImGui::DragFloat2("Anchor", &anchor.x, 0.01f, 0.0f, 1.0f)) {
+    if (ImGui::DragFloat2("Anchor", &anchor.x, kImGuiAnchorStep, kImGuiAnchorMin, kImGuiAnchorMax)) {
         SetAnchorPoint(anchor);
     }
 
@@ -185,15 +207,15 @@ void Sprite::DrawImGui()
     Vector2 texLT = GetTextureLeftTop();
     Vector2 texSize = GetTextureSize();
 
-    if (ImGui::DragFloat2("Tex LeftTop", &texLT.x, 1.0f)) {
+    if (ImGui::DragFloat2("Tex LeftTop", &texLT.x, kImGuiTextureCoordStep)) {
         SetTextureLeftTop(texLT);
     }
 
-    if (ImGui::DragFloat2("Tex Size", &texSize.x, 1.0f, 1.0f, 8192.0f)) {
+    if (ImGui::DragFloat2("Tex Size", &texSize.x, kImGuiTextureCoordStep, kImGuiTextureSizeMin, kImGuiTextureSizeMax)) {
         SetTextureSize(texSize);
     }
 
-    static char texBuf[256] = "";
+    static char texBuf[kTexturePathInputBufferSize] = "";
     ImGui::InputText("Texture Path", texBuf, sizeof(texBuf));
     if (ImGui::Button("Apply Texture")) {
         SetTexture(std::string(texBuf));
@@ -267,19 +289,19 @@ void Sprite::Update()
 
     // View/Projection行列の作成（2Dスプライト用）
     Matrix4x4 viewMatrix = MathUtil::MakeIdentity4x4();
-    float renderWidth = 1.0f; // 現在の描画幅
-    float renderHeight = 1.0f; // 現在の描画高さ
+    float renderWidth = kFallbackRenderSize; // 現在の描画幅
+    float renderHeight = kFallbackRenderSize; // 現在の描画高さ
     if (spriteCommon_ && spriteCommon_->GetDxCommon()) {
         renderWidth = spriteCommon_->GetDxCommon()->GetRenderWidth();
         renderHeight = spriteCommon_->GetDxCommon()->GetRenderHeight();
     }
     if (renderWidth <= 0.0f) {
-        renderWidth = 1.0f;
+        renderWidth = kFallbackRenderSize;
     }
     if (renderHeight <= 0.0f) {
-        renderHeight = 1.0f;
+        renderHeight = kFallbackRenderSize;
     }
-    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, renderWidth, renderHeight, 0.0f, 100.0f);
+    Matrix4x4 projectionMatrix = MathUtil::MakeOrthographicMatrix(0.0f, 0.0f, renderWidth, renderHeight, kOrthographicNearZ, kOrthographicFarZ);
 
     // WVP行列の計算と定数バッファへの書き込み
     Matrix4x4 wvpMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
@@ -380,8 +402,8 @@ void Sprite::Draw()
         Logger::Debug("Warning: Sprite::Draw has invalid textureIndex_, skipping SRV bind\n");
     }
 
-    // 描画！(インデックス数6)
-    dxCommon->GetCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    // インデックスバッファに設定した要素数で描画する
+    dxCommon->GetCommandList()->DrawIndexedInstanced(kSpriteIndexCount, 1, 0, 0, 0);
 }
 
 /// <summary>

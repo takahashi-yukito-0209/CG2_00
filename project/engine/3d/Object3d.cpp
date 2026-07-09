@@ -18,6 +18,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -31,6 +32,22 @@ namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
+constexpr Vector3 kDefaultTransformScale = { 1.0f, 1.0f, 1.0f }; // 初期スケール
+constexpr Vector3 kDefaultTransformRotation = { 0.0f, 0.0f, 0.0f }; // 初期回転
+constexpr Vector3 kDefaultTransformTranslation = { 0.0f, 0.0f, 0.0f }; // 初期位置
+constexpr Vector3 kDefaultCameraRotation = { 0.3f, 0.0f, 0.0f }; // 内部カメラの初期回転
+constexpr Vector3 kDefaultCameraTranslation = { 0.0f, 4.0f, -10.0f }; // 内部カメラの初期位置
+constexpr Vector4 kDefaultMaterialColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 初期マテリアル色
+constexpr int kDefaultLightingMode = 2; // 初期ライティングモード
+constexpr float kDefaultShininess = 32.0f; // 初期スペキュラ指数
+constexpr float kDefaultEnvironmentCoefficient = 0.0f; // 初期環境反射係数
+constexpr float kEnvironmentCoefficientMin = 0.0f; // 環境反射係数の最小値
+constexpr float kEnvironmentCoefficientMax = 1.0f; // 環境反射係数の最大値
+constexpr float kImGuiTransformStep = 0.01f; // Transform調整幅
+constexpr float kImGuiScaleMin = 0.001f; // Scale調整の最小値
+constexpr float kImGuiScaleMax = 1000.0f; // Scale調整の最大値
+constexpr size_t kObjectLogBufferSize = 256; // Object3dのログ用バッファサイズ
+constexpr size_t kObjectSrvLogBufferSize = 128; // SRVバインド警告用バッファサイズ
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
 
 /// <summary>
@@ -90,7 +107,7 @@ Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Obje
 /// </summary>
 void LogResolvedModelTexturePath(const Object3d::ModelData& modelData)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
     Logger::Debug(buffer);
 }
@@ -151,7 +168,7 @@ std::string FindTexturePathByModelBaseName(const std::string& modelDirectory, co
     for (const auto& extension : kModelTextureExtensions) {
         std::string texturePath = modelDirectory + "/" + modelBaseName + extension; // ベース名から作る候補パス
         if (std::filesystem::exists(texturePath)) {
-            char buffer[256]; // ログ出力用バッファ
+            char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
             sprintf_s(buffer, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", texturePath.c_str());
             Logger::Debug(buffer);
             return texturePath;
@@ -178,7 +195,7 @@ std::string FindFirstTexturePathInDirectory(const std::string& modelDirectory)
         }
 
         std::string texturePath = entry.path().string(); // ディレクトリ内で見つかった画像パス
-        char buffer[256]; // ログ出力用バッファ
+        char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", texturePath.c_str());
         Logger::Debug(buffer);
         return texturePath;
@@ -218,7 +235,7 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
 /// </summary>
 void LogAssimpLoadFailure(const std::string& fullPath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
     Logger::Warn(buffer);
 }
@@ -228,7 +245,7 @@ void LogAssimpLoadFailure(const std::string& fullPath)
 /// </summary>
 void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
     Logger::Warn(buffer);
 }
@@ -238,7 +255,7 @@ void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
 /// </summary>
 void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std::string& filename)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
     Logger::Warn(buffer);
 }
@@ -248,7 +265,7 @@ void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std:
 /// </summary>
 void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "LoadMaterialTemplateFile: map_Kd -> %s\n", textureFilePath.c_str());
     Logger::Debug(buffer);
 }
@@ -299,7 +316,7 @@ bool HasRequiredMeshNormals(const aiMesh* mesh, uint32_t meshIndex)
         return true;
     }
 
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
     Logger::Warn(buffer);
     return false;
@@ -479,8 +496,16 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
 /// </summary>
 void Object3d::InitializeTransformState()
 {
-    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
+    transform_ = {
+        kDefaultTransformScale,
+        kDefaultTransformRotation,
+        kDefaultTransformTranslation
+    };
+    cameraTransform_ = {
+        kDefaultTransformScale,
+        kDefaultCameraRotation,
+        kDefaultCameraTranslation
+    };
 }
 
 /// <summary>
@@ -491,9 +516,14 @@ void Object3d::DrawImGui(int index)
 #ifdef USE_IMGUI
     // 選択中オブジェクトの識別名を表示
     ImGui::Text("Object %d : %s", index, debugName_.c_str());
-    ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f, 0.001f, 1000.0f);
-    ImGui::DragFloat3("Rotate", &transform_.rotate.x, 0.01f);
-    ImGui::DragFloat3("Translate", &transform_.translate.x, 0.01f);
+    ImGui::DragFloat3(
+        "Scale",
+        &transform_.scale.x,
+        kImGuiTransformStep,
+        kImGuiScaleMin,
+        kImGuiScaleMax);
+    ImGui::DragFloat3("Rotate", &transform_.rotate.x, kImGuiTransformStep);
+    ImGui::DragFloat3("Translate", &transform_.translate.x, kImGuiTransformStep);
 
     // マテリアル編集
     if (materialData_) {
@@ -509,7 +539,11 @@ void Object3d::DrawImGui(int index)
             materialData_->color.z = col[2];
             materialData_->color.w = col[3];
         }
-        ImGui::SliderFloat("Environment Reflection", &materialData_->environmentCoefficient, 0.0f, 1.0f);
+        ImGui::SliderFloat(
+            "Environment Reflection",
+            &materialData_->environmentCoefficient,
+            kEnvironmentCoefficientMin,
+            kEnvironmentCoefficientMax);
     }
 #else
     (void)index;
@@ -640,16 +674,16 @@ void Object3d::CreateMaterialResource()
 /// </summary>
 void Object3d::InitializeMaterialState()
 {
-    materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    materialData_->color = kDefaultMaterialColor;
     materialData_->enableLighting = 1;
     materialData_->uvTransform = MathUtil::MakeIdentity4x4();
-    materialData_->lightingMode = 2;
+    materialData_->lightingMode = kDefaultLightingMode;
     useAlphaCutoutSampler_ = false;
     materialData_->useAlphaCutoutSampler = 0;
     useAlphaDiscard_ = true;
     materialData_->useAlphaDiscard = 1;
-    materialData_->shininess = 32.0f;
-    materialData_->environmentCoefficient = 0.0f;
+    materialData_->shininess = kDefaultShininess;
+    materialData_->environmentCoefficient = kDefaultEnvironmentCoefficient;
 }
 
 /// <summary>
@@ -687,7 +721,10 @@ void Object3d::SetLightingMode(int mode)
 void Object3d::SetEnvironmentCoefficient(float coefficient)
 {
     if (materialData_) {
-        materialData_->environmentCoefficient = std::clamp(coefficient, 0.0f, 1.0f);
+        materialData_->environmentCoefficient = std::clamp(
+            coefficient,
+            kEnvironmentCoefficientMin,
+            kEnvironmentCoefficientMax);
     }
 }
 
@@ -735,35 +772,68 @@ bool Object3d::UsesLoadedModelMaterialTexture() const
 }
 
 /// <summary>
-/// Object3d側の明示テクスチャまたはメッシュ用fallbackを割り当てる
+/// Object3d側で明示指定されたテクスチャを割り当てる。
+/// </summary>
+bool Object3d::AssignExplicitTextureOverride()
+{
+    if (!HasExplicitTextureOverride()) {
+        return false;
+    }
+
+    std::string resolvedTexturePath; // 解決後のテクスチャパス
+    const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
+
+    modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
+    modelData_.material.textureIndex = textureIndex;
+
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
+    sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
+    Logger::Debug(buffer);
+    return true;
+}
+
+/// <summary>
+/// Model側のマテリアルテクスチャを使う状態に設定する。
+/// </summary>
+void Object3d::AssignLoadedModelMaterialTexture()
+{
+    modelData_.material.textureIndex = UINT32_MAX;
+    Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
+}
+
+/// <summary>
+/// 既定テクスチャをfallbackとして割り当てる。
+/// </summary>
+bool Object3d::AssignFallbackTexture()
+{
+    modelData_.material.textureIndex = ResolveFallbackTextureIndex();
+    if (modelData_.material.textureIndex == UINT32_MAX) {
+        return false;
+    }
+
+    modelData_.material.textureFilePath = kDefaultObjectTexturePath;
+
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
+    sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
+    Logger::Debug(buffer);
+    return true;
+}
+
+/// <summary>
+/// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる。
 /// </summary>
 void Object3d::AssignTexture()
 {
-    if (HasExplicitTextureOverride()) {
-        std::string resolvedTexturePath; // モデルまたは明示指定から解決したテクスチャパス
-        const uint32_t textureIndex = ResolveTextureIndex(modelData_.material.textureFilePath, &resolvedTexturePath, false); // 割り当てるSRV番号
-
-        modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
-        modelData_.material.textureIndex = textureIndex;
-
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
-        Logger::Debug(buffer);
+    if (AssignExplicitTextureOverride()) {
         return;
     }
 
     if (UsesLoadedModelMaterialTexture()) {
-        modelData_.material.textureIndex = UINT32_MAX;
-        Logger::Debug("Object3d::AssignTexture: model material texture will be used\n");
+        AssignLoadedModelMaterialTexture();
         return;
     }
-    modelData_.material.textureIndex = ResolveFallbackTextureIndex();
-    if (modelData_.material.textureIndex != UINT32_MAX) {
-        modelData_.material.textureFilePath = kDefaultObjectTexturePath;
 
-        char buffer[256]; // ログ出力用バッファ
-        sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
-        Logger::Debug(buffer);
+    if (AssignFallbackTexture()) {
         return;
     }
 
@@ -919,7 +989,7 @@ void Object3d::BindPointLightResource(ID3D12GraphicsCommandList* commandList) co
 bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
 {
     if (!commandList || textureIndex == UINT32_MAX) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: texture SRV is invalid - skipping SRV bind\n", logContext);
         Logger::Debug(buffer);
         return false;
@@ -927,7 +997,7 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
 
     auto textureManager = TextureManager::GetInstance(); // テクスチャSRVの取得元
     if (!textureManager) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: TextureManager is null - skipping SRV bind\n", logContext);
         Logger::Debug(buffer);
         return false;
@@ -935,7 +1005,7 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
 
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = textureManager->GetSrvHandleGPU(textureIndex); // 描画に使うSRV
     if (srvHandle.ptr == 0) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: SRV handle for index %u is null - skipping SRV bind\n", logContext, textureIndex);
         Logger::Debug(buffer);
         return false;

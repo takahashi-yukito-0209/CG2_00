@@ -42,7 +42,22 @@ public: // メンバ関数
 private: // メンバ変数
 
     /// <summary>
-    /// 描画時に使用するテクスチャ番号を決定する
+    /// Object3d側で明示指定されたテクスチャ番号を取得する。
+    /// </summary>
+    uint32_t ResolveOwnerTextureOverrideIndex(const Object3d* owner) const;
+
+    /// <summary>
+    /// Model自身が保持しているテクスチャ番号を取得する。
+    /// </summary>
+    uint32_t ResolveModelTextureIndex() const;
+
+    /// <summary>
+    /// fallbackテクスチャのSRV番号を取得する。
+    /// </summary>
+    uint32_t ResolveFallbackTextureIndex() const;
+
+    /// <summary>
+    /// 描画時に使用するテクスチャ番号を決定する。
     /// </summary>
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
 
@@ -55,6 +70,11 @@ private: // メンバ変数
     /// 描画時に使用する頂点バッファビューを取得する
     /// </summary>
     D3D12_VERTEX_BUFFER_VIEW ResolveVertexBufferView(const Object3d* owner) const;
+
+    /// <summary>
+    /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
+    /// </summary>
+    void InitializeModelResources();
 
     /// <summary>
     /// モデル頂点データから頂点バッファを作成する

@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "Model.h"
 #include "TextureManager.h"
+#include <cstddef>
 #include <filesystem>
 #include <vector>
 
@@ -11,6 +12,7 @@ using namespace MyEngine;
 std::unique_ptr<ModelManager> ModelManager::instance_ = nullptr;
 
 namespace {
+constexpr size_t kModelManagerLogBufferSize = 256; // ModelManagerのログ用バッファサイズ
 
 /// <summary>
 /// モデルキャッシュで使うファイルパスキーを作成する。
@@ -91,7 +93,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
         }
 
         if (!found) {
-            char buf[256];
+            char buf[kModelManagerLogBufferSize];
             sprintf_s(buf, "Warning: ModelManager::LoadModel could not find model file: %s/%s\n", directory.c_str(), filename.c_str());
             Logger::Warn(buf);
         }

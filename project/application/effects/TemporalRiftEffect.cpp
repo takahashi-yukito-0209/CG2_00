@@ -45,6 +45,74 @@ constexpr int kMaximumCrackPatternCount = 7; // 定義済みの亀裂パター�
 constexpr int kCrackWidthVariationCycle = 2; // 亀裂幅の変化周期
 constexpr uint32_t kRingColorGroupCount = 2u; // 内側と外側に分けるリング色グループ数
 constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする要素番号
+constexpr float kImGuiDurationStep = 0.01f; // 時間設定の調整幅
+constexpr float kImGuiDurationMin = 0.01f; // 時間設定の最小値
+constexpr float kImGuiDurationMax = 2.0f; // 時間設定の最大値
+constexpr float kImGuiBlurStep = 0.001f; // ブラー強度の調整幅
+constexpr float kImGuiBlurMin = 0.0f; // ブラー強度の最小値
+constexpr float kImGuiBlurMax = 0.1f; // ブラー強度の最大値
+constexpr int kImGuiBlurSampleCountMin = 1; // ブラーサンプル数の最小値
+constexpr int kImGuiBlurSampleCountMax = 32; // ブラーサンプル数の最大値
+constexpr float kImGuiDistortionRadiusStep = 0.01f; // 歪み範囲の調整幅
+constexpr float kImGuiDistortionRadiusMin = 0.01f; // 歪み範囲の最小値
+constexpr float kImGuiDistortionRadiusMax = 1.5f; // 歪み範囲の最大値
+constexpr float kImGuiDistortionStrengthStep = 0.001f; // 歪み強度の調整幅
+constexpr float kImGuiCompressDistortionMin = -0.1f; // 圧縮歪み強度の最小値
+constexpr float kImGuiCompressDistortionMax = 0.0f; // 圧縮歪み強度の最大値
+constexpr float kImGuiBurstDistortionMin = 0.0f; // 破砕歪み強度の最小値
+constexpr float kImGuiBurstDistortionMax = 0.1f; // 破砕歪み強度の最大値
+constexpr float kImGuiDistortionWaveStep = 0.1f; // 歪み波数の調整幅
+constexpr float kImGuiDistortionWaveMin = 0.0f; // 歪み波数の最小値
+constexpr float kImGuiDistortionWaveMax = 12.0f; // 歪み波数の最大値
+constexpr int kImGuiAfterimageCountMin = 1; // 残像数の最小値
+constexpr int kImGuiAfterimageCountMax = 8; // 残像数の最大値
+constexpr int kImGuiAfterimageIntervalMin = 1; // 残像履歴間隔の最小値
+constexpr int kImGuiAfterimageIntervalMax = 12; // 残像履歴間隔の最大値
+constexpr float kImGuiAfterimageSizeStep = 1.0f; // 残像サイズの調整幅
+constexpr float kImGuiAfterimageSizeMin = 10.0f; // 残像サイズの最小値
+constexpr float kImGuiAfterimageSizeMax = 300.0f; // 残像サイズの最大値
+constexpr float kImGuiAlphaMin = 0.0f; // 透明度設定の最小値
+constexpr float kImGuiAlphaMax = 1.0f; // 透明度設定の最大値
+constexpr float kImGuiTemporalDisplacementStep = 0.05f; // 時間ずれ量の調整幅
+constexpr float kImGuiTemporalDisplacementMin = 0.0f; // 時間ずれ量の最小値
+constexpr float kImGuiTemporalDisplacementMax = 5.0f; // 時間ずれ量の最大値
+constexpr float kImGuiHitStopDurationStep = 0.005f; // ヒットストップ時間の調整幅
+constexpr float kImGuiHitStopDurationMin = 0.0f; // ヒットストップ時間の最小値
+constexpr float kImGuiHitStopDurationMax = 0.5f; // ヒットストップ時間の最大値
+constexpr float kImGuiCameraShakeDurationStep = 0.01f; // カメラ揺れ時間の調整幅
+constexpr float kImGuiCameraShakeDurationMin = 0.0f; // カメラ揺れ時間の最小値
+constexpr float kImGuiCameraShakeDurationMax = 2.0f; // カメラ揺れ時間の最大値
+constexpr float kImGuiCameraShakeStrengthStep = 0.01f; // カメラ揺れ強度の調整幅
+constexpr float kImGuiCameraShakeStrengthMin = 0.0f; // カメラ揺れ強度の最小値
+constexpr float kImGuiCameraShakeStrengthMax = 2.0f; // カメラ揺れ強度の最大値
+constexpr float kImGuiCameraShakeFrequencyStep = 1.0f; // カメラ揺れ周波数の調整幅
+constexpr float kImGuiCameraShakeFrequencyMin = 1.0f; // カメラ揺れ周波数の最小値
+constexpr float kImGuiCameraShakeFrequencyMax = 120.0f; // カメラ揺れ周波数の最大値
+constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
+constexpr int kImGuiCrackCountMin = 1; // 亀裂数の最小値
+constexpr int kImGuiCrackCountMax = 7; // 亀裂数の最大値
+constexpr float kImGuiCrackLengthStep = 0.05f; // 亀裂長さの調整幅
+constexpr float kImGuiCrackLengthMin = 0.05f; // 亀裂長さの最小値
+constexpr float kImGuiCrackLengthMax = 10.0f; // 亀裂長さの最大値
+constexpr float kImGuiCrackLengthVariationStep = 0.01f; // 亀裂長さばらつきの調整幅
+constexpr float kImGuiCrackLengthVariationMin = 0.0f; // 亀裂長さばらつきの最小値
+constexpr float kImGuiCrackLengthVariationMax = 3.0f; // 亀裂長さばらつきの最大値
+constexpr float kImGuiCrackWidthStep = 0.005f; // 亀裂幅の調整幅
+constexpr float kImGuiCrackWidthMin = 0.005f; // 亀裂幅の最小値
+constexpr float kImGuiCrackWidthMax = 1.0f; // 亀裂幅の最大値
+constexpr float kImGuiCrackWidthVariationMin = 0.0f; // 亀裂幅ばらつきの最小値
+constexpr float kImGuiCrackWidthVariationMax = 1.0f; // 亀裂幅ばらつきの最大値
+constexpr float kImGuiCrackLifeTimeMax = 5.0f; // 亀裂寿命の最大値
+constexpr int kImGuiRingCountMin = 0; // リング数の最小値
+constexpr int kImGuiRingCountMax = 8; // リング数の最大値
+constexpr int kImGuiFragmentCountMin = 0; // 破片数の最小値
+constexpr int kImGuiFragmentCountMax = 64; // 破片数の最大値
+constexpr float kImGuiFragmentSpeedStep = 0.1f; // 破片速度の調整幅
+constexpr float kImGuiFragmentSpeedMin = 0.0f; // 破片速度の最小値
+constexpr float kImGuiFragmentSpeedMax = 20.0f; // 破片速度の最大値
+constexpr float kImGuiFragmentLifeTimeStep = 0.01f; // 破片寿命の調整幅
+constexpr float kImGuiFragmentLifeTimeMin = 0.05f; // 破片寿命の最小値
+constexpr float kImGuiFragmentLifeTimeMax = 3.0f; // 破片寿命の最大値
 }
 
 /// <summary>
@@ -72,6 +140,72 @@ void TemporalRiftEffect::ResetSettings()
 }
 
 /// <summary>
+/// 演出開始時のポストエフェクト状態を設定する。
+/// </summary>
+void TemporalRiftEffect::ConfigureInitialPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetRadialBlurCenter(screenUv_);
+    postProcess.SetDistortionCenter(screenUv_);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetRadialBlurWidth(settings_.compressBlurStart);
+    postProcess.SetRadialBlurSampleCount(static_cast<uint32_t>(settings_.blurSampleCount));
+}
+
+/// <summary>
+/// 圧縮フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyCompressPostProcess(PostProcess& postProcess, float progress, float blurWidth)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.compressDistortionStrength * progress);
+    postProcess.SetDistortionProgress(progress);
+    postProcess.SetRadialBlurWidth(blurWidth);
+}
+
+/// <summary>
+/// 停止表示フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyGrayscalePostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Grayscale);
+}
+
+/// <summary>
+/// 破砕フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyBurstPostProcess(PostProcess& postProcess, float progress)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.burstDistortionStrength * (1.0f - progress));
+    postProcess.SetDistortionProgress(progress);
+    postProcess.SetRadialBlurWidth(settings_.burstBlurStrength * (1.0f - progress));
+}
+
+/// <summary>
+/// 復帰フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TemporalRiftEffect::ApplyRecoverPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Copy);
+}
+
+/// <summary>
+/// 再生前のポストエフェクト状態へ戻す。
+/// </summary>
+void TemporalRiftEffect::RestorePreviousPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(previousPostEffect_);
+}
+
+/// <summary>
 /// 時空破砕エフェクトを開始する
 /// </summary>
 void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique_ptr<Object3d>>& objects3d, const Vector2& screenUv)
@@ -91,15 +225,7 @@ void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique
     phase_ = TemporalRiftPhase::Compress;
     phaseTime_ = 0.0f;
     cracksEmitted_ = 0;
-    postProcess.SetEffectType(PostEffectType::Distortion);
-    postProcess.SetRadialBlurCenter(screenUv_);
-    postProcess.SetDistortionCenter(screenUv_);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
-    postProcess.SetRadialBlurWidth(settings_.compressBlurStart);
-    postProcess.SetRadialBlurSampleCount(static_cast<uint32_t>(settings_.blurSampleCount));
+    ConfigureInitialPostProcess(postProcess);
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 圧縮予兆を生成するパーティクル管理
     if (particleManager) {
@@ -123,12 +249,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
         const float progress = (std::min)(phaseTime_ / compressDuration, 1.0f); // 圧縮演出の進行度
         const float blurWidth = settings_.compressBlurStart
             + (settings_.compressBlurEnd - settings_.compressBlurStart) * progress; // 現在のブラー幅
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.compressDistortionStrength * progress);
-        postProcess.SetDistortionProgress(progress);
-        postProcess.SetRadialBlurWidth(blurWidth);
+        ApplyCompressPostProcess(postProcess, progress, blurWidth);
 
         if (phaseTime_ >= compressDuration) {
             phase_ = TemporalRiftPhase::Freeze;
@@ -138,7 +259,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     }
 
     case TemporalRiftPhase::Freeze:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyGrayscalePostProcess(postProcess);
         if (phaseTime_ >= settings_.freezeDuration) {
             phase_ = TemporalRiftPhase::Crack;
             phaseTime_ = 0.0f;
@@ -146,7 +267,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
         break;
 
     case TemporalRiftPhase::Crack:
-        postProcess.SetEffectType(PostEffectType::Grayscale);
+        ApplyGrayscalePostProcess(postProcess);
         EmitSpaceCracks();
         if (phaseTime_ >= settings_.crackDuration) {
             phase_ = TemporalRiftPhase::Burst;
@@ -159,12 +280,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     case TemporalRiftPhase::Burst: {
         const float burstDuration = (std::max)(settings_.burstDuration, kMinimumEffectDuration); // 破砕の衝撃を見せる時間
         const float progress = (std::min)(phaseTime_ / burstDuration, 1.0f); // 破砕演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.burstDistortionStrength * (1.0f - progress));
-        postProcess.SetDistortionProgress(progress);
-        postProcess.SetRadialBlurWidth(settings_.burstBlurStrength * (1.0f - progress));
+        ApplyBurstPostProcess(postProcess, progress);
 
         if (phaseTime_ >= burstDuration) {
             phase_ = TemporalRiftPhase::Recover;
@@ -174,10 +290,10 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     }
 
     case TemporalRiftPhase::Recover:
-        postProcess.SetEffectType(PostEffectType::Copy);
+        ApplyRecoverPostProcess(postProcess);
         if (phaseTime_ >= settings_.recoverDuration) {
             phase_ = TemporalRiftPhase::Idle;
-            postProcess.SetEffectType(previousPostEffect_);
+            RestorePreviousPostProcess(postProcess);
             phaseTime_ = 0.0f;
         }
         break;
@@ -368,65 +484,65 @@ void TemporalRiftEffect::DrawImGui()
     }
 
     if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Compress Duration", &settings_.compressDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Freeze Duration", &settings_.freezeDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Crack Duration", &settings_.crackDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Burst Duration", &settings_.burstDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Recover Duration", &settings_.recoverDuration, 0.01f, 0.01f, 2.0f, "%.2f sec");
+        ImGui::DragFloat("Compress Duration", &settings_.compressDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Freeze Duration", &settings_.freezeDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Crack Duration", &settings_.crackDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Burst Duration", &settings_.burstDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Recover Duration", &settings_.recoverDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
     }
 
     if (ImGui::CollapsingHeader("Radial Blur", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Compress Blur Start", &settings_.compressBlurStart, 0.001f, 0.0f, 0.1f, "%.3f");
-        ImGui::DragFloat("Compress Blur End", &settings_.compressBlurEnd, 0.001f, 0.0f, 0.1f, "%.3f");
-        ImGui::DragFloat("Burst Blur Strength", &settings_.burstBlurStrength, 0.001f, 0.0f, 0.1f, "%.3f");
-        ImGui::SliderInt("Blur Sample Count", &settings_.blurSampleCount, 1, 32);
+        ImGui::DragFloat("Compress Blur Start", &settings_.compressBlurStart, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        ImGui::DragFloat("Compress Blur End", &settings_.compressBlurEnd, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        ImGui::DragFloat("Burst Blur Strength", &settings_.burstBlurStrength, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        ImGui::SliderInt("Blur Sample Count", &settings_.blurSampleCount, kImGuiBlurSampleCountMin, kImGuiBlurSampleCountMax);
     }
 
     if (ImGui::CollapsingHeader("Distortion", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Distortion Radius", &settings_.distortionRadius, 0.01f, 0.01f, 1.5f, "%.2f");
-        ImGui::DragFloat("Compress Distortion", &settings_.compressDistortionStrength, 0.001f, -0.1f, 0.0f, "%.3f");
-        ImGui::DragFloat("Burst Distortion", &settings_.burstDistortionStrength, 0.001f, 0.0f, 0.1f, "%.3f");
-        ImGui::DragFloat("Distortion Wave Count", &settings_.distortionWaveCount, 0.1f, 0.0f, 12.0f, "%.1f");
+        ImGui::DragFloat("Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        ImGui::DragFloat("Compress Distortion", &settings_.compressDistortionStrength, kImGuiDistortionStrengthStep, kImGuiCompressDistortionMin, kImGuiCompressDistortionMax, "%.3f");
+        ImGui::DragFloat("Burst Distortion", &settings_.burstDistortionStrength, kImGuiDistortionStrengthStep, kImGuiBurstDistortionMin, kImGuiBurstDistortionMax, "%.3f");
+        ImGui::DragFloat("Distortion Wave Count", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
     }
 
     if (ImGui::CollapsingHeader("Afterimage", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Afterimage Count", &settings_.afterimageCount, 1, 8);
-        ImGui::SliderInt("History Interval", &settings_.afterimageFrameInterval, 1, 12);
-        ImGui::DragFloat("Afterimage Size", &settings_.afterimageSize, 1.0f, 10.0f, 300.0f, "%.0f");
-        ImGui::SliderFloat("Afterimage Alpha", &settings_.afterimageAlpha, 0.0f, 1.0f, "%.2f");
-        ImGui::DragFloat("Temporal Displacement", &settings_.temporalDisplacement, 0.05f, 0.0f, 5.0f, "%.2f");
+        ImGui::SliderInt("Afterimage Count", &settings_.afterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
+        ImGui::SliderInt("History Interval", &settings_.afterimageFrameInterval, kImGuiAfterimageIntervalMin, kImGuiAfterimageIntervalMax);
+        ImGui::DragFloat("Afterimage Size", &settings_.afterimageSize, kImGuiAfterimageSizeStep, kImGuiAfterimageSizeMin, kImGuiAfterimageSizeMax, "%.0f");
+        ImGui::SliderFloat("Afterimage Alpha", &settings_.afterimageAlpha, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
+        ImGui::DragFloat("Temporal Displacement", &settings_.temporalDisplacement, kImGuiTemporalDisplacementStep, kImGuiTemporalDisplacementMin, kImGuiTemporalDisplacementMax, "%.2f");
         ImGui::ColorEdit3("Afterimage Color", &settings_.afterimageColor.x);
     }
 
     if (ImGui::CollapsingHeader("Impact", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Hit Stop Duration", &settings_.hitStopDuration, 0.005f, 0.0f, 0.5f, "%.3f sec");
-        ImGui::DragFloat("Camera Shake Duration", &settings_.cameraShakeDuration, 0.01f, 0.0f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Camera Shake Strength", &settings_.cameraShakeStrength, 0.01f, 0.0f, 2.0f, "%.2f");
-        ImGui::DragFloat("Camera Shake Frequency", &settings_.cameraShakeFrequency, 1.0f, 1.0f, 120.0f, "%.0f");
+        ImGui::DragFloat("Hit Stop Duration", &settings_.hitStopDuration, kImGuiHitStopDurationStep, kImGuiHitStopDurationMin, kImGuiHitStopDurationMax, "%.3f sec");
+        ImGui::DragFloat("Camera Shake Duration", &settings_.cameraShakeDuration, kImGuiCameraShakeDurationStep, kImGuiCameraShakeDurationMin, kImGuiCameraShakeDurationMax, "%.2f sec");
+        ImGui::DragFloat("Camera Shake Strength", &settings_.cameraShakeStrength, kImGuiCameraShakeStrengthStep, kImGuiCameraShakeStrengthMin, kImGuiCameraShakeStrengthMax, "%.2f");
+        ImGui::DragFloat("Camera Shake Frequency", &settings_.cameraShakeFrequency, kImGuiCameraShakeFrequencyStep, kImGuiCameraShakeFrequencyMin, kImGuiCameraShakeFrequencyMax, "%.0f");
         ImGui::Text("Hit Stop Remaining: %.3f", hitStopRemainingTime_);
         ImGui::Text("Shake Remaining: %.3f", cameraShakeRemainingTime_);
     }
 
     if (ImGui::CollapsingHeader("Crack", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat3("Effect Position", &effectPosition_.x, 0.05f);
-        ImGui::SliderInt("Crack Count", &settings_.crackCount, 1, 7);
-        ImGui::DragFloat("Crack Length", &settings_.crackLength, 0.05f, 0.05f, 10.0f);
-        ImGui::DragFloat("Length Variation", &settings_.crackLengthVariation, 0.01f, 0.0f, 3.0f);
-        ImGui::DragFloat("Crack Width", &settings_.crackWidth, 0.005f, 0.005f, 1.0f);
-        ImGui::DragFloat("Width Variation", &settings_.crackWidthVariation, 0.005f, 0.0f, 1.0f);
-        ImGui::DragFloat("Crack Life Time", &settings_.crackLifeTime, 0.01f, 0.01f, 5.0f, "%.2f sec");
+        ImGui::DragFloat3("Effect Position", &effectPosition_.x, kImGuiPositionStep);
+        ImGui::SliderInt("Crack Count", &settings_.crackCount, kImGuiCrackCountMin, kImGuiCrackCountMax);
+        ImGui::DragFloat("Crack Length", &settings_.crackLength, kImGuiCrackLengthStep, kImGuiCrackLengthMin, kImGuiCrackLengthMax);
+        ImGui::DragFloat("Length Variation", &settings_.crackLengthVariation, kImGuiCrackLengthVariationStep, kImGuiCrackLengthVariationMin, kImGuiCrackLengthVariationMax);
+        ImGui::DragFloat("Crack Width", &settings_.crackWidth, kImGuiCrackWidthStep, kImGuiCrackWidthMin, kImGuiCrackWidthMax);
+        ImGui::DragFloat("Width Variation", &settings_.crackWidthVariation, kImGuiCrackWidthStep, kImGuiCrackWidthVariationMin, kImGuiCrackWidthVariationMax);
+        ImGui::DragFloat("Crack Life Time", &settings_.crackLifeTime, kImGuiDurationStep, kImGuiDurationMin, kImGuiCrackLifeTimeMax, "%.2f sec");
         ImGui::ColorEdit4("Crack Color", &settings_.crackColor.x);
     }
 
     if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Ring Count", &settings_.ringCount, 0, 8);
-        ImGui::SliderInt("Fragment Count", &settings_.fragmentCount, 0, 64);
+        ImGui::SliderInt("Ring Count", &settings_.ringCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        ImGui::SliderInt("Fragment Count", &settings_.fragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
         ImGui::ColorEdit4("Inner Ring Color", &settings_.innerRingColor.x);
         ImGui::ColorEdit4("Outer Ring Color", &settings_.outerRingColor.x);
         ImGui::ColorEdit4("Fragment Color", &settings_.fragmentColor.x);
-        ImGui::DragFloat("Fragment Min Speed", &settings_.fragmentMinSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
-        ImGui::DragFloat("Fragment Max Speed", &settings_.fragmentMaxSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
-        ImGui::DragFloat("Fragment Life Time", &settings_.fragmentLifeTime, 0.01f, 0.05f, 3.0f, "%.2f sec");
+        ImGui::DragFloat("Fragment Min Speed", &settings_.fragmentMinSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
+        ImGui::DragFloat("Fragment Max Speed", &settings_.fragmentMaxSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
+        ImGui::DragFloat("Fragment Life Time", &settings_.fragmentLifeTime, kImGuiFragmentLifeTimeStep, kImGuiFragmentLifeTimeMin, kImGuiFragmentLifeTimeMax, "%.2f sec");
     }
 #endif
 }

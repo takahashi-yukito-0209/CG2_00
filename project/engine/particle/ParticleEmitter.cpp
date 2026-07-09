@@ -7,6 +7,19 @@
 
 using namespace MyEngine;
 
+namespace {
+constexpr size_t kGroupNameInputBufferSize = 256; // グループ名入力用バッファサイズ
+constexpr float kImGuiTranslateStep = 0.01f; // 発生位置の調整幅
+constexpr int kImGuiCountStep = 1; // 発生数の調整幅
+constexpr int kImGuiCountMin = 0; // 発生数の最小値
+constexpr int kImGuiCountMax = 1000; // 発生数の最大値
+constexpr float kImGuiFrequencyStep = 0.01f; // 発生間隔の調整幅
+constexpr float kImGuiFrequencyMin = 0.0f; // 発生間隔の最小値
+constexpr float kImGuiFrequencyMax = 100.0f; // 発生間隔の最大値
+constexpr float kAlwaysEmitFrequencyThreshold = 0.0f; // 毎フレーム発生に切り替える発生間隔の下限
+constexpr float kEmitterElapsedTimeStart = 0.0f; // 発生経過時間の初期値
+} // namespace
+
 #ifdef USE_IMGUI
 static_assert(true, "ImGui available");
 #endif
@@ -40,11 +53,11 @@ void ParticleEmitter::Update(float deltaTime)
     // 経過時間を加算
     elapsed += deltaTime;
     // 発生間隔が0以下なら毎フレーム発生
-    if (frequency <= 0.0f) {
+    if (frequency <= kAlwaysEmitFrequencyThreshold) {
         if (count) {
             Emit();
         }
-        elapsed = 0.0f;
+        elapsed = kEmitterElapsedTimeStart;
         return;
     }
     // 発生間隔を超えたら発生させる
@@ -60,7 +73,7 @@ void ParticleEmitter::Update(float deltaTime)
 void ParticleEmitter::DrawImGui()
 {
     // グループ名の編集用バッファを用意
-    char buf[256] = {};
+    char buf[kGroupNameInputBufferSize] = {};
     // 現在のグループ名をバッファにコピー（安全な関数を使用）
     strncpy_s(buf, sizeof(buf), groupName.c_str(), _TRUNCATE);
     // ImGuiのInputTextで編集。変更があったらグループ名を更新
@@ -69,13 +82,13 @@ void ParticleEmitter::DrawImGui()
         groupName = std::string(buf);
     }
     // 座標（平行移動）の編集
-    ImGui::DragFloat3("Translate", &transform.translate.x, 0.01f);
-    // スケールの編集
+    ImGui::DragFloat3("Translate", &transform.translate.x, kImGuiTranslateStep);
+    // 発生数の編集
     int tmpCount = static_cast<int>(count);
     // 1以上1000以下の整数として編集。変更があったらcountを更新
-    if (ImGui::DragInt("Count", &tmpCount, 1, 0, 1000))
+    if (ImGui::DragInt("Count", &tmpCount, kImGuiCountStep, kImGuiCountMin, kImGuiCountMax))
         count = static_cast<uint32_t>(tmpCount);
-    ImGui::DragFloat("Frequency", &frequency, 0.01f, 0.0f, 100.0f);
+    ImGui::DragFloat("Frequency", &frequency, kImGuiFrequencyStep, kImGuiFrequencyMin, kImGuiFrequencyMax);
     ImGui::Checkbox("Use Hit Effect", &useHitEffect);
     ImGui::Checkbox("Use Ring Effect", &useRingEffect);
     ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);

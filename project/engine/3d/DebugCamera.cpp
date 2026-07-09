@@ -4,6 +4,18 @@
 using namespace Math;
 using namespace MyEngine;
 
+namespace {
+constexpr Vector3 kInitialTranslation = { 0.0f, 0.0f, -10.0f }; // 初期カメラ位置
+constexpr Vector3 kInitialRotation = { 0.0f, 0.0f, 0.0f }; // 初期カメラ回転
+constexpr int kMouseButtonLeft = 0; // 左マウスボタン番号
+constexpr int kMouseButtonRight = 1; // 右マウスボタン番号
+constexpr int kMouseButtonMiddle = 2; // 中マウスボタン番号
+constexpr float kMouseWheelZoomSpeed = 0.1f; // ホイールズーム速度
+constexpr float kDefaultFovY = 0.45f; // 縦方向の視野角
+constexpr float kDefaultNearZ = 0.1f; // ニアクリップ距離
+constexpr float kDefaultFarZ = 1000.0f; // ファークリップ距離
+} // namespace
+
 /// <summary>
 /// デフォルトコンストラクタ
 /// </summary>
@@ -24,8 +36,8 @@ void DebugCamera::Initialize(float screenWidth, float screenHeight)
     screenHeight_ = screenHeight;
 
     // カメラ位置と回転の初期値
-    translation_ = { 0.0f, 0.0f, -10.0f };
-    rotation_ = { 0.0f, 0.0f, 0.0f };
+    translation_ = kInitialTranslation;
+    rotation_ = kInitialRotation;
 
     // 行列の初期化
     UpdateProjectionMatrix();
@@ -77,7 +89,9 @@ void DebugCamera::OnMouseDrag(float deltaX, float deltaY)
     InputManager* input = InputManager::GetInstance(); // 入力マネージャのインスタンスを取得
 
     // 左クリック・右クリック・中クリックのいずれかが押されている間だけ回転を変更
-    if (input->IsMouseButtonPressed(0) || input->IsMouseButtonPressed(1) || input->IsMouseButtonPressed(2)) {
+    if (input->IsMouseButtonPressed(kMouseButtonLeft)
+        || input->IsMouseButtonPressed(kMouseButtonRight)
+        || input->IsMouseButtonPressed(kMouseButtonMiddle)) {
         // マウス移動に応じて回転を変更
         rotation_.y += deltaX * rotateSpeed_;
         rotation_.x += deltaY * rotateSpeed_;
@@ -90,7 +104,7 @@ void DebugCamera::OnMouseDrag(float deltaX, float deltaY)
 void DebugCamera::OnMouseWheel(float delta)
 {
     // ホイールでZ軸移動（ズーム）
-    float zoomSpeed = 0.1f;
+    float zoomSpeed = kMouseWheelZoomSpeed;
     translation_.z += delta * zoomSpeed;
 }
 
@@ -122,9 +136,9 @@ void DebugCamera::UpdateProjectionMatrix()
     float aspectRatio = screenWidth_ / screenHeight_;
 
     // パースの強さ（FOV = 画角）、アスペクト比、ニア・ファークリップ
-    float fovY = 0.45f; // 縦方向の視野角（ラジアン）
-    float nearZ = 0.1f; // ニアクリップ距離
-    float farZ = 1000.0f; // ファークリップ距離
+    float fovY = kDefaultFovY; // 縦方向の視野角（ラジアン）
+    float nearZ = kDefaultNearZ; // ニアクリップ距離
+    float farZ = kDefaultFarZ; // ファークリップ距離
 
     // 透視投影行列を生成
     projectionMatrix_ = MathUtil::MakePerspectiveFovMatrix(fovY, aspectRatio, nearZ, farZ);

@@ -13,6 +13,35 @@
 using namespace Microsoft::WRL;
 using namespace MyEngine;
 
+namespace {
+constexpr UINT kPostProcessDescriptorRangeTotalCount = 2; // カラーと深度のSRV範囲数
+constexpr UINT kPostProcessRootParameterCount = 3; // ポストエフェクト用ルートパラメータ数
+constexpr UINT kPostProcessStaticSamplerCount = 2; // カラー用と深度用サンプラー数
+constexpr UINT kColorSrvRegister = 0; // カラーSRVのレジスタ番号
+constexpr UINT kDepthSrvRegister = 1; // 深度SRVのレジスタ番号
+constexpr UINT kPostProcessSrvDescriptorCount = 1; // SRVテーブルごとのディスクリプタ数
+constexpr UINT kPostProcessDescriptorRangeCount = 1; // ルートパラメータごとのディスクリプタレンジ数
+constexpr UINT kPostProcessConstantRegister = 0; // ルート定数のレジスタ番号
+constexpr UINT kPostProcessConstantRegisterSpace = 0; // ルート定数のレジスタ空間
+constexpr UINT kPostProcessConstant32BitValueCount = 20; // ルート定数で渡す32bit値の数
+constexpr UINT kLinearClampSamplerRegister = 0; // 線形クランプサンプラーのレジスタ番号
+constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
+constexpr UINT kPostProcessRenderTargetCount = 1; // ポストエフェクト描画で使用するRT数
+constexpr UINT kPostProcessSampleCount = 1; // ポストエフェクト描画のマルチサンプル数
+constexpr float kGaussianSigmaMin = 0.1f; // ガウシアンぼかし標準偏差の最小値
+constexpr float kGaussianSigmaMax = 10.0f; // ガウシアンぼかし標準偏差の最大値
+constexpr float kOutlineStrengthMin = 0.0f; // アウトライン強度の最小値
+constexpr float kOutlineStrengthMax = 32.0f; // アウトライン強度の最大値
+constexpr float kNormalizedValueMin = 0.0f; // 正規化値の最小値
+constexpr float kNormalizedValueMax = 1.0f; // 正規化値の最大値
+constexpr float kDepthOutlineSoftnessMin = 0.0001f; // 深度アウトライン柔らかさの最小値
+constexpr float kRadialBlurWidthMax = 0.1f; // ラジアルブラー幅の最大値
+constexpr float kDistortionWaveCountMax = 12.0f; // 歪み波数の最大値
+constexpr float kRandomScaleMin = 1.0f; // ランダムエフェクトスケールの最小値
+constexpr float kRandomScaleMax = 2000.0f; // ランダムエフェクトスケールの最大値
+constexpr float kRandomSpeedMax = 20.0f; // ランダムエフェクト速度の最大値
+constexpr float kPositiveDeltaTimeMin = 0.0f; // 時間更新を行う最小デルタ時間
+} // namespace
 /// <summary>
 /// デストラクタ
 /// </summary>
@@ -98,43 +127,43 @@ bool PostProcess::IsReady() const
 /// </summary>
 void PostProcess::CreateRootSignature()
 {
-    D3D12_DESCRIPTOR_RANGE descriptorRanges[2] = {}; // カラーと深度のSRV範囲
-    descriptorRanges[0].BaseShaderRegister = 0;
-    descriptorRanges[0].NumDescriptors = 1;
+    D3D12_DESCRIPTOR_RANGE descriptorRanges[kPostProcessDescriptorRangeTotalCount] = {}; // カラーと深度のSRV範囲
+    descriptorRanges[0].BaseShaderRegister = kColorSrvRegister;
+    descriptorRanges[0].NumDescriptors = kPostProcessSrvDescriptorCount;
     descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRanges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    descriptorRanges[1].BaseShaderRegister = 1;
-    descriptorRanges[1].NumDescriptors = 1;
+    descriptorRanges[1].BaseShaderRegister = kDepthSrvRegister;
+    descriptorRanges[1].NumDescriptors = kPostProcessSrvDescriptorCount;
     descriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRanges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[3] = {}; // PixelShaderへ渡すルートパラメータ
+    D3D12_ROOT_PARAMETER rootParameters[kPostProcessRootParameterCount] = {}; // PixelShaderへ渡すルートパラメータ
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRanges[0];
-    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = kPostProcessDescriptorRangeCount;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[1];
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = kPostProcessDescriptorRangeCount;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[2].Constants.ShaderRegister = 0;
-    rootParameters[2].Constants.RegisterSpace = 0;
-    rootParameters[2].Constants.Num32BitValues = 20;
+    rootParameters[2].Constants.ShaderRegister = kPostProcessConstantRegister;
+    rootParameters[2].Constants.RegisterSpace = kPostProcessConstantRegisterSpace;
+    rootParameters[2].Constants.Num32BitValues = kPostProcessConstant32BitValueCount;
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {}; // カラー用と深度用サンプラー
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[kPostProcessStaticSamplerCount] = {}; // カラー用と深度用サンプラー
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderRegister = kLinearClampSamplerRegister;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
     staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderRegister = kPointClampSamplerRegister;
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {}; // ルートシグネチャ設定
@@ -214,10 +243,10 @@ ComPtr<ID3D12PipelineState> PostProcess::CreatePipelineState(
     };
     pipelineDesc.InputLayout = inputLayout;
     pipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineDesc.NumRenderTargets = 1;
+    pipelineDesc.NumRenderTargets = kPostProcessRenderTargetCount;
     pipelineDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     pipelineDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-    pipelineDesc.SampleDesc.Count = 1;
+    pipelineDesc.SampleDesc.Count = kPostProcessSampleCount;
     pipelineDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     pipelineDesc.RasterizerState = rasterizerDesc;
     pipelineDesc.BlendState = blendDesc;
@@ -391,7 +420,7 @@ void PostProcess::SetGaussianKernelSize(uint32_t kernelSize)
 /// </summary>
 void PostProcess::SetGaussianSigma(float sigma)
 {
-    if (sigma >= 0.1f && sigma <= 10.0f) {
+    if (sigma >= kGaussianSigmaMin && sigma <= kGaussianSigmaMax) {
         gaussianSigma_ = sigma;
     }
 }
@@ -458,7 +487,7 @@ void PostProcess::DrawGaussianTexture(
 /// </summary>
 void PostProcess::SetOutlineStrength(float strength)
 {
-    if (strength >= 0.0f && strength <= 32.0f) {
+    if (strength >= kOutlineStrengthMin && strength <= kOutlineStrengthMax) {
         outlineStrength_ = strength;
     }
 }
@@ -468,7 +497,7 @@ void PostProcess::SetOutlineStrength(float strength)
 /// </summary>
 void PostProcess::SetDepthOutlineThreshold(float threshold)
 {
-    if (threshold >= 0.0f && threshold <= 1.0f) {
+    if (threshold >= kNormalizedValueMin && threshold <= kNormalizedValueMax) {
         depthOutlineThreshold_ = threshold;
     }
 }
@@ -478,7 +507,7 @@ void PostProcess::SetDepthOutlineThreshold(float threshold)
 /// </summary>
 void PostProcess::SetDepthOutlineSoftness(float softness)
 {
-    if (softness >= 0.0001f && softness <= 1.0f) {
+    if (softness >= kDepthOutlineSoftnessMin && softness <= kNormalizedValueMax) {
         depthOutlineSoftness_ = softness;
     }
 }
@@ -488,8 +517,8 @@ void PostProcess::SetDepthOutlineSoftness(float softness)
 /// </summary>
 void PostProcess::SetRadialBlurCenter(const Math::Vector2& center)
 {
-    radialBlurCenter_.x = (std::max)(0.0f, (std::min)(1.0f, center.x));
-    radialBlurCenter_.y = (std::max)(0.0f, (std::min)(1.0f, center.y));
+    radialBlurCenter_.x = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, center.x));
+    radialBlurCenter_.y = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, center.y));
 }
 
 /// <summary>
@@ -497,7 +526,7 @@ void PostProcess::SetRadialBlurCenter(const Math::Vector2& center)
 /// </summary>
 void PostProcess::SetRadialBlurWidth(float width)
 {
-    if (width >= 0.0f && width <= 0.1f) {
+    if (width >= kNormalizedValueMin && width <= kRadialBlurWidthMax) {
         radialBlurWidth_ = width;
     }
 }
@@ -520,8 +549,8 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
 /// </summary>
 void PostProcess::SetDistortionCenter(const Math::Vector2& center)
 {
-    distortionCenter_.x = (std::clamp)(center.x, 0.0f, 1.0f);
-    distortionCenter_.y = (std::clamp)(center.y, 0.0f, 1.0f);
+    distortionCenter_.x = (std::clamp)(center.x, kNormalizedValueMin, kNormalizedValueMax);
+    distortionCenter_.y = (std::clamp)(center.y, kNormalizedValueMin, kNormalizedValueMax);
 }
 
 /// <summary>
@@ -545,7 +574,7 @@ void PostProcess::SetDistortionRadius(float radius)
 /// </summary>
 void PostProcess::SetDistortionWaveCount(float waveCount)
 {
-    distortionWaveCount_ = (std::clamp)(waveCount, 0.0f, 12.0f);
+    distortionWaveCount_ = (std::clamp)(waveCount, kNormalizedValueMin, kDistortionWaveCountMax);
 }
 
 /// <summary>
@@ -553,7 +582,7 @@ void PostProcess::SetDistortionWaveCount(float waveCount)
 /// </summary>
 void PostProcess::SetDistortionProgress(float progress)
 {
-    distortionProgress_ = (std::clamp)(progress, 0.0f, 1.0f);
+    distortionProgress_ = (std::clamp)(progress, kNormalizedValueMin, kNormalizedValueMax);
 }
 
 /// <summary>
@@ -561,7 +590,7 @@ void PostProcess::SetDistortionProgress(float progress)
 /// </summary>
 void PostProcess::SetDissolveThreshold(float threshold)
 {
-    dissolveThreshold_ = (std::max)(0.0f, (std::min)(1.0f, threshold));
+    dissolveThreshold_ = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, threshold));
 }
 
 /// <summary>
@@ -577,9 +606,9 @@ void PostProcess::SetDissolveEdgeWidth(float edgeWidth)
 /// </summary>
 void PostProcess::SetDissolveEdgeColor(const Math::Vector3& color)
 {
-    dissolveEdgeColor_.x = (std::max)(0.0f, (std::min)(1.0f, color.x));
-    dissolveEdgeColor_.y = (std::max)(0.0f, (std::min)(1.0f, color.y));
-    dissolveEdgeColor_.z = (std::max)(0.0f, (std::min)(1.0f, color.z));
+    dissolveEdgeColor_.x = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.x));
+    dissolveEdgeColor_.y = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.y));
+    dissolveEdgeColor_.z = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.z));
 }
 
 /// <summary>
@@ -640,7 +669,7 @@ void PostProcess::DrawDissolveTexture(
 /// </summary>
 void PostProcess::Update(float deltaTime)
 {
-    if (deltaTime > 0.0f) {
+    if (deltaTime > kPositiveDeltaTimeMin) {
         randomTime_ += deltaTime * randomSpeed_;
     }
 }
@@ -650,7 +679,7 @@ void PostProcess::Update(float deltaTime)
 /// </summary>
 void PostProcess::SetRandomStrength(float strength)
 {
-    randomStrength_ = (std::max)(0.0f, (std::min)(1.0f, strength));
+    randomStrength_ = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, strength));
 }
 
 /// <summary>
@@ -658,7 +687,7 @@ void PostProcess::SetRandomStrength(float strength)
 /// </summary>
 void PostProcess::SetRandomScale(float scale)
 {
-    randomScale_ = (std::max)(1.0f, (std::min)(2000.0f, scale));
+    randomScale_ = (std::max)(kRandomScaleMin, (std::min)(kRandomScaleMax, scale));
 }
 
 /// <summary>
@@ -666,7 +695,7 @@ void PostProcess::SetRandomScale(float scale)
 /// </summary>
 void PostProcess::SetRandomSpeed(float speed)
 {
-    randomSpeed_ = (std::max)(0.0f, (std::min)(20.0f, speed));
+    randomSpeed_ = (std::max)(kNormalizedValueMin, (std::min)(kRandomSpeedMax, speed));
 }
 
 /// <summary>

@@ -26,6 +26,40 @@ using namespace Math;
 
 namespace {
 constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
+constexpr Vector2 kTemporalSpriteDefaultSize = { 1.0f, 1.0f }; // 時間演出スプライトの初期サイズ
+constexpr Vector4 kHiddenSpriteColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示状態にするスプライト色
+constexpr int kMaximumTemporalAfterimageCount = 8; // 時空破砕で保持できる最大残像数
+constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+constexpr std::array<float, 4> kSceneRenderTargetClearColor = { 0.53f, 0.71f, 0.82f, 1.0f }; // シーン描画RTのクリア色
+constexpr std::array<float, 4> kTransparentRenderTargetClearColor = { 0.0f, 0.0f, 0.0f, 1.0f }; // 中間RTと最終RTのクリア色
+constexpr float kParticleRingOuterRadius = 1.0f; // パーティクルリングの外径
+constexpr float kParticleRingInnerRadius = 0.2f; // パーティクルリングの内径
+constexpr float kParticleCylinderRadius = 1.0f; // パーティクル円柱の半径
+constexpr float kParticleCylinderHeight = 1.0f; // パーティクル円柱の高さ
+constexpr float kParticleCylinderSubdivision = 1.0f; // パーティクル円柱の分割数
+constexpr Vector3 kEmitterDefaultPosition = { 0.0f, 0.0f, 0.0f }; // エミッターの初期位置
+constexpr int kHitEmitterParticleCount = 8; // ヒット演出で発生させる粒子数
+constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる粒子数
+constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
+constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
+constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
+constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
+constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
+constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
+constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
+constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
+constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
+constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
+constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
+constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
+constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
+constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
+constexpr const char* kHitParticleGroupName = "Hit"; // ヒット演出パーティクルグループ名
+constexpr const char* kRingParticleGroupName = "Ring"; // リング演出パーティクルグループ名
+constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱演出パーティクルグループ名
 }
 
 /// <summary>
@@ -47,20 +81,20 @@ void PlayScene::InitializeParticleObjects()
     particlePlane_ = std::make_unique<Object3d>();
     particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
-    particlePlane_->SetTexture("circle.png");
+    particlePlane_->SetTexture(kCircleTextureName);
     particlePlane_->SetEnableLighting(false);
 
     particleRing_ = std::make_unique<Object3d>();
     particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleRing_->SetMesh(PrimitiveFactory::CreateRing(1.0f, 0.2f));
-    particleRing_->SetTexture("gradationLine.png");
+    particleRing_->SetMesh(PrimitiveFactory::CreateRing(kParticleRingOuterRadius, kParticleRingInnerRadius));
+    particleRing_->SetTexture(kGradationLineTextureName);
     particleRing_->SetEnableLighting(false);
     particleRing_->SetUseAlphaCutoutSampler(true);
 
     particleCylinder_ = std::make_unique<Object3d>();
     particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(1.0f, 1.0f, 1.0f));
-    particleCylinder_->SetTexture("gradationLine.png");
+    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(kParticleCylinderRadius, kParticleCylinderHeight, kParticleCylinderSubdivision));
+    particleCylinder_->SetTexture(kGradationLineTextureName);
     particleCylinder_->SetEnableLighting(false);
     particleCylinder_->SetUseAlphaCutoutSampler(true);
 }
@@ -77,16 +111,16 @@ void PlayScene::InitializeParticleManager()
 
     particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
     particleManager->SetParticlePlane(particlePlane_.get());
-    particleManager->CreateParticleGroup("Circle", "circle.png");
-    particleManager->CreateParticleGroup("Checker", "uvChecker.png");
-    particleManager->CreateParticleGroup("Ball", "monsterBall.png");
-    particleManager->CreateParticleGroup("Hit", "circle2.png");
-    particleManager->CreateParticleGroup("Ring", "gradationLine.png");
-    particleManager->CreateParticleGroup("Cylinder", "gradationLine.png");
-    particleManager->SetParticleObject("Hit", particlePlane_.get());
-    particleManager->SetParticleObject("Ring", particleRing_.get());
-    particleManager->SetParticleObject("Cylinder", particleCylinder_.get());
-    particleManager->SetGroupBillboard("Cylinder", false);
+    particleManager->CreateParticleGroup(kCircleParticleGroupName, kCircleTextureName);
+    particleManager->CreateParticleGroup(kCheckerParticleGroupName, kUvCheckerTextureName);
+    particleManager->CreateParticleGroup(kBallParticleGroupName, kMonsterBallTextureName);
+    particleManager->CreateParticleGroup(kHitParticleGroupName, kCircleFlashTextureName);
+    particleManager->CreateParticleGroup(kRingParticleGroupName, kGradationLineTextureName);
+    particleManager->CreateParticleGroup(kCylinderParticleGroupName, kGradationLineTextureName);
+    particleManager->SetParticleObject(kHitParticleGroupName, particlePlane_.get());
+    particleManager->SetParticleObject(kRingParticleGroupName, particleRing_.get());
+    particleManager->SetParticleObject(kCylinderParticleGroupName, particleCylinder_.get());
+    particleManager->SetGroupBillboard(kCylinderParticleGroupName, false);
 }
 
 /// <summary>
@@ -94,10 +128,10 @@ void PlayScene::InitializeParticleManager()
 /// </summary>
 void PlayScene::InitializeHitParticleEmitter()
 {
-    pmEmitter_.groupName = "Hit";
-    pmEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    pmEmitter_.count = 8;
-    pmEmitter_.frequency = 1.0f;
+    pmEmitter_.groupName = kHitParticleGroupName;
+    pmEmitter_.transform.translate = kEmitterDefaultPosition;
+    pmEmitter_.count = kHitEmitterParticleCount;
+    pmEmitter_.frequency = kEmitterDefaultFrequency;
     pmEmitter_.useHitEffect = true;
     pmEmitter_.Emit();
 }
@@ -107,10 +141,10 @@ void PlayScene::InitializeHitParticleEmitter()
 /// </summary>
 void PlayScene::InitializeRingParticleEmitter()
 {
-    ringEmitter_.groupName = "Ring";
-    ringEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    ringEmitter_.count = 1;
-    ringEmitter_.frequency = 1.0f;
+    ringEmitter_.groupName = kRingParticleGroupName;
+    ringEmitter_.transform.translate = kEmitterDefaultPosition;
+    ringEmitter_.count = kSingleEffectEmitterCount;
+    ringEmitter_.frequency = kEmitterDefaultFrequency;
     ringEmitter_.useRingEffect = true;
     ringEmitter_.Emit();
 }
@@ -120,10 +154,10 @@ void PlayScene::InitializeRingParticleEmitter()
 /// </summary>
 void PlayScene::InitializeCylinderParticleEmitter()
 {
-    cylinderEmitter_.groupName = "Cylinder";
-    cylinderEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f };
-    cylinderEmitter_.count = 1;
-    cylinderEmitter_.frequency = 1.0f;
+    cylinderEmitter_.groupName = kCylinderParticleGroupName;
+    cylinderEmitter_.transform.translate = kEmitterDefaultPosition;
+    cylinderEmitter_.count = kSingleEffectEmitterCount;
+    cylinderEmitter_.frequency = kEmitterDefaultFrequency;
     cylinderEmitter_.useCylinderEffect = true;
     cylinderEmitter_.Emit();
 }
@@ -152,38 +186,35 @@ void PlayScene::InitializeParticleEffects()
 /// </summary>
 void PlayScene::InitializeTemporalEffectSprites()
 {
-    constexpr int kMaximumAfterimageCount = 8; // 調整UIで使用できる最大残像数
-    temporalAfterimageSprites_.reserve(kMaximumAfterimageCount);
-    for (int afterimageIndex = 0; afterimageIndex < kMaximumAfterimageCount; ++afterimageIndex) {
+    temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
+    for (int afterimageIndex = 0; afterimageIndex < kMaximumTemporalAfterimageCount; ++afterimageIndex) {
         auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
         afterimageSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
+        afterimageSprite->SetColor(kHiddenSpriteColor);
         afterimageSprite->Update();
         temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
-    constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
     timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
     for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
         auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
         particleSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         particleSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        particleSprite->SetSize({ 1.0f, 1.0f });
-        particleSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        particleSprite->SetSize(kTemporalSpriteDefaultSize);
+        particleSprite->SetColor(kHiddenSpriteColor);
         particleSprite->Update();
         timeReversalSprites_.push_back(std::move(particleSprite));
     }
 
-    constexpr int kMaximumRewindAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
-    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumRewindAfterimageCount; // 確保する残像スプライト総数
+    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount; // 確保する残像スプライト総数
     timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
     for (int afterimageIndex = 0;
         afterimageIndex < maximumRewindAfterimageSpriteCount;
@@ -191,11 +222,11 @@ void PlayScene::InitializeTemporalEffectSprites()
         auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
         afterimageSprite->Initialize(
             ctx_.spriteCommon,
-            "circle2.png",
+            kCircleFlashTextureName,
             ctx_.imguiManager);
         afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize({ 1.0f, 1.0f });
-        afterimageSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
+        afterimageSprite->SetColor(kHiddenSpriteColor);
         afterimageSprite->Update();
         timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
@@ -203,11 +234,11 @@ void PlayScene::InitializeTemporalEffectSprites()
     timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
     timeReversalConvergenceSprite_->Initialize(
         ctx_.spriteCommon,
-        "circle2.png",
+        kCircleFlashTextureName,
         ctx_.imguiManager);
     timeReversalConvergenceSprite_->SetAnchorPoint(kCenteredSpriteAnchor);
-    timeReversalConvergenceSprite_->SetSize({ 1.0f, 1.0f });
-    timeReversalConvergenceSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    timeReversalConvergenceSprite_->SetSize(kTemporalSpriteDefaultSize);
+    timeReversalConvergenceSprite_->SetColor(kHiddenSpriteColor);
     timeReversalConvergenceSprite_->Update();
 }
 
@@ -229,7 +260,7 @@ void PlayScene::InitializePostProcessTargets()
     sceneRenderTargetDesc.createColorSrv = true;
     sceneRenderTargetDesc.createDepthSrv = true;
     sceneRenderTargetDesc.resizeWithWindow = true;
-    sceneRenderTargetDesc.clearColor = { 0.53f, 0.71f, 0.82f, 1.0f };
+    sceneRenderTargetDesc.clearColor = kSceneRenderTargetClearColor;
     sceneRenderTarget_.Initialize(directXCommon, sceneRenderTargetDesc);
 
     RenderTargetDesc intermediateTargetDesc {}; // ポストプロセス中間RT設定
@@ -240,7 +271,7 @@ void PlayScene::InitializePostProcessTargets()
     intermediateTargetDesc.createColorSrv = true;
     intermediateTargetDesc.createDepthSrv = false;
     intermediateTargetDesc.resizeWithWindow = true;
-    intermediateTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    intermediateTargetDesc.clearColor = kTransparentRenderTargetClearColor;
     postProcessIntermediateTarget_.Initialize(directXCommon, intermediateTargetDesc);
 
     RenderTargetDesc finalRenderTargetDesc {}; // Scene View表示用RT設定
@@ -251,12 +282,12 @@ void PlayScene::InitializePostProcessTargets()
     finalRenderTargetDesc.createColorSrv = true;
     finalRenderTargetDesc.createDepthSrv = false;
     finalRenderTargetDesc.resizeWithWindow = true;
-    finalRenderTargetDesc.clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    finalRenderTargetDesc.clearColor = kTransparentRenderTargetClearColor;
     finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
 
     if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture("noise0.png");
-        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex("noise0.png");
+        ctx_.textureManager->LoadTexture(kDissolveMaskTextureName);
+        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex(kDissolveMaskTextureName);
     }
 
     postProcess_.Initialize(directXCommon);
@@ -268,13 +299,12 @@ void PlayScene::InitializePostProcessTargets()
 /// </summary>
 void PlayScene::InitializeDemoSprites()
 {
-    constexpr uint32_t kSpriteCount = 5; // 作成する確認用スプライト数
     const std::array<std::string, 2> spriteNames = {
         "uvChecker",
         "monsterBall"
     }; // 確認用スプライトに使用するテクスチャ名
 
-    for (uint32_t spriteIndex = 0; spriteIndex < kSpriteCount; ++spriteIndex) {
+    for (uint32_t spriteIndex = 0; spriteIndex < kDemoSpriteCount; ++spriteIndex) {
         auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
         const std::string textureName = spriteNames[(spriteIndex / 2) == 0 ? 0 : 1] + ".png"; // 使用するテクスチャ名
         sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
@@ -294,10 +324,8 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
 
     const bool isCubeModel = modelFileName.find("cube") != std::string::npos || modelFileName.find("Cube") != std::string::npos; // 環境マップ確認用モデルか
     if (isCubeModel) {
-        constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
-        const Vector3 kCubeTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
         object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
-        object3d.SetTranslate(kCubeTranslate);
+        object3d.SetTranslate(kCubeInitialTranslate);
     }
 }
 
@@ -323,11 +351,8 @@ void PlayScene::InitializeSceneObjects()
         ApplySceneObjectInitialSettings(*object3d, modelFileName);
         objects3d_.push_back(std::move(object3d));
     }
-
-    constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
     if (objects3d_.size() > kTerrainObjectIndex && objects3d_[kTerrainObjectIndex]) {
-        const Vector3 kTerrainScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
-        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainScale);
+        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainInitialScale);
     }
 }
 
@@ -340,11 +365,10 @@ void PlayScene::LoadSceneTextures()
         return;
     }
 
-    ctx_.textureManager->LoadTexture("uvChecker.png");
-    ctx_.textureManager->LoadTexture("monsterBall.png");
-    ctx_.textureManager->LoadTexture("circle.png");
-    ctx_.textureManager->LoadTexture("gradationLine.png");
-    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
+    ctx_.textureManager->LoadTexture(kUvCheckerTextureName);
+    ctx_.textureManager->LoadTexture(kMonsterBallTextureName);
+    ctx_.textureManager->LoadTexture(kCircleTextureName);
+    ctx_.textureManager->LoadTexture(kGradationLineTextureName);
     ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
 }
 
@@ -356,8 +380,6 @@ void PlayScene::InitializeSkyBox()
     if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
         return;
     }
-
-    constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
     const uint32_t environmentMapSrvIndex = ctx_.textureManager->GetSrvIndex(kEnvironmentMapTextureName); // 環境マップのSRV番号
     if (environmentMapSrvIndex == UINT32_MAX) {
         return;

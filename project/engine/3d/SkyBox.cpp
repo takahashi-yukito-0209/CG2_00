@@ -7,6 +7,21 @@
 
 using namespace MyEngine;
 
+namespace {
+constexpr size_t kSkyBoxRootParameterCount = 2; // スカイボックス用ルートパラメータ数
+constexpr size_t kSkyBoxInputElementCount = 1; // スカイボックス用入力要素数
+constexpr UINT kSkyBoxConstantBufferSize = 256; // スカイボックス用定数バッファサイズ
+constexpr UINT kSkyBoxCbvRegister = 0; // スカイボックス用CBVのレジスタ番号
+constexpr UINT kSkyBoxSrvRegister = 0; // キューブマップSRVのレジスタ番号
+constexpr UINT kSkyBoxSrvDescriptorCount = 1; // キューブマップSRVのディスクリプタ数
+constexpr UINT kSkyBoxDescriptorRangeCount = 1; // SRVテーブルで使用するディスクリプタレンジ数
+constexpr UINT kSkyBoxSamplerRegister = 0; // キューブマップサンプラーのレジスタ番号
+constexpr UINT kSkyBoxStaticSamplerCount = 1; // スタティックサンプラー数
+constexpr UINT kSkyBoxRenderTargetCount = 1; // スカイボックス描画で使用するRT数
+constexpr UINT kSkyBoxSampleCount = 1; // スカイボックス描画のマルチサンプル数
+constexpr size_t kSkyBoxLogBufferSize = 256; // スカイボックスのログ用バッファサイズ
+constexpr float kViewTranslationZero = 0.0f; // ビュー行列の平行移動成分を消す値
+} // namespace
 // 頂点構造体（位置のみ、テクスチャ座標や法線は不要）
 struct Vertex {
     float pos[3];
@@ -97,7 +112,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
 
     // 定数バッファの作成とマッピング
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
-        constantBuffers_[frameIndex] = dxCommon_->CreateBufferResource(256);
+        constantBuffers_[frameIndex] = dxCommon_->CreateBufferResource(kSkyBoxConstantBufferSize);
         constantBuffers_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedConstantBuffers_[frameIndex]));
     }
     // 定数バッファの内容は描画前にUpdateViewProjで更新するため、ここでは初期化しない
@@ -105,22 +120,22 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         HRESULT hr = S_OK;
 
         // ルートパラメータの定義
-        D3D12_ROOT_PARAMETER rootParams[2] = {};
+        D3D12_ROOT_PARAMETER rootParams[kSkyBoxRootParameterCount] = {};
         rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-        rootParams[0].Descriptor.ShaderRegister = 0; // b0
+        rootParams[0].Descriptor.ShaderRegister = kSkyBoxCbvRegister; // b0
         rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
         // SRVテーブルの定義
         D3D12_DESCRIPTOR_RANGE range = {};
         range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        range.NumDescriptors = 1;
-        range.BaseShaderRegister = 0; // t0
+        range.NumDescriptors = kSkyBoxSrvDescriptorCount;
+        range.BaseShaderRegister = kSkyBoxSrvRegister; // t0
         range.RegisterSpace = 0;
         range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
         // ルートパラメータの定義（SRVテーブル）
         rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
+        rootParams[1].DescriptorTable.NumDescriptorRanges = kSkyBoxDescriptorRangeCount;
         rootParams[1].DescriptorTable.pDescriptorRanges = &range;
         rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
@@ -130,14 +145,14 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        samplerDesc.ShaderRegister = 0;
+        samplerDesc.ShaderRegister = kSkyBoxSamplerRegister;
         samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         // ルートシグネチャの説明
         D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
         rsDesc.NumParameters = _countof(rootParams);
         rsDesc.pParameters = rootParams;
-        rsDesc.NumStaticSamplers = 1;
+        rsDesc.NumStaticSamplers = kSkyBoxStaticSamplerCount;
         rsDesc.pStaticSamplers = &samplerDesc;
         rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -160,7 +175,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         auto ps = dxCommon_->CompileShader(L"resources/shaders/SkyBox.PS.hlsl", L"ps_6_0");
 
         // 入力レイアウトの定義（位置のみ）
-        D3D12_INPUT_ELEMENT_DESC inputDesc[1] = {};
+        D3D12_INPUT_ELEMENT_DESC inputDesc[kSkyBoxInputElementCount] = {};
         inputDesc[0].SemanticName = "POSITION";
         inputDesc[0].SemanticIndex = 0;
         inputDesc[0].Format = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -180,9 +195,9 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         desc.SampleMask = UINT_MAX;
         desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        desc.NumRenderTargets = 1;
+        desc.NumRenderTargets = kSkyBoxRenderTargetCount;
         desc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
-        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Count = kSkyBoxSampleCount;
         // スカイボックスは常に最も遠くに描画されるべきなので、深度テストは常にパスさせるが、深度書き込みは行わない設定にする
         desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
         desc.DepthStencilState.DepthEnable = FALSE;
@@ -192,7 +207,7 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
         // PSOの生成とエラーチェック
         HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pipelineState_));
         if (FAILED(hr)) {
-            char buf[256];
+            char buf[kSkyBoxLogBufferSize];
             sprintf_s(buf, "ERROR SkyBox::Initialize: CreateGraphicsPipelineState failed hr=0x%08X\n", static_cast<unsigned int>(hr));
             Logger::Error(buf);
         }
@@ -286,9 +301,9 @@ void SkyBox::Draw(Camera* camera)
             Math::Matrix4x4 view = camera->GetViewMatrix();
             Math::Matrix4x4 proj = camera->GetProjectionMatrix();
             // ビュー行列の平行移動成分をゼロにして、カメラの位置に関係なく常に同じ位置にスカイボックスが描画されるようにする
-            view.m[3][0] = 0.0f;
-            view.m[3][1] = 0.0f;
-            view.m[3][2] = 0.0f;
+            view.m[3][0] = kViewTranslationZero;
+            view.m[3][1] = kViewTranslationZero;
+            view.m[3][2] = kViewTranslationZero;
             Math::Matrix4x4 vp = MathUtil::Multiply(view, proj);
             // 定数バッファにコピー
             memcpy(viewProjectionState_.data(), &vp, sizeof(vp));

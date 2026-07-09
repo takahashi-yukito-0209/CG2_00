@@ -35,6 +35,45 @@ constexpr int kMinimumParticleCount = 1; // 発生させる最小粒子数
 constexpr float kMinimumTransformHistoryCount = 2.0f; // 補間に必要な最低履歴数
 constexpr size_t kMaximumRewindAfterimageCount = 3; // 1粒子ごとの最大残像数
 constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
+constexpr int kImGuiParticleCountMin = 1; // 粒子数の最小値
+constexpr int kImGuiParticleCountMax = 128; // 粒子数の最大値
+constexpr float kImGuiSpeedStep = 0.1f; // 速度設定の調整幅
+constexpr float kImGuiSpeedMin = 0.0f; // 速度設定の最小値
+constexpr float kImGuiSpeedMax = 20.0f; // 速度設定の最大値
+constexpr float kImGuiDurationStep = 0.01f; // 時間設定の調整幅
+constexpr float kImGuiDurationMin = 0.05f; // 時間設定の最小値
+constexpr float kImGuiPauseDurationMin = 0.0f; // 停止時間設定の最小値
+constexpr float kImGuiDurationMax = 5.0f; // 時間設定の最大値
+constexpr int kImGuiAfterimageCountMin = 0; // 残像数の最小値
+constexpr int kImGuiAfterimageCountMax = 3; // 残像数の最大値
+constexpr float kImGuiAfterimageSpacingStep = 0.01f; // 残像間隔の調整幅
+constexpr float kImGuiAfterimageSpacingMin = 0.0f; // 残像間隔の最小値
+constexpr float kImGuiAfterimageSpacingMax = 0.5f; // 残像間隔の最大値
+constexpr float kImGuiAlphaStep = 0.01f; // 透明度設定の調整幅
+constexpr float kImGuiAlphaMin = 0.0f; // 透明度設定の最小値
+constexpr float kImGuiAlphaMax = 1.0f; // 透明度設定の最大値
+constexpr float kImGuiDistortionStrengthStep = 0.001f; // 歪み強度の調整幅
+constexpr float kImGuiDistortionStrengthMin = -0.2f; // 歪み強度の最小値
+constexpr float kImGuiDistortionStrengthMax = 0.2f; // 歪み強度の最大値
+constexpr float kImGuiDistortionRadiusStep = 0.01f; // 歪み範囲の調整幅
+constexpr float kImGuiDistortionRadiusMin = 0.05f; // 歪み範囲の最小値
+constexpr float kImGuiDistortionRadiusMax = 1.0f; // 歪み範囲の最大値
+constexpr float kImGuiDistortionWaveStep = 0.1f; // 歪み波数の調整幅
+constexpr float kImGuiDistortionWaveMin = 1.0f; // 歪み波数の最小値
+constexpr float kImGuiDistortionWaveMax = 12.0f; // 歪み波数の最大値
+constexpr float kImGuiConvergenceDurationMax = 2.0f; // 収束時間設定の最大値
+constexpr float kImGuiFlashSizeStep = 1.0f; // フラッシュサイズの調整幅
+constexpr float kImGuiFlashSizeMin = 8.0f; // フラッシュサイズの最小値
+constexpr float kImGuiFlashSizeMax = 512.0f; // フラッシュサイズの最大値
+constexpr int kImGuiRingCountMin = 0; // リング数の最小値
+constexpr int kImGuiRingCountMax = 8; // リング数の最大値
+constexpr float kImGuiHistoryDurationStep = 0.1f; // 履歴時間設定の調整幅
+constexpr float kImGuiHistoryDurationMin = 0.1f; // 履歴時間設定の最小値
+constexpr float kImGuiHistoryDurationMax = 10.0f; // 履歴時間設定の最大値
+constexpr float kImGuiParticleSizeStep = 1.0f; // 粒子サイズの調整幅
+constexpr float kImGuiParticleSizeMin = 2.0f; // 粒子サイズの最小値
+constexpr float kImGuiParticleSizeMax = 128.0f; // 粒子サイズの最大値
+constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 }
 
 /// <summary>
@@ -55,6 +94,51 @@ void TimeReversalEffect::ResetState()
 void TimeReversalEffect::ResetSettings()
 {
     settings_ = TimeReversalSettings {};
+}
+
+/// <summary>
+/// 時間逆行開始時のポストエフェクト状態を設定する。
+/// </summary>
+void TimeReversalEffect::ConfigureInitialPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(PostEffectType::Copy);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionProgress(0.0f);
+}
+
+/// <summary>
+/// 巻き戻しフェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeReversalEffect::ApplyRewindingPostProcess(PostProcess& postProcess, float rewindRate)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
+    postProcess.SetDistortionProgress(rewindRate);
+}
+
+/// <summary>
+/// 収束フェーズのポストエフェクト状態を反映する。
+/// </summary>
+void TimeReversalEffect::ApplyConvergingPostProcess(PostProcess& postProcess, float convergenceRate)
+{
+    postProcess.SetEffectType(PostEffectType::Distortion);
+    postProcess.SetDistortionRadius(settings_.distortionRadius);
+    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
+    postProcess.SetDistortionStrength(-settings_.distortionStrength * (1.0f - convergenceRate));
+    postProcess.SetDistortionProgress(convergenceRate);
+}
+
+/// <summary>
+/// 再生前のポストエフェクト状態へ戻す。
+/// </summary>
+void TimeReversalEffect::RestorePreviousPostProcess(PostProcess& postProcess)
+{
+    postProcess.SetEffectType(previousPostEffect_);
+    postProcess.SetDistortionStrength(0.0f);
 }
 
 /// <summary>
@@ -99,11 +183,7 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
         particles_.push_back(particle);
     }
 
-    postProcess.SetEffectType(PostEffectType::Copy);
-    postProcess.SetDistortionRadius(settings_.distortionRadius);
-    postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
+    ConfigureInitialPostProcess(postProcess);
 }
 
 /// <summary>
@@ -140,11 +220,7 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
             };
             particle.elapsedTime = particle.lifeTime * (1.0f - rewindRate);
         }
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
-        postProcess.SetDistortionProgress(rewindRate);
+        ApplyRewindingPostProcess(postProcess, rewindRate);
         ApplyTransform(objects3d);
 
         if (rewindRate >= 1.0f) {
@@ -157,18 +233,13 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     if (phase_ == TimeReversalPhase::Converging) {
         const float convergenceDuration = (std::max)(settings_.convergenceDuration, kMinimumEffectDuration); // 収束演出時間
         const float convergenceRate = (std::clamp)(phaseTime_ / convergenceDuration, 0.0f, 1.0f); // 収束演出の進行度
-        postProcess.SetEffectType(PostEffectType::Distortion);
-        postProcess.SetDistortionRadius(settings_.distortionRadius);
-        postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-        postProcess.SetDistortionStrength(-settings_.distortionStrength * (1.0f - convergenceRate));
-        postProcess.SetDistortionProgress(convergenceRate);
+        ApplyConvergingPostProcess(postProcess, convergenceRate);
 
         if (convergenceRate >= 1.0f) {
             phase_ = TimeReversalPhase::Idle;
             phaseTime_ = 0.0f;
             transformHistory_.clear();
-            postProcess.SetEffectType(previousPostEffect_);
-            postProcess.SetDistortionStrength(0.0f);
+            RestorePreviousPostProcess(postProcess);
         }
         return;
     }
@@ -382,29 +453,29 @@ void TimeReversalEffect::DrawImGui()
     ImGui::Text("Phase Time: %.3f", phaseTime_);
 
     if (ImGui::CollapsingHeader("Time Reversal Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Particle Count", &settings_.particleCount, 1, 128);
-        ImGui::DragFloat("Min Speed", &settings_.minSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
-        ImGui::DragFloat("Max Speed", &settings_.maxSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
-        ImGui::DragFloat("Expansion Duration", &settings_.expansionDuration, 0.01f, 0.05f, 5.0f, "%.2f sec");
-        ImGui::DragFloat("Pause Duration", &settings_.pauseDuration, 0.01f, 0.0f, 5.0f, "%.2f sec");
-        ImGui::DragFloat("Rewind Duration", &settings_.rewindDuration, 0.01f, 0.05f, 5.0f, "%.2f sec");
-        ImGui::SliderInt("Rewind Afterimage Count", &settings_.rewindAfterimageCount, 0, 3);
-        ImGui::DragFloat("Rewind Afterimage Spacing", &settings_.rewindAfterimageSpacing, 0.01f, 0.0f, 0.5f, "%.2f");
-        ImGui::DragFloat("Rewind Afterimage Alpha", &settings_.rewindAfterimageAlpha, 0.01f, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderInt("Particle Count", &settings_.particleCount, kImGuiParticleCountMin, kImGuiParticleCountMax);
+        ImGui::DragFloat("Min Speed", &settings_.minSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
+        ImGui::DragFloat("Max Speed", &settings_.maxSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
+        ImGui::DragFloat("Expansion Duration", &settings_.expansionDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Pause Duration", &settings_.pauseDuration, kImGuiDurationStep, kImGuiPauseDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::DragFloat("Rewind Duration", &settings_.rewindDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        ImGui::SliderInt("Rewind Afterimage Count", &settings_.rewindAfterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
+        ImGui::DragFloat("Rewind Afterimage Spacing", &settings_.rewindAfterimageSpacing, kImGuiAfterimageSpacingStep, kImGuiAfterimageSpacingMin, kImGuiAfterimageSpacingMax, "%.2f");
+        ImGui::DragFloat("Rewind Afterimage Alpha", &settings_.rewindAfterimageAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
         ImGui::SeparatorText("Screen Distortion");
-        ImGui::DragFloat("Rewind Distortion Strength", &settings_.distortionStrength, 0.001f, -0.2f, 0.2f, "%.3f");
-        ImGui::DragFloat("Rewind Distortion Radius", &settings_.distortionRadius, 0.01f, 0.05f, 1.0f, "%.2f");
-        ImGui::DragFloat("Rewind Distortion Waves", &settings_.distortionWaveCount, 0.1f, 1.0f, 12.0f, "%.1f");
+        ImGui::DragFloat("Rewind Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
+        ImGui::DragFloat("Rewind Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        ImGui::DragFloat("Rewind Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
         ImGui::SeparatorText("Convergence");
-        ImGui::DragFloat("Convergence Duration", &settings_.convergenceDuration, 0.01f, 0.05f, 2.0f, "%.2f sec");
-        ImGui::DragFloat("Convergence Flash Size", &settings_.convergenceFlashSize, 1.0f, 8.0f, 512.0f, "%.0f");
-        ImGui::DragFloat("Convergence Flash Alpha", &settings_.convergenceFlashAlpha, 0.01f, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderInt("Convergence Ring Count", &settings_.convergenceRingCount, 0, 8);
+        ImGui::DragFloat("Convergence Duration", &settings_.convergenceDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiConvergenceDurationMax, "%.2f sec");
+        ImGui::DragFloat("Convergence Flash Size", &settings_.convergenceFlashSize, kImGuiFlashSizeStep, kImGuiFlashSizeMin, kImGuiFlashSizeMax, "%.0f");
+        ImGui::DragFloat("Convergence Flash Alpha", &settings_.convergenceFlashAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
+        ImGui::SliderInt("Convergence Ring Count", &settings_.convergenceRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
         ImGui::SeparatorText("Transform Rewind");
-        ImGui::DragFloat("Transform History Duration", &settings_.transformHistoryDuration, 0.1f, 0.1f, 10.0f, "%.1f sec");
-        ImGui::DragFloat("Particle Size", &settings_.particleSize, 1.0f, 2.0f, 128.0f, "%.0f");
+        ImGui::DragFloat("Transform History Duration", &settings_.transformHistoryDuration, kImGuiHistoryDurationStep, kImGuiHistoryDurationMin, kImGuiHistoryDurationMax, "%.1f sec");
+        ImGui::DragFloat("Particle Size", &settings_.particleSize, kImGuiParticleSizeStep, kImGuiParticleSizeMin, kImGuiParticleSizeMax, "%.0f");
         ImGui::ColorEdit4("Particle Color", &settings_.particleColor.x);
-        ImGui::DragFloat3("Effect Position", &settings_.effectPosition.x, 0.05f);
+        ImGui::DragFloat3("Effect Position", &settings_.effectPosition.x, kImGuiPositionStep);
     }
 #endif
 }
