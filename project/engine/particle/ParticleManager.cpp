@@ -15,6 +15,18 @@ using namespace MyEngine;
 
 namespace {
 constexpr uint32_t kFallbackParticleLimit = 1024; // 初期化前に参照された場合の最低限の保持上限
+constexpr float kImGuiFineStep = 0.01f; // 細かい値の調整幅
+constexpr float kImGuiPhysicsStep = 0.1f; // 物理系値の調整幅
+constexpr float kImGuiLifeMin = 0.1f; // 寿命設定の最小値
+constexpr float kImGuiLifeMax = 100.0f; // 寿命設定の最大値
+constexpr float kImGuiSpawnPositionMin = -50.0f; // 発生位置範囲の最小値
+constexpr float kImGuiSpawnPositionMax = 50.0f; // 発生位置範囲の最大値
+constexpr float kImGuiScaleMin = 0.01f; // スケール範囲の最小値
+constexpr float kImGuiScaleMax = 10.0f; // スケール範囲の最大値
+constexpr float kImGuiPhysicsMin = -100.0f; // 物理系値の最小値
+constexpr float kImGuiPhysicsMax = 100.0f; // 物理系値の最大値
+constexpr float kImGuiDampingMin = 0.0f; // 減衰率の最小値
+constexpr float kImGuiDampingMax = 100.0f; // 減衰率の最大値
 }
 
 /// <summary>
@@ -675,30 +687,91 @@ void ParticleManager::DrawImGui()
     ImGui::Text("Groups: %zu", particleGroups_.size());
 
     if (ImGui::CollapsingHeader("Lifetime", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloatRange2("Life Min/Max", &lifeMin_, &lifeMax_, 0.01f, 0.1f, 100.0f);
+        ImGui::DragFloatRange2(
+            "Life Min/Max",
+            &lifeMin_,
+            &lifeMax_,
+            kImGuiFineStep,
+            kImGuiLifeMin,
+            kImGuiLifeMax);
     }
 
     if (ImGui::CollapsingHeader("Spawn Random", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat3("Spawn Pos Min", &spawnPosMin_.x, 0.01f, -50.0f, 50.0f);
-        ImGui::DragFloat3("Spawn Pos Max", &spawnPosMax_.x, 0.01f, -50.0f, 50.0f);
-        ImGui::DragFloat3("Scale Min", &scaleMin_.x, 0.01f, 0.01f, 10.0f);
-        ImGui::DragFloat3("Scale Max", &scaleMax_.x, 0.01f, 0.01f, 10.0f);
+        ImGui::DragFloat3(
+            "Spawn Pos Min",
+            &spawnPosMin_.x,
+            kImGuiFineStep,
+            kImGuiSpawnPositionMin,
+            kImGuiSpawnPositionMax);
+        ImGui::DragFloat3(
+            "Spawn Pos Max",
+            &spawnPosMax_.x,
+            kImGuiFineStep,
+            kImGuiSpawnPositionMin,
+            kImGuiSpawnPositionMax);
+        ImGui::DragFloat3(
+            "Scale Min",
+            &scaleMin_.x,
+            kImGuiFineStep,
+            kImGuiScaleMin,
+            kImGuiScaleMax);
+        ImGui::DragFloat3(
+            "Scale Max",
+            &scaleMax_.x,
+            kImGuiFineStep,
+            kImGuiScaleMin,
+            kImGuiScaleMax);
     }
 
     if (ImGui::CollapsingHeader("Velocity / Physics")) {
-        ImGui::DragFloat3("Vel Min", &velMin_.x, 0.01f, -50.0f, 50.0f);
-        ImGui::DragFloat3("Vel Max", &velMax_.x, 0.01f, -50.0f, 50.0f);
+        ImGui::DragFloat3(
+            "Vel Min",
+            &velMin_.x,
+            kImGuiFineStep,
+            kImGuiSpawnPositionMin,
+            kImGuiSpawnPositionMax);
+        ImGui::DragFloat3(
+            "Vel Max",
+            &velMax_.x,
+            kImGuiFineStep,
+            kImGuiSpawnPositionMin,
+            kImGuiSpawnPositionMax);
 
         ImGui::Checkbox("Enable Gravity", &gravityEnabled_);
-        ImGui::DragFloat3("Gravity", &gravity_.x, 0.1f, -100.0f, 100.0f);
-        ImGui::DragFloat("Damping", &damping_, 0.01f, 0.0f, 100.0f);
+        ImGui::DragFloat3(
+            "Gravity",
+            &gravity_.x,
+            kImGuiPhysicsStep,
+            kImGuiPhysicsMin,
+            kImGuiPhysicsMax);
+        ImGui::DragFloat(
+            "Damping",
+            &damping_,
+            kImGuiFineStep,
+            kImGuiDampingMin,
+            kImGuiDampingMax);
     }
 
     if (ImGui::CollapsingHeader("Field")) {
         ImGui::Checkbox("Enable Field", &fieldEnabled_);
-        ImGui::DragFloat3("Field Accel", &fieldAccel_.x, 0.1f, -100.0f, 100.0f);
-        ImGui::DragFloat3("Field Min", &fieldMin_.x, 0.1f, -100.0f, 100.0f);
-        ImGui::DragFloat3("Field Max", &fieldMax_.x, 0.1f, -100.0f, 100.0f);
+        ImGui::DragFloat3(
+            "Field Accel",
+            &fieldAccel_.x,
+            kImGuiPhysicsStep,
+            kImGuiPhysicsMin,
+            kImGuiPhysicsMax);
+        ImGui::DragFloat3(
+            "Field Min",
+            &fieldMin_.x,
+            kImGuiPhysicsStep,
+            kImGuiPhysicsMin,
+            kImGuiPhysicsMax);
+        ImGui::DragFloat3(
+            "Field Max",
+            &fieldMax_.x,
+            kImGuiPhysicsStep,
+            kImGuiPhysicsMin,
+            kImGuiPhysicsMax);
     }
 
     if (ImGui::CollapsingHeader("Color")) {
