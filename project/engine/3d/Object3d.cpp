@@ -32,6 +32,20 @@ namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
+constexpr Vector3 kDefaultTransformScale = { 1.0f, 1.0f, 1.0f }; // 初期スケール
+constexpr Vector3 kDefaultTransformRotation = { 0.0f, 0.0f, 0.0f }; // 初期回転
+constexpr Vector3 kDefaultTransformTranslation = { 0.0f, 0.0f, 0.0f }; // 初期位置
+constexpr Vector3 kDefaultCameraRotation = { 0.3f, 0.0f, 0.0f }; // 内部カメラの初期回転
+constexpr Vector3 kDefaultCameraTranslation = { 0.0f, 4.0f, -10.0f }; // 内部カメラの初期位置
+constexpr Vector4 kDefaultMaterialColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 初期マテリアル色
+constexpr int kDefaultLightingMode = 2; // 初期ライティングモード
+constexpr float kDefaultShininess = 32.0f; // 初期スペキュラ指数
+constexpr float kDefaultEnvironmentCoefficient = 0.0f; // 初期環境反射係数
+constexpr float kEnvironmentCoefficientMin = 0.0f; // 環境反射係数の最小値
+constexpr float kEnvironmentCoefficientMax = 1.0f; // 環境反射係数の最大値
+constexpr float kImGuiTransformStep = 0.01f; // Transform調整幅
+constexpr float kImGuiScaleMin = 0.001f; // Scale調整の最小値
+constexpr float kImGuiScaleMax = 1000.0f; // Scale調整の最大値
 constexpr size_t kObjectLogBufferSize = 256; // Object3dのログ用バッファサイズ
 constexpr size_t kObjectSrvLogBufferSize = 128; // SRVバインド警告用バッファサイズ
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
@@ -482,8 +496,16 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
 /// </summary>
 void Object3d::InitializeTransformState()
 {
-    transform_ = { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
-    cameraTransform_ = { { 1.0f, 1.0f, 1.0f }, { 0.3f, 0.0f, 0.0f }, { 0.0f, 4.0f, -10.0f } };
+    transform_ = {
+        kDefaultTransformScale,
+        kDefaultTransformRotation,
+        kDefaultTransformTranslation
+    };
+    cameraTransform_ = {
+        kDefaultTransformScale,
+        kDefaultCameraRotation,
+        kDefaultCameraTranslation
+    };
 }
 
 /// <summary>
@@ -494,9 +516,14 @@ void Object3d::DrawImGui(int index)
 #ifdef USE_IMGUI
     // 選択中オブジェクトの識別名を表示
     ImGui::Text("Object %d : %s", index, debugName_.c_str());
-    ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f, 0.001f, 1000.0f);
-    ImGui::DragFloat3("Rotate", &transform_.rotate.x, 0.01f);
-    ImGui::DragFloat3("Translate", &transform_.translate.x, 0.01f);
+    ImGui::DragFloat3(
+        "Scale",
+        &transform_.scale.x,
+        kImGuiTransformStep,
+        kImGuiScaleMin,
+        kImGuiScaleMax);
+    ImGui::DragFloat3("Rotate", &transform_.rotate.x, kImGuiTransformStep);
+    ImGui::DragFloat3("Translate", &transform_.translate.x, kImGuiTransformStep);
 
     // マテリアル編集
     if (materialData_) {
@@ -512,7 +539,11 @@ void Object3d::DrawImGui(int index)
             materialData_->color.z = col[2];
             materialData_->color.w = col[3];
         }
-        ImGui::SliderFloat("Environment Reflection", &materialData_->environmentCoefficient, 0.0f, 1.0f);
+        ImGui::SliderFloat(
+            "Environment Reflection",
+            &materialData_->environmentCoefficient,
+            kEnvironmentCoefficientMin,
+            kEnvironmentCoefficientMax);
     }
 #else
     (void)index;
@@ -643,16 +674,16 @@ void Object3d::CreateMaterialResource()
 /// </summary>
 void Object3d::InitializeMaterialState()
 {
-    materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    materialData_->color = kDefaultMaterialColor;
     materialData_->enableLighting = 1;
     materialData_->uvTransform = MathUtil::MakeIdentity4x4();
-    materialData_->lightingMode = 2;
+    materialData_->lightingMode = kDefaultLightingMode;
     useAlphaCutoutSampler_ = false;
     materialData_->useAlphaCutoutSampler = 0;
     useAlphaDiscard_ = true;
     materialData_->useAlphaDiscard = 1;
-    materialData_->shininess = 32.0f;
-    materialData_->environmentCoefficient = 0.0f;
+    materialData_->shininess = kDefaultShininess;
+    materialData_->environmentCoefficient = kDefaultEnvironmentCoefficient;
 }
 
 /// <summary>
@@ -690,7 +721,10 @@ void Object3d::SetLightingMode(int mode)
 void Object3d::SetEnvironmentCoefficient(float coefficient)
 {
     if (materialData_) {
-        materialData_->environmentCoefficient = std::clamp(coefficient, 0.0f, 1.0f);
+        materialData_->environmentCoefficient = std::clamp(
+            coefficient,
+            kEnvironmentCoefficientMin,
+            kEnvironmentCoefficientMax);
     }
 }
 
