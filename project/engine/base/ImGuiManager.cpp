@@ -26,6 +26,49 @@ using namespace Math;
 namespace MyEngine {
 
 #ifdef USE_IMGUI
+namespace {
+constexpr int kKernelIndex3x3 = 0; // 3x3を選択する番号
+constexpr int kKernelIndex5x5 = 1; // 5x5を選択する番号
+constexpr int kKernelIndex7x7 = 2; // 7x7を選択する番号
+constexpr uint32_t kKernelSize3x3 = 3u; // 3x3カーネルサイズ
+constexpr uint32_t kKernelSize5x5 = 5u; // 5x5カーネルサイズ
+constexpr uint32_t kKernelSize7x7 = 7u; // 7x7カーネルサイズ
+constexpr uint32_t kSeparablePassCount = 2u; // 分離フィルタのパス数
+constexpr float kPostProcessNormalizedMin = 0.0f; // 正規化値の最小値
+constexpr float kPostProcessNormalizedMax = 1.0f; // 正規化値の最大値
+constexpr float kGaussianSigmaStep = 0.05f; // Gaussian sigmaの調整幅
+constexpr float kGaussianSigmaMin = 0.1f; // Gaussian sigmaの最小値
+constexpr float kGaussianSigmaMax = 10.0f; // Gaussian sigmaの最大値
+constexpr float kOutlineStrengthStep = 0.1f; // アウトライン強度の調整幅
+constexpr float kOutlineStrengthMin = 0.0f; // アウトライン強度の最小値
+constexpr float kOutlineStrengthMax = 32.0f; // アウトライン強度の最大値
+constexpr float kDepthThresholdStep = 0.001f; // 深度閾値の調整幅
+constexpr float kDepthThresholdMax = 0.2f; // 深度閾値の最大値
+constexpr float kDepthSoftnessStep = 0.001f; // 深度アウトライン柔らかさの調整幅
+constexpr float kDepthSoftnessMin = 0.001f; // 深度アウトライン柔らかさの最小値
+constexpr float kDepthSoftnessMax = 0.2f; // 深度アウトライン柔らかさの最大値
+constexpr float kEffectCenterStep = 0.005f; // 中心座標の調整幅
+constexpr float kRadialBlurWidthStep = 0.0005f; // ラジアルブラー幅の調整幅
+constexpr float kRadialBlurWidthMax = 0.1f; // ラジアルブラー幅の最大値
+constexpr int kRadialBlurSampleMin = 1; // ラジアルブラーサンプル数の最小値
+constexpr int kRadialBlurSampleMax = 32; // ラジアルブラーサンプル数の最大値
+constexpr float kDistortionStrengthStep = 0.001f; // 歪み強度の調整幅
+constexpr float kDistortionStrengthMin = -0.1f; // 歪み強度の最小値
+constexpr float kDistortionStrengthMax = 0.1f; // 歪み強度の最大値
+constexpr float kDistortionRadiusStep = 0.01f; // 歪み半径の調整幅
+constexpr float kDistortionRadiusMin = 0.01f; // 歪み半径の最小値
+constexpr float kDistortionRadiusMax = 1.5f; // 歪み半径の最大値
+constexpr float kDistortionWaveStep = 0.1f; // 歪み波数の調整幅
+constexpr float kDistortionWaveMax = 12.0f; // 歪み波数の最大値
+constexpr float kDissolveEdgeWidthStep = 0.001f; // Dissolve境界幅の調整幅
+constexpr float kDissolveEdgeWidthMin = 0.001f; // Dissolve境界幅の最小値
+constexpr float kDissolveEdgeWidthMax = 0.25f; // Dissolve境界幅の最大値
+constexpr float kRandomScaleStep = 1.0f; // ノイズスケールの調整幅
+constexpr float kRandomScaleMin = 1.0f; // ノイズスケールの最小値
+constexpr float kRandomScaleMax = 2000.0f; // ノイズスケールの最大値
+constexpr float kRandomSpeedStep = 0.05f; // ノイズ速度の調整幅
+constexpr float kRandomSpeedMax = 20.0f; // ノイズ速度の最大値
+} // namespace
 
 /// <summary>
 /// ImGui::NewFrame とバックエンドの NewFrame を呼び出して新しいフレームを開始する。
@@ -338,7 +381,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::BoxFilter) {
-            int kernelIndex = ctx.postProcess->GetBoxFilterKernelSize() == 5 ? 1 : 0; // 現在のカーネル番号
+            int kernelIndex = ctx.postProcess->GetBoxFilterKernelSize() == kKernelSize5x5
+                ? kKernelIndex5x5
+                : kKernelIndex3x3; // 現在のカーネル番号
             const char* kernelNames[] = {
                 "3x3",
                 "5x5"
@@ -349,14 +394,18 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                     &kernelIndex,
                     kernelNames,
                     IM_ARRAYSIZE(kernelNames))) {
-                uint32_t kernelSize = kernelIndex == 1 ? 5u : 3u; // 選択されたカーネルサイズ
+                uint32_t kernelSize = kernelIndex == kKernelIndex5x5
+                    ? kKernelSize5x5
+                    : kKernelSize3x3; // 選択されたカーネルサイズ
                 ctx.postProcess->SetBoxFilterKernelSize(kernelSize);
             }
         }
 
         if (ctx.postProcess->GetEffectType() == PostEffectType::GaussianFilter) {
             uint32_t currentKernelSize = ctx.postProcess->GetGaussianKernelSize(); // 現在のカーネルサイズ
-            int kernelIndex = currentKernelSize == 3 ? 0 : (currentKernelSize == 5 ? 1 : 2);
+            int kernelIndex = currentKernelSize == kKernelSize3x3
+                ? kKernelIndex3x3
+                : (currentKernelSize == kKernelSize5x5 ? kKernelIndex5x5 : kKernelIndex7x7);
             const char* kernelNames[] = {
                 "3x3",
                 "5x5",
@@ -368,7 +417,11 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
                     &kernelIndex,
                     kernelNames,
                     IM_ARRAYSIZE(kernelNames))) {
-                const uint32_t kernelSizes[] = { 3u, 5u, 7u }; // 選択値に対応するサイズ
+                const uint32_t kernelSizes[] = {
+                    kKernelSize3x3,
+                    kKernelSize5x5,
+                    kKernelSize7x7
+                }; // 選択値に対応するサイズ
                 ctx.postProcess->SetGaussianKernelSize(kernelSizes[kernelIndex]);
             }
 
@@ -376,14 +429,14 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Sigma",
                     &sigma,
-                    0.05f,
-                    0.1f,
-                    10.0f,
+                    kGaussianSigmaStep,
+                    kGaussianSigmaMin,
+                    kGaussianSigmaMax,
                     "%.2f")) {
                 ctx.postProcess->SetGaussianSigma(sigma);
             }
 
-            uint32_t sampleCount = ctx.postProcess->GetGaussianKernelSize() * 2; // 分離処理の総サンプル数
+            uint32_t sampleCount = ctx.postProcess->GetGaussianKernelSize() * kSeparablePassCount; // 分離処理の総サンプル数
             ImGui::Text("Samples: %u (separable 2-pass)", sampleCount);
         }
 
@@ -393,9 +446,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Outline Strength",
                     &outlineStrength,
-                    0.1f,
-                    0.0f,
-                    32.0f,
+                    kOutlineStrengthStep,
+                    kOutlineStrengthMin,
+                    kOutlineStrengthMax,
                     "%.1f")) {
                 ctx.postProcess->SetOutlineStrength(outlineStrength);
             }
@@ -406,9 +459,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Depth Threshold",
                     &depthThreshold,
-                    0.001f,
-                    0.0f,
-                    0.2f,
+                    kDepthThresholdStep,
+                    kPostProcessNormalizedMin,
+                    kDepthThresholdMax,
                     "%.3f")) {
                 ctx.postProcess->SetDepthOutlineThreshold(depthThreshold);
             }
@@ -417,9 +470,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Depth Softness",
                     &depthSoftness,
-                    0.001f,
-                    0.001f,
-                    0.2f,
+                    kDepthSoftnessStep,
+                    kDepthSoftnessMin,
+                    kDepthSoftnessMax,
                     "%.3f")) {
                 ctx.postProcess->SetDepthOutlineSoftness(depthSoftness);
             }
@@ -434,9 +487,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat2(
                     "Blur Center",
                     centerValues,
-                    0.005f,
-                    0.0f,
-                    1.0f,
+                    kEffectCenterStep,
+                    kPostProcessNormalizedMin,
+                    kPostProcessNormalizedMax,
                     "%.3f")) {
                 ctx.postProcess->SetRadialBlurCenter(
                     { centerValues[0], centerValues[1] });
@@ -446,9 +499,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Blur Width",
                     &blurWidth,
-                    0.0005f,
-                    0.0f,
-                    0.1f,
+                    kRadialBlurWidthStep,
+                    kPostProcessNormalizedMin,
+                    kRadialBlurWidthMax,
                     "%.4f")) {
                 ctx.postProcess->SetRadialBlurWidth(blurWidth);
             }
@@ -457,8 +510,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::SliderInt(
                     "Sample Count",
                     &sampleCount,
-                    1,
-                    32)) {
+                    kRadialBlurSampleMin,
+                    kRadialBlurSampleMax)) {
                 ctx.postProcess->SetRadialBlurSampleCount(
                     static_cast<uint32_t>(sampleCount));
             }
@@ -470,9 +523,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat2(
                     "Distortion Center",
                     centerValues,
-                    0.005f,
-                    0.0f,
-                    1.0f,
+                    kEffectCenterStep,
+                    kPostProcessNormalizedMin,
+                    kPostProcessNormalizedMax,
                     "%.3f")) {
                 ctx.postProcess->SetDistortionCenter(
                     { centerValues[0], centerValues[1] });
@@ -482,9 +535,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Distortion Strength",
                     &strength,
-                    0.001f,
-                    -0.1f,
-                    0.1f,
+                    kDistortionStrengthStep,
+                    kDistortionStrengthMin,
+                    kDistortionStrengthMax,
                     "%.3f")) {
                 ctx.postProcess->SetDistortionStrength(strength);
             }
@@ -493,9 +546,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Distortion Radius",
                     &radius,
-                    0.01f,
-                    0.01f,
-                    1.5f,
+                    kDistortionRadiusStep,
+                    kDistortionRadiusMin,
+                    kDistortionRadiusMax,
                     "%.2f")) {
                 ctx.postProcess->SetDistortionRadius(radius);
             }
@@ -504,9 +557,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Distortion Wave Count",
                     &waveCount,
-                    0.1f,
-                    0.0f,
-                    12.0f,
+                    kDistortionWaveStep,
+                    kPostProcessNormalizedMin,
+                    kDistortionWaveMax,
                     "%.1f")) {
                 ctx.postProcess->SetDistortionWaveCount(waveCount);
             }
@@ -517,8 +570,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::SliderFloat(
                     "Threshold",
                     &threshold,
-                    0.0f,
-                    1.0f,
+                    kPostProcessNormalizedMin,
+                    kPostProcessNormalizedMax,
                     "%.3f")) {
                 ctx.postProcess->SetDissolveThreshold(threshold);
             }
@@ -527,9 +580,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Edge Width",
                     &edgeWidth,
-                    0.001f,
-                    0.001f,
-                    0.25f,
+                    kDissolveEdgeWidthStep,
+                    kDissolveEdgeWidthMin,
+                    kDissolveEdgeWidthMax,
                     "%.3f")) {
                 ctx.postProcess->SetDissolveEdgeWidth(edgeWidth);
             }
@@ -553,8 +606,8 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::SliderFloat(
                     "Noise Strength",
                     &randomStrength,
-                    0.0f,
-                    1.0f,
+                    kPostProcessNormalizedMin,
+                    kPostProcessNormalizedMax,
                     "%.2f")) {
                 ctx.postProcess->SetRandomStrength(randomStrength);
             }
@@ -563,9 +616,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Noise Scale",
                     &randomScale,
-                    1.0f,
-                    1.0f,
-                    2000.0f,
+                    kRandomScaleStep,
+                    kRandomScaleMin,
+                    kRandomScaleMax,
                     "%.0f")) {
                 ctx.postProcess->SetRandomScale(randomScale);
             }
@@ -574,9 +627,9 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
             if (ImGui::DragFloat(
                     "Noise Speed",
                     &randomSpeed,
-                    0.05f,
-                    0.0f,
-                    20.0f,
+                    kRandomSpeedStep,
+                    kPostProcessNormalizedMin,
+                    kRandomSpeedMax,
                     "%.2f")) {
                 ctx.postProcess->SetRandomSpeed(randomSpeed);
             }
