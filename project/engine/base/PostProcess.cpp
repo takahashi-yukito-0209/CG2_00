@@ -28,6 +28,19 @@ constexpr UINT kLinearClampSamplerRegister = 0; // 線形クランプサンプ�
 constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
 constexpr UINT kPostProcessRenderTargetCount = 1; // ポストエフェクト描画で使用するRT数
 constexpr UINT kPostProcessSampleCount = 1; // ポストエフェクト描画のマルチサンプル数
+constexpr float kGaussianSigmaMin = 0.1f; // ガウシアンぼかし標準偏差の最小値
+constexpr float kGaussianSigmaMax = 10.0f; // ガウシアンぼかし標準偏差の最大値
+constexpr float kOutlineStrengthMin = 0.0f; // アウトライン強度の最小値
+constexpr float kOutlineStrengthMax = 32.0f; // アウトライン強度の最大値
+constexpr float kNormalizedValueMin = 0.0f; // 正規化値の最小値
+constexpr float kNormalizedValueMax = 1.0f; // 正規化値の最大値
+constexpr float kDepthOutlineSoftnessMin = 0.0001f; // 深度アウトライン柔らかさの最小値
+constexpr float kRadialBlurWidthMax = 0.1f; // ラジアルブラー幅の最大値
+constexpr float kDistortionWaveCountMax = 12.0f; // 歪み波数の最大値
+constexpr float kRandomScaleMin = 1.0f; // ランダムエフェクトスケールの最小値
+constexpr float kRandomScaleMax = 2000.0f; // ランダムエフェクトスケールの最大値
+constexpr float kRandomSpeedMax = 20.0f; // ランダムエフェクト速度の最大値
+constexpr float kPositiveDeltaTimeMin = 0.0f; // 時間更新を行う最小デルタ時間
 } // namespace
 /// <summary>
 /// デストラクタ
@@ -407,7 +420,7 @@ void PostProcess::SetGaussianKernelSize(uint32_t kernelSize)
 /// </summary>
 void PostProcess::SetGaussianSigma(float sigma)
 {
-    if (sigma >= 0.1f && sigma <= 10.0f) {
+    if (sigma >= kGaussianSigmaMin && sigma <= kGaussianSigmaMax) {
         gaussianSigma_ = sigma;
     }
 }
@@ -474,7 +487,7 @@ void PostProcess::DrawGaussianTexture(
 /// </summary>
 void PostProcess::SetOutlineStrength(float strength)
 {
-    if (strength >= 0.0f && strength <= 32.0f) {
+    if (strength >= kOutlineStrengthMin && strength <= kOutlineStrengthMax) {
         outlineStrength_ = strength;
     }
 }
@@ -484,7 +497,7 @@ void PostProcess::SetOutlineStrength(float strength)
 /// </summary>
 void PostProcess::SetDepthOutlineThreshold(float threshold)
 {
-    if (threshold >= 0.0f && threshold <= 1.0f) {
+    if (threshold >= kNormalizedValueMin && threshold <= kNormalizedValueMax) {
         depthOutlineThreshold_ = threshold;
     }
 }
@@ -494,7 +507,7 @@ void PostProcess::SetDepthOutlineThreshold(float threshold)
 /// </summary>
 void PostProcess::SetDepthOutlineSoftness(float softness)
 {
-    if (softness >= 0.0001f && softness <= 1.0f) {
+    if (softness >= kDepthOutlineSoftnessMin && softness <= kNormalizedValueMax) {
         depthOutlineSoftness_ = softness;
     }
 }
@@ -504,8 +517,8 @@ void PostProcess::SetDepthOutlineSoftness(float softness)
 /// </summary>
 void PostProcess::SetRadialBlurCenter(const Math::Vector2& center)
 {
-    radialBlurCenter_.x = (std::max)(0.0f, (std::min)(1.0f, center.x));
-    radialBlurCenter_.y = (std::max)(0.0f, (std::min)(1.0f, center.y));
+    radialBlurCenter_.x = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, center.x));
+    radialBlurCenter_.y = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, center.y));
 }
 
 /// <summary>
@@ -513,7 +526,7 @@ void PostProcess::SetRadialBlurCenter(const Math::Vector2& center)
 /// </summary>
 void PostProcess::SetRadialBlurWidth(float width)
 {
-    if (width >= 0.0f && width <= 0.1f) {
+    if (width >= kNormalizedValueMin && width <= kRadialBlurWidthMax) {
         radialBlurWidth_ = width;
     }
 }
@@ -536,8 +549,8 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
 /// </summary>
 void PostProcess::SetDistortionCenter(const Math::Vector2& center)
 {
-    distortionCenter_.x = (std::clamp)(center.x, 0.0f, 1.0f);
-    distortionCenter_.y = (std::clamp)(center.y, 0.0f, 1.0f);
+    distortionCenter_.x = (std::clamp)(center.x, kNormalizedValueMin, kNormalizedValueMax);
+    distortionCenter_.y = (std::clamp)(center.y, kNormalizedValueMin, kNormalizedValueMax);
 }
 
 /// <summary>
@@ -561,7 +574,7 @@ void PostProcess::SetDistortionRadius(float radius)
 /// </summary>
 void PostProcess::SetDistortionWaveCount(float waveCount)
 {
-    distortionWaveCount_ = (std::clamp)(waveCount, 0.0f, 12.0f);
+    distortionWaveCount_ = (std::clamp)(waveCount, kNormalizedValueMin, kDistortionWaveCountMax);
 }
 
 /// <summary>
@@ -569,7 +582,7 @@ void PostProcess::SetDistortionWaveCount(float waveCount)
 /// </summary>
 void PostProcess::SetDistortionProgress(float progress)
 {
-    distortionProgress_ = (std::clamp)(progress, 0.0f, 1.0f);
+    distortionProgress_ = (std::clamp)(progress, kNormalizedValueMin, kNormalizedValueMax);
 }
 
 /// <summary>
@@ -577,7 +590,7 @@ void PostProcess::SetDistortionProgress(float progress)
 /// </summary>
 void PostProcess::SetDissolveThreshold(float threshold)
 {
-    dissolveThreshold_ = (std::max)(0.0f, (std::min)(1.0f, threshold));
+    dissolveThreshold_ = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, threshold));
 }
 
 /// <summary>
@@ -593,9 +606,9 @@ void PostProcess::SetDissolveEdgeWidth(float edgeWidth)
 /// </summary>
 void PostProcess::SetDissolveEdgeColor(const Math::Vector3& color)
 {
-    dissolveEdgeColor_.x = (std::max)(0.0f, (std::min)(1.0f, color.x));
-    dissolveEdgeColor_.y = (std::max)(0.0f, (std::min)(1.0f, color.y));
-    dissolveEdgeColor_.z = (std::max)(0.0f, (std::min)(1.0f, color.z));
+    dissolveEdgeColor_.x = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.x));
+    dissolveEdgeColor_.y = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.y));
+    dissolveEdgeColor_.z = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, color.z));
 }
 
 /// <summary>
@@ -656,7 +669,7 @@ void PostProcess::DrawDissolveTexture(
 /// </summary>
 void PostProcess::Update(float deltaTime)
 {
-    if (deltaTime > 0.0f) {
+    if (deltaTime > kPositiveDeltaTimeMin) {
         randomTime_ += deltaTime * randomSpeed_;
     }
 }
@@ -666,7 +679,7 @@ void PostProcess::Update(float deltaTime)
 /// </summary>
 void PostProcess::SetRandomStrength(float strength)
 {
-    randomStrength_ = (std::max)(0.0f, (std::min)(1.0f, strength));
+    randomStrength_ = (std::max)(kNormalizedValueMin, (std::min)(kNormalizedValueMax, strength));
 }
 
 /// <summary>
@@ -674,7 +687,7 @@ void PostProcess::SetRandomStrength(float strength)
 /// </summary>
 void PostProcess::SetRandomScale(float scale)
 {
-    randomScale_ = (std::max)(1.0f, (std::min)(2000.0f, scale));
+    randomScale_ = (std::max)(kRandomScaleMin, (std::min)(kRandomScaleMax, scale));
 }
 
 /// <summary>
@@ -682,7 +695,7 @@ void PostProcess::SetRandomScale(float scale)
 /// </summary>
 void PostProcess::SetRandomSpeed(float speed)
 {
-    randomSpeed_ = (std::max)(0.0f, (std::min)(20.0f, speed));
+    randomSpeed_ = (std::max)(kNormalizedValueMin, (std::min)(kRandomSpeedMax, speed));
 }
 
 /// <summary>
