@@ -48,6 +48,10 @@ constexpr Vector3 kDefaultEffectPosition = { 0.0f, 1.0f, 0.0f }; // エフェク
 constexpr Vector4 kHiddenAfterimageColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示時の残像色
 constexpr int kCrackRevealCountOffset = 1; // 進行率から亀裂表示数へ変換する加算数
 constexpr int kBranchRateDenominatorMin = 1; // 枝分かれ率計算に使用する分母の最小値
+constexpr int kAfterimageCurrentFrameCount = 1; // 残像履歴に現在フレーム分を含める数
+constexpr int kAfterimageVisibleCountNone = 0; // 非表示時の残像表示数
+constexpr int kAfterimageLifeRateDenominatorMin = 1; // 残像の新しさ計算に使用する分母の最小値
+constexpr int kMinimumCrackEmitCount = 1; // 亀裂を発生させる最小数
 constexpr int kMinimumBurstEmitCount = 0; // 破砕時に発生させる数の最小値
 constexpr uint32_t kInnerRingCountBias = 1u; // 奇数リング数を内側へ寄せる加算値
 constexpr const char* kRingParticleGroupName = "Ring"; // リング用パーティクルグループ名
@@ -364,7 +368,7 @@ void TemporalRiftEffect::UpdateAfterimages(std::vector<std::unique_ptr<Object3d>
     transformHistory_.push_front(currentTransform);
 
     const size_t maximumHistoryCount = static_cast<size_t>(
-        settings_.afterimageCount * settings_.afterimageFrameInterval + 1); // 残像表示に必要な最大履歴数
+        settings_.afterimageCount * settings_.afterimageFrameInterval + kAfterimageCurrentFrameCount); // 残像表示に必要な最大履歴数
     while (transformHistory_.size() > maximumHistoryCount) {
         transformHistory_.pop_back();
     }
@@ -376,7 +380,7 @@ void TemporalRiftEffect::UpdateAfterimages(std::vector<std::unique_ptr<Object3d>
 void TemporalRiftEffect::UpdateAfterimageSprites(std::vector<std::unique_ptr<Sprite>>& afterimageSprites, const ScreenUvResolver& screenUvResolver)
 {
     const int visibleAfterimageCount = phase_ == TemporalRiftPhase::Idle
-        ? 0
+        ? kAfterimageVisibleCountNone
         : (std::min)(settings_.afterimageCount, static_cast<int>(afterimageSprites.size())); // 実際に表示する残像数
 
     for (size_t spriteIndex = 0; spriteIndex < afterimageSprites.size(); ++spriteIndex) {
@@ -395,7 +399,7 @@ void TemporalRiftEffect::UpdateAfterimageSprites(std::vector<std::unique_ptr<Spr
         const Transform& historyTransform = transformHistory_[historyIndex]; // 表示する過去Transform
         const Vector2 screenUv = screenUvResolver(historyTransform.translate); // 過去位置の画面UV
         const float lifeRate = kEffectProgressMax
-            - static_cast<float>(spriteIndex) / static_cast<float>((std::max)(visibleAfterimageCount, 1)); // 残像の新しさ
+            - static_cast<float>(spriteIndex) / static_cast<float>((std::max)(visibleAfterimageCount, kAfterimageLifeRateDenominatorMin)); // 残像の新しさ
         const float scaleAverage = (historyTransform.scale.x + historyTransform.scale.y + historyTransform.scale.z) / kTransformScaleComponentCount; // Transformのスケール平均
         const float spriteSize = settings_.afterimageSize
             * (std::max)(scaleAverage, kMinimumAfterimageScale)
@@ -669,7 +673,7 @@ void TemporalRiftEffect::EmitSpaceCracks()
         Vector3 { 0.62f, 0.30f, 0.06f },
     }; // 中心から少しずらして見せる位置補正
 
-    const int crackCount = (std::clamp)(settings_.crackCount, 1, static_cast<int>(kCrackAngles.size())); // 発生する亀裂総数
+    const int crackCount = (std::clamp)(settings_.crackCount, kMinimumCrackEmitCount, static_cast<int>(kCrackAngles.size())); // 発生する亀裂総数
     const float crackDuration = (std::max)(settings_.crackDuration, kMinimumEffectDuration); // 亀裂展開時間
     const float progress = (std::clamp)(phaseTime_ / crackDuration, kEffectProgressMin, kEffectProgressMax); // 亀裂展開の進行度
     const int targetCrackCount = (std::min)(
