@@ -13,6 +13,22 @@
 using namespace Microsoft::WRL;
 using namespace MyEngine;
 
+namespace {
+constexpr UINT kPostProcessDescriptorRangeTotalCount = 2; // カラーと深度のSRV範囲数
+constexpr UINT kPostProcessRootParameterCount = 3; // ポストエフェクト用ルートパラメータ数
+constexpr UINT kPostProcessStaticSamplerCount = 2; // カラー用と深度用サンプラー数
+constexpr UINT kColorSrvRegister = 0; // カラーSRVのレジスタ番号
+constexpr UINT kDepthSrvRegister = 1; // 深度SRVのレジスタ番号
+constexpr UINT kPostProcessSrvDescriptorCount = 1; // SRVテーブルごとのディスクリプタ数
+constexpr UINT kPostProcessDescriptorRangeCount = 1; // ルートパラメータごとのディスクリプタレンジ数
+constexpr UINT kPostProcessConstantRegister = 0; // ルート定数のレジスタ番号
+constexpr UINT kPostProcessConstantRegisterSpace = 0; // ルート定数のレジスタ空間
+constexpr UINT kPostProcessConstant32BitValueCount = 20; // ルート定数で渡す32bit値の数
+constexpr UINT kLinearClampSamplerRegister = 0; // 線形クランプサンプラーのレジスタ番号
+constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
+constexpr UINT kPostProcessRenderTargetCount = 1; // ポストエフェクト描画で使用するRT数
+constexpr UINT kPostProcessSampleCount = 1; // ポストエフェクト描画のマルチサンプル数
+} // namespace
 /// <summary>
 /// デストラクタ
 /// </summary>
@@ -98,43 +114,43 @@ bool PostProcess::IsReady() const
 /// </summary>
 void PostProcess::CreateRootSignature()
 {
-    D3D12_DESCRIPTOR_RANGE descriptorRanges[2] = {}; // カラーと深度のSRV範囲
-    descriptorRanges[0].BaseShaderRegister = 0;
-    descriptorRanges[0].NumDescriptors = 1;
+    D3D12_DESCRIPTOR_RANGE descriptorRanges[kPostProcessDescriptorRangeTotalCount] = {}; // カラーと深度のSRV範囲
+    descriptorRanges[0].BaseShaderRegister = kColorSrvRegister;
+    descriptorRanges[0].NumDescriptors = kPostProcessSrvDescriptorCount;
     descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRanges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    descriptorRanges[1].BaseShaderRegister = 1;
-    descriptorRanges[1].NumDescriptors = 1;
+    descriptorRanges[1].BaseShaderRegister = kDepthSrvRegister;
+    descriptorRanges[1].NumDescriptors = kPostProcessSrvDescriptorCount;
     descriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRanges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[3] = {}; // PixelShaderへ渡すルートパラメータ
+    D3D12_ROOT_PARAMETER rootParameters[kPostProcessRootParameterCount] = {}; // PixelShaderへ渡すルートパラメータ
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRanges[0];
-    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = kPostProcessDescriptorRangeCount;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[1];
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = kPostProcessDescriptorRangeCount;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[2].Constants.ShaderRegister = 0;
-    rootParameters[2].Constants.RegisterSpace = 0;
-    rootParameters[2].Constants.Num32BitValues = 20;
+    rootParameters[2].Constants.ShaderRegister = kPostProcessConstantRegister;
+    rootParameters[2].Constants.RegisterSpace = kPostProcessConstantRegisterSpace;
+    rootParameters[2].Constants.Num32BitValues = kPostProcessConstant32BitValueCount;
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {}; // カラー用と深度用サンプラー
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[kPostProcessStaticSamplerCount] = {}; // カラー用と深度用サンプラー
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderRegister = kLinearClampSamplerRegister;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
     staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderRegister = kPointClampSamplerRegister;
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {}; // ルートシグネチャ設定
@@ -214,10 +230,10 @@ ComPtr<ID3D12PipelineState> PostProcess::CreatePipelineState(
     };
     pipelineDesc.InputLayout = inputLayout;
     pipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineDesc.NumRenderTargets = 1;
+    pipelineDesc.NumRenderTargets = kPostProcessRenderTargetCount;
     pipelineDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();
     pipelineDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-    pipelineDesc.SampleDesc.Count = 1;
+    pipelineDesc.SampleDesc.Count = kPostProcessSampleCount;
     pipelineDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     pipelineDesc.RasterizerState = rasterizerDesc;
     pipelineDesc.BlendState = blendDesc;
