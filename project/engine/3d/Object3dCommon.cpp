@@ -22,6 +22,14 @@ constexpr UINT kLinearWrapSamplerRegister = 0; // 線形ラップサンプラー
 constexpr UINT kPointClampSamplerRegister = 1; // ポイントクランプサンプラーのレジスタ番号
 constexpr float kSamplerMipLodBias = 0.0f; // サンプラーのミップLODバイアス
 constexpr float kSamplerMinLod = 0.0f; // サンプラーの最小LOD
+constexpr float kDefaultDirectionalLightIntensity = 1.0f; // 平行光源の初期強度
+constexpr float kDefaultPointLightRadius = 10.0f; // 点光源の初期半径
+constexpr float kDefaultPointLightDecay = 2.0f; // 点光源の初期減衰率
+constexpr float kDefaultSpotLightDistance = 10.0f; // スポットライトの初期距離
+constexpr float kDefaultSpotLightDecay = 2.0f; // スポットライトの初期減衰率
+constexpr float kDefaultSpotLightCosAngle = 1.0f; // スポットライト角度の初期cos値
+constexpr float kDefaultSpotLightCosFalloffStart = 1.0f; // フォールオフ開始角度の初期cos値
+constexpr int kLightDisabled = 0; // ライト無効状態
 constexpr float kImGuiLightIntensityMin = 0.0f; // ライト強度の最小値
 constexpr float kImGuiLightIntensityMax = 10.0f; // ライト強度の最大値
 constexpr float kImGuiLightPositionStep = 0.1f; // ライト位置の調整幅
@@ -78,7 +86,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
         // 既定値の設定
         directionalLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
-        directionalLightData_->intensity = 1.0f;
+        directionalLightData_->intensity = kDefaultDirectionalLightIntensity;
         // デバッグログ
         {
             char buf[kObjectLogBufferSize];
@@ -106,9 +114,9 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
             // 無効化のため、位置を原点、色を白、半径と減衰を適当な値に設定し、enabled を 0 にする
             pointLightsData_[i].position = { 0.0f, 0.0f, 0.0f, 0.0f };
             pointLightsData_[i].color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            pointLightsData_[i].radius = 10.0f;
-            pointLightsData_[i].decay = 2.0f;
-            pointLightsData_[i].enabled = 0;
+            pointLightsData_[i].radius = kDefaultPointLightRadius;
+            pointLightsData_[i].decay = kDefaultPointLightDecay;
+            pointLightsData_[i].enabled = kLightDisabled;
             pointLightsData_[i].padding = 0.0f;
         }
     }
@@ -126,11 +134,11 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
         spotLightData_->position = { 0.0f, 0.0f, 0.0f, 0.0f };
         spotLightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         spotLightData_->direction = { 0.0f, -1.0f, 0.0f };
-        spotLightData_->distance = 10.0f;
-        spotLightData_->decay = 2.0f;
-        spotLightData_->cosAngle = 1.0f;
-        spotLightData_->cosFalloffStart = 1.0f;
-        spotLightData_->enabled = 0;
+        spotLightData_->distance = kDefaultSpotLightDistance;
+        spotLightData_->decay = kDefaultSpotLightDecay;
+        spotLightData_->cosAngle = kDefaultSpotLightCosAngle;
+        spotLightData_->cosFalloffStart = kDefaultSpotLightCosFalloffStart;
+        spotLightData_->enabled = kLightDisabled;
         spotLightData_->padding = 0.0f;
     }
 
