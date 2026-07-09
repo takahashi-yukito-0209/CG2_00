@@ -18,6 +18,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -31,6 +32,8 @@ namespace {
 constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
+constexpr size_t kObjectLogBufferSize = 256; // Object3dのログ用バッファサイズ
+constexpr size_t kObjectSrvLogBufferSize = 128; // SRVバインド警告用バッファサイズ
 std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルデータ
 
 /// <summary>
@@ -90,7 +93,7 @@ Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Obje
 /// </summary>
 void LogResolvedModelTexturePath(const Object3d::ModelData& modelData)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
     Logger::Debug(buffer);
 }
@@ -151,7 +154,7 @@ std::string FindTexturePathByModelBaseName(const std::string& modelDirectory, co
     for (const auto& extension : kModelTextureExtensions) {
         std::string texturePath = modelDirectory + "/" + modelBaseName + extension; // ベース名から作る候補パス
         if (std::filesystem::exists(texturePath)) {
-            char buffer[256]; // ログ出力用バッファ
+            char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
             sprintf_s(buffer, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", texturePath.c_str());
             Logger::Debug(buffer);
             return texturePath;
@@ -178,7 +181,7 @@ std::string FindFirstTexturePathInDirectory(const std::string& modelDirectory)
         }
 
         std::string texturePath = entry.path().string(); // ディレクトリ内で見つかった画像パス
-        char buffer[256]; // ログ出力用バッファ
+        char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", texturePath.c_str());
         Logger::Debug(buffer);
         return texturePath;
@@ -218,7 +221,7 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
 /// </summary>
 void LogAssimpLoadFailure(const std::string& fullPath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: Assimp failed to load %s\n", fullPath.c_str());
     Logger::Warn(buffer);
 }
@@ -228,7 +231,7 @@ void LogAssimpLoadFailure(const std::string& fullPath)
 /// </summary>
 void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: Assimp scene has no meshes %s\n", fullPath.c_str());
     Logger::Warn(buffer);
 }
@@ -238,7 +241,7 @@ void LogAssimpSceneHasNoMeshes(const std::string& fullPath)
 /// </summary>
 void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std::string& filename)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: LoadMaterialTemplateFile failed to open %s/%s\n", directoryPath.c_str(), filename.c_str());
     Logger::Warn(buffer);
 }
@@ -248,7 +251,7 @@ void LogMaterialTemplateOpenFailure(const std::string& directoryPath, const std:
 /// </summary>
 void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
 {
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "LoadMaterialTemplateFile: map_Kd -> %s\n", textureFilePath.c_str());
     Logger::Debug(buffer);
 }
@@ -299,7 +302,7 @@ bool HasRequiredMeshNormals(const aiMesh* mesh, uint32_t meshIndex)
         return true;
     }
 
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Warning: mesh %u has no normals - skipping\n", meshIndex);
     Logger::Warn(buffer);
     return false;
@@ -749,7 +752,7 @@ bool Object3d::AssignExplicitTextureOverride()
     modelData_.material.textureFilePath = resolvedTexturePath.empty() ? modelData_.material.textureFilePath : resolvedTexturePath;
     modelData_.material.textureIndex = textureIndex;
 
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Object3d::AssignTexture: file=%s -> srvIndex=%u\n", modelData_.material.textureFilePath.c_str(), textureIndex);
     Logger::Debug(buffer);
     return true;
@@ -776,7 +779,7 @@ bool Object3d::AssignFallbackTexture()
 
     modelData_.material.textureFilePath = kDefaultObjectTexturePath;
 
-    char buffer[256]; // ログ出力用バッファ
+    char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "Object3d::AssignTexture: no material texture specified, defaulting to uvChecker srvIndex=%u\n", modelData_.material.textureIndex);
     Logger::Debug(buffer);
     return true;
@@ -952,7 +955,7 @@ void Object3d::BindPointLightResource(ID3D12GraphicsCommandList* commandList) co
 bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const
 {
     if (!commandList || textureIndex == UINT32_MAX) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: texture SRV is invalid - skipping SRV bind\n", logContext);
         Logger::Debug(buffer);
         return false;
@@ -960,7 +963,7 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
 
     auto textureManager = TextureManager::GetInstance(); // テクスチャSRVの取得元
     if (!textureManager) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: TextureManager is null - skipping SRV bind\n", logContext);
         Logger::Debug(buffer);
         return false;
@@ -968,7 +971,7 @@ bool Object3d::BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t text
 
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = textureManager->GetSrvHandleGPU(textureIndex); // 描画に使うSRV
     if (srvHandle.ptr == 0) {
-        char buffer[128]; // ログ出力用バッファ
+        char buffer[kObjectSrvLogBufferSize]; // ログ出力用バッファ
         sprintf_s(buffer, "%s: SRV handle for index %u is null - skipping SRV bind\n", logContext, textureIndex);
         Logger::Debug(buffer);
         return false;
