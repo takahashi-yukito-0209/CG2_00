@@ -39,6 +39,14 @@ constexpr float kHitLifeTime = 0.6f; // ヒットエフェクトの寿命
 constexpr float kParticleTimeStart = 0.0f; // パーティクル経過時間の初期値
 constexpr Vector3 kParticleZeroVector = { 0.0f, 0.0f, 0.0f }; // パーティクルのゼロベクトル
 constexpr Vector3 kHitColorRgb = { 1.0f, 1.0f, 1.0f }; // ヒットエフェクトの基本色
+constexpr Vector3 kRingStartScale = { 0.2f, 0.2f, kParticleScaleZ }; // Ringエフェクト開始時のスケール
+constexpr Vector3 kRingEndScale = { 1.6f, 1.6f, kParticleScaleZ }; // Ringエフェクト終了時のスケール
+constexpr Vector4 kRingColor = { 1.0f, 1.0f, 1.0f, 0.75f }; // Ringエフェクトの色
+constexpr float kRingLifeTime = 0.8f; // Ringエフェクトの寿命
+constexpr Vector3 kCylinderStartScale = { 0.35f, 0.7f, 0.35f }; // Cylinderエフェクト開始時のスケール
+constexpr Vector3 kCylinderEndScale = { 1.2f, 0.9f, 1.2f }; // Cylinderエフェクト終了時のスケール
+constexpr Vector4 kCylinderColor = { 0.55f, 0.75f, 1.0f, 0.55f }; // Cylinderエフェクトの色
+constexpr float kCylinderLifeTime = 1.0f; // Cylinderエフェクトの寿命
 }
 
 /// <summary>
@@ -350,16 +358,16 @@ void ParticleManager::EmitRingEffect(const std::string& name, const Vector3& pos
 
     for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
-        particle.startScale = { 0.2f, 0.2f, 1.0f };
-        particle.endScale = { 1.6f, 1.6f, 1.0f };
+        particle.startScale = kRingStartScale;
+        particle.endScale = kRingEndScale;
         particle.transform.scale = particle.startScale;
-        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.rotate = kParticleZeroVector;
         particle.transform.translate = position;
-        particle.velocity = { 0.0f, 0.0f, 0.0f };
-        particle.color = { 1.0f, 1.0f, 1.0f, 0.75f };
+        particle.velocity = kParticleZeroVector;
+        particle.color = kRingColor;
         particle.startColor = particle.color;
-        particle.lifeTime = 0.8f;
-        particle.currentTime = 0.0f;
+        particle.lifeTime = kRingLifeTime;
+        particle.currentTime = kParticleTimeStart;
         particle.spawnTime = globalTime_;
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
@@ -388,16 +396,16 @@ void ParticleManager::EmitCylinderEffect(const std::string& name, const Vector3&
 
     for (uint32_t i = 0; i < emitCount; ++i) {
         PM_CpuParticle particle {}; // 生成するパーティクル
-        particle.startScale = { 0.35f, 0.7f, 0.35f };
-        particle.endScale = { 1.2f, 0.9f, 1.2f };
+        particle.startScale = kCylinderStartScale;
+        particle.endScale = kCylinderEndScale;
         particle.transform.scale = particle.startScale;
-        particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particle.transform.rotate = kParticleZeroVector;
         particle.transform.translate = position;
-        particle.velocity = { 0.0f, 0.0f, 0.0f };
-        particle.color = { 0.55f, 0.75f, 1.0f, 0.55f };
+        particle.velocity = kParticleZeroVector;
+        particle.color = kCylinderColor;
         particle.startColor = particle.color;
-        particle.lifeTime = 1.0f;
-        particle.currentTime = 0.0f;
+        particle.lifeTime = kCylinderLifeTime;
+        particle.currentTime = kParticleTimeStart;
         particle.spawnTime = globalTime_;
         particle.useScaleOverLife = true;
         particle.useFadeOut = true;
