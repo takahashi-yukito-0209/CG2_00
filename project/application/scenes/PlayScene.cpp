@@ -33,33 +33,221 @@ constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持�
 constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
 constexpr std::array<float, 4> kSceneRenderTargetClearColor = { 0.53f, 0.71f, 0.82f, 1.0f }; // シーン描画RTのクリア色
 constexpr std::array<float, 4> kTransparentRenderTargetClearColor = { 0.0f, 0.0f, 0.0f, 1.0f }; // 中間RTと最終RTのクリア色
+constexpr bool kUseDepthBuffer = true; // RenderTargetに深度バッファを作成する
+constexpr bool kNoDepthBuffer = false; // RenderTargetに深度バッファを作成しない
+constexpr bool kCreateDepthSrv = true; // 深度SRVを作成する
+constexpr bool kNoDepthSrv = false; // 深度SRVを作成しない
 constexpr float kParticleRingOuterRadius = 1.0f; // パーティクルリングの外径
 constexpr float kParticleRingInnerRadius = 0.2f; // パーティクルリングの内径
-constexpr float kParticleCylinderRadius = 1.0f; // パーティクル円柱の半径
+constexpr float kParticleCylinderTopRadius = 1.0f; // パーティクル円柱の上面半径
+constexpr float kParticleCylinderBottomRadius = 1.0f; // パーティクル円柱の下面半径
 constexpr float kParticleCylinderHeight = 1.0f; // パーティクル円柱の高さ
-constexpr float kParticleCylinderSubdivision = 1.0f; // パーティクル円柱の分割数
+constexpr uint32_t kParticleCylinderDivide = 32; // パーティクル円柱の分割数
+constexpr bool kUseAlphaCutoutSampler = true; // アルファ抜き用サンプラーを使用する
+constexpr bool kNoAlphaCutoutSampler = false; // アルファ抜き用サンプラーを使用しない
 constexpr Vector3 kEmitterDefaultPosition = { 0.0f, 0.0f, 0.0f }; // エミッターの初期位置
 constexpr int kHitEmitterParticleCount = 8; // ヒット演出で発生させる粒子数
 constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる粒子数
 constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
+constexpr float kStoppedDeltaTime = 0.0f; // ヒットストップや時間停止中に使用する停止時間
+constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終了したとみなす残り時間
+constexpr int kGaussianFirstPassIndex = 0; // Gaussian Filterの横方向pass番号
+constexpr int kGaussianSecondPassIndex = 1; // Gaussian Filterの縦方向pass番号
 constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
+constexpr uint32_t kDemoSpriteTextureSwitchInterval = 2; // 同じ確認用テクスチャを連続で使う枚数
+constexpr int kDrawTypeAll = -1; // すべての描画対象を表示する種別
+constexpr int kDrawTypeModel = 0; // モデル単体を表示する種別
+constexpr int kDrawTypeParticle = 1; // パーティクルを表示する種別
+constexpr int kDrawTypeSprite = 2; // スプライトを表示する種別
+constexpr int kDrawTypeBunny = 3; // Bunnyモデルを表示する種別
+constexpr int kDrawTypeFence = 4; // Fenceモデルを表示する種別
+constexpr int kDrawTypeChecker = 5; // Checkerモデルを表示する種別
+constexpr int kDrawTypeSphere = 6; // Sphere系モデルを表示する種別
+constexpr int kDrawTypeAllDebug = 7; // デバッグ用にすべてを表示する種別
+constexpr size_t kModelObjectIndex = 0; // 通常モデルの登録番号
+constexpr size_t kBunnyObjectIndex = 1; // Bunnyモデルの登録番号
+constexpr size_t kCheckerObjectIndex = 2; // Checkerモデルの登録番号
+constexpr size_t kFenceObjectIndex = 3; // Fenceモデルの登録番号
+constexpr size_t kSphereObjectStartIndex = 4; // Sphere系モデルの先頭登録番号
+constexpr size_t kSphereObjectEndIndex = 6; // Sphere系モデルの末尾登録番号
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
 constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
+constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
+constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
+constexpr std::array<const char*, 7> kSceneModelFileNames = {
+    "plane/plane.gltf",
+    "bunny/bunny.obj",
+    "teapot/teapot.obj",
+    "fence/fence.obj",
+    "sphere/sphere.gltf",
+    "terrain/terrain.obj",
+    "cube/Cube.obj",
+}; // シーンで生成するモデルファイル名
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
 constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
 constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
 constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
+constexpr std::array<const char*, 2> kDemoSpriteTextureNames = {
+    kUvCheckerTextureName,
+    kMonsterBallTextureName,
+}; // 確認用スプライトに使用するテクスチャ名
 constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
+constexpr std::array<const char*, 5> kSceneTextureNames = {
+    kUvCheckerTextureName,
+    kMonsterBallTextureName,
+    kCircleTextureName,
+    kGradationLineTextureName,
+    kEnvironmentMapTextureName,
+}; // シーン初期化時に読み込むテクスチャ名
 constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
 constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
 constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
 constexpr const char* kHitParticleGroupName = "Hit"; // ヒット演出パーティクルグループ名
 constexpr const char* kRingParticleGroupName = "Ring"; // リング演出パーティクルグループ名
 constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱演出パーティクルグループ名
+
+/// <summary>
+/// パーティクルエミッターで使用する演出種別
+/// </summary>
+enum class ParticleEmitterEffectType {
+    Hit,
+    Ring,
+    Cylinder,
+};
+
+/// <summary>
+/// パーティクルエミッターの共通設定を適用する
+/// </summary>
+void ConfigureParticleEmitter(
+    ParticleEmitter& emitter,
+    const char* groupName,
+    int particleCount,
+    ParticleEmitterEffectType effectType)
+{
+    emitter.groupName = groupName;
+    emitter.transform.translate = kEmitterDefaultPosition;
+    emitter.count = particleCount;
+    emitter.frequency = kEmitterDefaultFrequency;
+    emitter.useHitEffect = false;
+    emitter.useRingEffect = false;
+    emitter.useCylinderEffect = false;
+
+    switch (effectType) {
+    case ParticleEmitterEffectType::Hit:
+        emitter.useHitEffect = true;
+        break;
+    case ParticleEmitterEffectType::Ring:
+        emitter.useRingEffect = true;
+        break;
+    case ParticleEmitterEffectType::Cylinder:
+        emitter.useCylinderEffect = true;
+        break;
+    }
+
+    emitter.Emit();
+}
+
+/// <summary>
+/// ポストプロセス用のRenderTarget設定を作成する
+/// </summary>
+RenderTargetDesc CreatePostProcessRenderTargetDesc(
+    DXGI_FORMAT format,
+    bool useDepth,
+    bool createDepthSrv,
+    const std::array<float, 4>& clearColor)
+{
+    RenderTargetDesc desc {}; // 作成するRenderTarget設定
+    desc.width = WinApp::kWindowWidth;
+    desc.height = WinApp::kWindowHeight;
+    desc.format = format;
+    desc.useDepth = useDepth;
+    desc.createColorSrv = true;
+    desc.createDepthSrv = createDepthSrv;
+    desc.resizeWithWindow = true;
+    desc.clearColor = clearColor;
+    return desc;
+}
+
+/// <summary>
+/// 非表示状態の時間演出スプライトを作成する
+/// </summary>
+std::unique_ptr<Sprite> CreateHiddenTemporalSprite(const SceneContext& ctx, const std::string& textureName)
+{
+    auto sprite = std::make_unique<Sprite>(); // 作成する時間演出用スプライト
+    sprite->Initialize(ctx.spriteCommon, textureName, ctx.imguiManager);
+    sprite->SetAnchorPoint(kCenteredSpriteAnchor);
+    sprite->SetSize(kTemporalSpriteDefaultSize);
+    sprite->SetColor(kHiddenSpriteColor);
+    sprite->Update();
+    return sprite;
+}
+
+/// <summary>
+/// パーティクル描画用の3Dオブジェクトを作成する
+/// </summary>
+std::unique_ptr<Object3d> CreateParticleDrawObject(
+    const SceneContext& ctx,
+    const std::vector<Object3d::VertexData>& meshVertices,
+    const char* textureName,
+    bool useAlphaCutoutSampler)
+{
+    auto object3d = std::make_unique<Object3d>(); // 作成するパーティクル描画用オブジェクト
+    object3d->Initialize(ctx.object3dCommon, ctx.imguiManager);
+    object3d->SetMesh(meshVertices);
+    object3d->SetTexture(textureName);
+    object3d->SetEnableLighting(false);
+    object3d->SetUseAlphaCutoutSampler(useAlphaCutoutSampler);
+    return object3d;
+}
+
+/// <summary>
+/// 確認用スプライト番号から使用するテクスチャ名を取得する
+/// </summary>
+const char* GetDemoSpriteTextureName(uint32_t spriteIndex)
+{
+    const size_t textureIndex = (std::min)(
+        static_cast<size_t>(spriteIndex / kDemoSpriteTextureSwitchInterval),
+        kDemoSpriteTextureNames.size() - 1); // 使用する確認用テクスチャ番号
+    return kDemoSpriteTextureNames[textureIndex];
+}
+
+/// <summary>
+/// ヒットストップが残っているか判定する
+/// </summary>
+bool HasActiveHitStop(float hitStopRemainingTime)
+{
+    return hitStopRemainingTime > kHitStopFinishedThreshold;
+}
+
+/// <summary>
+/// 指定したモデルファイル名に判定キーワードが含まれるか調べる
+/// </summary>
+bool ContainsModelKeyword(const std::string& modelFileName, const char* keyword)
+{
+    return modelFileName.find(keyword) != std::string::npos;
+}
+
+/// <summary>
+/// アルファ抜き設定が必要なモデルか判定する
+/// </summary>
+bool IsFenceModelFile(const std::string& modelFileName)
+{
+    return ContainsModelKeyword(modelFileName, kFenceModelKeyword);
+}
+
+/// <summary>
+/// 環境マップ確認用のcubeモデルか判定する
+/// </summary>
+bool IsCubeModelFile(const std::string& modelFileName)
+{
+    return ContainsModelKeyword(modelFileName, kCubeModelKeywordLower)
+        || ContainsModelKeyword(modelFileName, kCubeModelKeywordUpper);
+}
 }
 
 /// <summary>
@@ -77,26 +265,32 @@ PlayScene::~PlayScene() { }
 /// </summary>
 void PlayScene::InitializeParticleObjects()
 {
-    // パーティクルの初期化
-    particlePlane_ = std::make_unique<Object3d>();
-    particlePlane_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particlePlane_->SetMesh(PrimitiveFactory::CreatePlane());
-    particlePlane_->SetTexture(kCircleTextureName);
-    particlePlane_->SetEnableLighting(false);
+    const std::vector<Object3d::VertexData> planeMesh = PrimitiveFactory::CreatePlane(); // 平面パーティクル用メッシュ
+    particlePlane_ = CreateParticleDrawObject(
+        ctx_,
+        planeMesh,
+        kCircleTextureName,
+        kNoAlphaCutoutSampler);
 
-    particleRing_ = std::make_unique<Object3d>();
-    particleRing_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleRing_->SetMesh(PrimitiveFactory::CreateRing(kParticleRingOuterRadius, kParticleRingInnerRadius));
-    particleRing_->SetTexture(kGradationLineTextureName);
-    particleRing_->SetEnableLighting(false);
-    particleRing_->SetUseAlphaCutoutSampler(true);
+    const std::vector<Object3d::VertexData> ringMesh = PrimitiveFactory::CreateRing(
+        kParticleRingOuterRadius,
+        kParticleRingInnerRadius); // リングパーティクル用メッシュ
+    particleRing_ = CreateParticleDrawObject(
+        ctx_,
+        ringMesh,
+        kGradationLineTextureName,
+        kUseAlphaCutoutSampler);
 
-    particleCylinder_ = std::make_unique<Object3d>();
-    particleCylinder_->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-    particleCylinder_->SetMesh(PrimitiveFactory::CreateCylinder(kParticleCylinderRadius, kParticleCylinderHeight, kParticleCylinderSubdivision));
-    particleCylinder_->SetTexture(kGradationLineTextureName);
-    particleCylinder_->SetEnableLighting(false);
-    particleCylinder_->SetUseAlphaCutoutSampler(true);
+    const std::vector<Object3d::VertexData> cylinderMesh = PrimitiveFactory::CreateCylinder(
+        kParticleCylinderTopRadius,
+        kParticleCylinderBottomRadius,
+        kParticleCylinderHeight,
+        kParticleCylinderDivide); // 円柱パーティクル用メッシュ
+    particleCylinder_ = CreateParticleDrawObject(
+        ctx_,
+        cylinderMesh,
+        kGradationLineTextureName,
+        kUseAlphaCutoutSampler);
 }
 
 /// <summary>
@@ -128,12 +322,11 @@ void PlayScene::InitializeParticleManager()
 /// </summary>
 void PlayScene::InitializeHitParticleEmitter()
 {
-    pmEmitter_.groupName = kHitParticleGroupName;
-    pmEmitter_.transform.translate = kEmitterDefaultPosition;
-    pmEmitter_.count = kHitEmitterParticleCount;
-    pmEmitter_.frequency = kEmitterDefaultFrequency;
-    pmEmitter_.useHitEffect = true;
-    pmEmitter_.Emit();
+    ConfigureParticleEmitter(
+        pmEmitter_,
+        kHitParticleGroupName,
+        kHitEmitterParticleCount,
+        ParticleEmitterEffectType::Hit);
 }
 
 /// <summary>
@@ -141,12 +334,11 @@ void PlayScene::InitializeHitParticleEmitter()
 /// </summary>
 void PlayScene::InitializeRingParticleEmitter()
 {
-    ringEmitter_.groupName = kRingParticleGroupName;
-    ringEmitter_.transform.translate = kEmitterDefaultPosition;
-    ringEmitter_.count = kSingleEffectEmitterCount;
-    ringEmitter_.frequency = kEmitterDefaultFrequency;
-    ringEmitter_.useRingEffect = true;
-    ringEmitter_.Emit();
+    ConfigureParticleEmitter(
+        ringEmitter_,
+        kRingParticleGroupName,
+        kSingleEffectEmitterCount,
+        ParticleEmitterEffectType::Ring);
 }
 
 /// <summary>
@@ -154,12 +346,11 @@ void PlayScene::InitializeRingParticleEmitter()
 /// </summary>
 void PlayScene::InitializeCylinderParticleEmitter()
 {
-    cylinderEmitter_.groupName = kCylinderParticleGroupName;
-    cylinderEmitter_.transform.translate = kEmitterDefaultPosition;
-    cylinderEmitter_.count = kSingleEffectEmitterCount;
-    cylinderEmitter_.frequency = kEmitterDefaultFrequency;
-    cylinderEmitter_.useCylinderEffect = true;
-    cylinderEmitter_.Emit();
+    ConfigureParticleEmitter(
+        cylinderEmitter_,
+        kCylinderParticleGroupName,
+        kSingleEffectEmitterCount,
+        ParticleEmitterEffectType::Cylinder);
 }
 
 /// <summary>
@@ -188,29 +379,13 @@ void PlayScene::InitializeTemporalEffectSprites()
 {
     temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
     for (int afterimageIndex = 0; afterimageIndex < kMaximumTemporalAfterimageCount; ++afterimageIndex) {
-        auto afterimageSprite = std::make_unique<Sprite>(); // Transform履歴を表示する残像スプライト
-        afterimageSprite->Initialize(
-            ctx_.spriteCommon,
-            kCircleFlashTextureName,
-            ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
-        afterimageSprite->SetColor(kHiddenSpriteColor);
-        afterimageSprite->Update();
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
         temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
     timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
     for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
-        auto particleSprite = std::make_unique<Sprite>(); // 時間逆流専用の粒子スプライト
-        particleSprite->Initialize(
-            ctx_.spriteCommon,
-            kCircleFlashTextureName,
-            ctx_.imguiManager);
-        particleSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        particleSprite->SetSize(kTemporalSpriteDefaultSize);
-        particleSprite->SetColor(kHiddenSpriteColor);
-        particleSprite->Update();
+        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行用の粒子スプライト
         timeReversalSprites_.push_back(std::move(particleSprite));
     }
 
@@ -219,27 +394,11 @@ void PlayScene::InitializeTemporalEffectSprites()
     for (int afterimageIndex = 0;
         afterimageIndex < maximumRewindAfterimageSpriteCount;
         ++afterimageIndex) {
-        auto afterimageSprite = std::make_unique<Sprite>(); // 巻き戻し軌道用の残像スプライト
-        afterimageSprite->Initialize(
-            ctx_.spriteCommon,
-            kCircleFlashTextureName,
-            ctx_.imguiManager);
-        afterimageSprite->SetAnchorPoint(kCenteredSpriteAnchor);
-        afterimageSprite->SetSize(kTemporalSpriteDefaultSize);
-        afterimageSprite->SetColor(kHiddenSpriteColor);
-        afterimageSprite->Update();
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
         timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
-    timeReversalConvergenceSprite_ = std::make_unique<Sprite>();
-    timeReversalConvergenceSprite_->Initialize(
-        ctx_.spriteCommon,
-        kCircleFlashTextureName,
-        ctx_.imguiManager);
-    timeReversalConvergenceSprite_->SetAnchorPoint(kCenteredSpriteAnchor);
-    timeReversalConvergenceSprite_->SetSize(kTemporalSpriteDefaultSize);
-    timeReversalConvergenceSprite_->SetColor(kHiddenSpriteColor);
-    timeReversalConvergenceSprite_->Update();
+    timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
 }
 
 /// <summary>
@@ -252,37 +411,26 @@ void PlayScene::InitializePostProcessTargets()
         return;
     }
 
-    RenderTargetDesc sceneRenderTargetDesc {}; // シーン描画用RT設定
-    sceneRenderTargetDesc.width = WinApp::kWindowWidth;
-    sceneRenderTargetDesc.height = WinApp::kWindowHeight;
-    sceneRenderTargetDesc.format = directXCommon->GetSwapChainFormat();
-    sceneRenderTargetDesc.useDepth = true;
-    sceneRenderTargetDesc.createColorSrv = true;
-    sceneRenderTargetDesc.createDepthSrv = true;
-    sceneRenderTargetDesc.resizeWithWindow = true;
-    sceneRenderTargetDesc.clearColor = kSceneRenderTargetClearColor;
+    const DXGI_FORMAT renderTargetFormat = directXCommon->GetSwapChainFormat(); // 各RTで使用するカラーフォーマット
+    const RenderTargetDesc sceneRenderTargetDesc = CreatePostProcessRenderTargetDesc(
+        renderTargetFormat,
+        kUseDepthBuffer,
+        kCreateDepthSrv,
+        kSceneRenderTargetClearColor); // シーン描画用RT設定
     sceneRenderTarget_.Initialize(directXCommon, sceneRenderTargetDesc);
 
-    RenderTargetDesc intermediateTargetDesc {}; // ポストプロセス中間RT設定
-    intermediateTargetDesc.width = WinApp::kWindowWidth;
-    intermediateTargetDesc.height = WinApp::kWindowHeight;
-    intermediateTargetDesc.format = directXCommon->GetSwapChainFormat();
-    intermediateTargetDesc.useDepth = false;
-    intermediateTargetDesc.createColorSrv = true;
-    intermediateTargetDesc.createDepthSrv = false;
-    intermediateTargetDesc.resizeWithWindow = true;
-    intermediateTargetDesc.clearColor = kTransparentRenderTargetClearColor;
+    const RenderTargetDesc intermediateTargetDesc = CreatePostProcessRenderTargetDesc(
+        renderTargetFormat,
+        kNoDepthBuffer,
+        kNoDepthSrv,
+        kTransparentRenderTargetClearColor); // ポストプロセス中間RT設定
     postProcessIntermediateTarget_.Initialize(directXCommon, intermediateTargetDesc);
 
-    RenderTargetDesc finalRenderTargetDesc {}; // Scene View表示用RT設定
-    finalRenderTargetDesc.width = WinApp::kWindowWidth;
-    finalRenderTargetDesc.height = WinApp::kWindowHeight;
-    finalRenderTargetDesc.format = directXCommon->GetSwapChainFormat();
-    finalRenderTargetDesc.useDepth = false;
-    finalRenderTargetDesc.createColorSrv = true;
-    finalRenderTargetDesc.createDepthSrv = false;
-    finalRenderTargetDesc.resizeWithWindow = true;
-    finalRenderTargetDesc.clearColor = kTransparentRenderTargetClearColor;
+    const RenderTargetDesc finalRenderTargetDesc = CreatePostProcessRenderTargetDesc(
+        renderTargetFormat,
+        kNoDepthBuffer,
+        kNoDepthSrv,
+        kTransparentRenderTargetClearColor); // Scene View表示用RT設定
     finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
 
     if (ctx_.textureManager) {
@@ -299,14 +447,9 @@ void PlayScene::InitializePostProcessTargets()
 /// </summary>
 void PlayScene::InitializeDemoSprites()
 {
-    const std::array<std::string, 2> spriteNames = {
-        "uvChecker",
-        "monsterBall"
-    }; // 確認用スプライトに使用するテクスチャ名
-
     for (uint32_t spriteIndex = 0; spriteIndex < kDemoSpriteCount; ++spriteIndex) {
         auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
-        const std::string textureName = spriteNames[(spriteIndex / 2) == 0 ? 0 : 1] + ".png"; // 使用するテクスチャ名
+        const char* textureName = GetDemoSpriteTextureName(spriteIndex); // 使用する確認用テクスチャ名
         sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
         sprites_.push_back(std::move(sprite));
     }
@@ -317,12 +460,12 @@ void PlayScene::InitializeDemoSprites()
 /// </summary>
 void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::string& modelFileName)
 {
-    const bool isFenceModel = modelFileName.find("fence") != std::string::npos; // アルファ抜き用サンプラーが必要なモデルか
+    const bool isFenceModel = IsFenceModelFile(modelFileName); // アルファ抜き用サンプラーが必要なモデルか
     if (isFenceModel) {
         object3d.SetUseAlphaCutoutSampler(true);
     }
 
-    const bool isCubeModel = modelFileName.find("cube") != std::string::npos || modelFileName.find("Cube") != std::string::npos; // 環境マップ確認用モデルか
+    const bool isCubeModel = IsCubeModelFile(modelFileName); // 環境マップ確認用モデルか
     if (isCubeModel) {
         object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
         object3d.SetTranslate(kCubeInitialTranslate);
@@ -334,17 +477,7 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
 /// </summary>
 void PlayScene::InitializeSceneObjects()
 {
-    const std::vector<std::string> modelFileNames = {
-        "plane/plane.gltf",
-        "bunny/bunny.obj",
-        "teapot/teapot.obj",
-        "fence/fence.obj",
-        "sphere/sphere.gltf",
-        "terrain/terrain.obj",
-        "cube/Cube.obj"
-    }; // シーンで生成するモデルファイル名
-
-    for (const std::string& modelFileName : modelFileNames) {
+    for (const char* modelFileName : kSceneModelFileNames) {
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelFileName);
@@ -365,11 +498,9 @@ void PlayScene::LoadSceneTextures()
         return;
     }
 
-    ctx_.textureManager->LoadTexture(kUvCheckerTextureName);
-    ctx_.textureManager->LoadTexture(kMonsterBallTextureName);
-    ctx_.textureManager->LoadTexture(kCircleTextureName);
-    ctx_.textureManager->LoadTexture(kGradationLineTextureName);
-    ctx_.textureManager->LoadTexture(kEnvironmentMapTextureName);
+    for (const char* textureName : kSceneTextureNames) {
+        ctx_.textureManager->LoadTexture(textureName);
+    }
 }
 
 /// <summary>
@@ -505,13 +636,15 @@ void PlayScene::HandleEffectStartInput()
 /// </summary>
 void PlayScene::UpdateTemporalEffects(float deltaTime)
 {
-    const float effectDeltaTime = temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f ? 0.0f : deltaTime; // ヒットストップを反映した演出時間
+    const float hitStopRemainingTime = temporalRiftEffect_.GetHitStopRemainingTime(); // 現在のヒットストップ残り時間
+    const bool hasActiveHitStop = HasActiveHitStop(hitStopRemainingTime); // ヒットストップ中か
+    const float effectDeltaTime = hasActiveHitStop ? kStoppedDeltaTime : deltaTime; // ヒットストップを反映した演出時間
     UpdateTimeReversalTransformHistory();
     UpdateTemporalRiftEffect(effectDeltaTime);
     UpdateTimeReversalEffect(effectDeltaTime);
     UpdateTimeStopEffect(deltaTime);
     UpdateImpactResponse(deltaTime);
-    if (temporalRiftEffect_.GetHitStopRemainingTime() <= 0.0f) {
+    if (!hasActiveHitStop) {
         UpdateTemporalAfterimages();
     }
     postProcess_.Update(deltaTime);
@@ -569,7 +702,8 @@ void PlayScene::Update(float dt)
 /// </summary>
 void PlayScene::UpdateParticleSystems(float deltaTime)
 {
-    const float particleDeltaTime = (temporalRiftEffect_.GetHitStopRemainingTime() > 0.0f || IsTimeStopped()) ? 0.0f : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
+    const bool hasActiveHitStop = HasActiveHitStop(temporalRiftEffect_.GetHitStopRemainingTime()); // ヒットストップ中か
+    const float particleDeltaTime = (hasActiveHitStop || IsTimeStopped()) ? kStoppedDeltaTime : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
     pmEmitter_.Update(particleDeltaTime);
     ringEmitter_.Update(particleDeltaTime);
     cylinderEmitter_.Update(particleDeltaTime);
@@ -690,7 +824,7 @@ bool PlayScene::CanUseFinalRenderTarget() const
 void PlayScene::ApplyGaussianFirstPass(uint32_t& postProcessSourceSrvIndex)
 {
     postProcessIntermediateTarget_.Begin(true);
-    postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 0);
+    postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, kGaussianFirstPassIndex);
     postProcessIntermediateTarget_.End();
     postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
 }
@@ -701,7 +835,7 @@ void PlayScene::ApplyGaussianFirstPass(uint32_t& postProcessSourceSrvIndex)
 void PlayScene::DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, PostEffectType finalEffectType, bool useGaussianFilter)
 {
     if (useGaussianFilter) {
-        postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, 1);
+        postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, kGaussianSecondPassIndex);
     } else if (finalEffectType == PostEffectType::DepthOutline && sceneRenderTarget_.HasDepthSrv() && ctx_.camera) {
         postProcess_.DrawDepthOutline(postProcessSourceSrvIndex, sceneRenderTarget_, ctx_.camera->GetProjectionMatrix());
     } else if (finalEffectType == PostEffectType::Dissolve && dissolveMaskSrvIndex_ != UINT32_MAX) {
@@ -839,22 +973,22 @@ void PlayScene::DrawAllObjects3d()
 void PlayScene::DrawSelectedObjects3d(int selectedDrawType)
 {
     switch (selectedDrawType) {
-    case 0:
-        DrawObject3dAtIndex(0);
+    case kDrawTypeModel:
+        DrawObject3dAtIndex(kModelObjectIndex);
         break;
-    case 3:
-        DrawObject3dAtIndex(1);
+    case kDrawTypeBunny:
+        DrawObject3dAtIndex(kBunnyObjectIndex);
         break;
-    case 4:
-        DrawObject3dAtIndex(3);
+    case kDrawTypeFence:
+        DrawObject3dAtIndex(kFenceObjectIndex);
         break;
-    case 5:
-        DrawObject3dAtIndex(2);
+    case kDrawTypeChecker:
+        DrawObject3dAtIndex(kCheckerObjectIndex);
         break;
-    case 6:
-        DrawObject3dAtIndex(4);
-        DrawObject3dAtIndex(5);
-        DrawObject3dAtIndex(6);
+    case kDrawTypeSphere:
+        for (size_t objectIndex = kSphereObjectStartIndex; objectIndex <= kSphereObjectEndIndex; ++objectIndex) {
+            DrawObject3dAtIndex(objectIndex);
+        }
         break;
     default:
         break;
@@ -866,9 +1000,9 @@ void PlayScene::DrawSelectedObjects3d(int selectedDrawType)
 /// </summary>
 bool PlayScene::ShouldDrawParticles(int selectedDrawType) const
 {
-    return selectedDrawType == -1
-        || selectedDrawType == 1
-        || selectedDrawType == 7
+    return selectedDrawType == kDrawTypeAll
+        || selectedDrawType == kDrawTypeParticle
+        || selectedDrawType == kDrawTypeAllDebug
         || IsAnyEffectPlaying();
 }
 
@@ -905,7 +1039,7 @@ void PlayScene::DrawWorldAndParticles()
     }
 
     ctx_.object3dCommon->SetCommonDrawSetting();
-    if (selectedDrawType == -1 || selectedDrawType == 7) {
+    if (selectedDrawType == kDrawTypeAll || selectedDrawType == kDrawTypeAllDebug) {
         DrawAllObjects3d();
     } else {
         DrawSelectedObjects3d(selectedDrawType);
@@ -924,7 +1058,7 @@ void PlayScene::DrawSprites()
         return;
     }
 
-    if (selectedDrawType == -1 || selectedDrawType == 2 || selectedDrawType == 7) {
+    if (selectedDrawType == kDrawTypeAll || selectedDrawType == kDrawTypeSprite || selectedDrawType == kDrawTypeAllDebug) {
         ctx_.spriteCommon->SetCommonDrawSetting();
         for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
             if (sprite) {

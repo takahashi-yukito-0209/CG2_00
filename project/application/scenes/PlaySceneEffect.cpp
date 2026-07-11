@@ -6,6 +6,7 @@
 #include "../../engine/utility/mathUtility.h"
 
 #include <algorithm>
+#include <array>
 
 using namespace MyEngine;
 using namespace Math;
@@ -14,6 +15,17 @@ constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合�
 constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
 constexpr float kNdcToUvScale = 0.5f; // NDC座標をUV座標へ変換する倍率
 constexpr float kNdcToUvOffset = 0.5f; // NDC座標をUV座標へ変換するオフセット
+constexpr float kScreenUvMin = 0.0f; // 画面UVの最小値
+constexpr float kScreenUvMax = 1.0f; // 画面UVの最大値
+constexpr const char* kEffectControllerWindowName = "Effect Controller"; // エフェクト操作用ImGuiウィンドウ名
+constexpr const char* kEffectTypeComboLabel = "Effect Type"; // エフェクト種別選択のImGuiラベル
+constexpr const char* kEffectTriggerKeyText = "Trigger Key: R"; // エフェクト開始キーの表示文
+constexpr const char* kPlayEffectButtonLabel = "Play Effect"; // エフェクト再生ボタンの表示文
+constexpr std::array<const char*, 3> kEffectNames = {
+    "Dimensional Shatter",
+    "Time Reversal",
+    "Time Stop",
+}; // ImGuiで選択できるエフェクト名
 
 /// <summary>
 /// ワールド座標を画面UV座標へ変換する
@@ -47,8 +59,8 @@ Vector2 CalculateScreenUvFromWorldPosition(const Camera* camera, const Vector3& 
         (clipX / clipW) * kNdcToUvScale + kNdcToUvOffset,
         -(clipY / clipW) * kNdcToUvScale + kNdcToUvOffset,
     }; // NDC座標を画面UV座標へ変換した結果
-    screenUv.x = (std::clamp)(screenUv.x, 0.0f, 1.0f);
-    screenUv.y = (std::clamp)(screenUv.y, 0.0f, 1.0f);
+    screenUv.x = (std::clamp)(screenUv.x, kScreenUvMin, kScreenUvMax);
+    screenUv.y = (std::clamp)(screenUv.y, kScreenUvMin, kScreenUvMax);
     return screenUv;
 }
 }
@@ -60,28 +72,23 @@ void PlayScene::DrawEffectControllerImGui()
 {
 #ifdef USE_IMGUI
     int selectedEffectIndex = static_cast<int>(selectedEffectType_); // ImGuiで編集中のエフェクト番号
-    const char* effectNames[] = {
-        "Dimensional Shatter",
-        "Time Reversal",
-        "Time Stop",
-    }; // 選択可能なエフェクト名
     if (!IsAnyEffectPlaying()
         && ImGui::Combo(
-            "Effect Type",
+            kEffectTypeComboLabel,
             &selectedEffectIndex,
-            effectNames,
-            IM_ARRAYSIZE(effectNames))) {
+            kEffectNames.data(),
+            static_cast<int>(kEffectNames.size()))) {
         selectedEffectType_ = static_cast<EffectType>(selectedEffectIndex);
     }
 
-    ImGui::Text("Trigger Key: R");
+    ImGui::Text(kEffectTriggerKeyText);
     if (!IsAnyEffectPlaying()) {
-        if (ImGui::Button("Play Effect")) {
+        if (ImGui::Button(kPlayEffectButtonLabel)) {
             StartSelectedEffect();
         }
     } else {
         ImGui::BeginDisabled();
-        ImGui::Button("Play Effect");
+        ImGui::Button(kPlayEffectButtonLabel);
         ImGui::EndDisabled();
     }
 #endif
@@ -113,7 +120,7 @@ void PlayScene::DrawSelectedEffectImGui()
 void PlayScene::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Begin("Effect Controller");
+    ImGui::Begin(kEffectControllerWindowName);
     DrawEffectControllerImGui();
     DrawSelectedEffectImGui();
     ImGui::End();

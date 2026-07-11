@@ -13,7 +13,13 @@ using namespace MyEngine;
 
 namespace {
 constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
+constexpr float kEffectTimeStart = 0.0f; // フェーズ開始時の経過時間
+constexpr float kEffectProgressMin = 0.0f; // 演出進行率の最小値
+constexpr float kEffectProgressMax = 1.0f; // 演出進行率の最大値
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
+constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 開始時に発生させる円柱エフェクト名
+constexpr const char* kRingParticleGroupName = "Ring"; // リングエフェクト名
+constexpr const char* kHitParticleGroupName = "Hit"; // 破片エフェクト名
 constexpr float kImGuiShortDurationStep = 0.01f; // 短い時間設定の調整幅
 constexpr float kImGuiStopDurationStep = 0.05f; // 停止時間設定の調整幅
 constexpr float kImGuiMinimumShortDuration = 0.01f; // 短い時間設定の最小値
@@ -34,6 +40,34 @@ constexpr int kImGuiRingCountMax = 8; // リング数の最大値
 constexpr int kImGuiFragmentCountMin = 0; // 破片数の最小値
 constexpr int kImGuiFragmentCountMax = 64; // 破片数の最大値
 constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
+
+/// <summary>
+/// 演出時間をゼロ除算しない値へ補正する
+/// </summary>
+float GetSafeEffectDuration(float duration)
+{
+    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
+    return safeDuration;
+}
+
+/// <summary>
+/// 経過時間から0から1の演出進行率を計算する
+/// </summary>
+float CalculateEffectProgress(float elapsedTime, float duration)
+{
+    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
+    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
+    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
+}
+
+/// <summary>
+/// 設定値を0以上のパーティクル発生数へ補正する
+/// </summary>
+uint32_t ClampParticleCount(int count)
+{
+    const int safeCount = (std::max)(count, 0); // 負数を発生数として扱わないための補正値
+    return static_cast<uint32_t>(safeCount);
+}
 }
 
 /// <summary>
@@ -42,7 +76,7 @@ constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 void TimeStopEffect::ResetState()
 {
     phase_ = TimeStopPhase::Idle;
-    phaseTime_ = 0.0f;
+    phaseTime_ = kEffectTimeStart;
     previousPostEffect_ = PostEffectType::Copy;
 }
 
@@ -63,8 +97,8 @@ void TimeStopEffect::ConfigureDistortionPostProcess(PostProcess& postProcess, co
     postProcess.SetRadialBlurCenter(effectCenter);
     postProcess.SetDistortionRadius(settings_.distortionRadius);
     postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetDistortionStrength(kEffectProgressMin);
+    postProcess.SetDistortionProgress(kEffectProgressMin);
     postProcess.SetEffectType(PostEffectType::Distortion);
 }
 
@@ -85,7 +119,7 @@ void TimeStopEffect::ApplyStoppedPostProcess(PostProcess& postProcess, bool rese
 {
     postProcess.SetEffectType(PostEffectType::Grayscale);
     if (resetDistortionStrength) {
-        postProcess.SetDistortionStrength(0.0f);
+        postProcess.SetDistortionStrength(kEffectProgressMin);
     }
 }
 
@@ -95,7 +129,7 @@ void TimeStopEffect::ApplyStoppedPostProcess(PostProcess& postProcess, bool rese
 void TimeStopEffect::ApplyReleasingPostProcess(PostProcess& postProcess, float progress)
 {
     postProcess.SetEffectType(PostEffectType::Distortion);
-    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - progress));
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (kEffectProgressMax - progress));
     postProcess.SetDistortionProgress(progress);
 }
 
@@ -106,13 +140,13 @@ void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter
 {
     previousPostEffect_ = postProcess.GetEffectType(); // 再生前のポストエフェクト
     phase_ = TimeStopPhase::Entering;
-    phaseTime_ = 0.0f;
+    phaseTime_ = kEffectTimeStart;
 
     ConfigureDistortionPostProcess(postProcess, effectCenter);
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 開始演出を発生させるパーティクル管理
     if (particleManager) {
-        particleManager->EmitCylinderEffect("Cylinder", settings_.effectPosition, kStartCylinderCount);
+        particleManager->EmitCylinderEffect(kCylinderParticleGroupName, settings_.effectPosition, kStartCylinderCount);
     }
 }
 
@@ -127,25 +161,27 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
 
     phaseTime_ += deltaTime;
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 時間停止演出を発生させるパーティクル管理
+    const auto transitionToPhase = [this](TimeStopPhase nextPhase) {
+        phase_ = nextPhase;
+        phaseTime_ = kEffectTimeStart;
+    }; // フェーズ変更時に経過時間を初期化する処理
 
     switch (phase_) {
     case TimeStopPhase::Idle:
         break;
 
     case TimeStopPhase::Entering: {
-        const float duration = (std::max)(settings_.enterDuration, kMinimumEffectDuration); // 開始演出時間
-        const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 開始演出の進行度
+        const float progress = CalculateEffectProgress(phaseTime_, settings_.enterDuration); // 開始演出の進行度
         ApplyEnteringPostProcess(postProcess, progress);
 
-        if (progress >= 1.0f) {
-            phase_ = TimeStopPhase::Stopped;
-            phaseTime_ = 0.0f;
+        if (progress >= kEffectProgressMax) {
+            transitionToPhase(TimeStopPhase::Stopped);
             ApplyStoppedPostProcess(postProcess, true);
             if (particleManager) {
                 particleManager->EmitRingEffect(
-                    "Ring",
+                    kRingParticleGroupName,
                     settings_.effectPosition,
-                    static_cast<uint32_t>((std::max)(settings_.startRingCount, 0)));
+                    ClampParticleCount(settings_.startRingCount));
             }
         }
         break;
@@ -154,30 +190,27 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
     case TimeStopPhase::Stopped:
         ApplyStoppedPostProcess(postProcess, false);
         if (phaseTime_ >= settings_.stopDuration) {
-            phase_ = TimeStopPhase::Releasing;
-            phaseTime_ = 0.0f;
+            transitionToPhase(TimeStopPhase::Releasing);
             if (particleManager) {
                 particleManager->EmitRingEffect(
-                    "Ring",
+                    kRingParticleGroupName,
                     settings_.effectPosition,
-                    static_cast<uint32_t>((std::max)(settings_.releaseRingCount, 0)));
+                    ClampParticleCount(settings_.releaseRingCount));
                 particleManager->EmitHitEffect(
-                    "Hit",
+                    kHitParticleGroupName,
                     settings_.effectPosition,
-                    static_cast<uint32_t>((std::max)(settings_.releaseFragmentCount, 0)));
+                    ClampParticleCount(settings_.releaseFragmentCount));
             }
         }
         break;
 
     case TimeStopPhase::Releasing: {
-        const float duration = (std::max)(settings_.releaseDuration, kMinimumEffectDuration); // 再開演出時間
-        const float progress = (std::clamp)(phaseTime_ / duration, 0.0f, 1.0f); // 再開演出の進行度
+        const float progress = CalculateEffectProgress(phaseTime_, settings_.releaseDuration); // 再開演出の進行度
         ApplyReleasingPostProcess(postProcess, progress);
 
-        if (progress >= 1.0f) {
-            phase_ = TimeStopPhase::Idle;
-            phaseTime_ = 0.0f;
-            postProcess.SetDistortionStrength(0.0f);
+        if (progress >= kEffectProgressMax) {
+            transitionToPhase(TimeStopPhase::Idle);
+            postProcess.SetDistortionStrength(kEffectProgressMin);
             postProcess.SetEffectType(previousPostEffect_);
         }
         break;
