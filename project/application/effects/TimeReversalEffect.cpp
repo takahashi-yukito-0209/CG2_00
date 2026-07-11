@@ -18,6 +18,9 @@ using namespace MyEngine;
 
 namespace {
 constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
+constexpr float kEffectTimeStart = 0.0f; // フェーズ開始時の経過時間
+constexpr float kEffectProgressMin = 0.0f; // 演出進行率の最小値
+constexpr float kEffectProgressMax = 1.0f; // 演出進行率の最大値
 constexpr float kHistorySampleRate = 60.0f; // 履歴時間をフレーム数へ変換する基準値
 constexpr float kTimeReversalDistortionDampingRate = 0.35f; // 時間逆行中の歪み減衰率
 constexpr float kParticleShrinkRate = 0.35f; // 時間経過による粒子縮小率
@@ -35,6 +38,7 @@ constexpr int kMinimumParticleCount = 1; // 発生させる最小粒子数
 constexpr float kMinimumTransformHistoryCount = 2.0f; // 補間に必要な最低履歴数
 constexpr size_t kMaximumRewindAfterimageCount = 3; // 1粒子ごとの最大残像数
 constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
+constexpr const char* kRingParticleGroupName = "Ring"; // リングエフェクト名
 constexpr int kImGuiParticleCountMin = 1; // 粒子数の最小値
 constexpr int kImGuiParticleCountMax = 128; // 粒子数の最大値
 constexpr float kImGuiSpeedStep = 0.1f; // 速度設定の調整幅
@@ -74,6 +78,34 @@ constexpr float kImGuiParticleSizeStep = 1.0f; // 粒子サイズの調整幅
 constexpr float kImGuiParticleSizeMin = 2.0f; // 粒子サイズの最小値
 constexpr float kImGuiParticleSizeMax = 128.0f; // 粒子サイズの最大値
 constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
+
+/// <summary>
+/// 演出時間をゼロ除算しない値へ補正する
+/// </summary>
+float GetSafeEffectDuration(float duration)
+{
+    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
+    return safeDuration;
+}
+
+/// <summary>
+/// 経過時間から0から1の演出進行率を計算する
+/// </summary>
+float CalculateEffectProgress(float elapsedTime, float duration)
+{
+    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
+    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
+    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
+}
+
+/// <summary>
+/// 経過時間から1から0へ戻る演出進行率を計算する
+/// </summary>
+float CalculateEffectRemainingProgress(float elapsedTime, float duration)
+{
+    const float progress = CalculateEffectProgress(elapsedTime, duration); // 現在の演出進行率
+    return kEffectProgressMax - progress;
+}
 }
 
 /// <summary>
@@ -82,7 +114,7 @@ constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 void TimeReversalEffect::ResetState()
 {
     phase_ = TimeReversalPhase::Idle;
-    phaseTime_ = 0.0f;
+    phaseTime_ = kEffectTimeStart;
     previousPostEffect_ = PostEffectType::Copy;
     particles_.clear();
     transformHistory_.clear();
@@ -104,8 +136,8 @@ void TimeReversalEffect::ConfigureInitialPostProcess(PostProcess& postProcess)
     postProcess.SetEffectType(PostEffectType::Copy);
     postProcess.SetDistortionRadius(settings_.distortionRadius);
     postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(0.0f);
-    postProcess.SetDistortionProgress(0.0f);
+    postProcess.SetDistortionStrength(kEffectProgressMin);
+    postProcess.SetDistortionProgress(kEffectProgressMin);
 }
 
 /// <summary>
@@ -116,7 +148,7 @@ void TimeReversalEffect::ApplyRewindingPostProcess(PostProcess& postProcess, flo
     postProcess.SetEffectType(PostEffectType::Distortion);
     postProcess.SetDistortionRadius(settings_.distortionRadius);
     postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(settings_.distortionStrength * (1.0f - rewindRate * kTimeReversalDistortionDampingRate));
+    postProcess.SetDistortionStrength(settings_.distortionStrength * (kEffectProgressMax - rewindRate * kTimeReversalDistortionDampingRate));
     postProcess.SetDistortionProgress(rewindRate);
 }
 
@@ -128,7 +160,7 @@ void TimeReversalEffect::ApplyConvergingPostProcess(PostProcess& postProcess, fl
     postProcess.SetEffectType(PostEffectType::Distortion);
     postProcess.SetDistortionRadius(settings_.distortionRadius);
     postProcess.SetDistortionWaveCount(settings_.distortionWaveCount);
-    postProcess.SetDistortionStrength(-settings_.distortionStrength * (1.0f - convergenceRate));
+    postProcess.SetDistortionStrength(-settings_.distortionStrength * (kEffectProgressMax - convergenceRate));
     postProcess.SetDistortionProgress(convergenceRate);
 }
 
@@ -138,7 +170,7 @@ void TimeReversalEffect::ApplyConvergingPostProcess(PostProcess& postProcess, fl
 void TimeReversalEffect::RestorePreviousPostProcess(PostProcess& postProcess)
 {
     postProcess.SetEffectType(previousPostEffect_);
-    postProcess.SetDistortionStrength(0.0f);
+    postProcess.SetDistortionStrength(kEffectProgressMin);
 }
 
 /// <summary>
@@ -148,7 +180,7 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
 {
     previousPostEffect_ = postProcess.GetEffectType(); // 再生前のポストエフェクト
     phase_ = TimeReversalPhase::Expanding;
-    phaseTime_ = 0.0f;
+    phaseTime_ = kEffectTimeStart;
     particles_.clear();
 
     const int particleCount = (std::clamp)(
@@ -178,7 +210,7 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
             direction.z * speed,
         };
         particle.rewindStartPosition = particle.position;
-        particle.elapsedTime = 0.0f;
+        particle.elapsedTime = kEffectTimeStart;
         particle.lifeTime = settings_.expansionDuration;
         particles_.push_back(particle);
     }
@@ -196,11 +228,14 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     }
 
     phaseTime_ += deltaTime;
+    const auto transitionToPhase = [this](TimeReversalPhase nextPhase) {
+        phase_ = nextPhase;
+        phaseTime_ = kEffectTimeStart;
+    }; // フェーズ変更時に経過時間を初期化する処理
 
     if (phase_ == TimeReversalPhase::Paused) {
         if (phaseTime_ >= settings_.pauseDuration) {
-            phase_ = TimeReversalPhase::Rewinding;
-            phaseTime_ = 0.0f;
+            transitionToPhase(TimeReversalPhase::Rewinding);
             for (TimeReversalParticle& particle : particles_) {
                 particle.rewindStartPosition = particle.position;
             }
@@ -209,8 +244,7 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     }
 
     if (phase_ == TimeReversalPhase::Rewinding) {
-        const float rewindDuration = (std::max)(settings_.rewindDuration, kMinimumEffectDuration); // 巻き戻し時間
-        const float rewindRate = (std::clamp)(phaseTime_ / rewindDuration, 0.0f, 1.0f); // 巻き戻しの進行度
+        const float rewindRate = CalculateEffectProgress(phaseTime_, settings_.rewindDuration); // 巻き戻しの進行度
 
         for (TimeReversalParticle& particle : particles_) {
             particle.position = {
@@ -218,12 +252,12 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
                 particle.rewindStartPosition.y + (settings_.effectPosition.y - particle.rewindStartPosition.y) * rewindRate,
                 particle.rewindStartPosition.z + (settings_.effectPosition.z - particle.rewindStartPosition.z) * rewindRate,
             };
-            particle.elapsedTime = particle.lifeTime * (1.0f - rewindRate);
+            particle.elapsedTime = particle.lifeTime * (kEffectProgressMax - rewindRate);
         }
         ApplyRewindingPostProcess(postProcess, rewindRate);
         ApplyTransform(objects3d);
 
-        if (rewindRate >= 1.0f) {
+        if (rewindRate >= kEffectProgressMax) {
             particles_.clear();
             StartConvergence();
         }
@@ -231,13 +265,11 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     }
 
     if (phase_ == TimeReversalPhase::Converging) {
-        const float convergenceDuration = (std::max)(settings_.convergenceDuration, kMinimumEffectDuration); // 収束演出時間
-        const float convergenceRate = (std::clamp)(phaseTime_ / convergenceDuration, 0.0f, 1.0f); // 収束演出の進行度
+        const float convergenceRate = CalculateEffectProgress(phaseTime_, settings_.convergenceDuration); // 収束演出の進行度
         ApplyConvergingPostProcess(postProcess, convergenceRate);
 
-        if (convergenceRate >= 1.0f) {
-            phase_ = TimeReversalPhase::Idle;
-            phaseTime_ = 0.0f;
+        if (convergenceRate >= kEffectProgressMax) {
+            transitionToPhase(TimeReversalPhase::Idle);
             transformHistory_.clear();
             RestorePreviousPostProcess(postProcess);
         }
@@ -256,8 +288,7 @@ void TimeReversalEffect::Update(float deltaTime, PostProcess& postProcess, std::
     }
 
     if (!hasActiveParticle) {
-        phase_ = TimeReversalPhase::Paused;
-        phaseTime_ = 0.0f;
+        transitionToPhase(TimeReversalPhase::Paused);
     }
 }
 
@@ -285,8 +316,8 @@ void TimeReversalEffect::UpdateSprites(
         const TimeReversalParticle& particle = particles_[spriteIndex]; // 表示する専用パーティクル
         const Vector2 screenUv = screenUvResolver(particle.position); // 粒子の画面UV
         const float lifeRate = particle.lifeTime > 0.0f
-            ? (std::clamp)(particle.elapsedTime / particle.lifeTime, 0.0f, 1.0f)
-            : 1.0f; // 拡散フェーズの進行度
+            ? CalculateEffectProgress(particle.elapsedTime, particle.lifeTime)
+            : kEffectProgressMax; // 拡散フェーズの進行度
         const float size = settings_.particleSize * (1.0f - lifeRate * kParticleShrinkRate); // 粒子サイズ
 
         particleSprite->SetPosition({
@@ -307,8 +338,7 @@ void TimeReversalEffect::UpdateSprites(
         settings_.rewindAfterimageCount,
         0,
         static_cast<int>(kMaximumRewindAfterimageCount))); // 実際に表示する残像数
-    const float rewindDuration = (std::max)(settings_.rewindDuration, kMinimumEffectDuration); // 残像位置計算用の巻き戻し時間
-    const float rewindRate = (std::clamp)(phaseTime_ / rewindDuration, 0.0f, 1.0f); // 巻き戻しの進行度
+    const float rewindRate = CalculateEffectProgress(phaseTime_, settings_.rewindDuration); // 巻き戻しの進行度
 
     for (size_t spriteIndex = 0; spriteIndex < afterimageSprites.size(); ++spriteIndex) {
         Sprite* afterimageSprite = afterimageSprites[spriteIndex].get(); // 更新対象の残像スプライト
@@ -329,15 +359,15 @@ void TimeReversalEffect::UpdateSprites(
         const TimeReversalParticle& particle = particles_[particleIndex]; // 残像元の粒子
         const float trailOffset = settings_.rewindAfterimageSpacing
             * static_cast<float>(afterimageIndex + 1)
-            * (1.0f - rewindRate); // 軌跡上の遅れ
-        const float afterimageRate = (std::clamp)(rewindRate - trailOffset, 0.0f, 1.0f); // 残像位置の進行度
+            * (kEffectProgressMax - rewindRate); // 軌跡上の遅れ
+        const float afterimageRate = (std::clamp)(rewindRate - trailOffset, kEffectProgressMin, kEffectProgressMax); // 残像位置の進行度
         const Vector3 afterimagePosition = {
             particle.rewindStartPosition.x + (settings_.effectPosition.x - particle.rewindStartPosition.x) * afterimageRate,
             particle.rewindStartPosition.y + (settings_.effectPosition.y - particle.rewindStartPosition.y) * afterimageRate,
             particle.rewindStartPosition.z + (settings_.effectPosition.z - particle.rewindStartPosition.z) * afterimageRate,
         }; // 軌跡上の残像ワールド座標
         const Vector2 screenUv = screenUvResolver(afterimagePosition); // 残像の画面UV
-        const float alphaRate = 1.0f
+        const float alphaRate = kEffectProgressMax
             - static_cast<float>(afterimageIndex) / static_cast<float>((std::max)(afterimageCount, size_t { 1 })); // 後方ほど薄くする係数
         const float sizeRate = kRewindAfterimageBaseSizeRate
             - static_cast<float>(afterimageIndex) * kRewindAfterimageSizeStep; // 後方ほど小さくする係数
@@ -364,12 +394,12 @@ void TimeReversalEffect::UpdateSprites(
             convergenceSprite->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
             convergenceSprite->Update();
         } else {
-            const float convergenceDuration = (std::max)(settings_.convergenceDuration, kMinimumEffectDuration); // フラッシュ計算用の収束時間
-            const float convergenceRate = (std::clamp)(phaseTime_ / convergenceDuration, 0.0f, 1.0f); // フラッシュの進行度
+            const float convergenceRate = CalculateEffectProgress(phaseTime_, settings_.convergenceDuration); // フラッシュの進行度
+            const float convergenceRemainingRate = CalculateEffectRemainingProgress(phaseTime_, settings_.convergenceDuration); // 終了までの残り進行率
             const Vector2 screenUv = screenUvResolver(settings_.effectPosition); // 収束地点の画面UV
             const float flashSize = settings_.convergenceFlashSize
                 * (kConvergenceFlashStartScale + convergenceRate * kConvergenceFlashScaleRange); // 中心から広がるフラッシュサイズ
-            const float flashAlpha = settings_.convergenceFlashAlpha * (1.0f - convergenceRate); // 終了へ向けて減衰する透明度
+            const float flashAlpha = settings_.convergenceFlashAlpha * convergenceRemainingRate; // 終了へ向けて減衰する透明度
 
             convergenceSprite->SetPosition({
                 screenUv.x * static_cast<float>(WinApp::kWindowWidth),
@@ -528,8 +558,7 @@ void TimeReversalEffect::ApplyTransform(std::vector<std::unique_ptr<Object3d>>& 
         return;
     }
 
-    const float rewindDuration = (std::max)(settings_.rewindDuration, kMinimumEffectDuration); // Transform巻き戻し時間
-    const float rewindRate = (std::clamp)(phaseTime_ / rewindDuration, 0.0f, 1.0f); // Transform巻き戻し進行度
+    const float rewindRate = CalculateEffectProgress(phaseTime_, settings_.rewindDuration); // Transform巻き戻し進行度
     const float historyPosition = rewindRate * static_cast<float>(transformHistory_.size() - 1); // 履歴内の参照位置
     const size_t currentHistoryIndex = static_cast<size_t>(historyPosition); // 補間元の履歴番号
     const size_t nextHistoryIndex = (std::min)(currentHistoryIndex + 1, transformHistory_.size() - 1); // 補間先の履歴番号
@@ -557,12 +586,12 @@ void TimeReversalEffect::ApplyTransform(std::vector<std::unique_ptr<Object3d>>& 
 void TimeReversalEffect::StartConvergence()
 {
     phase_ = TimeReversalPhase::Converging;
-    phaseTime_ = 0.0f;
+    phaseTime_ = kEffectTimeStart;
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 収束リングを生成するパーティクル管理
     if (particleManager && settings_.convergenceRingCount > 0) {
         particleManager->EmitRingEffect(
-            "Ring",
+            kRingParticleGroupName,
             settings_.effectPosition,
             static_cast<uint32_t>(settings_.convergenceRingCount));
     }

@@ -59,6 +59,18 @@ constexpr const char* kHitParticleGroupName = "Hit"; // 亀裂と破片用パー
 constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱用パーティクルグループ名
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
 constexpr int kMaximumCrackPatternCount = 7; // 定義済みの亀裂パターン数
+constexpr std::array<float, kMaximumCrackPatternCount> kCrackAngles = {
+    -1.15f, -0.72f, -0.28f, 0.12f, 0.55f, 0.95f, 1.34f,
+}; // 各亀裂のZ軸回転
+constexpr std::array<Vector3, kMaximumCrackPatternCount> kCrackOffsets = {
+    Vector3 { -0.20f, 0.08f, 0.00f },
+    Vector3 { -0.38f, -0.12f, 0.01f },
+    Vector3 { -0.12f, 0.30f, 0.02f },
+    Vector3 { 0.10f, -0.28f, 0.03f },
+    Vector3 { 0.30f, 0.16f, 0.04f },
+    Vector3 { 0.48f, -0.06f, 0.05f },
+    Vector3 { 0.62f, 0.30f, 0.06f },
+}; // 中心から少しずらして見せる位置補正
 constexpr int kCrackWidthVariationCycle = 2; // 亀裂幅の変化周期
 constexpr uint32_t kRingColorGroupCount = 2u; // 内側と外側に分けるリング色グループ数
 constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする要素番号
@@ -130,6 +142,34 @@ constexpr float kImGuiFragmentSpeedMax = 20.0f; // 破片速度の最大値
 constexpr float kImGuiFragmentLifeTimeStep = 0.01f; // 破片寿命の調整幅
 constexpr float kImGuiFragmentLifeTimeMin = 0.05f; // 破片寿命の最小値
 constexpr float kImGuiFragmentLifeTimeMax = 3.0f; // 破片寿命の最大値
+
+/// <summary>
+/// 演出時間をゼロ除算しない値へ補正する
+/// </summary>
+float GetSafeEffectDuration(float duration)
+{
+    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
+    return safeDuration;
+}
+
+/// <summary>
+/// 経過時間から0から1の演出進行率を計算する
+/// </summary>
+float CalculateEffectProgress(float elapsedTime, float duration)
+{
+    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
+    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
+    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
+}
+
+/// <summary>
+/// 経過時間から1から0へ戻る演出進行率を計算する
+/// </summary>
+float CalculateEffectRemainingProgress(float elapsedTime, float duration)
+{
+    const float progress = CalculateEffectProgress(elapsedTime, duration); // 現在の演出進行率
+    return kEffectProgressMax - progress;
+}
 }
 
 /// <summary>
@@ -257,20 +297,24 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
 {
     phaseTime_ += deltaTime;
 
+    const auto transitionToPhase = [this](TemporalRiftPhase nextPhase) {
+        phase_ = nextPhase;
+        phaseTime_ = kEffectTimeStart;
+    }; // フェーズ変更時に経過時間を初期化する処理
+
     switch (phase_) {
     case TemporalRiftPhase::Idle:
         break;
 
     case TemporalRiftPhase::Compress: {
-        const float compressDuration = (std::max)(settings_.compressDuration, kMinimumEffectDuration); // 空間圧縮を見せる時間
-        const float progress = (std::min)(phaseTime_ / compressDuration, kEffectProgressMax); // 圧縮演出の進行度
+        const float compressDuration = GetSafeEffectDuration(settings_.compressDuration); // 空間圧縮を見せる時間
+        const float progress = CalculateEffectProgress(phaseTime_, settings_.compressDuration); // 圧縮演出の進行度
         const float blurWidth = settings_.compressBlurStart
             + (settings_.compressBlurEnd - settings_.compressBlurStart) * progress; // 現在のブラー幅
         ApplyCompressPostProcess(postProcess, progress, blurWidth);
 
         if (phaseTime_ >= compressDuration) {
-            phase_ = TemporalRiftPhase::Freeze;
-            phaseTime_ = kEffectTimeStart;
+            transitionToPhase(TemporalRiftPhase::Freeze);
         }
         break;
     }
@@ -278,8 +322,7 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     case TemporalRiftPhase::Freeze:
         ApplyGrayscalePostProcess(postProcess);
         if (phaseTime_ >= settings_.freezeDuration) {
-            phase_ = TemporalRiftPhase::Crack;
-            phaseTime_ = kEffectTimeStart;
+            transitionToPhase(TemporalRiftPhase::Crack);
         }
         break;
 
@@ -287,21 +330,19 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
         ApplyGrayscalePostProcess(postProcess);
         EmitSpaceCracks();
         if (phaseTime_ >= settings_.crackDuration) {
-            phase_ = TemporalRiftPhase::Burst;
-            phaseTime_ = kEffectTimeStart;
+            transitionToPhase(TemporalRiftPhase::Burst);
             EmitRiftBurst();
             StartImpact(camera);
         }
         break;
 
     case TemporalRiftPhase::Burst: {
-        const float burstDuration = (std::max)(settings_.burstDuration, kMinimumEffectDuration); // 破砕の衝撃を見せる時間
-        const float progress = (std::min)(phaseTime_ / burstDuration, kEffectProgressMax); // 破砕演出の進行度
+        const float burstDuration = GetSafeEffectDuration(settings_.burstDuration); // 破砕の衝撃を見せる時間
+        const float progress = CalculateEffectProgress(phaseTime_, settings_.burstDuration); // 破砕演出の進行度
         ApplyBurstPostProcess(postProcess, progress);
 
         if (phaseTime_ >= burstDuration) {
-            phase_ = TemporalRiftPhase::Recover;
-            phaseTime_ = kEffectTimeStart;
+            transitionToPhase(TemporalRiftPhase::Recover);
         }
         break;
     }
@@ -309,9 +350,8 @@ void TemporalRiftEffect::Update(float deltaTime, PostProcess& postProcess, Camer
     case TemporalRiftPhase::Recover:
         ApplyRecoverPostProcess(postProcess);
         if (phaseTime_ >= settings_.recoverDuration) {
-            phase_ = TemporalRiftPhase::Idle;
+            transitionToPhase(TemporalRiftPhase::Idle);
             RestorePreviousPostProcess(postProcess);
-            phaseTime_ = kEffectTimeStart;
         }
         break;
     }
@@ -334,13 +374,13 @@ void TemporalRiftEffect::UpdateAfterimages(std::vector<std::unique_ptr<Object3d>
     float displacementRate = kEffectProgressMin; // 現在フェーズで適用する時間ずれ移動率
     switch (phase_) {
     case TemporalRiftPhase::Compress:
-        displacementRate = (std::min)(phaseTime_ / (std::max)(settings_.compressDuration, kMinimumEffectDuration), kEffectProgressMax);
+        displacementRate = CalculateEffectProgress(phaseTime_, settings_.compressDuration);
         break;
     case TemporalRiftPhase::Freeze:
         displacementRate = kEffectProgressMax;
         break;
     case TemporalRiftPhase::Crack:
-        displacementRate = kEffectProgressMax - (std::min)(phaseTime_ / (std::max)(settings_.crackDuration, kMinimumEffectDuration), kEffectProgressMax);
+        displacementRate = CalculateEffectRemainingProgress(phaseTime_, settings_.crackDuration);
         break;
     case TemporalRiftPhase::Burst:
     case TemporalRiftPhase::Recover:
@@ -660,22 +700,9 @@ void TemporalRiftEffect::EmitSpaceCracks()
         return;
     }
 
-    constexpr std::array<float, kMaximumCrackPatternCount> kCrackAngles = {
-        -1.15f, -0.72f, -0.28f, 0.12f, 0.55f, 0.95f, 1.34f,
-    }; // 各亀裂のZ軸回転
-    constexpr std::array<Vector3, kMaximumCrackPatternCount> kCrackOffsets = {
-        Vector3 { -0.20f, 0.08f, 0.00f },
-        Vector3 { -0.38f, -0.12f, 0.01f },
-        Vector3 { -0.12f, 0.30f, 0.02f },
-        Vector3 { 0.10f, -0.28f, 0.03f },
-        Vector3 { 0.30f, 0.16f, 0.04f },
-        Vector3 { 0.48f, -0.06f, 0.05f },
-        Vector3 { 0.62f, 0.30f, 0.06f },
-    }; // 中心から少しずらして見せる位置補正
 
     const int crackCount = (std::clamp)(settings_.crackCount, kMinimumCrackEmitCount, static_cast<int>(kCrackAngles.size())); // 発生する亀裂総数
-    const float crackDuration = (std::max)(settings_.crackDuration, kMinimumEffectDuration); // 亀裂展開時間
-    const float progress = (std::clamp)(phaseTime_ / crackDuration, kEffectProgressMin, kEffectProgressMax); // 亀裂展開の進行度
+    const float progress = CalculateEffectProgress(phaseTime_, settings_.crackDuration); // 亀裂展開の進行度
     const int targetCrackCount = (std::min)(
         crackCount,
         static_cast<int>(progress * static_cast<float>(crackCount)) + kCrackRevealCountOffset); // 現在までに表示する亀裂数
