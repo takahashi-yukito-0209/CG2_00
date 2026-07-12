@@ -1,4 +1,5 @@
 #include "TemporalRiftEffect.h"
+#include "EffectProgress.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -19,7 +20,12 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
-constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
+using EffectProgress::CalculateEffectProgress;
+using EffectProgress::CalculateEffectRemainingProgress;
+using EffectProgress::GetSafeEffectDuration;
+using EffectProgress::kEffectProgressMax;
+using EffectProgress::kEffectProgressMin;
+using EffectProgress::kEffectTimeStart;
 constexpr float kTemporalVerticalDisplacementRate = 0.25f; // 時間ずれの縦方向移動率
 constexpr float kAfterimageBaseScaleRate = 0.75f; // 残像サイズの基準倍率
 constexpr float kAfterimageScaleRange = 0.25f; // 残像サイズの変化幅
@@ -40,9 +46,6 @@ constexpr float kCameraShakeAmplitudeY = 0.65f; // カメラ揺れY方向の振�
 constexpr float kCameraShakeAmplitudeZ = 0.35f; // カメラ揺れZ方向の振幅倍率
 constexpr float kTransformScaleComponentCount = 3.0f; // スケール平均に使用する成分数
 constexpr float kMinimumAfterimageScale = 0.1f; // 残像表示に使用する最小スケール
-constexpr float kEffectTimeStart = 0.0f; // 演出経過時間の初期値
-constexpr float kEffectProgressMin = 0.0f; // 演出進行率の最小値
-constexpr float kEffectProgressMax = 1.0f; // 演出進行率の最大値
 constexpr float kPostEffectStrengthOff = 0.0f; // ポストエフェクト強度を無効化する値
 constexpr Vector3 kDefaultEffectPosition = { 0.0f, 1.0f, 0.0f }; // エフェクト発生位置の初期値
 constexpr Vector4 kHiddenAfterimageColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示時の残像色
@@ -143,33 +146,6 @@ constexpr float kImGuiFragmentLifeTimeStep = 0.01f; // 破片寿命の調整幅
 constexpr float kImGuiFragmentLifeTimeMin = 0.05f; // 破片寿命の最小値
 constexpr float kImGuiFragmentLifeTimeMax = 3.0f; // 破片寿命の最大値
 
-/// <summary>
-/// 演出時間をゼロ除算しない値へ補正する
-/// </summary>
-float GetSafeEffectDuration(float duration)
-{
-    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
-    return safeDuration;
-}
-
-/// <summary>
-/// 経過時間から0から1の演出進行率を計算する
-/// </summary>
-float CalculateEffectProgress(float elapsedTime, float duration)
-{
-    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
-    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
-    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
-}
-
-/// <summary>
-/// 経過時間から1から0へ戻る演出進行率を計算する
-/// </summary>
-float CalculateEffectRemainingProgress(float elapsedTime, float duration)
-{
-    const float progress = CalculateEffectProgress(elapsedTime, duration); // 現在の演出進行率
-    return kEffectProgressMax - progress;
-}
 }
 
 /// <summary>

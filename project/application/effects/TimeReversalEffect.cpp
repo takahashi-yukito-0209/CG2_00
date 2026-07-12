@@ -1,4 +1,5 @@
 #include "TimeReversalEffect.h"
+#include "EffectProgress.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -17,10 +18,11 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
-constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
-constexpr float kEffectTimeStart = 0.0f; // フェーズ開始時の経過時間
-constexpr float kEffectProgressMin = 0.0f; // 演出進行率の最小値
-constexpr float kEffectProgressMax = 1.0f; // 演出進行率の最大値
+using EffectProgress::CalculateEffectProgress;
+using EffectProgress::CalculateEffectRemainingProgress;
+using EffectProgress::kEffectProgressMax;
+using EffectProgress::kEffectProgressMin;
+using EffectProgress::kEffectTimeStart;
 constexpr float kHistorySampleRate = 60.0f; // 履歴時間をフレーム数へ変換する基準値
 constexpr float kTimeReversalDistortionDampingRate = 0.35f; // 時間逆行中の歪み減衰率
 constexpr float kParticleShrinkRate = 0.35f; // 時間経過による粒子縮小率
@@ -79,33 +81,6 @@ constexpr float kImGuiParticleSizeMin = 2.0f; // 粒子サイズの最小値
 constexpr float kImGuiParticleSizeMax = 128.0f; // 粒子サイズの最大値
 constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 
-/// <summary>
-/// 演出時間をゼロ除算しない値へ補正する
-/// </summary>
-float GetSafeEffectDuration(float duration)
-{
-    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
-    return safeDuration;
-}
-
-/// <summary>
-/// 経過時間から0から1の演出進行率を計算する
-/// </summary>
-float CalculateEffectProgress(float elapsedTime, float duration)
-{
-    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
-    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
-    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
-}
-
-/// <summary>
-/// 経過時間から1から0へ戻る演出進行率を計算する
-/// </summary>
-float CalculateEffectRemainingProgress(float elapsedTime, float duration)
-{
-    const float progress = CalculateEffectProgress(elapsedTime, duration); // 現在の演出進行率
-    return kEffectProgressMax - progress;
-}
 }
 
 /// <summary>
