@@ -35,9 +35,18 @@ struct Matrix4x4 {
     Matrix4x4 operator*(const Matrix4x4& rhs) const;
 };
 
-// 座標変換情報構造体
-struct Transform {
+// Euler角の座標変換情報構造体
+struct EulerTransform {
     Vector3 scale, rotate, translate;
 };
+
+// Quaternion回転の座標変換情報構造体
+struct QuaternionTransform {
+    Vector3 scale;
+    Quaternion rotate;
+    Vector3 translate;
+};
+
+using Transform = EulerTransform;
 
 } // namespace Math

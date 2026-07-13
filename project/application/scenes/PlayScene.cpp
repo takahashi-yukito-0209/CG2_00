@@ -57,12 +57,17 @@ constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環�
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
 constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
+constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
 constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
+constexpr const char* kSimpleSkinModelFileName = "simpleSkin/simpleSkin.gltf"; // Skinning確認用simpleSkinモデル
+constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // Skinning確認用sneakWalkモデル
+constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
 
-constexpr std::array<const char*, 7> kSceneModelFileNames = {
+constexpr std::array<const char*, 10> kSceneModelFileNames = {
     "plane/plane.gltf",
     "bunny/bunny.obj",
     "teapot/teapot.obj",
@@ -70,6 +75,9 @@ constexpr std::array<const char*, 7> kSceneModelFileNames = {
     "sphere/sphere.gltf",
     "terrain/terrain.obj",
     kAnimatedCubeModelFileName,
+    kSimpleSkinModelFileName,
+    kHumanSneakWalkModelFileName,
+    kHumanWalkModelFileName,
 }; // シーンで生成するモデルファイル名
 
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
@@ -235,6 +243,26 @@ bool IsCubeModelFile(const std::string& modelFileName)
 {
     return ContainsModelKeyword(modelFileName, kCubeModelKeywordLower)
         || ContainsModelKeyword(modelFileName, kCubeModelKeywordUpper);
+}
+
+/// <summary>
+/// 初期化時にアニメーションも設定するモデルか判定する
+/// </summary>
+bool IsAnimationModelFile(const std::string& modelFileName)
+{
+    return modelFileName == kAnimatedCubeModelFileName
+        || modelFileName == kHumanSneakWalkModelFileName
+        || modelFileName == kHumanWalkModelFileName;
+}
+
+/// <summary>
+/// Skinning確認用に表示サイズを調整するモデルか判定する
+/// </summary>
+bool IsSkinningPreviewModelFile(const std::string& modelFileName)
+{
+    return modelFileName == kSimpleSkinModelFileName
+        || modelFileName == kHumanSneakWalkModelFileName
+        || modelFileName == kHumanWalkModelFileName;
 }
 }
 
@@ -458,8 +486,13 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
         object3d.SetTranslate(kCubeInitialTranslate);
     }
-}
 
+    const bool isSkinningPreviewModel = IsSkinningPreviewModelFile(modelFileName); // Skinning確認用モデルか
+    if (isSkinningPreviewModel) {
+        object3d.SetScale(kSkinningPreviewScale);
+        object3d.SetTranslate(kSkinningPreviewTranslate);
+    }
+}
 /// <summary>
 /// シーンで使用する3Dオブジェクトを初期化する。
 /// </summary>
@@ -469,7 +502,7 @@ void PlayScene::InitializeSceneObjects()
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelFileName);
-        if (std::string(modelFileName) == kAnimatedCubeModelFileName) {
+        if (IsAnimationModelFile(modelFileName)) {
             object3d->SetAnimation(modelFileName);
         }
         ApplySceneObjectInitialSettings(*object3d, modelFileName);

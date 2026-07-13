@@ -214,15 +214,32 @@ void Model::Draw(Object3d* owner)
         return;
     }
 
-    // 頂点バッファの設定 (モデルまたはオーナーから)
-    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
-    cmdList->IASetVertexBuffers(0, 1, &vbv);
+    Object3dCommon* common = owner->GetObject3dCommon(); // Object3d共通描画管理
+    // Object3dCommonが有効でない場合は描画できない
+    if (!common) {
+        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
+        return;
+    }
+
+    const bool useSkinning = owner->CanUseSkinning() && vertexInfluenceBufferView_.SizeInBytes != 0; // Skinning描画を使うか
+    if (useSkinning) {
+        common->SetSkinningDrawSetting();
+        D3D12_VERTEX_BUFFER_VIEW vertexBufferViews[2] = {
+            ResolveVertexBufferView(owner),
+            vertexInfluenceBufferView_
+        }; // Skinning用の頂点バッファ一覧
+        cmdList->IASetVertexBuffers(0, 2, vertexBufferViews);
+        cmdList->SetGraphicsRootDescriptorTable(10, owner->GetSkinningPaletteSrvHandle());
+    } else {
+        common->SetCommonDrawSetting();
+        D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
+        cmdList->IASetVertexBuffers(0, 1, &vbv);
+    }
 
     // Material CBV は Object3d が持つものを使用する
     if (!BindOwnerMaterialResource(cmdList, owner, "Model::Draw")) {
         return;
     }
-
 
     // 座標変換行列CBV設定 (オーナーから)
     if (owner->GetTransformationMatrixResource()) {
@@ -231,14 +248,6 @@ void Model::Draw(Object3d* owner)
     } else {
         // オーナーが座標変換行列リソースを持っていない場合は描画できない
         Logger::Debug("Model::Draw skipped: transformation matrix CBV missing\n");
-        return;
-    }
-
-    // 平行光源CBV設定 (shared in Object3dCommon)
-    Object3dCommon* common = owner->GetObject3dCommon();
-    // Object3dCommonが有効でない場合は描画できない
-    if (!common) {
-        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
         return;
     }
 
@@ -281,7 +290,6 @@ void Model::Draw(Object3d* owner)
     }
     cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
 }
-
 /// <summary>
 /// インスタンシング描画
 /// </summary>
@@ -407,6 +415,36 @@ void Model::CreateVertexBuffer()
     vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
 }
 
+
+/// <summary>
+/// Skinning用の頂点影響バッファを作成する
+/// </summary>
+void Model::CreateVertexInfluenceBuffer()
+{
+    vertexInfluenceResource_.Reset();
+    vertexInfluenceBufferView_ = {};
+
+    if (!modelCommon_ || !modelCommon_->GetDxCommon()) {
+        return;
+    }
+    if (modelData_.vertexInfluences.empty() || modelData_.vertexInfluences.size() != modelData_.vertices.size()) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t bufferSize = sizeof(Object3d::VertexInfluence) * modelData_.vertexInfluences.size(); // 影響情報バッファサイズ
+    vertexInfluenceResource_ = dxCommon->CreateBufferResource(bufferSize);
+
+    void* mappedData = nullptr; // 頂点影響情報の転送先
+    vertexInfluenceResource_->Map(0, nullptr, &mappedData);
+    assert(mappedData != nullptr);
+    std::memcpy(mappedData, modelData_.vertexInfluences.data(), bufferSize);
+    vertexInfluenceResource_->Unmap(0, nullptr);
+
+    vertexInfluenceBufferView_.BufferLocation = vertexInfluenceResource_->GetGPUVirtualAddress();
+    vertexInfluenceBufferView_.SizeInBytes = static_cast<UINT>(bufferSize);
+    vertexInfluenceBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexInfluence));
+}
 /// <summary>
 /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
 /// </summary>
@@ -416,6 +454,7 @@ void Model::InitializeModelResources()
     EnsureFallbackModelTextureLoaded(textureManager);
 
     CreateVertexBuffer();
+    CreateVertexInfluenceBuffer();
 
     const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデルマテリアルのSRV番号
     if (materialTextureIndex != UINT32_MAX) {

@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 #include <d3d12.h>
+#include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -25,6 +27,8 @@ class Model;
 /// </summary>
 class Object3d {
 public: // メンバ構造体
+    static constexpr uint32_t kNumMaxInfluence = 4; // 1頂点に割り当てる最大Joint影響数
+
     // 頂点データ構造体
     struct VertexData {
         Math::Vector4 position;
@@ -32,6 +36,20 @@ public: // メンバ構造体
         Math::Vector3 normal;
     };
 
+
+    struct VertexInfluence {
+        std::array<float, kNumMaxInfluence> weights {}; // 各Jointの重み
+        std::array<int32_t, kNumMaxInfluence> jointIndices {}; // 影響するJointのIndex
+    };
+
+    struct JointWeightData {
+        Math::Matrix4x4 inverseBindPoseMatrix; // BindPoseを打ち消すための逆行列
+    };
+
+    struct WellForGPU {
+        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での最終変換行列
+        Math::Matrix4x4 skeletonSpaceInverseTransposeMatrix; // 法線変換用の逆転置行列
+    };
     // マテリアル構造体
     struct Material {
         Math::Vector4 color;
@@ -85,7 +103,7 @@ public: // メンバ構造体
         float padding;
     };
 
-    // マテリアルデータの該当フィールドも更新
+    // マテリアルデータ構造体
     struct MaterialData {
         std::string textureFilePath;
         uint32_t textureIndex = UINT32_MAX;
@@ -119,13 +137,31 @@ public: // メンバ構造体
     // モデルデータ構造体
     struct ModelData {
         std::vector<VertexData> vertices;
+        std::vector<VertexInfluence> vertexInfluences; // 展開済み頂点ごとのSkinning影響情報
+        std::unordered_map<std::string, JointWeightData> skinClusterData; // Joint名ごとの逆BindPose情報
         MaterialData material;
         // ルートノード情報（Assimpのノードツリーを格納）
         struct Node {
-            Math::Matrix4x4 localMatrix;
-            std::string name;
-            std::vector<Node> children;
+            Math::QuaternionTransform transform; // ノードの座標変換情報
+            Math::Matrix4x4 localMatrix; // ノードのローカル行列
+            std::string name; // ノード名
+            std::vector<Node> children; // 子ノードの一覧
         } rootNode;
+    };
+    struct Joint {
+        Math::QuaternionTransform transform; // Jointの座標変換情報
+        Math::Matrix4x4 localMatrix; // Jointのローカル行列
+        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での変換行列
+        std::string name; // Joint名
+        std::vector<int32_t> children; // 子JointのIndex一覧
+        int32_t index = 0; // 自分のIndex
+        std::optional<int32_t> parent; // 親JointのIndex（なければnull）
+    };
+
+    struct Skeleton {
+        int32_t root = 0; // RootJointのIndex
+        std::map<std::string, int32_t> jointMap; // Joint名からIndexを引くための辞書
+        std::vector<Joint> joints; // 所属しているJoint一覧
     };
 
 public: // メンバ関数
@@ -178,6 +214,25 @@ public: // メンバ関数
     /// 任意時刻のQuaternion値を取得する
     /// </summary>
     static Math::Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time);
+    /// <summary>
+    /// Node階層からSkeletonを作成する
+    /// </summary>
+    static Skeleton CreateSkeleton(const ModelData::Node& rootNode);
+
+    /// <summary>
+    /// NodeからJointを再帰的に作成する
+    /// </summary>
+    static int32_t CreateJoint(const ModelData::Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
+
+    /// <summary>
+    /// Skeletonの行列情報を更新する
+    /// </summary>
+    static void Update(Skeleton& skeleton);
+
+    /// <summary>
+    /// AnimationをSkeletonのJointに適用する
+    /// </summary>
+    static void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
 
     /// <summary>
     /// 既存のModelインスタンスを設定する
@@ -186,6 +241,8 @@ public: // メンバ関数
     {
         model_ = model;
         debugName_ = model ? "External Model" : "No Model";
+        RebuildSkeletonFromModel();
+        RefreshSkinningResourcesFromModel();
     }
 
     /// <summary>
@@ -249,6 +306,41 @@ public: // メンバ関数
     const ModelData& GetModelData() const { return modelData_; }
 
     /// <summary>
+    /// 作成済みのSkeletonを取得する
+    /// </summary>
+    const Skeleton& GetSkeleton() const { return skeleton_; }
+
+    /// <summary>
+    /// Skeletonが作成済みか取得する
+    /// </summary>
+    bool HasSkeleton() const { return hasSkeleton_; }
+
+    /// <summary>
+    /// Skinning描画が利用可能か取得する
+    /// </summary>
+    bool CanUseSkinning() const;
+
+    /// <summary>
+    /// Skeletonのデバッグ描画を有効にするか設定する
+    /// </summary>
+    void SetSkeletonDebugDrawEnabled(bool enabled) { skeletonDebugDrawEnabled_ = enabled; }
+
+    /// <summary>
+    /// Skeletonのデバッグ描画が有効か取得する
+    /// </summary>
+    bool GetSkeletonDebugDrawEnabled() const { return skeletonDebugDrawEnabled_; }
+
+    /// <summary>
+    /// Skinning用Palette SRVのGPUハンドルを取得する
+    /// </summary>
+    D3D12_GPU_DESCRIPTOR_HANDLE GetSkinningPaletteSrvHandle() const;
+
+    /// <summary>
+    /// Skinning用PaletteのJoint数を取得する
+    /// </summary>
+    uint32_t GetSkinningPaletteJointCount() const { return skinningPaletteJointCount_; }
+
+    /// <summary>
     /// Object3dCommonへの参照を取得する
     /// </summary>
     Object3dCommon* GetObject3dCommon() const { return object3dCommon_; }
@@ -263,6 +355,34 @@ private: // メンバ変数
 
     // OBJファイルのデータ
     ModelData modelData_;
+    Skeleton skeleton_; // モデルのNode階層から作成したSkeleton
+    bool hasSkeleton_ = false; // Skeletonを保持しているか
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skinningPaletteResources_; // Skinning用Paletteリソース
+    std::array<WellForGPU*, DirectXCommon::kFrameCount> mappedSkinningPaletteData_ {}; // Paletteのマップ済みCPUポインタ
+    std::array<uint32_t, DirectXCommon::kFrameCount> skinningPaletteSrvIndices_ { UINT32_MAX, UINT32_MAX }; // Palette SRV番号
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> skinningPaletteSrvHandlesGPU_ {}; // Palette SRVのGPUハンドル
+    uint32_t skinningPaletteJointCount_ = 0; // Paletteに格納しているJoint数
+    bool hasSkinCluster_ = false; // SkinClusterを保持しているか
+    bool skinningEnabled_ = true; // Skinning描画を使用するか
+    float animationPlaybackSpeed_ = 1.0f; // アニメーション再生速度
+    int32_t selectedJointIndex_ = 0; // ImGuiで選択中のJoint
+    bool skeletonDebugDrawEnabled_ = false; // Skeletonデバッグ描画を行うか
+    float skeletonDebugJointRadius_ = 0.012f; // Joint表示用の半径
+    float skeletonDebugBoneRadius_ = 0.003f; // Bone表示用の太さ
+    Math::Vector4 skeletonDebugBoneColor_ = { 0.2f, 0.85f, 1.0f, 1.0f }; // Boneデバッグ描画の色
+    Math::Vector4 skeletonDebugJointColor_ = { 1.0f, 0.35f, 0.8f, 1.0f }; // Jointデバッグ描画の色
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugVertexResources_; // Skeletonデバッグ描画用頂点リソース
+    std::array<VertexData*, DirectXCommon::kFrameCount> mappedSkeletonDebugVertexData_ {}; // Skeletonデバッグ頂点の転送先
+    std::array<D3D12_VERTEX_BUFFER_VIEW, DirectXCommon::kFrameCount> skeletonDebugVertexBufferViews_ {}; // Skeletonデバッグ頂点バッファビュー
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugBoneVertexCounts_ {}; // Boneデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugJointVertexCounts_ {}; // Jointデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugVertexCounts_ {}; // Skeletonデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugVertexCapacities_ {}; // Skeletonデバッグ頂点バッファ容量
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugBoneMaterialResources_; // Boneデバッグ用マテリアルリソース
+    std::array<Material*, DirectXCommon::kFrameCount> mappedSkeletonDebugBoneMaterialData_ {}; // Boneデバッグ用マテリアル転送先
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugJointMaterialResources_; // Jointデバッグ用マテリアルリソース
+    std::array<Material*, DirectXCommon::kFrameCount> mappedSkeletonDebugJointMaterialData_ {}; // Jointデバッグ用マテリアル転送先
+    uint32_t skeletonDebugTextureIndex_ = UINT32_MAX; // Skeletonデバッグ用白テクスチャ番号
 
     // マテリアル用リソース
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> materialResources_;
@@ -431,11 +551,65 @@ public: // メンバ関数
     bool GetUseAlphaDiscard() const { return useAlphaDiscard_; }
 
 private: // 内部関数
-    // 蛻晄悄蛹冶｣懷勧
+    // 初期化補助
     /// <summary>
     /// Transformの初期値を設定する
     /// </summary>
     void InitializeTransformState();
+    /// <summary>
+    /// 現在のモデル情報からSkeletonを再構築する
+    /// </summary>
+    void RebuildSkeletonFromModel();
+
+    /// <summary>
+    /// 現在のモデル情報からSkinning用GPUリソースを作り直す
+    /// </summary>
+    void RefreshSkinningResourcesFromModel();
+
+    /// <summary>
+    /// 現在のモデル情報からSkinning用GPUリソースを作成する
+    /// </summary>
+    void CreateSkinningResources(const ModelData& modelData);
+
+    /// <summary>
+    /// Skinning用GPUリソースを解放する
+    /// </summary>
+    void ReleaseSkinningResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用GPUリソースを解放する
+    /// </summary>
+    void ReleaseSkeletonDebugResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用マテリアルを作成する
+    /// </summary>
+    void CreateSkeletonDebugMaterialResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用頂点バッファ容量を確保する
+    /// </summary>
+    void EnsureSkeletonDebugVertexCapacity(uint32_t vertexCount);
+
+    /// <summary>
+    /// Skeletonの現在姿勢からデバッグ描画用メッシュを更新する
+    /// </summary>
+    void UpdateSkeletonDebugMesh(uint32_t frameIndex);
+
+    /// <summary>
+    /// Skeletonのデバッグメッシュを描画する
+    /// </summary>
+    void DrawSkeletonDebug();
+
+    /// <summary>
+    /// SkeletonからSkinning用Paletteを更新する
+    /// </summary>
+    void UpdateSkinningPaletteResources();
+
+    /// <summary>
+    /// 現在時刻のAnimationをObject3dとSkeletonへ反映する
+    /// </summary>
+    void ApplyAnimationAtCurrentTime();
 
     void CreateMaterialResource(); // マテリアル用定数バッファリソースの作成と初期化
     /// <summary>

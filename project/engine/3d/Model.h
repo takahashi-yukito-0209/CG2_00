@@ -87,6 +87,11 @@ private: // メンバ変数
     void CreateVertexBuffer();
 
     /// <summary>
+    /// Skinning用の頂点影響バッファを作成する
+    /// </summary>
+    void CreateVertexInfluenceBuffer();
+
+    /// <summary>
     /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindOwnerMaterialResource(ID3D12GraphicsCommandList* commandList, const Object3d* owner, const char* logContext) const;
@@ -109,6 +114,12 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource_;
     // DirectX12用の頂点バッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
+
+    // Skinning用の頂点影響バッファリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexInfluenceResource_;
+    // Skinning用の頂点影響バッファビュー
+    D3D12_VERTEX_BUFFER_VIEW vertexInfluenceBufferView_ {};
+
 
     // モデルファイル由来の既定テクスチャSRV番号
     uint32_t textureIndex_ = UINT32_MAX;

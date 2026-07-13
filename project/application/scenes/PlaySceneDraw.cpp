@@ -17,13 +17,19 @@ constexpr int kDrawTypeBunny = 3; // Bunnyモデルを表示する種別
 constexpr int kDrawTypeFence = 4; // Fenceモデルを表示する種別
 constexpr int kDrawTypeChecker = 5; // Checkerモデルを表示する種別
 constexpr int kDrawTypeSphere = 6; // Sphere系モデルを表示する種別
-constexpr int kDrawTypeAllDebug = 7; // デバッグ用にすべてを表示する種別
+constexpr int kDrawTypeSimpleSkin = 7; // simpleSkinモデルを表示する種別
+constexpr int kDrawTypeHumanSneakWalk = 8; // human/sneakWalkモデルを表示する種別
+constexpr int kDrawTypeHumanWalk = 9; // human/walkモデルを表示する種別
+constexpr int kDrawTypeAllDebug = 10; // デバッグ用にすべてを表示する種別
 constexpr size_t kModelObjectIndex = 0; // 通常モデルの登録番号
 constexpr size_t kBunnyObjectIndex = 1; // Bunnyモデルの登録番号
 constexpr size_t kCheckerObjectIndex = 2; // Checkerモデルの登録番号
 constexpr size_t kFenceObjectIndex = 3; // Fenceモデルの登録番号
 constexpr size_t kSphereObjectStartIndex = 4; // Sphere系モデルの先頭登録番号
 constexpr size_t kSphereObjectEndIndex = 6; // Sphere系モデルの末尾登録番号
+constexpr size_t kSimpleSkinObjectIndex = 7; // simpleSkinモデルの登録番号
+constexpr size_t kHumanSneakWalkObjectIndex = 8; // human/sneakWalkモデルの登録番号
+constexpr size_t kHumanWalkObjectIndex = 9; // human/walkモデルの登録番号
 }
 
 /// <summary>
@@ -82,6 +88,15 @@ void PlayScene::DrawSelectedObjects3d(int selectedDrawType)
         for (size_t objectIndex = kSphereObjectStartIndex; objectIndex <= kSphereObjectEndIndex; ++objectIndex) {
             DrawObject3dAtIndex(objectIndex);
         }
+        break;
+    case kDrawTypeSimpleSkin:
+        DrawObject3dAtIndex(kSimpleSkinObjectIndex);
+        break;
+    case kDrawTypeHumanSneakWalk:
+        DrawObject3dAtIndex(kHumanSneakWalkObjectIndex);
+        break;
+    case kDrawTypeHumanWalk:
+        DrawObject3dAtIndex(kHumanWalkObjectIndex);
         break;
     default:
         break;

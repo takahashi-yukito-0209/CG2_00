@@ -324,6 +324,9 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
                 "Fence",
                 "Checker",
                 "Sphere",
+                "Simple Skin",
+                "Human Sneak Walk",
+                "Human Walk",
                 "All"
             }; // 描画対象の表示名
             constexpr int drawTypeCount = static_cast<int>(sizeof(drawTypeLabels) / sizeof(drawTypeLabels[0])); // 描画対象数

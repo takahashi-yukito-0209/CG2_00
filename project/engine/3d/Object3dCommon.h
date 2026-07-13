@@ -46,6 +46,16 @@ public: // メンバ関数
     void SetCommonDrawSetting();
 
     /// <summary>
+    /// Skinning用の描画設定をコマンドリストに設定
+    /// </summary>
+    void SetSkinningDrawSetting();
+
+    /// <summary>
+    /// Skeletonデバッグ用の描画設定をコマンドリストに設定
+    /// </summary>
+    void SetSkeletonDebugDrawSetting();
+
+    /// <summary>
     /// オブジェクト反射に使う環境マップのSRVインデックスを設定
     /// </summary>
     void SetEnvironmentMapSrvIndex(uint32_t srvIndex);
@@ -92,6 +102,11 @@ public: // メンバ関数
     /// DirectXCommon へのアクセサ
     /// </summary>
     DirectXCommon* GetDxCommon() { return dxCommon_; }
+
+    /// <summary>
+    /// SRV管理クラスを取得する
+    /// </summary>
+    SrvManager* GetSrvManager() const { return srvManager_; }
 
     // カメラのワールド位置を GPU 定数バッファに書き込むための構造体
     struct CameraForGPU {
@@ -198,6 +213,8 @@ private: // メンバ変数
     DirectXCommon* dxCommon_; // DirectXCommon へのポインタ（外部で管理される）
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_; // 3Dオブジェクトの描画に使用するルートシグネチャ
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, static_cast<size_t>(BlendMode::Count)> graphicsPipelineStates_ {}; // ブレンドモード別の3Dオブジェクト用PSO
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, static_cast<size_t>(BlendMode::Count)> skinningPipelineStates_ {}; // ブレンドモード別のSkinning用PSO
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, static_cast<size_t>(BlendMode::Count)> skeletonDebugPipelineStates_ {}; // ブレンドモード別のSkeletonデバッグ用PSO
 
     // インスタンシング／パーティクル描画に使用するPSO
     Microsoft::WRL::ComPtr<ID3D12PipelineState> instancingPipelineState_;
