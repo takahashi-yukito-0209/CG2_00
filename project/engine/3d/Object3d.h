@@ -7,6 +7,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <wrl.h>
 
@@ -38,11 +39,11 @@ public: // メンバ構造体
         float padding[3];
         Math::Matrix4x4 uvTransform;
         int lightingMode;
-        int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
-        int32_t useAlphaDiscard; // 0でない場合、透明テクセルをdiscardする
+        int32_t useAlphaCutoutSampler; // 0以外の場合、アルファカットアウト用にpoint+clampサンプラーを使用
+        int32_t useAlphaDiscard; // 0以外の場合、透過ピクセルをdiscardする
         float padding2[1];
         float shininess; // 反射の鋭さ（スペキュラー強度の指数）
-        float environmentCoefficient; // 環境マップ反射の強さ
+        float environmentCoefficient; // 環境マップ反射強度
         float pad3[2];
     };
 
@@ -50,18 +51,18 @@ public: // メンバ構造体
     struct TransformationMatrix {
         Math::Matrix4x4 WVP;
         Math::Matrix4x4 World;
-        Math::Vector4 color; // インスタンス毎のカラー（w = アルファ）
+        Math::Vector4 color; // インスタンスごとの色（wはアルファ）
         Math::Matrix4x4 WorldInverseTranspose;
     };
 
     // 平行光源データ構造体
     struct DirectionalLight {
-        Math::Vector4 color; //!< ライトの色
-        Math::Vector3 direction; //!< ライトの向き
-        float intensity; //!< 輝度
+        Math::Vector4 color; // ライトの色
+        Math::Vector3 direction; // ライトの向き
+        float intensity; // 輝度
     };
 
-    // 点光源データ構造体 (CPU側レイアウト)
+    // 点光源データ構造体
     struct PointLight {
         Math::Vector4 position;
         Math::Vector4 color;
@@ -71,7 +72,7 @@ public: // メンバ構造体
         float padding;
     };
 
-    // スポットライトデータ構造体 (CPU側レイアウト)
+    // スポットライトデータ構造体
     struct SpotLight {
         Math::Vector4 position;
         Math::Vector4 color;
@@ -84,17 +85,42 @@ public: // メンバ構造体
         float padding;
     };
 
-    // マテリアルデータ構造体
+    // マテリアルデータの該当フィールドも更新
     struct MaterialData {
         std::string textureFilePath;
         uint32_t textureIndex = UINT32_MAX;
+    };
+
+    template <typename TValue>
+    struct Keyframe {
+        float time; // キーフレームの時刻
+        TValue value; // キーフレームの値
+    };
+
+    using KeyframeVector3 = Keyframe<Math::Vector3>;
+    using KeyframeQuaternion = Keyframe<Math::Quaternion>;
+
+    template <typename TValue>
+    struct AnimationCurve {
+        std::vector<Keyframe<TValue>> keyframes; // 時刻順に並んだキーフレーム
+    };
+
+    struct NodeAnimation {
+        AnimationCurve<Math::Vector3> translate; // 平行移動のアニメーション
+        AnimationCurve<Math::Quaternion> rotate; // 回転のアニメーション
+        AnimationCurve<Math::Vector3> scale; // スケールのアニメーション
+    };
+
+    struct Animation {
+        float duration = 0.0f; // アニメーション全体の長さ
+        std::unordered_map<std::string, NodeAnimation> nodeAnimations; // ノード名ごとのアニメーション
     };
 
     // モデルデータ構造体
     struct ModelData {
         std::vector<VertexData> vertices;
         MaterialData material;
-        // ルートノード情報（Assimp のノードツリーを格納）
+        // ルートノード情報（Assimpのノードツリーを格納）
         struct Node {
             Math::Matrix4x4 localMatrix;
             std::string name;
@@ -129,14 +155,29 @@ public: // メンバ関数
     void DrawInstanced(uint32_t instanceCount);
 
     /// <summary>
-    /// マテリアルテンプレートファイルを読みこむ（マテリアルの基本情報を格納した独自フォーマットのファイルを想定）
+    /// マテリアルテンプレートファイルを読み込む
     /// </summary>
     static MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
 
     /// <summary>
-    /// モデルファイルを読みこむ（頂点データとマテリアル情報を格納した独自フォーマットのファイルを想定）
+    /// モデルファイルを読み込み、頂点データとマテリアル情報を格納する
     /// </summary>
     static ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename);
+
+    /// <summary>
+    /// アニメーションファイルを読み込む
+    /// </summary>
+    static Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename);
+
+    /// <summary>
+    /// 任意時刻のVector3値を取得する
+    /// </summary>
+    static Math::Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time);
+
+    /// <summary>
+    /// 任意時刻のQuaternion値を取得する
+    /// </summary>
+    static Math::Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time);
 
     /// <summary>
     /// 既存のModelインスタンスを設定する
@@ -158,6 +199,26 @@ public: // メンバ関数
     void SetTexture(const std::string& filePath);
 
     /// <summary>
+    /// 再生するアニメーションを設定する
+    /// </summary>
+    void SetAnimation(const Animation& animation);
+
+    /// <summary>
+    /// 指定ファイルからアニメーションを読み込んで設定する
+    /// </summary>
+    bool SetAnimation(const std::string& filePath);
+
+    /// <summary>
+    /// アニメーション再生の有効状態を設定する
+    /// </summary>
+    void SetAnimationEnabled(bool enabled) { animationEnabled_ = enabled; }
+
+    /// <summary>
+    /// アニメーション再生状態を更新する
+    /// </summary>
+    void UpdateAnimation(float deltaTime);
+
+    /// <summary>
     /// モデルを使わず、直接指定した頂点データを設定する
     /// </summary>
     void SetMesh(const std::vector<VertexData>& vertices);
@@ -168,17 +229,17 @@ public: // メンバ関数
     Model* GetModel() const { return model_; }
 
     /// <summary>
-    /// 頂点バッファビューの取得
+    /// 頂点バッファビューを取得する
     /// </summary>
     D3D12_VERTEX_BUFFER_VIEW const& GetVertexBufferView() const { return vertexBufferView_; }
 
     /// <summary>
-    /// マテリアル用リソースの取得
+    /// マテリアル用リソースを取得する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const;
 
     /// <summary>
-    /// 座標変換行列用リソースの取得
+    /// 座標変換行列用リソースを取得する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const;
 
@@ -200,7 +261,7 @@ public: // メンバ関数
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
 
-    // Objファイルのデータ
+    // OBJファイルのデータ
     ModelData modelData_;
 
     // マテリアル用リソース
@@ -217,60 +278,66 @@ private: // メンバ変数
     TransformationMatrix* transformationMatrixData_ = &transformationMatrixState_;
 
     // 平行光源用リソース
-    // 注: 平行光源は現在 `Object3dCommon` が所有する共有リソースとなっている
+    // 注: 平行光源は現在 Object3dCommon が所有する共有リソースを使用する
     // 頂点バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
-    // バッファリソース内のデータを指すポインタ
+    // バッファ内のデータを指すポインタ
     VertexData* vertexData_ = nullptr;
-    // バッファリソースの使い道を補足するバッファビュー
+    // 頂点バッファの使い方を表すビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
     Math::Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
     Math::Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
+    Animation animation_; // 再生対象のアニメーション
+    float animationTime_ = 0.0f; // 現在の再生時刻
+    bool hasAnimation_ = false; // アニメーションを保持しているか
+    bool animationEnabled_ = false; // アニメーションを再生するか
+    Math::Matrix4x4 animationLocalMatrix_ {}; // アニメーションから作成したローカル行列
+
     // 設定されているモデルへのポインタ
     Model* model_ = nullptr;
     std::string debugName_ = "No Model"; // ImGuiで識別するための表示名
-    // モデル用にこの `Object3d` が所有する `ModelCommon`
+    // モデル用にこのObject3dが所有するModelCommon
     std::unique_ptr<ModelCommon> modelCommon_;
 
-    // 参照するカメラ（既定は Object3dCommon のデフォルトカメラ）
+    // 参照するカメラ（未設定時はObject3dCommonのデフォルトカメラ）
     class Camera* camera_ = nullptr;
 
-    // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
+    // このオブジェクトのマテリアルがアルファカットアウト用サンプラー（point+clamp）を必要とするか
     bool useAlphaCutoutSampler_ = false;
     bool useAlphaDiscard_ = true;
 
 public: // メンバ関数
     /// <summary>
-    ///  大きさ設定
+    /// 大きさを設定する
     /// </summary>
     void SetScale(const Math::Vector3& scale) { transform_.scale = scale; }
 
     /// <summary>
-    /// 回転設定
+    /// 回転を設定する
     /// </summary>
     void SetRotate(const Math::Vector3& rotate) { transform_.rotate = rotate; }
 
     /// <summary>
-    /// 平行移動設定
+    /// 平行移動を設定する
     /// </summary>
     void SetTranslate(const Math::Vector3& translate)
     {
-        // 入力値の妥当性チェック
+        // 入力値の妥当性を確認
         auto invalid = [](float v) {
             return !std::isfinite(v) || std::fabs(v) > 1e6f;
         };
 
-        // いずれかの成分が無限大、非数、または極端に大きい値の場合は警告を出して無視する
+        // 無限大、非数、または極端に大きい値は無視する
         if (invalid(translate.x) || invalid(translate.y) || invalid(translate.z)) {
             std::ostringstream oss;
             oss << "Warning: Rejecting invalid translate set = " << translate.x << " " << translate.y << " " << translate.z << "\n";
             Logger::Log(oss.str());
-            return; // すべての成分が有効な値でない場合は transform_.translate を更新せずに終了
+            return; // すべての成分が有効でない場合はtransform_.translateを更新せずに終了
         }
 
-        // すべての成分が有効な値の場合のみ transform_.translate に代入する
+        // すべての成分が有効な場合のみ平行移動に代入する
         transform_.translate = translate;
     }
 
@@ -280,47 +347,47 @@ public: // メンバ関数
     void DrawImGui(int index);
 
     /// <summary>
-    /// スケール取得
+    /// スケールを取得する
     /// </summary>
     const Math::Vector3 GetScale() const { return transform_.scale; }
 
     /// <summary>
-    /// 回転取得
+    /// 回転を取得する
     /// </summary>
     const Math::Vector3 GetRotate() const { return transform_.rotate; }
 
     /// <summary>
-    /// 平行移動取得
+    /// 平行移動を取得する
     /// </summary>
     const Math::Vector3 GetTranslate() const { return transform_.translate; }
 
     /// <summary>
-    /// ライティングの有効/無効を取得する
+    /// ライティングの有効・無効を取得する
     /// </summary>
     bool GetEnableLighting() const;
 
     /// <summary>
-    /// ライティングの有効/無効を設定する
+    /// ライティングの有効・無効を設定する
     /// </summary>
     void SetEnableLighting(bool enable);
 
     /// <summary>
-    /// ライティングモードの取得
+    /// ライティングモードを取得する
     /// </summary>
     int GetLightingMode() const;
 
     /// <summary>
-    /// ライティングモードの設定
+    /// ライティングモードを設定する
     /// </summary>
     void SetLightingMode(int mode);
 
     /// <summary>
-    /// 環境マップ反射の強さを設定する
+    /// 環境マップ反射強度を設定する
     /// </summary>
     void SetEnvironmentCoefficient(float coefficient);
 
     /// <summary>
-    /// 環境マップ反射の強さを取得する
+    /// 環境マップ反射強度を取得する
     /// </summary>
     float GetEnvironmentCoefficient() const;
 
@@ -330,25 +397,25 @@ public: // メンバ関数
     void SetUVTransform(const Math::Matrix4x4& uvTransform);
 
     /// <summary>
-    /// アルファカットアウト用サンプラーの使用設定
+    /// アルファカットアウト用サンプラーの使用を設定する
     /// </summary>
     void SetUseAlphaCutoutSampler(bool use)
     {
         // 内部フラグを更新
         useAlphaCutoutSampler_ = use;
-        // マテリアルデータの該当フィールドも更新
         if (materialData_) {
+            // マテリアルデータの該当フィールドも更新
             materialData_->useAlphaCutoutSampler = use ? 1 : 0;
         }
     }
 
     /// <summary>
-    /// アルファカットアウト用サンプラーの使用設定の取得
+    /// アルファカットアウト用サンプラーの使用状態を取得する
     /// </summary>
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
     /// <summary>
-    /// 透明テクセルをdiscardするか設定する
+    /// 透過ピクセルをdiscardするか設定する
     /// </summary>
     void SetUseAlphaDiscard(bool use)
     {
@@ -359,20 +426,20 @@ public: // メンバ関数
     }
 
     /// <summary>
-    /// 透明テクセルをdiscardするか取得する
+    /// 透過ピクセルをdiscardするか取得する
     /// </summary>
     bool GetUseAlphaDiscard() const { return useAlphaDiscard_; }
 
 private: // 内部関数
-    // 初期化補助
+    // 蛻晄悄蛹冶｣懷勧
     /// <summary>
-    /// Transform の初期値を設定する。
+    /// Transformの初期値を設定する
     /// </summary>
     void InitializeTransformState();
 
-    void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
+    void CreateMaterialResource(); // マテリアル用定数バッファリソースの作成と初期化
     /// <summary>
-    /// マテリアルの初期値をCPU側状態へ設定する。
+    /// マテリアルの初期値をCPU側状態へ設定する
     /// </summary>
     void InitializeMaterialState();
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
@@ -387,22 +454,22 @@ private: // 内部関数
     bool UsesLoadedModelMaterialTexture() const;
 
     /// <summary>
-    /// Object3d側で明示指定されたテクスチャを割り当てる。
+    /// Object3d側で明示指定されたテクスチャを割り当てる
     /// </summary>
     bool AssignExplicitTextureOverride();
 
     /// <summary>
-    /// Model側のマテリアルテクスチャを使う状態に設定する。
+    /// Model側のマテリアルテクスチャを使う状態に設定する
     /// </summary>
     void AssignLoadedModelMaterialTexture();
 
     /// <summary>
-    /// 既定テクスチャをfallbackとして割り当てる。
+    /// 既定テクスチャをfallbackとして割り当てる
     /// </summary>
     bool AssignFallbackTexture();
 
     /// <summary>
-    /// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる。
+    /// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる
     /// </summary>
     void AssignTexture();
 
@@ -472,12 +539,12 @@ private: // 内部関数
     void UpdateFrameResources(); // モデルデータ割り当て
 
     /// <summary>
-    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する
     /// </summary>
     void UploadMaterialFrameResource(uint32_t frameIndex);
 
     /// <summary>
-    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する
     /// </summary>
     void UploadTransformationMatrixFrameResource(uint32_t frameIndex);
 };

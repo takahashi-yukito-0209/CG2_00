@@ -20,44 +20,49 @@ public: // メンバ関数
     ~Model() = default; // デストラクタ
 
     /// <summary>
-    /// モデルファイルを読みこむ（頂点データとマテリアル情報を格納した独自フォーマットのファイルを想定）
+    /// モデルファイルを読み込み、頂点データとマテリアル情報を初期化する
     /// </summary>
     bool LoadFromFile(const std::string& directoryPath, const std::string& filename);
 
     /// <summary>
-    /// モデルの初期化
+    /// モデルを初期化する
     /// </summary>
     void Initialize(ModelCommon* modelCommon);
 
     /// <summary>
-    /// 描画
+    /// 描画する
     /// </summary>
     void Draw(Object3d* owner);
 
     /// <summary>
-    /// インスタンシング描画
+    /// インスタンシング描画する
     /// </summary>
     void DrawInstanced(Object3d* owner, uint32_t instanceCount);
+
+    /// <summary>
+    /// 読み込んだモデルデータを取得する
+    /// </summary>
+    const Object3d::ModelData& GetModelData() const { return modelData_; }
 
 private: // メンバ変数
 
     /// <summary>
-    /// Object3d側で明示指定されたテクスチャ番号を取得する。
+    /// Object3d側で明示指定されたテクスチャ番号を取得する
     /// </summary>
     uint32_t ResolveOwnerTextureOverrideIndex(const Object3d* owner) const;
 
     /// <summary>
-    /// Model自身が保持しているテクスチャ番号を取得する。
+    /// Model自身が保持しているテクスチャ番号を取得する
     /// </summary>
     uint32_t ResolveModelTextureIndex() const;
 
     /// <summary>
-    /// fallbackテクスチャのSRV番号を取得する。
+    /// fallbackテクスチャのSRV番号を取得する
     /// </summary>
     uint32_t ResolveFallbackTextureIndex() const;
 
     /// <summary>
-    /// 描画時に使用するテクスチャ番号を決定する。
+    /// 描画時に使用するテクスチャ番号を決定する
     /// </summary>
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
 
@@ -72,12 +77,12 @@ private: // メンバ変数
     D3D12_VERTEX_BUFFER_VIEW ResolveVertexBufferView(const Object3d* owner) const;
 
     /// <summary>
-    /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
+    /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する
     /// </summary>
     void InitializeModelResources();
 
     /// <summary>
-    /// モデル頂点データから頂点バッファを作成する
+    /// モデルの頂点データから頂点バッファを作成する
     /// </summary>
     void CreateVertexBuffer();
 
@@ -98,14 +103,14 @@ private: // メンバ変数
     // 読み込んだモデルの構造データ
     Object3d::ModelData modelData_;
 
-    // GPU 上に配置される頂点バッファ用リソース
+    // GPU上に配置される頂点バッファ用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
     // 頂点データ転送時に使用する中間バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource_;
-    // DirectX12 用の頂点バッファビュー
+    // DirectX12用の頂点バッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
-    // モデルファイル由来の既定テクスチャSRVインデックス
+    // モデルファイル由来の既定テクスチャSRV番号
     uint32_t textureIndex_ = UINT32_MAX;
 };
 

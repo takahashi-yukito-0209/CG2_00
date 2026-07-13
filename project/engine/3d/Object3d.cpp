@@ -19,6 +19,7 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <cstddef>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -377,6 +378,78 @@ void AppendMeshVerticesToModelData(const aiScene* scene, Object3d::ModelData& mo
         }
     }
 }
+/// <summary>
+/// AssimpのVector3キーをObject3d用Keyframeに変換して追加する
+/// </summary>
+void AppendVector3Keyframes(const aiVectorKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3d::KeyframeVector3>& destination, bool invertX)
+{
+    for (uint32_t keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
+        const aiVectorKey& sourceKey = sourceKeys[keyIndex]; // Assimp側のキーフレーム
+        Object3d::KeyframeVector3 keyframe {}; // 追加するキーフレーム
+        keyframe.time = static_cast<float>(sourceKey.mTime / ticksPerSecond);
+        keyframe.value = {
+            invertX ? -sourceKey.mValue.x : sourceKey.mValue.x,
+            sourceKey.mValue.y,
+            sourceKey.mValue.z
+        };
+        destination.push_back(keyframe);
+    }
+}
+
+/// <summary>
+/// AssimpのQuaternionキーをObject3d用Keyframeに変換して追加する
+/// </summary>
+void AppendQuaternionKeyframes(const aiQuatKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3d::KeyframeQuaternion>& destination)
+{
+    for (uint32_t keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
+        const aiQuatKey& sourceKey = sourceKeys[keyIndex]; // Assimp側のキーフレーム
+        Object3d::KeyframeQuaternion keyframe {}; // 追加するキーフレーム
+        keyframe.time = static_cast<float>(sourceKey.mTime / ticksPerSecond);
+        keyframe.value = {
+            -sourceKey.mValue.x,
+            sourceKey.mValue.y,
+            sourceKey.mValue.z,
+            sourceKey.mValue.w
+        };
+        destination.push_back(keyframe);
+    }
+}
+
+/// <summary>
+/// AssimpのNodeAnimationをObject3d用NodeAnimationに変換する
+/// </summary>
+Object3d::NodeAnimation ReadNodeAnimation(const aiNodeAnim* channel, double ticksPerSecond)
+{
+    Object3d::NodeAnimation nodeAnimation {}; // 変換後のノードアニメーション
+    AppendVector3Keyframes(channel->mPositionKeys, channel->mNumPositionKeys, ticksPerSecond, nodeAnimation.translate.keyframes, true);
+    AppendQuaternionKeyframes(channel->mRotationKeys, channel->mNumRotationKeys, ticksPerSecond, nodeAnimation.rotate.keyframes);
+    AppendVector3Keyframes(channel->mScalingKeys, channel->mNumScalingKeys, ticksPerSecond, nodeAnimation.scale.keyframes, false);
+    return nodeAnimation;
+}
+
+/// <summary>
+/// AssimpのAnimationをObject3d用Animationに変換する
+/// </summary>
+Object3d::Animation BuildAnimationFromAssimpScene(const aiScene* scene)
+{
+    Object3d::Animation animation {}; // 読み込んだアニメーション
+    if (!scene || scene->mNumAnimations == 0) {
+        return animation;
+    }
+
+    aiAnimation* animationAssimp = scene->mAnimations[0]; // 最初のアニメーション
+    const double ticksPerSecond = animationAssimp->mTicksPerSecond != 0.0 ? animationAssimp->mTicksPerSecond : 1.0; // 秒変換用の周波数
+    animation.duration = static_cast<float>(animationAssimp->mDuration / ticksPerSecond);
+
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        const aiNodeAnim* channel = animationAssimp->mChannels[channelIndex]; // Assimp側のノードアニメーション
+        const std::string nodeName = channel->mNodeName.C_Str(); // 対象ノード名
+        animation.nodeAnimations[nodeName] = ReadNodeAnimation(channel, ticksPerSecond);
+    }
+
+    return animation;
+}
+
 }
 
 /// <summary>
@@ -1082,7 +1155,8 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
 {
     // WVP行列計算
     // ワールド行列
-    Matrix4x4 world = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    Matrix4x4 baseWorld = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate); // Object3d自身のワールド行列
+    Matrix4x4 world = animationEnabled_ ? MathUtil::Multiply(animationLocalMatrix_, baseWorld) : baseWorld; // アニメーションを合成したワールド行列
     // 逆転置行列（正規行列用にスケール影響除去）
     Matrix4x4 worldInv = MathUtil::Inverse(world);
     Matrix4x4 worldInvTranspose = MathUtil::Transpose(worldInv);
@@ -1206,6 +1280,138 @@ Object3d::ModelData Object3d::LoadModelFile(const std::string& directoryPath, co
 
     LogResolvedModelTexturePath(modelData);
     return FinalizeLoadedModelData(cacheKey, modelData);
+}
+
+/// <summary>
+/// アニメーションファイルを読み込む
+/// </summary>
+Object3d::Animation Object3d::LoadAnimationFile(const std::string& directoryPath, const std::string& filename)
+{
+    Animation animation {}; // 読み込んだアニメーション
+    const std::string fullPath = BuildModelFilePath(directoryPath, filename); // アニメーションファイルのフルパス
+
+    Assimp::Importer importer; // Assimpの読み込み管理
+    const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimpが読み込んだシーン
+    if (!scene || scene->mNumAnimations == 0) {
+        Logger::Warn(std::string("Warning: animation not found ") + fullPath + "\n");
+        return animation;
+    }
+
+    return BuildAnimationFromAssimpScene(scene);
+}
+
+/// <summary>
+/// 任意時刻のVector3値を取得する
+/// </summary>
+Math::Vector3 Object3d::CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time)
+{
+    assert(!keyframes.empty());
+    if (keyframes.size() == 1 || time <= keyframes.front().time) {
+        return keyframes.front().value;
+    }
+
+    for (size_t index = 0; index < keyframes.size() - 1; ++index) {
+        const KeyframeVector3& current = keyframes[index]; // 補間元のキーフレーム
+        const KeyframeVector3& next = keyframes[index + 1]; // 補間先のキーフレーム
+        if (current.time <= time && time <= next.time) {
+            const float t = (time - current.time) / (next.time - current.time); // キーフレーム間の補間率
+            return MathUtil::Lerp(current.value, next.value, t);
+        }
+    }
+
+    return keyframes.back().value;
+}
+
+/// <summary>
+/// 任意時刻のQuaternion値を取得する
+/// </summary>
+Math::Quaternion Object3d::CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time)
+{
+    assert(!keyframes.empty());
+    if (keyframes.size() == 1 || time <= keyframes.front().time) {
+        return keyframes.front().value;
+    }
+
+    for (size_t index = 0; index < keyframes.size() - 1; ++index) {
+        const KeyframeQuaternion& current = keyframes[index]; // 補間元のキーフレーム
+        const KeyframeQuaternion& next = keyframes[index + 1]; // 補間先のキーフレーム
+        if (current.time <= time && time <= next.time) {
+            const float t = (time - current.time) / (next.time - current.time); // キーフレーム間の補間率
+            return MathUtil::Slerp(current.value, next.value, t);
+        }
+    }
+
+    return keyframes.back().value;
+}
+
+/// <summary>
+/// 再生するアニメーションを設定する
+/// </summary>
+void Object3d::SetAnimation(const Animation& animation)
+{
+    animation_ = animation;
+    animationTime_ = 0.0f;
+    hasAnimation_ = animation.duration > 0.0f && !animation.nodeAnimations.empty();
+    animationEnabled_ = hasAnimation_;
+    animationLocalMatrix_ = MathUtil::MakeIdentity4x4();
+}
+
+/// <summary>
+/// 指定ファイルからアニメーションを読み込んで設定する
+/// </summary>
+bool Object3d::SetAnimation(const std::string& filePath)
+{
+    std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model); // 解決済みのモデルパス
+    Animation animation {}; // 読み込むアニメーション
+    if (!resolved.empty()) {
+        std::filesystem::path path(resolved); // ファイル分解用のパス
+        animation = LoadAnimationFile(path.parent_path().string(), path.filename().string());
+    } else {
+        animation = LoadAnimationFile("resources", filePath);
+    }
+
+    SetAnimation(animation);
+    return hasAnimation_;
+}
+
+/// <summary>
+/// アニメーション再生状態を更新する
+/// </summary>
+void Object3d::UpdateAnimation(float deltaTime)
+{
+    if (!hasAnimation_ || !animationEnabled_ || animation_.duration <= 0.0f) {
+        return;
+    }
+
+    animationTime_ += deltaTime;
+    animationTime_ = std::fmod(animationTime_, animation_.duration);
+
+    const std::string& rootNodeName = modelData_.rootNode.name; // ルートノード名
+    auto nodeAnimationIterator = animation_.nodeAnimations.find(rootNodeName); // ルートノードのアニメーション
+    if (nodeAnimationIterator == animation_.nodeAnimations.end()) {
+        if (model_ && model_->GetModelData().rootNode.name != rootNodeName) {
+            nodeAnimationIterator = animation_.nodeAnimations.find(model_->GetModelData().rootNode.name);
+        }
+        if (nodeAnimationIterator == animation_.nodeAnimations.end()) {
+            nodeAnimationIterator = animation_.nodeAnimations.begin();
+        }
+    }
+
+    const NodeAnimation& rootNodeAnimation = nodeAnimationIterator->second; // 適用するノードアニメーション
+    if (rootNodeAnimation.translate.keyframes.empty() && rootNodeAnimation.rotate.keyframes.empty() && rootNodeAnimation.scale.keyframes.empty()) {
+        return;
+    }
+
+    const Math::Vector3 translate = rootNodeAnimation.translate.keyframes.empty()
+        ? Math::Vector3 { 0.0f, 0.0f, 0.0f }
+        : CalculateValue(rootNodeAnimation.translate.keyframes, animationTime_); // 指定時刻の平行移動
+    const Math::Quaternion rotate = rootNodeAnimation.rotate.keyframes.empty()
+        ? Math::Quaternion { 0.0f, 0.0f, 0.0f, 1.0f }
+        : CalculateValue(rootNodeAnimation.rotate.keyframes, animationTime_); // 指定時刻の回転
+    const Math::Vector3 scale = rootNodeAnimation.scale.keyframes.empty()
+        ? Math::Vector3 { 1.0f, 1.0f, 1.0f }
+        : CalculateValue(rootNodeAnimation.scale.keyframes, animationTime_); // 指定時刻のスケール
+    animationLocalMatrix_ = MathUtil::MakeAffineMatrix(scale, rotate, translate);
 }
 
 /// <summary>

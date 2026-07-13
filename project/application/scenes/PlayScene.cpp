@@ -59,7 +59,9 @@ constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
+constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
+
 constexpr std::array<const char*, 7> kSceneModelFileNames = {
     "plane/plane.gltf",
     "bunny/bunny.obj",
@@ -67,8 +69,9 @@ constexpr std::array<const char*, 7> kSceneModelFileNames = {
     "fence/fence.obj",
     "sphere/sphere.gltf",
     "terrain/terrain.obj",
-    "cube/Cube.obj",
+    kAnimatedCubeModelFileName,
 }; // シーンで生成するモデルファイル名
+
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
@@ -79,6 +82,7 @@ constexpr std::array<const char*, 2> kDemoSpriteTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
 }; // 確認用スプライトに使用するテクスチャ名
+
 constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
 constexpr std::array<const char*, 5> kSceneTextureNames = {
     kUvCheckerTextureName,
@@ -87,6 +91,7 @@ constexpr std::array<const char*, 5> kSceneTextureNames = {
     kGradationLineTextureName,
     kEnvironmentMapTextureName,
 }; // シーン初期化時に読み込むテクスチャ名
+
 constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
 constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
 constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
@@ -464,6 +469,9 @@ void PlayScene::InitializeSceneObjects()
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelFileName);
+        if (std::string(modelFileName) == kAnimatedCubeModelFileName) {
+            object3d->SetAnimation(modelFileName);
+        }
         ApplySceneObjectInitialSettings(*object3d, modelFileName);
         objects3d_.push_back(std::move(object3d));
     }
@@ -673,7 +681,7 @@ void PlayScene::Update(float dt)
     UpdatePostEffectCenters();
 
     UpdateParticleSystems(dt);
-    UpdateSceneObjects();
+    UpdateSceneObjects(dt);
     UpdateDemoSprites();
 
     UpdateAfterimageSprites();
@@ -700,7 +708,7 @@ void PlayScene::UpdateParticleSystems(float deltaTime)
 /// <summary>
 /// シーン内の3Dオブジェクトを更新する。
 /// </summary>
-void PlayScene::UpdateSceneObjects()
+void PlayScene::UpdateSceneObjects(float deltaTime)
 {
     if (!ctx_.camera) {
         return;
@@ -710,6 +718,7 @@ void PlayScene::UpdateSceneObjects()
     const Matrix4x4 projectionMatrix = ctx_.camera->GetProjectionMatrix(); // 3Dオブジェクト更新に使用する射影行列
     for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
         if (object3d) {
+            object3d->UpdateAnimation(deltaTime);
             object3d->Update(viewMatrix, projectionMatrix);
         }
     }
