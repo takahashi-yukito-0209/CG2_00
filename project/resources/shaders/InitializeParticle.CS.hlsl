@@ -1,3 +1,5 @@
+static const uint kMaxParticles = 1024;
+
 struct Particle
 {
     float3 scale;
@@ -11,25 +13,16 @@ struct Particle
     float4 color;
 };
 
-cbuffer ParticleTransformInfo : register(b0)
-{
-    uint gParticleCount;
-    float3 gPadding;
-    float4x4 gView;
-    float4x4 gProjection;
-};
-
-StructuredBuffer<Particle> gParticleSources : register(t0);
 RWStructuredBuffer<Particle> gParticles : register(u0);
 
 [numthreads(1024, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint particleIndex = DTid.x;
-    if (particleIndex >= gParticleCount)
+    if (particleIndex >= kMaxParticles)
     {
         return;
     }
 
-    gParticles[particleIndex] = gParticleSources[particleIndex];
+    gParticles[particleIndex] = (Particle)0;
 }

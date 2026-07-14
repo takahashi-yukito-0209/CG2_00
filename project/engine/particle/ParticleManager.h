@@ -41,11 +41,13 @@ struct ParticleGroup {
 // GPUでインスタンシング用行列へ変換するための粒子データ
 struct PM_GpuParticleSource {
     Math::Vector3 scale;
-    float padding0 = 0.0f;
+    float lifeTime = 0.0f;
     Math::Vector3 rotate;
-    float padding1 = 0.0f;
+    float currentTime = 0.0f;
     Math::Vector3 translate;
-    float padding2 = 0.0f;
+    float padding0 = 0.0f;
+    Math::Vector3 velocity;
+    float padding1 = 0.0f;
     Math::Vector4 color;
 };
 
@@ -213,6 +215,11 @@ private:
     /// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
     /// </summary>
     bool DispatchGpuParticleTransform(uint32_t count);
+
+    /// <summary>
+    /// GPU上のParticle Resourceを初期化する。
+    /// </summary>
+    bool DispatchInitializeGpuParticles();
     /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
@@ -259,6 +266,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleSourceResources_;
     std::array<PM_GpuParticleSource*, DirectXCommon::kFrameCount> gpuParticleSourceData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleInfoResources_;
@@ -269,6 +277,7 @@ private:
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputUavIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> gpuParticleOutputSrvHandlesGPU_ {};
     std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuParticleOutputStates_ {};
+    std::array<bool, DirectXCommon::kFrameCount> gpuParticleInitialized_ {};
     bool gpuParticleReady_ = false;
 };
 

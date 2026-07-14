@@ -625,10 +625,25 @@ void ParticleManager::InitializeGpuParticleResources()
         return;
     }
 
+    Microsoft::WRL::ComPtr<IDxcBlob> initializeShaderBlob = dxCommon_->CompileShader(L"resources/shaders/InitializeParticle.CS.hlsl", L"cs_6_0");
+    if (!initializeShaderBlob) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to compile InitializeParticle.CS.hlsl.\n");
+        return;
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC initializePipelineDesc {};
+    initializePipelineDesc.pRootSignature = computeRootSignature_.Get();
+    initializePipelineDesc.CS = { initializeShaderBlob->GetBufferPointer(), initializeShaderBlob->GetBufferSize() };
+    hr = device->CreateComputePipelineState(&initializePipelineDesc, IID_PPV_ARGS(&initializeParticlePipelineState_));
+    if (FAILED(hr)) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create initialize particle pipeline state.\n");
+        return;
+    }
+
     const uint32_t particleLimit = GetParticleLimit();
     const size_t sourceBufferSize = sizeof(PM_GpuParticleSource) * particleLimit;
     const size_t infoBufferSize = (sizeof(PM_GpuParticleTransformInfo) + 0xff) & ~static_cast<size_t>(0xff);
-    const size_t outputBufferSize = sizeof(Object3d::TransformationMatrix) * particleLimit;
+    const size_t outputBufferSize = sizeof(PM_GpuParticleSource) * particleLimit;
 
     D3D12_SHADER_RESOURCE_VIEW_DESC sourceSrvDesc {};
     sourceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -643,14 +658,14 @@ void ParticleManager::InitializeGpuParticleResources()
     outputSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
     outputSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     outputSrvDesc.Buffer.NumElements = particleLimit;
-    outputSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
+    outputSrvDesc.Buffer.StructureByteStride = sizeof(PM_GpuParticleSource);
     outputSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC outputUavDesc {};
     outputUavDesc.Format = DXGI_FORMAT_UNKNOWN;
     outputUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     outputUavDesc.Buffer.NumElements = particleLimit;
-    outputUavDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
+    outputUavDesc.Buffer.StructureByteStride = sizeof(PM_GpuParticleSource);
     outputUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
@@ -723,6 +738,7 @@ void ParticleManager::FinalizeGpuParticleResources()
         gpuParticleOutputUavIndices_[frameIndex] = UINT32_MAX;
         gpuParticleOutputSrvHandlesGPU_[frameIndex] = {};
         gpuParticleOutputStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
+        gpuParticleInitialized_[frameIndex] = false;
         gpuParticleSourceData_[frameIndex] = nullptr;
         gpuParticleInfoData_[frameIndex] = nullptr;
         gpuParticleSourceResources_[frameIndex].Reset();
@@ -731,6 +747,7 @@ void ParticleManager::FinalizeGpuParticleResources()
     }
 
     computePipelineState_.Reset();
+    initializeParticlePipelineState_.Reset();
     computeRootSignature_.Reset();
     gpuParticleReady_ = false;
 }
@@ -755,9 +772,14 @@ uint32_t ParticleManager::UploadGpuParticleSource(const ParticleGroup& group, ui
         const PM_CpuParticle& particle = group.particles[particleIndex];
         PM_GpuParticleSource& gpuParticle = gpuParticleSourceData_[frameIndex][particleIndex];
         gpuParticle.scale = particle.transform.scale;
+        gpuParticle.lifeTime = particle.lifeTime;
         gpuParticle.rotate = particle.transform.rotate;
+        gpuParticle.currentTime = particle.currentTime;
         gpuParticle.translate = particle.transform.translate;
         gpuParticle.translate.z += static_cast<float>(particleIndex) * 1e-3f;
+        gpuParticle.padding0 = 0.0f;
+        gpuParticle.velocity = particle.velocity;
+        gpuParticle.padding1 = 0.0f;
         gpuParticle.color = particle.color;
     }
 
@@ -772,6 +794,52 @@ uint32_t ParticleManager::UploadGpuParticleSource(const ParticleGroup& group, ui
 /// <summary>
 /// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
 /// </summary>
+/// <summary>
+/// GPU上のParticle Resourceを初期化する。
+/// </summary>
+bool ParticleManager::DispatchInitializeGpuParticles()
+{
+    if (!gpuParticleReady_ || !dxCommon_ || !srvManager_) {
+        return false;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    if (gpuParticleInitialized_[frameIndex]) {
+        return true;
+    }
+
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    if (!commandList || !computeRootSignature_ || !initializeParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
+        return false;
+    }
+
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex];
+    if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuParticleOutputResources_[frameIndex].Get(),
+            outputState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &toUavBarrier);
+        outputState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
+    commandList->SetComputeRootSignature(computeRootSignature_.Get());
+    commandList->SetPipelineState(initializeParticlePipelineState_.Get());
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
+    commandList->Dispatch(1, 1, 1);
+
+    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
+    commandList->ResourceBarrier(1, &uavBarrier);
+
+    D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        gpuParticleOutputResources_[frameIndex].Get(),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    commandList->ResourceBarrier(1, &toSrvBarrier);
+    outputState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    gpuParticleInitialized_[frameIndex] = true;
+    return true;
+}
 bool ParticleManager::DispatchGpuParticleTransform(uint32_t count)
 {
     if (!gpuParticleReady_ || count == 0 || !dxCommon_ || !srvManager_) {
@@ -900,9 +968,8 @@ void ParticleManager::Draw()
     Vector3 cameraRight = { view.m[0][0], view.m[1][0], view.m[2][0] };
     Vector3 cameraUp = { view.m[0][1], view.m[1][1], view.m[2][1] };
 
-    auto instancingData = object3dCommon_->GetInstancingData();
     const uint32_t instancingSlots = object3dCommon_->GetInstancingSlotCount();
-    if (!instancingData || instancingSlots == 0) {
+    if (instancingSlots == 0) {
         return;
     }
 
@@ -930,37 +997,15 @@ void ParticleManager::Draw()
 
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
 
-        bool useGpuParticleTransform = false;
         const uint32_t gpuParticleCount = UploadGpuParticleSource(group, count, view, projection);
-        if (gpuParticleCount == count && DispatchGpuParticleTransform(count)) {
-            const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
-            object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
-            useGpuParticleTransform = true;
+        if (gpuParticleCount != count || !DispatchInitializeGpuParticles() || !DispatchGpuParticleTransform(count)) {
+            object3dCommon_->ClearInstancingSrvOverride();
+            continue;
         }
 
+        const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+        object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
         object3dCommon_->SetInstancingDrawSetting();
-
-        if (!useGpuParticleTransform) {
-            uint32_t instanceIndex = 0;
-            for (const PM_CpuParticle& particle : group.particles) {
-                if (instanceIndex >= count) {
-                    break;
-                }
-                Transform transform = particle.transform;
-                transform.translate.z += static_cast<float>(instanceIndex) * 1e-3f;
-
-                Matrix4x4 world = MathUtil::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-                Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, projection));
-                Matrix4x4 worldInverse = MathUtil::Inverse(world);
-                Matrix4x4 worldInverseTranspose = MathUtil::Transpose(worldInverse);
-
-                instancingData[instanceIndex].World = world;
-                instancingData[instanceIndex].WVP = wvp;
-                instancingData[instanceIndex].WorldInverseTranspose = worldInverseTranspose;
-                instancingData[instanceIndex].color = particle.color;
-                ++instanceIndex;
-            }
-        }
 
         if (auto* model = renderObject->GetModel()) {
             model->DrawInstanced(renderObject, count);
