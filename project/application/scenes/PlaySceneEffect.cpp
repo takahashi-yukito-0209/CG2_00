@@ -10,6 +10,7 @@
 
 using namespace MyEngine;
 using namespace Math;
+
 namespace {
 constexpr Vector2 kScreenCenterUv = { 0.5f, 0.5f }; // 変換できない場合に使用する画面中央
 constexpr float kMinimumClipW = 0.0001f; // カメラ背面とゼロ除算を判定する最小値
