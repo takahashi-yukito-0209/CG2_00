@@ -207,6 +207,12 @@
     <ClCompile Include="application\scenes\PlayScene.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneDraw.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\PlayScenePostProcess.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneEffect.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
@@ -375,6 +381,9 @@
     </ClInclude>
     <ClInclude Include="application\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\effects\EffectProgress.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
     <ClInclude Include="application\effects\TimeStopEffect.h">
       <Filter>ヘッダー ファイル\application\effects</Filter>

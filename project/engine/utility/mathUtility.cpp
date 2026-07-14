@@ -148,6 +148,100 @@ Math::Matrix4x4 MathUtil::MakeAffineMatrix(const Math::Vector3& scale, const Mat
     return result;
 }
 
+/// <summary>
+/// 2つのVector3を線形補間する
+/// </summary>
+Math::Vector3 MathUtil::Lerp(const Math::Vector3& start, const Math::Vector3& end, float t)
+{
+    const float clampedT = std::clamp(t, 0.0f, 1.0f); // 補間率
+    return {
+        start.x + (end.x - start.x) * clampedT,
+        start.y + (end.y - start.y) * clampedT,
+        start.z + (end.z - start.z) * clampedT
+    };
+}
+
+/// <summary>
+/// 2つのQuaternionを球面線形補間する
+/// </summary>
+Math::Quaternion MathUtil::Slerp(const Math::Quaternion& start, const Math::Quaternion& end, float t)
+{
+    const float clampedT = std::clamp(t, 0.0f, 1.0f); // 補間率
+    Math::Quaternion correctedEnd = end; // 最短経路に補正した終点
+    float dot = start.x * end.x + start.y * end.y + start.z * end.z + start.w * end.w; // Quaternion同士の内積
+
+    if (dot < 0.0f) {
+        correctedEnd = { -end.x, -end.y, -end.z, -end.w };
+        dot = -dot;
+    }
+
+    constexpr float kLinearThreshold = 0.9995f; // 線形補間へ切り替える近似しきい値
+    if (dot > kLinearThreshold) {
+        Math::Quaternion result = {
+            start.x + (correctedEnd.x - start.x) * clampedT,
+            start.y + (correctedEnd.y - start.y) * clampedT,
+            start.z + (correctedEnd.z - start.z) * clampedT,
+            start.w + (correctedEnd.w - start.w) * clampedT
+        }; // 線形補間したQuaternion
+        const float length = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w); // 正規化用の長さ
+        if (length > 0.000001f) {
+            result.x /= length;
+            result.y /= length;
+            result.z /= length;
+            result.w /= length;
+        }
+        return result;
+    }
+
+    dot = std::clamp(dot, -1.0f, 1.0f);
+    const float theta = std::acos(dot); // Quaternion間の角度
+    const float sinTheta = std::sin(theta); // 球面補間の分母
+    const float startScale = std::sin((1.0f - clampedT) * theta) / sinTheta; // 始点側の重み
+    const float endScale = std::sin(clampedT * theta) / sinTheta; // 終点側の重み
+
+    return {
+        start.x * startScale + correctedEnd.x * endScale,
+        start.y * startScale + correctedEnd.y * endScale,
+        start.z * startScale + correctedEnd.z * endScale,
+        start.w * startScale + correctedEnd.w * endScale
+    };
+}
+
+/// <summary>
+/// Quaternionから回転行列を作成する
+/// </summary>
+Math::Matrix4x4 MathUtil::MakeRotateMatrix(const Math::Quaternion& rotate)
+{
+    const float xx = rotate.x * rotate.x; // x成分の二乗
+    const float yy = rotate.y * rotate.y; // y成分の二乗
+    const float zz = rotate.z * rotate.z; // z成分の二乗
+    const float xy = rotate.x * rotate.y; // xy成分
+    const float xz = rotate.x * rotate.z; // xz成分
+    const float yz = rotate.y * rotate.z; // yz成分
+    const float wx = rotate.w * rotate.x; // wx成分
+    const float wy = rotate.w * rotate.y; // wy成分
+    const float wz = rotate.w * rotate.z; // wz成分
+
+    Math::Matrix4x4 result = MakeIdentity4x4(); // 作成する回転行列
+    result.m[0][0] = 1.0f - 2.0f * (yy + zz);
+    result.m[0][1] = 2.0f * (xy + wz);
+    result.m[0][2] = 2.0f * (xz - wy);
+    result.m[1][0] = 2.0f * (xy - wz);
+    result.m[1][1] = 1.0f - 2.0f * (xx + zz);
+    result.m[1][2] = 2.0f * (yz + wx);
+    result.m[2][0] = 2.0f * (xz + wy);
+    result.m[2][1] = 2.0f * (yz - wx);
+    result.m[2][2] = 1.0f - 2.0f * (xx + yy);
+    return result;
+}
+
+/// <summary>
+/// scale、Quaternion回転、translateからアフィン行列を作成する
+/// </summary>
+Math::Matrix4x4 MathUtil::MakeAffineMatrix(const Math::Vector3& scale, const Math::Quaternion& rotate, const Math::Vector3& translate)
+{
+    return Multiply(Multiply(MakeScaleMatrix(scale), MakeRotateMatrix(rotate)), MakeTranslateMatrix(translate));
+}
 Math::Matrix4x4 MathUtil::MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip)
 {
     Math::Matrix4x4 result = {};

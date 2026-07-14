@@ -10,12 +10,16 @@ struct Vector2 {
 struct Vector3 {
     float x, y, z;
 
-    // 宣言
+    // 減算
     Vector3 operator-(const Vector3 rhs) const;
     Vector3 operator-() const;
 };
 
 struct Vector4 {
+    float x, y, z, w;
+};
+
+struct Quaternion {
     float x, y, z, w;
 };
 
@@ -27,13 +31,22 @@ struct Matrix3x3 {
 struct Matrix4x4 {
     float m[4][4];
 
-    // 宣言
+    // 乗算
     Matrix4x4 operator*(const Matrix4x4& rhs) const;
 };
 
-// 座標変換構造体
-struct Transform {
+// Euler角の座標変換情報構造体
+struct EulerTransform {
     Vector3 scale, rotate, translate;
 };
+
+// Quaternion回転の座標変換情報構造体
+struct QuaternionTransform {
+    Vector3 scale;
+    Quaternion rotate;
+    Vector3 translate;
+};
+
+using Transform = EulerTransform;
 
 } // namespace Math

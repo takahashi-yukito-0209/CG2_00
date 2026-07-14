@@ -1,4 +1,5 @@
 #include "TimeStopEffect.h"
+#include "EffectProgress.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -12,10 +13,11 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
-constexpr float kMinimumEffectDuration = 0.0001f; // 演出時間のゼロ除算を防ぐ最小値
-constexpr float kEffectTimeStart = 0.0f; // フェーズ開始時の経過時間
-constexpr float kEffectProgressMin = 0.0f; // 演出進行率の最小値
-constexpr float kEffectProgressMax = 1.0f; // 演出進行率の最大値
+using EffectProgress::CalculateEffectProgress;
+using EffectProgress::ClampParticleCount;
+using EffectProgress::kEffectProgressMax;
+using EffectProgress::kEffectProgressMin;
+using EffectProgress::kEffectTimeStart;
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
 constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 開始時に発生させる円柱エフェクト名
 constexpr const char* kRingParticleGroupName = "Ring"; // リングエフェクト名
@@ -41,33 +43,6 @@ constexpr int kImGuiFragmentCountMin = 0; // 破片数の最小値
 constexpr int kImGuiFragmentCountMax = 64; // 破片数の最大値
 constexpr float kImGuiPositionStep = 0.05f; // 発生位置の調整幅
 
-/// <summary>
-/// 演出時間をゼロ除算しない値へ補正する
-/// </summary>
-float GetSafeEffectDuration(float duration)
-{
-    const float safeDuration = (std::max)(duration, kMinimumEffectDuration); // 進行率計算に使用する演出時間
-    return safeDuration;
-}
-
-/// <summary>
-/// 経過時間から0から1の演出進行率を計算する
-/// </summary>
-float CalculateEffectProgress(float elapsedTime, float duration)
-{
-    const float safeDuration = GetSafeEffectDuration(duration); // 進行率計算に使用する演出時間
-    const float progress = elapsedTime / safeDuration; // clamp前の演出進行率
-    return (std::clamp)(progress, kEffectProgressMin, kEffectProgressMax);
-}
-
-/// <summary>
-/// 設定値を0以上のパーティクル発生数へ補正する
-/// </summary>
-uint32_t ClampParticleCount(int count)
-{
-    const int safeCount = (std::max)(count, 0); // 負数を発生数として扱わないための補正値
-    return static_cast<uint32_t>(safeCount);
-}
 }
 
 /// <summary>

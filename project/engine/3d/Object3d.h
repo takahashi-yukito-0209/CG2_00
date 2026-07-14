@@ -4,9 +4,12 @@
 #include <array>
 #include <cmath>
 #include <d3d12.h>
+#include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <wrl.h>
 
@@ -24,6 +27,8 @@ class Model;
 /// </summary>
 class Object3d {
 public: // メンバ構造体
+    static constexpr uint32_t kNumMaxInfluence = 4; // 1頂点に割り当てる最大Joint影響数
+
     // 頂点データ構造体
     struct VertexData {
         Math::Vector4 position;
@@ -31,6 +36,20 @@ public: // メンバ構造体
         Math::Vector3 normal;
     };
 
+
+    struct VertexInfluence {
+        std::array<float, kNumMaxInfluence> weights {}; // 各Jointの重み
+        std::array<int32_t, kNumMaxInfluence> jointIndices {}; // 影響するJointのIndex
+    };
+
+    struct JointWeightData {
+        Math::Matrix4x4 inverseBindPoseMatrix; // BindPoseを打ち消すための逆行列
+    };
+
+    struct WellForGPU {
+        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での最終変換行列
+        Math::Matrix4x4 skeletonSpaceInverseTransposeMatrix; // 法線変換用の逆転置行列
+    };
     // マテリアル構造体
     struct Material {
         Math::Vector4 color;
@@ -38,11 +57,11 @@ public: // メンバ構造体
         float padding[3];
         Math::Matrix4x4 uvTransform;
         int lightingMode;
-        int32_t useAlphaCutoutSampler; // 0でない場合、アルファカットアウト用に point+clamp サンプラーを使用
-        int32_t useAlphaDiscard; // 0でない場合、透明テクセルをdiscardする
+        int32_t useAlphaCutoutSampler; // 0以外の場合、アルファカットアウト用にpoint+clampサンプラーを使用
+        int32_t useAlphaDiscard; // 0以外の場合、透過ピクセルをdiscardする
         float padding2[1];
         float shininess; // 反射の鋭さ（スペキュラー強度の指数）
-        float environmentCoefficient; // 環境マップ反射の強さ
+        float environmentCoefficient; // 環境マップ反射強度
         float pad3[2];
     };
 
@@ -50,18 +69,18 @@ public: // メンバ構造体
     struct TransformationMatrix {
         Math::Matrix4x4 WVP;
         Math::Matrix4x4 World;
-        Math::Vector4 color; // インスタンス毎のカラー（w = アルファ）
+        Math::Vector4 color; // インスタンスごとの色（wはアルファ）
         Math::Matrix4x4 WorldInverseTranspose;
     };
 
     // 平行光源データ構造体
     struct DirectionalLight {
-        Math::Vector4 color; //!< ライトの色
-        Math::Vector3 direction; //!< ライトの向き
-        float intensity; //!< 輝度
+        Math::Vector4 color; // ライトの色
+        Math::Vector3 direction; // ライトの向き
+        float intensity; // 輝度
     };
 
-    // 点光源データ構造体 (CPU側レイアウト)
+    // 点光源データ構造体
     struct PointLight {
         Math::Vector4 position;
         Math::Vector4 color;
@@ -71,7 +90,7 @@ public: // メンバ構造体
         float padding;
     };
 
-    // スポットライトデータ構造体 (CPU側レイアウト)
+    // スポットライトデータ構造体
     struct SpotLight {
         Math::Vector4 position;
         Math::Vector4 color;
@@ -90,16 +109,60 @@ public: // メンバ構造体
         uint32_t textureIndex = UINT32_MAX;
     };
 
+    template <typename TValue>
+    struct Keyframe {
+        float time; // キーフレームの時刻
+        TValue value; // キーフレームの値
+    };
+
+    using KeyframeVector3 = Keyframe<Math::Vector3>;
+    using KeyframeQuaternion = Keyframe<Math::Quaternion>;
+
+    template <typename TValue>
+    struct AnimationCurve {
+        std::vector<Keyframe<TValue>> keyframes; // 時刻順に並んだキーフレーム
+    };
+
+    struct NodeAnimation {
+        AnimationCurve<Math::Vector3> translate; // 平行移動のアニメーション
+        AnimationCurve<Math::Quaternion> rotate; // 回転のアニメーション
+        AnimationCurve<Math::Vector3> scale; // スケールのアニメーション
+    };
+
+    struct Animation {
+        float duration = 0.0f; // アニメーション全体の長さ
+        std::unordered_map<std::string, NodeAnimation> nodeAnimations; // ノード名ごとのアニメーション
+    };
+
     // モデルデータ構造体
     struct ModelData {
         std::vector<VertexData> vertices;
+        std::vector<uint32_t> indices; // Index描画で参照する頂点番号
+        std::vector<VertexInfluence> vertexInfluences; // 展開済み頂点ごとのSkinning影響情報
+        std::unordered_map<std::string, JointWeightData> skinClusterData; // Joint名ごとの逆BindPose情報
         MaterialData material;
-        // ルートノード情報（Assimp のノードツリーを格納）
+        // ルートノード情報（Assimpのノードツリーを格納）
         struct Node {
-            Math::Matrix4x4 localMatrix;
-            std::string name;
-            std::vector<Node> children;
+            Math::QuaternionTransform transform; // ノードの座標変換情報
+            Math::Matrix4x4 localMatrix; // ノードのローカル行列
+            std::string name; // ノード名
+            std::vector<Node> children; // 子ノードの一覧
         } rootNode;
+    };
+    struct Joint {
+        Math::QuaternionTransform transform; // Jointの座標変換情報
+        Math::Matrix4x4 localMatrix; // Jointのローカル行列
+        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での変換行列
+        std::string name; // Joint名
+        std::vector<int32_t> children; // 子JointのIndex一覧
+        int32_t index = 0; // 自分のIndex
+        std::optional<int32_t> parent; // 親JointのIndex（なければnull）
+    };
+
+    struct Skeleton {
+        int32_t root = 0; // RootJointのIndex
+        std::map<std::string, int32_t> jointMap; // Joint名からIndexを引くための辞書
+        std::vector<Joint> joints; // 所属しているJoint一覧
     };
 
 public: // メンバ関数
@@ -129,14 +192,48 @@ public: // メンバ関数
     void DrawInstanced(uint32_t instanceCount);
 
     /// <summary>
-    /// マテリアルテンプレートファイルを読みこむ（マテリアルの基本情報を格納した独自フォーマットのファイルを想定）
+    /// マテリアルテンプレートファイルを読み込む
     /// </summary>
     static MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
 
     /// <summary>
-    /// モデルファイルを読みこむ（頂点データとマテリアル情報を格納した独自フォーマットのファイルを想定）
+    /// モデルファイルを読み込み、頂点データとマテリアル情報を格納する
     /// </summary>
     static ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename);
+
+    /// <summary>
+    /// アニメーションファイルを読み込む
+    /// </summary>
+    static Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename);
+
+    /// <summary>
+    /// 任意時刻のVector3値を取得する
+    /// </summary>
+    static Math::Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time);
+
+    /// <summary>
+    /// 任意時刻のQuaternion値を取得する
+    /// </summary>
+    static Math::Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time);
+    /// <summary>
+    /// Node階層からSkeletonを作成する
+    /// </summary>
+    static Skeleton CreateSkeleton(const ModelData::Node& rootNode);
+
+    /// <summary>
+    /// NodeからJointを再帰的に作成する
+    /// </summary>
+    static int32_t CreateJoint(const ModelData::Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
+
+    /// <summary>
+    /// Skeletonの行列情報を更新する
+    /// </summary>
+    static void Update(Skeleton& skeleton);
+
+    /// <summary>
+    /// AnimationをSkeletonのJointに適用する
+    /// </summary>
+    static void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
 
     /// <summary>
     /// 既存のModelインスタンスを設定する
@@ -145,6 +242,8 @@ public: // メンバ関数
     {
         model_ = model;
         debugName_ = model ? "External Model" : "No Model";
+        RebuildSkeletonFromModel();
+        RefreshSkinningResourcesFromModel();
     }
 
     /// <summary>
@@ -158,6 +257,26 @@ public: // メンバ関数
     void SetTexture(const std::string& filePath);
 
     /// <summary>
+    /// 再生するアニメーションを設定する
+    /// </summary>
+    void SetAnimation(const Animation& animation);
+
+    /// <summary>
+    /// 指定ファイルからアニメーションを読み込んで設定する
+    /// </summary>
+    bool SetAnimation(const std::string& filePath);
+
+    /// <summary>
+    /// アニメーション再生の有効状態を設定する
+    /// </summary>
+    void SetAnimationEnabled(bool enabled) { animationEnabled_ = enabled; }
+
+    /// <summary>
+    /// アニメーション再生状態を更新する
+    /// </summary>
+    void UpdateAnimation(float deltaTime);
+
+    /// <summary>
     /// モデルを使わず、直接指定した頂点データを設定する
     /// </summary>
     void SetMesh(const std::vector<VertexData>& vertices);
@@ -168,17 +287,17 @@ public: // メンバ関数
     Model* GetModel() const { return model_; }
 
     /// <summary>
-    /// 頂点バッファビューの取得
+    /// 頂点バッファビューを取得する
     /// </summary>
     D3D12_VERTEX_BUFFER_VIEW const& GetVertexBufferView() const { return vertexBufferView_; }
 
     /// <summary>
-    /// マテリアル用リソースの取得
+    /// マテリアル用リソースを取得する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetMaterialResource() const;
 
     /// <summary>
-    /// 座標変換行列用リソースの取得
+    /// 座標変換行列用リソースを取得する
     /// </summary>
     Microsoft::WRL::ComPtr<ID3D12Resource> const& GetTransformationMatrixResource() const;
 
@@ -186,6 +305,41 @@ public: // メンバ関数
     /// このオブジェクトが保持するモデル補助データを取得する
     /// </summary>
     const ModelData& GetModelData() const { return modelData_; }
+
+    /// <summary>
+    /// 作成済みのSkeletonを取得する
+    /// </summary>
+    const Skeleton& GetSkeleton() const { return skeleton_; }
+
+    /// <summary>
+    /// Skeletonが作成済みか取得する
+    /// </summary>
+    bool HasSkeleton() const { return hasSkeleton_; }
+
+    /// <summary>
+    /// Skinning描画が利用可能か取得する
+    /// </summary>
+    bool CanUseSkinning() const;
+
+    /// <summary>
+    /// Skeletonのデバッグ描画を有効にするか設定する
+    /// </summary>
+    void SetSkeletonDebugDrawEnabled(bool enabled) { skeletonDebugDrawEnabled_ = enabled; }
+
+    /// <summary>
+    /// Skeletonのデバッグ描画が有効か取得する
+    /// </summary>
+    bool GetSkeletonDebugDrawEnabled() const { return skeletonDebugDrawEnabled_; }
+
+    /// <summary>
+    /// Skinning用Palette SRVのGPUハンドルを取得する
+    /// </summary>
+    D3D12_GPU_DESCRIPTOR_HANDLE GetSkinningPaletteSrvHandle() const;
+
+    /// <summary>
+    /// Skinning用PaletteのJoint数を取得する
+    /// </summary>
+    uint32_t GetSkinningPaletteJointCount() const { return skinningPaletteJointCount_; }
 
     /// <summary>
     /// Object3dCommonへの参照を取得する
@@ -200,8 +354,36 @@ public: // メンバ関数
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
 
-    // Objファイルのデータ
+    // OBJファイルのデータ
     ModelData modelData_;
+    Skeleton skeleton_; // モデルのNode階層から作成したSkeleton
+    bool hasSkeleton_ = false; // Skeletonを保持しているか
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skinningPaletteResources_; // Skinning用Paletteリソース
+    std::array<WellForGPU*, DirectXCommon::kFrameCount> mappedSkinningPaletteData_ {}; // Paletteのマップ済みCPUポインタ
+    std::array<uint32_t, DirectXCommon::kFrameCount> skinningPaletteSrvIndices_ { UINT32_MAX, UINT32_MAX }; // Palette SRV番号
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> skinningPaletteSrvHandlesGPU_ {}; // Palette SRVのGPUハンドル
+    uint32_t skinningPaletteJointCount_ = 0; // Paletteに格納しているJoint数
+    bool hasSkinCluster_ = false; // SkinClusterを保持しているか
+    bool skinningEnabled_ = true; // Skinning描画を使用するか
+    float animationPlaybackSpeed_ = 1.0f; // アニメーション再生速度
+    int32_t selectedJointIndex_ = 0; // ImGuiで選択中のJoint
+    bool skeletonDebugDrawEnabled_ = false; // Skeletonデバッグ描画を行うか
+    float skeletonDebugJointRadius_ = 0.012f; // Joint表示用の半径
+    float skeletonDebugBoneRadius_ = 0.003f; // Bone表示用の太さ
+    Math::Vector4 skeletonDebugBoneColor_ = { 0.2f, 0.85f, 1.0f, 1.0f }; // Boneデバッグ描画の色
+    Math::Vector4 skeletonDebugJointColor_ = { 1.0f, 0.35f, 0.8f, 1.0f }; // Jointデバッグ描画の色
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugVertexResources_; // Skeletonデバッグ描画用頂点リソース
+    std::array<VertexData*, DirectXCommon::kFrameCount> mappedSkeletonDebugVertexData_ {}; // Skeletonデバッグ頂点の転送先
+    std::array<D3D12_VERTEX_BUFFER_VIEW, DirectXCommon::kFrameCount> skeletonDebugVertexBufferViews_ {}; // Skeletonデバッグ頂点バッファビュー
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugBoneVertexCounts_ {}; // Boneデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugJointVertexCounts_ {}; // Jointデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugVertexCounts_ {}; // Skeletonデバッグ描画の頂点数
+    std::array<uint32_t, DirectXCommon::kFrameCount> skeletonDebugVertexCapacities_ {}; // Skeletonデバッグ頂点バッファ容量
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugBoneMaterialResources_; // Boneデバッグ用マテリアルリソース
+    std::array<Material*, DirectXCommon::kFrameCount> mappedSkeletonDebugBoneMaterialData_ {}; // Boneデバッグ用マテリアル転送先
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> skeletonDebugJointMaterialResources_; // Jointデバッグ用マテリアルリソース
+    std::array<Material*, DirectXCommon::kFrameCount> mappedSkeletonDebugJointMaterialData_ {}; // Jointデバッグ用マテリアル転送先
+    uint32_t skeletonDebugTextureIndex_ = UINT32_MAX; // Skeletonデバッグ用白テクスチャ番号
 
     // マテリアル用リソース
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> materialResources_;
@@ -217,60 +399,66 @@ private: // メンバ変数
     TransformationMatrix* transformationMatrixData_ = &transformationMatrixState_;
 
     // 平行光源用リソース
-    // 注: 平行光源は現在 `Object3dCommon` が所有する共有リソースとなっている
+    // 注: 平行光源は現在 Object3dCommon が所有する共有リソースを使用する
     // 頂点バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
-    // バッファリソース内のデータを指すポインタ
+    // バッファ内のデータを指すポインタ
     VertexData* vertexData_ = nullptr;
-    // バッファリソースの使い道を補足するバッファビュー
+    // 頂点バッファの使い方を表すビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
     Math::Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
     Math::Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
+    Animation animation_; // 再生対象のアニメーション
+    float animationTime_ = 0.0f; // 現在の再生時刻
+    bool hasAnimation_ = false; // アニメーションを保持しているか
+    bool animationEnabled_ = false; // アニメーションを再生するか
+    Math::Matrix4x4 animationLocalMatrix_ {}; // アニメーションから作成したローカル行列
+
     // 設定されているモデルへのポインタ
     Model* model_ = nullptr;
     std::string debugName_ = "No Model"; // ImGuiで識別するための表示名
-    // モデル用にこの `Object3d` が所有する `ModelCommon`
+    // モデル用にこのObject3dが所有するModelCommon
     std::unique_ptr<ModelCommon> modelCommon_;
 
-    // 参照するカメラ（既定は Object3dCommon のデフォルトカメラ）
+    // 参照するカメラ（未設定時はObject3dCommonのデフォルトカメラ）
     class Camera* camera_ = nullptr;
 
-    // このオブジェクトのマテリアルがアルファカットアウト用サンプラー(point+clamp)を必要とするか
+    // このオブジェクトのマテリアルがアルファカットアウト用サンプラー（point+clamp）を必要とするか
     bool useAlphaCutoutSampler_ = false;
     bool useAlphaDiscard_ = true;
 
 public: // メンバ関数
     /// <summary>
-    ///  大きさ設定
+    /// 大きさを設定する
     /// </summary>
     void SetScale(const Math::Vector3& scale) { transform_.scale = scale; }
 
     /// <summary>
-    /// 回転設定
+    /// 回転を設定する
     /// </summary>
     void SetRotate(const Math::Vector3& rotate) { transform_.rotate = rotate; }
 
     /// <summary>
-    /// 平行移動設定
+    /// 平行移動を設定する
     /// </summary>
     void SetTranslate(const Math::Vector3& translate)
     {
-        // 入力値の妥当性チェック
+        // 入力値の妥当性を確認
         auto invalid = [](float v) {
             return !std::isfinite(v) || std::fabs(v) > 1e6f;
         };
 
-        // いずれかの成分が無限大、非数、または極端に大きい値の場合は警告を出して無視する
+        // 無限大、非数、または極端に大きい値は無視する
         if (invalid(translate.x) || invalid(translate.y) || invalid(translate.z)) {
             std::ostringstream oss;
             oss << "Warning: Rejecting invalid translate set = " << translate.x << " " << translate.y << " " << translate.z << "\n";
             Logger::Log(oss.str());
-            return; // すべての成分が有効な値でない場合は transform_.translate を更新せずに終了
+            return; // すべての成分が有効でない場合はtransform_.translateを更新せずに終了
         }
 
-        // すべての成分が有効な値の場合のみ transform_.translate に代入する
+        // すべての成分が有効な場合のみ平行移動に代入する
         transform_.translate = translate;
     }
 
@@ -280,47 +468,47 @@ public: // メンバ関数
     void DrawImGui(int index);
 
     /// <summary>
-    /// スケール取得
+    /// スケールを取得する
     /// </summary>
     const Math::Vector3 GetScale() const { return transform_.scale; }
 
     /// <summary>
-    /// 回転取得
+    /// 回転を取得する
     /// </summary>
     const Math::Vector3 GetRotate() const { return transform_.rotate; }
 
     /// <summary>
-    /// 平行移動取得
+    /// 平行移動を取得する
     /// </summary>
     const Math::Vector3 GetTranslate() const { return transform_.translate; }
 
     /// <summary>
-    /// ライティングの有効/無効を取得する
+    /// ライティングの有効・無効を取得する
     /// </summary>
     bool GetEnableLighting() const;
 
     /// <summary>
-    /// ライティングの有効/無効を設定する
+    /// ライティングの有効・無効を設定する
     /// </summary>
     void SetEnableLighting(bool enable);
 
     /// <summary>
-    /// ライティングモードの取得
+    /// ライティングモードを取得する
     /// </summary>
     int GetLightingMode() const;
 
     /// <summary>
-    /// ライティングモードの設定
+    /// ライティングモードを設定する
     /// </summary>
     void SetLightingMode(int mode);
 
     /// <summary>
-    /// 環境マップ反射の強さを設定する
+    /// 環境マップ反射強度を設定する
     /// </summary>
     void SetEnvironmentCoefficient(float coefficient);
 
     /// <summary>
-    /// 環境マップ反射の強さを取得する
+    /// 環境マップ反射強度を取得する
     /// </summary>
     float GetEnvironmentCoefficient() const;
 
@@ -330,25 +518,25 @@ public: // メンバ関数
     void SetUVTransform(const Math::Matrix4x4& uvTransform);
 
     /// <summary>
-    /// アルファカットアウト用サンプラーの使用設定
+    /// アルファカットアウト用サンプラーの使用を設定する
     /// </summary>
     void SetUseAlphaCutoutSampler(bool use)
     {
         // 内部フラグを更新
         useAlphaCutoutSampler_ = use;
-        // マテリアルデータの該当フィールドも更新
         if (materialData_) {
+            // マテリアルデータの該当フィールドも更新
             materialData_->useAlphaCutoutSampler = use ? 1 : 0;
         }
     }
 
     /// <summary>
-    /// アルファカットアウト用サンプラーの使用設定の取得
+    /// アルファカットアウト用サンプラーの使用状態を取得する
     /// </summary>
     bool GetUseAlphaCutoutSampler() const { return useAlphaCutoutSampler_; }
 
     /// <summary>
-    /// 透明テクセルをdiscardするか設定する
+    /// 透過ピクセルをdiscardするか設定する
     /// </summary>
     void SetUseAlphaDiscard(bool use)
     {
@@ -359,20 +547,74 @@ public: // メンバ関数
     }
 
     /// <summary>
-    /// 透明テクセルをdiscardするか取得する
+    /// 透過ピクセルをdiscardするか取得する
     /// </summary>
     bool GetUseAlphaDiscard() const { return useAlphaDiscard_; }
 
 private: // 内部関数
     // 初期化補助
     /// <summary>
-    /// Transform の初期値を設定する。
+    /// Transformの初期値を設定する
     /// </summary>
     void InitializeTransformState();
-
-    void CreateMaterialResource(); // マテリアル数バッファリソースの作成と初期化
     /// <summary>
-    /// マテリアルの初期値をCPU側状態へ設定する。
+    /// 現在のモデル情報からSkeletonを再構築する
+    /// </summary>
+    void RebuildSkeletonFromModel();
+
+    /// <summary>
+    /// 現在のモデル情報からSkinning用GPUリソースを作り直す
+    /// </summary>
+    void RefreshSkinningResourcesFromModel();
+
+    /// <summary>
+    /// 現在のモデル情報からSkinning用GPUリソースを作成する
+    /// </summary>
+    void CreateSkinningResources(const ModelData& modelData);
+
+    /// <summary>
+    /// Skinning用GPUリソースを解放する
+    /// </summary>
+    void ReleaseSkinningResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用GPUリソースを解放する
+    /// </summary>
+    void ReleaseSkeletonDebugResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用マテリアルを作成する
+    /// </summary>
+    void CreateSkeletonDebugMaterialResources();
+
+    /// <summary>
+    /// Skeletonデバッグ描画用頂点バッファ容量を確保する
+    /// </summary>
+    void EnsureSkeletonDebugVertexCapacity(uint32_t vertexCount);
+
+    /// <summary>
+    /// Skeletonの現在姿勢からデバッグ描画用メッシュを更新する
+    /// </summary>
+    void UpdateSkeletonDebugMesh(uint32_t frameIndex);
+
+    /// <summary>
+    /// Skeletonのデバッグメッシュを描画する
+    /// </summary>
+    void DrawSkeletonDebug();
+
+    /// <summary>
+    /// SkeletonからSkinning用Paletteを更新する
+    /// </summary>
+    void UpdateSkinningPaletteResources();
+
+    /// <summary>
+    /// 現在時刻のAnimationをObject3dとSkeletonへ反映する
+    /// </summary>
+    void ApplyAnimationAtCurrentTime();
+
+    void CreateMaterialResource(); // マテリアル用定数バッファリソースの作成と初期化
+    /// <summary>
+    /// マテリアルの初期値をCPU側状態へ設定する
     /// </summary>
     void InitializeMaterialState();
     void CreateTransformationMatrixResource(); // 定数バッファリソースの作成と初期化
@@ -387,22 +629,22 @@ private: // 内部関数
     bool UsesLoadedModelMaterialTexture() const;
 
     /// <summary>
-    /// Object3d側で明示指定されたテクスチャを割り当てる。
+    /// Object3d側で明示指定されたテクスチャを割り当てる
     /// </summary>
     bool AssignExplicitTextureOverride();
 
     /// <summary>
-    /// Model側のマテリアルテクスチャを使う状態に設定する。
+    /// Model側のマテリアルテクスチャを使う状態に設定する
     /// </summary>
     void AssignLoadedModelMaterialTexture();
 
     /// <summary>
-    /// 既定テクスチャをfallbackとして割り当てる。
+    /// 既定テクスチャをfallbackとして割り当てる
     /// </summary>
     bool AssignFallbackTexture();
 
     /// <summary>
-    /// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる。
+    /// Object3d側の明示テクスチャ、Model側マテリアル、fallbackの順でテクスチャを割り当てる
     /// </summary>
     void AssignTexture();
 
@@ -472,12 +714,12 @@ private: // 内部関数
     void UpdateFrameResources(); // モデルデータ割り当て
 
     /// <summary>
-    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する。
+    /// 現在のフレームで使用するマテリアル状態をGPUバッファへ転送する
     /// </summary>
     void UploadMaterialFrameResource(uint32_t frameIndex);
 
     /// <summary>
-    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する。
+    /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する
     /// </summary>
     void UploadTransformationMatrixFrameResource(uint32_t frameIndex);
 };

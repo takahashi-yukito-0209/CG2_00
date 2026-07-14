@@ -67,6 +67,26 @@ Math::Matrix4x4 MakeRotateZMatrix(float radian);
 Math::Matrix4x4 MakeAffineMatrix(const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& translate);
 
 /// <summary>
+/// 2つのVector3を線形補間する
+/// </summary>
+Math::Vector3 Lerp(const Math::Vector3& start, const Math::Vector3& end, float t);
+
+/// <summary>
+/// 2つのQuaternionを球面線形補間する
+/// </summary>
+Math::Quaternion Slerp(const Math::Quaternion& start, const Math::Quaternion& end, float t);
+
+/// <summary>
+/// Quaternionから回転行列を作成する
+/// </summary>
+Math::Matrix4x4 MakeRotateMatrix(const Math::Quaternion& rotate);
+
+/// <summary>
+/// scale、Quaternion回転、translateからアフィン行列を作成する
+/// </summary>
+Math::Matrix4x4 MakeAffineMatrix(const Math::Vector3& scale, const Math::Quaternion& rotate, const Math::Vector3& translate);
+
+/// <summary>
 /// 透視投影行列を作成する関数
 /// </summary>
 Math::Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
@@ -100,4 +120,8 @@ public:
     Math::Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip) { return MathUtil::MakePerspectiveFovMatrix(fovY, aspectRatio, nearClip, farClip); }
     Math::Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip) { return MathUtil::MakeOrthographicMatrix(left, top, right, bottom, nearClip, farClip); }
     Math::Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth) { return MathUtil::MakeViewportMatrix(left, top, width, height, minDepth, maxDepth); }
+    Math::Vector3 Lerp(const Math::Vector3& start, const Math::Vector3& end, float t) { return MathUtil::Lerp(start, end, t); }
+    Math::Quaternion Slerp(const Math::Quaternion& start, const Math::Quaternion& end, float t) { return MathUtil::Slerp(start, end, t); }
+    Math::Matrix4x4 MakeRotateMatrix(const Math::Quaternion& rotate) { return MathUtil::MakeRotateMatrix(rotate); }
+    Math::Matrix4x4 MakeAffineMatrix(const Math::Vector3& scale, const Math::Quaternion& rotate, const Math::Vector3& translate) { return MathUtil::MakeAffineMatrix(scale, rotate, translate); }
 };

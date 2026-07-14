@@ -280,7 +280,7 @@ private:
     /// <summary>
     /// シーン内の3Dオブジェクトを更新する。
     /// </summary>
-    void UpdateSceneObjects();
+    void UpdateSceneObjects(float deltaTime);
 
     /// <summary>
     /// 確認用スプライトを更新する。

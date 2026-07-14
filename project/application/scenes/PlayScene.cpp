@@ -51,41 +51,35 @@ constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる�
 constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
 constexpr float kStoppedDeltaTime = 0.0f; // ヒットストップや時間停止中に使用する停止時間
 constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終了したとみなす残り時間
-constexpr int kGaussianFirstPassIndex = 0; // Gaussian Filterの横方向pass番号
-constexpr int kGaussianSecondPassIndex = 1; // Gaussian Filterの縦方向pass番号
 constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
 constexpr uint32_t kDemoSpriteTextureSwitchInterval = 2; // 同じ確認用テクスチャを連続で使う枚数
-constexpr int kDrawTypeAll = -1; // すべての描画対象を表示する種別
-constexpr int kDrawTypeModel = 0; // モデル単体を表示する種別
-constexpr int kDrawTypeParticle = 1; // パーティクルを表示する種別
-constexpr int kDrawTypeSprite = 2; // スプライトを表示する種別
-constexpr int kDrawTypeBunny = 3; // Bunnyモデルを表示する種別
-constexpr int kDrawTypeFence = 4; // Fenceモデルを表示する種別
-constexpr int kDrawTypeChecker = 5; // Checkerモデルを表示する種別
-constexpr int kDrawTypeSphere = 6; // Sphere系モデルを表示する種別
-constexpr int kDrawTypeAllDebug = 7; // デバッグ用にすべてを表示する種別
-constexpr size_t kModelObjectIndex = 0; // 通常モデルの登録番号
-constexpr size_t kBunnyObjectIndex = 1; // Bunnyモデルの登録番号
-constexpr size_t kCheckerObjectIndex = 2; // Checkerモデルの登録番号
-constexpr size_t kFenceObjectIndex = 3; // Fenceモデルの登録番号
-constexpr size_t kSphereObjectStartIndex = 4; // Sphere系モデルの先頭登録番号
-constexpr size_t kSphereObjectEndIndex = 6; // Sphere系モデルの末尾登録番号
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
 constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
+constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
+constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
+constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
+constexpr const char* kSimpleSkinModelFileName = "simpleSkin/simpleSkin.gltf"; // Skinning確認用simpleSkinモデル
+constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // Skinning確認用sneakWalkモデル
+constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
-constexpr std::array<const char*, 7> kSceneModelFileNames = {
+
+constexpr std::array<const char*, 10> kSceneModelFileNames = {
     "plane/plane.gltf",
     "bunny/bunny.obj",
     "teapot/teapot.obj",
     "fence/fence.obj",
     "sphere/sphere.gltf",
     "terrain/terrain.obj",
-    "cube/Cube.obj",
+    kAnimatedCubeModelFileName,
+    kSimpleSkinModelFileName,
+    kHumanSneakWalkModelFileName,
+    kHumanWalkModelFileName,
 }; // シーンで生成するモデルファイル名
+
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
@@ -96,6 +90,7 @@ constexpr std::array<const char*, 2> kDemoSpriteTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
 }; // 確認用スプライトに使用するテクスチャ名
+
 constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
 constexpr std::array<const char*, 5> kSceneTextureNames = {
     kUvCheckerTextureName,
@@ -104,6 +99,7 @@ constexpr std::array<const char*, 5> kSceneTextureNames = {
     kGradationLineTextureName,
     kEnvironmentMapTextureName,
 }; // シーン初期化時に読み込むテクスチャ名
+
 constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
 constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
 constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
@@ -247,6 +243,26 @@ bool IsCubeModelFile(const std::string& modelFileName)
 {
     return ContainsModelKeyword(modelFileName, kCubeModelKeywordLower)
         || ContainsModelKeyword(modelFileName, kCubeModelKeywordUpper);
+}
+
+/// <summary>
+/// 初期化時にアニメーションも設定するモデルか判定する
+/// </summary>
+bool IsAnimationModelFile(const std::string& modelFileName)
+{
+    return modelFileName == kAnimatedCubeModelFileName
+        || modelFileName == kHumanSneakWalkModelFileName
+        || modelFileName == kHumanWalkModelFileName;
+}
+
+/// <summary>
+/// Skinning確認用に表示サイズを調整するモデルか判定する
+/// </summary>
+bool IsSkinningPreviewModelFile(const std::string& modelFileName)
+{
+    return modelFileName == kSimpleSkinModelFileName
+        || modelFileName == kHumanSneakWalkModelFileName
+        || modelFileName == kHumanWalkModelFileName;
 }
 }
 
@@ -470,8 +486,13 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetEnvironmentCoefficient(kCubeEnvironmentCoefficient);
         object3d.SetTranslate(kCubeInitialTranslate);
     }
-}
 
+    const bool isSkinningPreviewModel = IsSkinningPreviewModelFile(modelFileName); // Skinning確認用モデルか
+    if (isSkinningPreviewModel) {
+        object3d.SetScale(kSkinningPreviewScale);
+        object3d.SetTranslate(kSkinningPreviewTranslate);
+    }
+}
 /// <summary>
 /// シーンで使用する3Dオブジェクトを初期化する。
 /// </summary>
@@ -481,6 +502,9 @@ void PlayScene::InitializeSceneObjects()
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelFileName);
+        if (IsAnimationModelFile(modelFileName)) {
+            object3d->SetAnimation(modelFileName);
+        }
         ApplySceneObjectInitialSettings(*object3d, modelFileName);
         objects3d_.push_back(std::move(object3d));
     }
@@ -690,7 +714,7 @@ void PlayScene::Update(float dt)
     UpdatePostEffectCenters();
 
     UpdateParticleSystems(dt);
-    UpdateSceneObjects();
+    UpdateSceneObjects(dt);
     UpdateDemoSprites();
 
     UpdateAfterimageSprites();
@@ -717,7 +741,7 @@ void PlayScene::UpdateParticleSystems(float deltaTime)
 /// <summary>
 /// シーン内の3Dオブジェクトを更新する。
 /// </summary>
-void PlayScene::UpdateSceneObjects()
+void PlayScene::UpdateSceneObjects(float deltaTime)
 {
     if (!ctx_.camera) {
         return;
@@ -727,6 +751,7 @@ void PlayScene::UpdateSceneObjects()
     const Matrix4x4 projectionMatrix = ctx_.camera->GetProjectionMatrix(); // 3Dオブジェクト更新に使用する射影行列
     for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
         if (object3d) {
+            object3d->UpdateAnimation(deltaTime);
             object3d->Update(viewMatrix, projectionMatrix);
         }
     }
@@ -754,318 +779,6 @@ void PlayScene::Draw()
 
     DrawSceneContent();
     DrawSprites();
-}
-
-/// <summary>
-/// ポストプロセス描画が利用できるか判定する
-/// </summary>
-bool PlayScene::CanUsePostProcess() const
-{
-    DirectXCommon* directXCommon = ctx_.directXCommon; // 描画に使用するDirectX基盤
-    return directXCommon
-        && sceneRenderTarget_.IsValid()
-        && sceneRenderTarget_.HasColorSrv()
-        && postProcess_.IsReady();
-}
-
-/// <summary>
-/// シーン描画結果をポストプロセス入力用RTへ描画する
-/// </summary>
-void PlayScene::DrawSceneToPostProcessTarget()
-{
-    sceneRenderTarget_.Begin(true);
-    DrawSceneContent();
-    sceneRenderTarget_.End();
-}
-
-/// <summary>
-/// 時間演出用のポストプロセス連鎖を適用する
-/// </summary>
-void PlayScene::ApplyTemporalPostProcessChain(uint32_t& postProcessSourceSrvIndex, PostEffectType& finalEffectType)
-{
-    const bool canUseTemporalChain = temporalRiftEffect_.IsPostProcessChainPhase()
-        && postProcessIntermediateTarget_.IsValid()
-        && postProcessIntermediateTarget_.HasColorSrv(); // 2pass目に渡すRTが必要
-    if (!canUseTemporalChain) {
-        return;
-    }
-
-    postProcessIntermediateTarget_.Begin(true);
-    postProcess_.DrawTexture(sceneRenderTarget_, PostEffectType::Distortion);
-    postProcessIntermediateTarget_.End();
-
-    postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
-    finalEffectType = PostEffectType::RadialBlur;
-}
-
-/// <summary>
-/// Gaussian Filterの2pass描画が利用できるか判定する
-/// </summary>
-bool PlayScene::CanUseGaussianFilter(PostEffectType finalEffectType) const
-{
-    return finalEffectType == PostEffectType::GaussianFilter
-        && postProcessIntermediateTarget_.IsValid()
-        && postProcessIntermediateTarget_.HasColorSrv();
-}
-
-/// <summary>
-/// Scene View表示用の最終RTが利用できるか判定する
-/// </summary>
-bool PlayScene::CanUseFinalRenderTarget() const
-{
-    return sceneViewOnly_
-        && finalRenderTarget_.IsValid()
-        && finalRenderTarget_.HasColorSrv();
-}
-
-/// <summary>
-/// Gaussian Filterの1pass目を中間RTへ描画する
-/// </summary>
-void PlayScene::ApplyGaussianFirstPass(uint32_t& postProcessSourceSrvIndex)
-{
-    postProcessIntermediateTarget_.Begin(true);
-    postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, kGaussianFirstPassIndex);
-    postProcessIntermediateTarget_.End();
-    postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
-}
-
-/// <summary>
-/// 最終ポストプロセス描画を実行する
-/// </summary>
-void PlayScene::DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, PostEffectType finalEffectType, bool useGaussianFilter)
-{
-    if (useGaussianFilter) {
-        postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, kGaussianSecondPassIndex);
-    } else if (finalEffectType == PostEffectType::DepthOutline && sceneRenderTarget_.HasDepthSrv() && ctx_.camera) {
-        postProcess_.DrawDepthOutline(postProcessSourceSrvIndex, sceneRenderTarget_, ctx_.camera->GetProjectionMatrix());
-    } else if (finalEffectType == PostEffectType::Dissolve && dissolveMaskSrvIndex_ != UINT32_MAX) {
-        postProcess_.DrawDissolveTexture(postProcessSourceSrvIndex, dissolveMaskSrvIndex_);
-    } else {
-        postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
-    }
-}
-/// <summary>
-/// 最終描画に必要なポストプロセス状態を作成する
-/// </summary>
-PlayScene::PostProcessDrawContext PlayScene::BuildPostProcessDrawContext()
-{
-    PostProcessDrawContext drawContext {}; // ポストプロセス描画で共有する状態
-    drawContext.sourceSrvIndex = sceneRenderTarget_.GetColorSrvIndex();
-    drawContext.finalEffectType = postProcess_.GetEffectType();
-
-    ApplyPostProcessPrePasses(drawContext);
-    drawContext.useFinalRenderTarget = CanUseFinalRenderTarget();
-    return drawContext;
-}
-
-/// <summary>
-/// 最終描画前に必要なポストプロセスの前段パスを適用する。
-/// </summary>
-void PlayScene::ApplyPostProcessPrePasses(PostProcessDrawContext& drawContext)
-{
-    ApplyTemporalPostProcessChain(drawContext.sourceSrvIndex, drawContext.finalEffectType);
-
-    drawContext.useGaussianFilter = CanUseGaussianFilter(drawContext.finalEffectType);
-    if (drawContext.useGaussianFilter) {
-        ApplyGaussianFirstPass(drawContext.sourceSrvIndex);
-    }
-}
-
-/// <summary>
-/// Scene View用RTが必要な場合だけ描画先を切り替える
-/// </summary>
-void PlayScene::BeginSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget)
-{
-    if (!useFinalRenderTarget) {
-        return;
-    }
-
-    finalRenderTarget_.Begin(true);
-}
-
-/// <summary>
-/// Scene View用RTへ描画していた場合だけ描画先を戻す
-/// </summary>
-void PlayScene::EndSceneViewRenderTargetIfNeeded(bool useFinalRenderTarget)
-{
-    if (!useFinalRenderTarget) {
-        return;
-    }
-
-    finalRenderTarget_.End();
-}
-
-/// <summary>
-/// 現在の描画先へポストプロセス結果とスプライトを描画する
-/// </summary>
-void PlayScene::DrawPostProcessOutputToCurrentTarget(const PostProcessDrawContext& drawContext)
-{
-    DrawFinalPostProcessPass(
-        drawContext.sourceSrvIndex,
-        drawContext.finalEffectType,
-        drawContext.useGaussianFilter);
-    DrawSprites();
-}
-
-/// <summary>
-/// 作成済みのポストプロセス状態に従って最終結果を描画する
-/// </summary>
-void PlayScene::DrawPostProcessResult(const PostProcessDrawContext& drawContext)
-{
-    BeginSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
-    DrawPostProcessOutputToCurrentTarget(drawContext);
-    EndSceneViewRenderTargetIfNeeded(drawContext.useFinalRenderTarget);
-}
-
-/// <summary>
-/// ポストプロセス付きでシーンを描画する
-/// </summary>
-bool PlayScene::DrawPostProcessedScene()
-{
-    if (!CanUsePostProcess()) {
-        return false;
-    }
-
-    DrawSceneToPostProcessTarget();
-
-    const PostProcessDrawContext drawContext = BuildPostProcessDrawContext(); // 最終描画に使用する状態
-    DrawPostProcessResult(drawContext);
-    return true;
-}
-
-/// <summary>
-/// シーン内の3D要素を描画する
-/// </summary>
-void PlayScene::DrawSceneContent()
-{
-    DrawWorldAndParticles();
-    DrawTemporalAfterimages();
-    DrawTimeReversalParticles();
-}
-
-/// <summary>
-/// 指定した番号の3Dオブジェクトを描画する。
-/// </summary>
-void PlayScene::DrawObject3dAtIndex(size_t objectIndex)
-{
-    if (objects3d_.size() <= objectIndex || !objects3d_[objectIndex]) {
-        return;
-    }
-
-    objects3d_[objectIndex]->Draw();
-}
-
-/// <summary>
-/// すべての3Dオブジェクトを描画する。
-/// </summary>
-void PlayScene::DrawAllObjects3d()
-{
-    for (auto& object3d : objects3d_) { // 更新対象の3Dオブジェクト
-        if (object3d) {
-            object3d->Draw();
-        }
-    }
-}
-
-/// <summary>
-/// 選択中の描画種別に対応する3Dオブジェクトを描画する。
-/// </summary>
-void PlayScene::DrawSelectedObjects3d(int selectedDrawType)
-{
-    switch (selectedDrawType) {
-    case kDrawTypeModel:
-        DrawObject3dAtIndex(kModelObjectIndex);
-        break;
-    case kDrawTypeBunny:
-        DrawObject3dAtIndex(kBunnyObjectIndex);
-        break;
-    case kDrawTypeFence:
-        DrawObject3dAtIndex(kFenceObjectIndex);
-        break;
-    case kDrawTypeChecker:
-        DrawObject3dAtIndex(kCheckerObjectIndex);
-        break;
-    case kDrawTypeSphere:
-        for (size_t objectIndex = kSphereObjectStartIndex; objectIndex <= kSphereObjectEndIndex; ++objectIndex) {
-            DrawObject3dAtIndex(objectIndex);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-/// <summary>
-/// パーティクルを描画する必要があるか判定する。
-/// </summary>
-bool PlayScene::ShouldDrawParticles(int selectedDrawType) const
-{
-    return selectedDrawType == kDrawTypeAll
-        || selectedDrawType == kDrawTypeParticle
-        || selectedDrawType == kDrawTypeAllDebug
-        || IsAnyEffectPlaying();
-}
-
-/// <summary>
-/// 必要な場合だけパーティクルを描画する。
-/// </summary>
-void PlayScene::DrawParticlesIfNeeded(int selectedDrawType)
-{
-    if (!ShouldDrawParticles(selectedDrawType)) {
-        return;
-    }
-
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス
-    if (!particleManager) {
-        return;
-    }
-
-    particleManager->Draw();
-}
-
-/// <summary>
-/// 3D空間とパーティクルを描画する。
-/// </summary>
-void PlayScene::DrawWorldAndParticles()
-{
-    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
-
-    if (skybox_ && ctx_.camera) {
-        skybox_->Draw(ctx_.camera);
-    }
-
-    if (!ctx_.object3dCommon) {
-        return;
-    }
-
-    ctx_.object3dCommon->SetCommonDrawSetting();
-    if (selectedDrawType == kDrawTypeAll || selectedDrawType == kDrawTypeAllDebug) {
-        DrawAllObjects3d();
-    } else {
-        DrawSelectedObjects3d(selectedDrawType);
-    }
-
-    DrawParticlesIfNeeded(selectedDrawType);
-}
-
-/// <summary>
-/// ポストプロセスの影響を受けないスプライトを描画する
-/// </summary>
-void PlayScene::DrawSprites()
-{
-    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
-    if (!ctx_.spriteCommon) {
-        return;
-    }
-
-    if (selectedDrawType == kDrawTypeAll || selectedDrawType == kDrawTypeSprite || selectedDrawType == kDrawTypeAllDebug) {
-        ctx_.spriteCommon->SetCommonDrawSetting();
-        for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
-            if (sprite) {
-                sprite->Draw();
-            }
-        }
-    }
 }
 
 /// <summary>

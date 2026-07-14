@@ -117,6 +117,17 @@ const std::vector<Object3d::VertexData>& Model::ResolveDrawVertices(const Object
 }
 
 /// <summary>
+/// 描画時に使用するIndexデータを取得する
+/// </summary>
+const std::vector<uint32_t>& Model::ResolveDrawIndices(const Object3d* owner) const
+{
+    if (modelData_.indices.empty()) {
+        return owner->GetModelData().indices;
+    }
+
+    return modelData_.indices;
+}
+/// <summary>
 /// 描画時に使用する頂点バッファビューを取得する
 /// </summary>
 D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) const
@@ -128,6 +139,35 @@ D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) c
     return owner->GetVertexBufferView();
 }
 
+/// <summary>
+/// 描画時に使用するIndexバッファビューを取得する
+/// </summary>
+D3D12_INDEX_BUFFER_VIEW Model::ResolveIndexBufferView(const Object3d* owner) const
+{
+    (void)owner;
+    return indexBufferView_;
+}
+
+/// <summary>
+/// IndexがあればIndex描画、なければ従来の頂点描画を行う
+/// </summary>
+void Model::DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const
+{
+    const std::vector<uint32_t>& indices = ResolveDrawIndices(owner); // 描画に使うIndexデータ
+    const D3D12_INDEX_BUFFER_VIEW indexBufferView = ResolveIndexBufferView(owner); // 描画に使うIndexBufferView
+    if (!indices.empty() && indexBufferView.SizeInBytes != 0) {
+        commandList->IASetIndexBuffer(&indexBufferView);
+        commandList->DrawIndexedInstanced(static_cast<UINT>(indices.size()), instanceCount, 0, 0, 0);
+        return;
+    }
+
+    const std::vector<Object3d::VertexData>& vertices = ResolveDrawVertices(owner); // 描画に使う頂点データ
+    if (vertices.empty()) {
+        return;
+    }
+
+    commandList->DrawInstanced(static_cast<UINT>(vertices.size()), instanceCount, 0, 0);
+}
 /// <summary>
 /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
 /// </summary>
@@ -214,15 +254,32 @@ void Model::Draw(Object3d* owner)
         return;
     }
 
-    // 頂点バッファの設定 (モデルまたはオーナーから)
-    D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
-    cmdList->IASetVertexBuffers(0, 1, &vbv);
+    Object3dCommon* common = owner->GetObject3dCommon(); // Object3d共通描画管理
+    // Object3dCommonが有効でない場合は描画できない
+    if (!common) {
+        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
+        return;
+    }
+
+    const bool useSkinning = owner->CanUseSkinning() && vertexInfluenceBufferView_.SizeInBytes != 0; // Skinning描画を使うか
+    if (useSkinning) {
+        common->SetSkinningDrawSetting();
+        D3D12_VERTEX_BUFFER_VIEW vertexBufferViews[2] = {
+            ResolveVertexBufferView(owner),
+            vertexInfluenceBufferView_
+        }; // Skinning用の頂点バッファ一覧
+        cmdList->IASetVertexBuffers(0, 2, vertexBufferViews);
+        cmdList->SetGraphicsRootDescriptorTable(10, owner->GetSkinningPaletteSrvHandle());
+    } else {
+        common->SetCommonDrawSetting();
+        D3D12_VERTEX_BUFFER_VIEW vbv = ResolveVertexBufferView(owner); // 描画に使う頂点バッファビュー
+        cmdList->IASetVertexBuffers(0, 1, &vbv);
+    }
 
     // Material CBV は Object3d が持つものを使用する
     if (!BindOwnerMaterialResource(cmdList, owner, "Model::Draw")) {
         return;
     }
-
 
     // 座標変換行列CBV設定 (オーナーから)
     if (owner->GetTransformationMatrixResource()) {
@@ -231,14 +288,6 @@ void Model::Draw(Object3d* owner)
     } else {
         // オーナーが座標変換行列リソースを持っていない場合は描画できない
         Logger::Debug("Model::Draw skipped: transformation matrix CBV missing\n");
-        return;
-    }
-
-    // 平行光源CBV設定 (shared in Object3dCommon)
-    Object3dCommon* common = owner->GetObject3dCommon();
-    // Object3dCommonが有効でない場合は描画できない
-    if (!common) {
-        Logger::Debug("Model::Draw skipped: missing Object3dCommon\n");
         return;
     }
 
@@ -274,14 +323,8 @@ void Model::Draw(Object3d* owner)
     const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
     BindTexture(cmdList, textureIndex, "Model::Draw");
 
-    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
-    if (verts.empty()) {
-        Logger::Debug("Model::Draw skipped: no vertices available\n");
-        return;
-    }
-    cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
+    DrawIndexedOrVertices(cmdList, owner, 1);
 }
-
 /// <summary>
 /// インスタンシング描画
 /// </summary>
@@ -369,12 +412,8 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
     }
 
-    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
-    if (verts.empty()) {
-        return;
-    }
     // 描画コマンド
-    cmdList->DrawInstanced(static_cast<UINT>(verts.size()), instanceCount, 0, 0);
+    DrawIndexedOrVertices(cmdList, owner, instanceCount);
 }
 
 /// <summary>
@@ -407,6 +446,62 @@ void Model::CreateVertexBuffer()
     vertexBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexData));
 }
 
+
+/// <summary>
+/// モデルのIndexデータからIndexバッファを作成する
+/// </summary>
+void Model::CreateIndexBuffer()
+{
+    indexResource_.Reset();
+    indexBufferView_ = {};
+
+    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.indices.empty()) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t indexBufferSize = sizeof(uint32_t) * modelData_.indices.size(); // Indexバッファサイズ
+    indexResource_ = dxCommon->CreateBufferResource(indexBufferSize);
+
+    void* mappedIndexData = nullptr; // Indexデータ転送先
+    indexResource_->Map(0, nullptr, &mappedIndexData);
+    assert(mappedIndexData != nullptr);
+    std::memcpy(mappedIndexData, modelData_.indices.data(), indexBufferSize);
+    indexResource_->Unmap(0, nullptr);
+
+    indexBufferView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
+    indexBufferView_.SizeInBytes = static_cast<UINT>(indexBufferSize);
+    indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
+}
+/// <summary>
+/// Skinning用の頂点影響バッファを作成する
+/// </summary>
+void Model::CreateVertexInfluenceBuffer()
+{
+    vertexInfluenceResource_.Reset();
+    vertexInfluenceBufferView_ = {};
+
+    if (!modelCommon_ || !modelCommon_->GetDxCommon()) {
+        return;
+    }
+    if (modelData_.vertexInfluences.empty() || modelData_.vertexInfluences.size() != modelData_.vertices.size()) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t bufferSize = sizeof(Object3d::VertexInfluence) * modelData_.vertexInfluences.size(); // 影響情報バッファサイズ
+    vertexInfluenceResource_ = dxCommon->CreateBufferResource(bufferSize);
+
+    void* mappedData = nullptr; // 頂点影響情報の転送先
+    vertexInfluenceResource_->Map(0, nullptr, &mappedData);
+    assert(mappedData != nullptr);
+    std::memcpy(mappedData, modelData_.vertexInfluences.data(), bufferSize);
+    vertexInfluenceResource_->Unmap(0, nullptr);
+
+    vertexInfluenceBufferView_.BufferLocation = vertexInfluenceResource_->GetGPUVirtualAddress();
+    vertexInfluenceBufferView_.SizeInBytes = static_cast<UINT>(bufferSize);
+    vertexInfluenceBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexInfluence));
+}
 /// <summary>
 /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
 /// </summary>
@@ -416,6 +511,8 @@ void Model::InitializeModelResources()
     EnsureFallbackModelTextureLoaded(textureManager);
 
     CreateVertexBuffer();
+    CreateIndexBuffer();
+    CreateVertexInfluenceBuffer();
 
     const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデルマテリアルのSRV番号
     if (materialTextureIndex != UINT32_MAX) {

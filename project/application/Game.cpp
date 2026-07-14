@@ -60,7 +60,7 @@ using namespace Math;
 
 namespace {
 constexpr Vector3 kInitialCameraRotate = { 5.9f, -7.43f, 0.0f }; // 初期カメラの回転角
-constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -188.0f }; // 初期カメラの位置
+constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -18.0f }; // 初期カメラの位置
 constexpr Vector4 kWhiteColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 白色
 constexpr Vector4 kPointLightPosition = { 0.0f, 1.5f, 0.0f, 0.0f }; // 点光源の位置
 constexpr Vector4 kPointLightColor = { 1.0f, 1.0f, 1.0f, 1.5f }; // 点光源の色と輝度
@@ -96,6 +96,9 @@ enum DrawType {
     DRAW_FENCE, // フェンス描画
     DRAW_CHECKER, // チェッカー描画
     DRAW_SPHERE, // 球描画
+    DRAW_SIMPLE_SKIN, // simpleSkinモデル描画
+    DRAW_HUMAN_SNEAK_WALK, // human/sneakWalkモデル描画
+    DRAW_HUMAN_WALK, // human/walkモデル描画
     DRAW_ALL, // すべて描画
 };
 
@@ -584,6 +587,7 @@ void Game::Update()
             projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
         }
     }
+
     Matrix4x4 worldViewProjectionMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
 
     // Object3dCommon にカメラのワールド位置をセット

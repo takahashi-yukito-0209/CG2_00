@@ -561,8 +561,103 @@ void Object3dCommon::SetInstancingDrawSetting()
 }
 
 /// <summary>
-/// 共通描画設定をコマンドリストに設定
+/// Skinning用の描画設定をコマンドリストに設定
 /// </summary>
+void Object3dCommon::SetSkinningDrawSetting()
+{
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    if (mappedDirectionalLightData_[frameIndex]) {
+        *mappedDirectionalLightData_[frameIndex] = directionalLightState_;
+    }
+    if (mappedPointLightsData_[frameIndex]) {
+        memcpy(mappedPointLightsData_[frameIndex], pointLightsState_.data(), sizeof(Object3d::PointLight) * pointLightsState_.size());
+    }
+    if (mappedSpotLightData_[frameIndex]) {
+        *mappedSpotLightData_[frameIndex] = spotLightState_;
+    }
+    if (mappedCameraData_[frameIndex]) {
+        *mappedCameraData_[frameIndex] = cameraState_;
+    }
+    if (mappedCameraCBData_[frameIndex]) {
+        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+    }
+
+    auto cmdList = dxCommon_->GetCommandList(); // 描画コマンドリスト
+    if (!cmdList || !rootSignature_ || !IsValidObjectBlendMode(blendMode_)) {
+        return;
+    }
+
+    auto& pipelineState = skinningPipelineStates_[ToObjectBlendModeIndex(blendMode_)]; // Skinning用PSO
+    if (!pipelineState) {
+        return;
+    }
+
+    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+    cmdList->SetPipelineState(pipelineState.Get());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (spotLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (directionalLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (cameraResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (environmentMapSrvHandleGPU_.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
+    }
+}
+/// <summary>
+/// Skeletonデバッグ用の描画設定をコマンドリストに設定
+/// </summary>
+void Object3dCommon::SetSkeletonDebugDrawSetting()
+{
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
+    if (mappedDirectionalLightData_[frameIndex]) {
+        *mappedDirectionalLightData_[frameIndex] = directionalLightState_;
+    }
+    if (mappedPointLightsData_[frameIndex]) {
+        memcpy(mappedPointLightsData_[frameIndex], pointLightsState_.data(), sizeof(Object3d::PointLight) * pointLightsState_.size());
+    }
+    if (mappedSpotLightData_[frameIndex]) {
+        *mappedSpotLightData_[frameIndex] = spotLightState_;
+    }
+    if (mappedCameraData_[frameIndex]) {
+        *mappedCameraData_[frameIndex] = cameraState_;
+    }
+    if (mappedCameraCBData_[frameIndex]) {
+        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+    }
+
+    auto cmdList = dxCommon_->GetCommandList(); // 描画コマンドリスト
+    if (!cmdList || !rootSignature_ || !IsValidObjectBlendMode(blendMode_)) {
+        return;
+    }
+
+    auto& pipelineState = skeletonDebugPipelineStates_[ToObjectBlendModeIndex(blendMode_)]; // Skeletonデバッグ用PSO
+    if (!pipelineState) {
+        return;
+    }
+
+    cmdList->SetGraphicsRootSignature(rootSignature_.Get());
+    cmdList->SetPipelineState(pipelineState.Get());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (spotLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(8, spotLightResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (directionalLightResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(3, directionalLightResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (cameraResources_[frameIndex]) {
+        cmdList->SetGraphicsRootConstantBufferView(6, cameraResources_[frameIndex]->GetGPUVirtualAddress());
+    }
+    if (environmentMapSrvHandleGPU_.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(9, environmentMapSrvHandleGPU_);
+    }
+}
 void Object3dCommon::SetCommonDrawSetting()
 {
     const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 描画対象フレーム番号
@@ -656,6 +751,12 @@ void Object3dCommon::CreateRootSignature()
     descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForSkinning[1] = {};
+    descriptorRangeForSkinning[0].BaseShaderRegister = 3; // t3 in VS
+    descriptorRangeForSkinning[0].NumDescriptors = 1;
+    descriptorRangeForSkinning[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeForSkinning[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     D3D12_DESCRIPTOR_RANGE descriptorRangeForEnvironment[1] = {};
     descriptorRangeForEnvironment[0].BaseShaderRegister = 2; // t2 in PS
     descriptorRangeForEnvironment[0].NumDescriptors = 1;
@@ -679,7 +780,7 @@ void Object3dCommon::CreateRootSignature()
 
     // 注意: 互換性のため既存のインデックスを維持する: 0=Material CBV(Pixel), 1=WVP CBV(Vertex), 2=Texture SRV Table(Pixel), 3=Light CBV(Pixel)
     // 既存コードのインデックスを変更せずに済むよう、インスタンシングSRVテーブルはインデックス4（頂点）に追加する。
-    D3D12_ROOT_PARAMETER rootParameters[10] = {};
+    D3D12_ROOT_PARAMETER rootParameters[11] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う (PixelShader, レジスタ0: マテリアルCBV)
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -724,6 +825,12 @@ void Object3dCommon::CreateRootSignature()
     rootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[9].DescriptorTable.pDescriptorRanges = descriptorRangeForEnvironment;
     rootParameters[9].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForEnvironment);
+
+    // Skinning用Palette SRV (Vertex shader, t3)
+    rootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[10].DescriptorTable.pDescriptorRanges = descriptorRangeForSkinning;
+    rootParameters[10].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForSkinning);
 
     // 注: 平行光源CBVは Object3dCommon に保存されたGPUアドレスを使ってオブジェクト毎にバインドされる
 
@@ -886,6 +993,25 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
     inputLayoutDesc.pInputElementDescs = inputElementDescs; // 入力要素の配列へのポインタ
     inputLayoutDesc.NumElements = _countof(inputElementDescs); // 入力要素の数
 
+    D3D12_INPUT_ELEMENT_DESC skinningInputElementDescs[5] = {};
+    skinningInputElementDescs[0] = inputElementDescs[0];
+    skinningInputElementDescs[1] = inputElementDescs[1];
+    skinningInputElementDescs[2] = inputElementDescs[2];
+    skinningInputElementDescs[3].SemanticName = "BLENDWEIGHT";
+    skinningInputElementDescs[3].SemanticIndex = 0;
+    skinningInputElementDescs[3].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    skinningInputElementDescs[3].InputSlot = 1;
+    skinningInputElementDescs[3].AlignedByteOffset = 0;
+    skinningInputElementDescs[4].SemanticName = "BLENDINDICES";
+    skinningInputElementDescs[4].SemanticIndex = 0;
+    skinningInputElementDescs[4].Format = DXGI_FORMAT_R32G32B32A32_SINT;
+    skinningInputElementDescs[4].InputSlot = 1;
+    skinningInputElementDescs[4].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    D3D12_INPUT_LAYOUT_DESC skinningInputLayoutDesc {};
+    skinningInputLayoutDesc.pInputElementDescs = skinningInputElementDescs;
+    skinningInputLayoutDesc.NumElements = _countof(skinningInputElementDescs);
+
     // BlendState の設定を blendMode_ に応じて切り替える
     D3D12_BLEND_DESC blendDesc {};
     D3D12_RENDER_TARGET_BLEND_DESC& rtBlend = blendDesc.RenderTarget[0]; // 1つ目のレンダーターゲットのブレンド設定を取得
@@ -1030,6 +1156,20 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
     // 実際に生成し、メンバ変数に保持する
     const size_t modeIndex = ToObjectBlendModeIndex(mode); // 作成したPSOを格納する添字
     hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates_[modeIndex]));
+    assert(SUCCEEDED(hr));
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skeletonDebugPipelineStateDesc = graphicsPipelineStateDesc;
+    skeletonDebugPipelineStateDesc.DepthStencilState.DepthEnable = false;
+    skeletonDebugPipelineStateDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&skeletonDebugPipelineStateDesc, IID_PPV_ARGS(&skeletonDebugPipelineStates_[modeIndex]));
+    assert(SUCCEEDED(hr));
+
+    Microsoft::WRL::ComPtr<IDxcBlob> skinningVertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/SkinningObject3D.VS.hlsl", L"vs_6_0");
+    assert(skinningVertexShaderBlob != nullptr);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skinningPipelineStateDesc = graphicsPipelineStateDesc;
+    skinningPipelineStateDesc.InputLayout = skinningInputLayoutDesc;
+    skinningPipelineStateDesc.VS = { skinningVertexShaderBlob->GetBufferPointer(), skinningVertexShaderBlob->GetBufferSize() };
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&skinningPipelineStateDesc, IID_PPV_ARGS(&skinningPipelineStates_[modeIndex]));
     assert(SUCCEEDED(hr));
 
     if (instancingPipelineState_) {
