@@ -137,6 +137,7 @@ public: // メンバ構造体
     // モデルデータ構造体
     struct ModelData {
         std::vector<VertexData> vertices;
+        std::vector<uint32_t> indices; // Index描画で参照する頂点番号
         std::vector<VertexInfluence> vertexInfluences; // 展開済み頂点ごとのSkinning影響情報
         std::unordered_map<std::string, JointWeightData> skinClusterData; // Joint名ごとの逆BindPose情報
         MaterialData material;

@@ -629,12 +629,11 @@ Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint3
 }
 
 /// <summary>
-/// Assimp の三角形面を Object3d 用の頂点配列へ追加する。
+/// Assimp のメッシュ頂点を Object3d 用の頂点配列へ追加する。
 /// </summary>
-void AppendFaceVerticesToModelData(const aiMesh* mesh, const aiFace& face, bool hasTextureCoords, const std::vector<Object3d::VertexInfluence>& meshVertexInfluences, Object3d::ModelData& modelData)
+void AppendMeshSourceVerticesToModelData(const aiMesh* mesh, bool hasTextureCoords, const std::vector<Object3d::VertexInfluence>& meshVertexInfluences, Object3d::ModelData& modelData)
 {
-    for (uint32_t element = 0; element < 3; ++element) {
-        const uint32_t vertexIndex = face.mIndices[element]; // 面が参照する頂点番号
+    for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
         const Object3d::VertexData vertexData = ConvertAssimpVertexToObjectVertex(mesh, vertexIndex, hasTextureCoords); // 追加する頂点データ
         modelData.vertices.push_back(vertexData);
         modelData.vertexInfluences.push_back(meshVertexInfluences[vertexIndex]);
@@ -642,27 +641,40 @@ void AppendFaceVerticesToModelData(const aiMesh* mesh, const aiFace& face, bool 
 }
 
 /// <summary>
-/// Assimp の全メッシュを Object3d 用の頂点データへ展開する。
+/// Assimp の三角形面から Object3d 用のIndex配列へ追加する。
+/// </summary>
+void AppendFaceIndicesToModelData(const aiFace& face, uint32_t vertexBaseIndex, Object3d::ModelData& modelData)
+{
+    for (uint32_t element = 0; element < 3; ++element) {
+        const uint32_t vertexIndex = face.mIndices[element]; // 面が参照するメッシュ内頂点番号
+        modelData.indices.push_back(vertexBaseIndex + vertexIndex);
+    }
+}
+
+/// <summary>
+/// Assimp の全メッシュを Object3d 用の頂点データとIndexデータへ変換する。
 /// </summary>
 void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3d::ModelData& modelData)
 {
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
-        aiMesh* mesh = scene->mMeshes[meshIndex]; // 展開対象のメッシュ
+        aiMesh* mesh = scene->mMeshes[meshIndex]; // 変換対象のメッシュ
 
         if (!HasRequiredMeshNormals(mesh, meshIndex)) {
             continue;
         }
 
         const bool hasTextureCoords = mesh->HasTextureCoords(0); // テクスチャ座標を持っているか
+        const uint32_t vertexBaseIndex = static_cast<uint32_t>(modelData.vertices.size()); // このメッシュの先頭頂点番号
         const std::vector<Object3d::VertexInfluence> meshVertexInfluences = BuildMeshVertexInfluences(mesh, nodeIndexMap, modelData); // メッシュ元頂点ごとのSkinning影響
+        AppendMeshSourceVerticesToModelData(mesh, hasTextureCoords, meshVertexInfluences, modelData);
 
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
-            const aiFace& face = mesh->mFaces[faceIndex]; // 展開対象の面
+            const aiFace& face = mesh->mFaces[faceIndex]; // 変換対象の面
             if (face.mNumIndices != 3) {
                 continue;
             }
 
-            AppendFaceVerticesToModelData(mesh, face, hasTextureCoords, meshVertexInfluences, modelData);
+            AppendFaceIndicesToModelData(face, vertexBaseIndex, modelData);
         }
     }
 }

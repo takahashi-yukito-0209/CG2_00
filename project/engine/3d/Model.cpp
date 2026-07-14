@@ -117,6 +117,17 @@ const std::vector<Object3d::VertexData>& Model::ResolveDrawVertices(const Object
 }
 
 /// <summary>
+/// 描画時に使用するIndexデータを取得する
+/// </summary>
+const std::vector<uint32_t>& Model::ResolveDrawIndices(const Object3d* owner) const
+{
+    if (modelData_.indices.empty()) {
+        return owner->GetModelData().indices;
+    }
+
+    return modelData_.indices;
+}
+/// <summary>
 /// 描画時に使用する頂点バッファビューを取得する
 /// </summary>
 D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) const
@@ -128,6 +139,35 @@ D3D12_VERTEX_BUFFER_VIEW Model::ResolveVertexBufferView(const Object3d* owner) c
     return owner->GetVertexBufferView();
 }
 
+/// <summary>
+/// 描画時に使用するIndexバッファビューを取得する
+/// </summary>
+D3D12_INDEX_BUFFER_VIEW Model::ResolveIndexBufferView(const Object3d* owner) const
+{
+    (void)owner;
+    return indexBufferView_;
+}
+
+/// <summary>
+/// IndexがあればIndex描画、なければ従来の頂点描画を行う
+/// </summary>
+void Model::DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const
+{
+    const std::vector<uint32_t>& indices = ResolveDrawIndices(owner); // 描画に使うIndexデータ
+    const D3D12_INDEX_BUFFER_VIEW indexBufferView = ResolveIndexBufferView(owner); // 描画に使うIndexBufferView
+    if (!indices.empty() && indexBufferView.SizeInBytes != 0) {
+        commandList->IASetIndexBuffer(&indexBufferView);
+        commandList->DrawIndexedInstanced(static_cast<UINT>(indices.size()), instanceCount, 0, 0, 0);
+        return;
+    }
+
+    const std::vector<Object3d::VertexData>& vertices = ResolveDrawVertices(owner); // 描画に使う頂点データ
+    if (vertices.empty()) {
+        return;
+    }
+
+    commandList->DrawInstanced(static_cast<UINT>(vertices.size()), instanceCount, 0, 0);
+}
 /// <summary>
 /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
 /// </summary>
@@ -283,12 +323,7 @@ void Model::Draw(Object3d* owner)
     const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
     BindTexture(cmdList, textureIndex, "Model::Draw");
 
-    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
-    if (verts.empty()) {
-        Logger::Debug("Model::Draw skipped: no vertices available\n");
-        return;
-    }
-    cmdList->DrawInstanced(static_cast<UINT>(verts.size()), 1, 0, 0);
+    DrawIndexedOrVertices(cmdList, owner, 1);
 }
 /// <summary>
 /// インスタンシング描画
@@ -377,12 +412,8 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootDescriptorTable(4, instSrv);
     }
 
-    const auto& verts = ResolveDrawVertices(owner); // 描画に使う頂点データ
-    if (verts.empty()) {
-        return;
-    }
     // 描画コマンド
-    cmdList->DrawInstanced(static_cast<UINT>(verts.size()), instanceCount, 0, 0);
+    DrawIndexedOrVertices(cmdList, owner, instanceCount);
 }
 
 /// <summary>
@@ -416,6 +447,32 @@ void Model::CreateVertexBuffer()
 }
 
 
+/// <summary>
+/// モデルのIndexデータからIndexバッファを作成する
+/// </summary>
+void Model::CreateIndexBuffer()
+{
+    indexResource_.Reset();
+    indexBufferView_ = {};
+
+    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.indices.empty()) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    const size_t indexBufferSize = sizeof(uint32_t) * modelData_.indices.size(); // Indexバッファサイズ
+    indexResource_ = dxCommon->CreateBufferResource(indexBufferSize);
+
+    void* mappedIndexData = nullptr; // Indexデータ転送先
+    indexResource_->Map(0, nullptr, &mappedIndexData);
+    assert(mappedIndexData != nullptr);
+    std::memcpy(mappedIndexData, modelData_.indices.data(), indexBufferSize);
+    indexResource_->Unmap(0, nullptr);
+
+    indexBufferView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
+    indexBufferView_.SizeInBytes = static_cast<UINT>(indexBufferSize);
+    indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
+}
 /// <summary>
 /// Skinning用の頂点影響バッファを作成する
 /// </summary>
@@ -454,6 +511,7 @@ void Model::InitializeModelResources()
     EnsureFallbackModelTextureLoaded(textureManager);
 
     CreateVertexBuffer();
+    CreateIndexBuffer();
     CreateVertexInfluenceBuffer();
 
     const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデルマテリアルのSRV番号

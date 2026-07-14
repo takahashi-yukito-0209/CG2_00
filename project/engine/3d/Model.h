@@ -72,9 +72,24 @@ private: // メンバ変数
     const std::vector<Object3d::VertexData>& ResolveDrawVertices(const Object3d* owner) const;
 
     /// <summary>
+    /// 描画時に使用するIndexデータを取得する
+    /// </summary>
+    const std::vector<uint32_t>& ResolveDrawIndices(const Object3d* owner) const;
+
+    /// <summary>
     /// 描画時に使用する頂点バッファビューを取得する
     /// </summary>
     D3D12_VERTEX_BUFFER_VIEW ResolveVertexBufferView(const Object3d* owner) const;
+
+    /// <summary>
+    /// 描画時に使用するIndexバッファビューを取得する
+    /// </summary>
+    D3D12_INDEX_BUFFER_VIEW ResolveIndexBufferView(const Object3d* owner) const;
+
+    /// <summary>
+    /// IndexがあればIndex描画、なければ従来の頂点描画を行う
+    /// </summary>
+    void DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const;
 
     /// <summary>
     /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する
@@ -85,6 +100,11 @@ private: // メンバ変数
     /// モデルの頂点データから頂点バッファを作成する
     /// </summary>
     void CreateVertexBuffer();
+
+    /// <summary>
+    /// モデルのIndexデータからIndexバッファを作成する
+    /// </summary>
+    void CreateIndexBuffer();
 
     /// <summary>
     /// Skinning用の頂点影響バッファを作成する
@@ -114,6 +134,11 @@ private: // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource_;
     // DirectX12用の頂点バッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
+
+    // GPU上に配置されるIndexバッファ用リソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
+    // DirectX12用のIndexバッファビュー
+    D3D12_INDEX_BUFFER_VIEW indexBufferView_ {};
 
     // Skinning用の頂点影響バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexInfluenceResource_;
