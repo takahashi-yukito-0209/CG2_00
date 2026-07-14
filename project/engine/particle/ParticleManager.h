@@ -6,11 +6,14 @@
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
 #include <cstddef>
+#include <array>
+#include <d3d12.h>
 #include <vector>
 #include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <wrl.h>
 
 // CPU側のパーティクルデータ
 struct PM_CpuParticle {
@@ -35,7 +38,24 @@ struct ParticleGroup {
     MyEngine::Object3d* renderObject = nullptr; // 描画に使うPrimitive
     bool useBillboard = true; // ビルボード描画を使うか
 };
+// GPUでインスタンシング用行列へ変換するための粒子データ
+struct PM_GpuParticleSource {
+    Math::Vector3 scale;
+    float padding0 = 0.0f;
+    Math::Vector3 rotate;
+    float padding1 = 0.0f;
+    Math::Vector3 translate;
+    float padding2 = 0.0f;
+    Math::Vector4 color;
+};
 
+// ComputeShaderへ渡すパーティクル変換情報
+struct PM_GpuParticleTransformInfo {
+    uint32_t particleCount = 0;
+    float padding[3] {};
+    Math::Matrix4x4 view;
+    Math::Matrix4x4 projection;
+};
 namespace MyEngine {
 
 /// <summary>
@@ -175,6 +195,25 @@ private:
     ParticleManager() = default;
 
     /// <summary>
+    /// GPUパーティクル変換に必要なリソースを作成する。
+    /// </summary>
+    void InitializeGpuParticleResources();
+
+    /// <summary>
+    /// GPUパーティクル変換に必要なリソースを解放する。
+    /// </summary>
+    void FinalizeGpuParticleResources();
+
+    /// <summary>
+    /// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
+    /// </summary>
+    uint32_t UploadGpuParticleSource(const ParticleGroup& group, uint32_t count, const Math::Matrix4x4& view, const Math::Matrix4x4& projection);
+
+    /// <summary>
+    /// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
+    /// </summary>
+    bool DispatchGpuParticleTransform(uint32_t count);
+    /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
     uint32_t GetParticleLimit() const;
@@ -217,6 +256,20 @@ private:
     float damping_ = 0.0f;
 
     class ImGuiManager* imguiManager_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleSourceResources_;
+    std::array<PM_GpuParticleSource*, DirectXCommon::kFrameCount> gpuParticleSourceData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleInfoResources_;
+    std::array<PM_GpuParticleTransformInfo*, DirectXCommon::kFrameCount> gpuParticleInfoData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleOutputResources_;
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleSourceSrvIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputSrvIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> gpuParticleOutputSrvHandlesGPU_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuParticleOutputStates_ {};
+    bool gpuParticleReady_ = false;
 };
 
 } // namespace MyEngine

@@ -248,6 +248,9 @@
     <FxCompile Include="resources\shaders\Particle.VS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
+    <FxCompile Include="resources\shaders\GPUParticleUpdate.CS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
     <FxCompile Include="resources\shaders\Sprite.PS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>

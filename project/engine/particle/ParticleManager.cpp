@@ -5,8 +5,10 @@
 #include "engine/3d/Object3d.h"
 #include "engine/3d/Object3dCommon.h"
 #include "engine/base/DirectXCommon.h"
+#include "externals/DirectXTex/d3dx12.h"
 #include "engine/utility/Logger.h"
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <numbers>
 
@@ -66,7 +68,11 @@ constexpr float kRiftFragmentStartWidth = 0.025f; // Rift破片開始時の幅
 constexpr float kRiftFragmentEndWidth = 0.01f; // Rift破片終了時の幅
 constexpr float kRiftFragmentEndLengthRate = 0.35f; // Rift破片終了時の長さ倍率
 constexpr float kRiftFragmentLifeTimeMin = 0.01f; // Rift破片寿命の最小値
-constexpr float kRiftFragmentRotationOffset = std::numbers::pi_v<float> * 0.5f; // Rift破片の向き補正
+constexpr float kRiftFragmentRotationOffset = std::numbers::pi_v<float> * 0.5f;
+constexpr uint32_t kGpuParticleThreadCount = 1024; // ComputeShaderの1グループあたりのスレッド数
+constexpr uint32_t kComputeRootParameterSourceSrv = 0; // Compute入力SRVのルート番号
+constexpr uint32_t kComputeRootParameterOutputUav = 1; // Compute出力UAVのルート番号
+constexpr uint32_t kComputeRootParameterInfoCbv = 2; // Compute定数バッファのルート番号 // Rift破片の向き補正
 }
 
 /// <summary>
@@ -79,6 +85,7 @@ void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, S
     srvManager_ = srv;
     texManager_ = texMgr;
     imguiManager_ = imguiManager;
+    InitializeGpuParticleResources();
 }
 
 /// <summary>
@@ -89,6 +96,7 @@ void ParticleManager::Finalize()
     particleGroups_.clear();
     instancingLimitWarnedGroups_.clear();
     totalParticleCount_ = 0;
+    FinalizeGpuParticleResources();
 }
 
 /// <summary>
@@ -543,19 +551,287 @@ void ParticleManager::EmitRiftFragments(
 /// <summary>
 /// パーティクルを更新する
 /// </summary>
+/// <summary>
+/// GPUパーティクル変換に必要なリソースを作成する。
+/// </summary>
+void ParticleManager::InitializeGpuParticleResources()
+{
+    gpuParticleReady_ = false;
+    if (!dxCommon_ || !srvManager_) {
+        return;
+    }
+
+    ID3D12Device* device = dxCommon_->GetDevice();
+    if (!device) {
+        return;
+    }
+
+    D3D12_DESCRIPTOR_RANGE sourceSrvRange {};
+    sourceSrvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    sourceSrvRange.NumDescriptors = 1;
+    sourceSrvRange.BaseShaderRegister = 0;
+    sourceSrvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_DESCRIPTOR_RANGE outputUavRange {};
+    outputUavRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    outputUavRange.NumDescriptors = 1;
+    outputUavRange.BaseShaderRegister = 0;
+    outputUavRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[3] {};
+    rootParameters[kComputeRootParameterSourceSrv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[kComputeRootParameterSourceSrv].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[kComputeRootParameterSourceSrv].DescriptorTable.pDescriptorRanges = &sourceSrvRange;
+    rootParameters[kComputeRootParameterSourceSrv].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[kComputeRootParameterOutputUav].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[kComputeRootParameterOutputUav].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[kComputeRootParameterOutputUav].DescriptorTable.pDescriptorRanges = &outputUavRange;
+    rootParameters[kComputeRootParameterOutputUav].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[kComputeRootParameterInfoCbv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[kComputeRootParameterInfoCbv].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[kComputeRootParameterInfoCbv].Descriptor.ShaderRegister = 0;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc {};
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    if (FAILED(hr)) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to serialize compute root signature.\n");
+        return;
+    }
+
+    hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&computeRootSignature_));
+    if (FAILED(hr)) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create compute root signature.\n");
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlob> computeShaderBlob = dxCommon_->CompileShader(L"resources/shaders/GPUParticleUpdate.CS.hlsl", L"cs_6_0");
+    if (!computeShaderBlob) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to compile GPUParticleUpdate.CS.hlsl.\n");
+        return;
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pipelineDesc {};
+    pipelineDesc.pRootSignature = computeRootSignature_.Get();
+    pipelineDesc.CS = { computeShaderBlob->GetBufferPointer(), computeShaderBlob->GetBufferSize() };
+    hr = device->CreateComputePipelineState(&pipelineDesc, IID_PPV_ARGS(&computePipelineState_));
+    if (FAILED(hr)) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create compute pipeline state.\n");
+        return;
+    }
+
+    const uint32_t particleLimit = GetParticleLimit();
+    const size_t sourceBufferSize = sizeof(PM_GpuParticleSource) * particleLimit;
+    const size_t infoBufferSize = (sizeof(PM_GpuParticleTransformInfo) + 0xff) & ~static_cast<size_t>(0xff);
+    const size_t outputBufferSize = sizeof(Object3d::TransformationMatrix) * particleLimit;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC sourceSrvDesc {};
+    sourceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    sourceSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    sourceSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    sourceSrvDesc.Buffer.NumElements = particleLimit;
+    sourceSrvDesc.Buffer.StructureByteStride = sizeof(PM_GpuParticleSource);
+    sourceSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC outputSrvDesc {};
+    outputSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    outputSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    outputSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    outputSrvDesc.Buffer.NumElements = particleLimit;
+    outputSrvDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
+    outputSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC outputUavDesc {};
+    outputUavDesc.Format = DXGI_FORMAT_UNKNOWN;
+    outputUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    outputUavDesc.Buffer.NumElements = particleLimit;
+    outputUavDesc.Buffer.StructureByteStride = sizeof(Object3d::TransformationMatrix);
+    outputUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (!srvManager_->CanAllocate()) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate source SRV.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+        gpuParticleSourceResources_[frameIndex] = dxCommon_->CreateBufferResource(sourceBufferSize);
+        gpuParticleSourceResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleSourceData_[frameIndex]));
+        gpuParticleSourceSrvIndices_[frameIndex] = srvManager_->Allocate();
+        device->CreateShaderResourceView(gpuParticleSourceResources_[frameIndex].Get(), &sourceSrvDesc, srvManager_->GetCPUDescriptorHandle(gpuParticleSourceSrvIndices_[frameIndex]));
+
+        gpuParticleInfoResources_[frameIndex] = dxCommon_->CreateBufferResource(infoBufferSize);
+        gpuParticleInfoResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleInfoData_[frameIndex]));
+
+        D3D12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        D3D12_RESOURCE_DESC outputResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(outputBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        hr = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &outputResourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&gpuParticleOutputResources_[frameIndex]));
+        if (FAILED(hr)) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create output buffer.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+        gpuParticleOutputStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
+
+        if (!srvManager_->CanAllocate()) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate output SRV.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+        gpuParticleOutputSrvIndices_[frameIndex] = srvManager_->Allocate();
+        gpuParticleOutputSrvHandlesGPU_[frameIndex] = srvManager_->GetGPUDescriptorHandle(gpuParticleOutputSrvIndices_[frameIndex]);
+        device->CreateShaderResourceView(gpuParticleOutputResources_[frameIndex].Get(), &outputSrvDesc, srvManager_->GetCPUDescriptorHandle(gpuParticleOutputSrvIndices_[frameIndex]));
+
+        if (!srvManager_->CanAllocate()) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate output UAV.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+        gpuParticleOutputUavIndices_[frameIndex] = srvManager_->Allocate();
+        device->CreateUnorderedAccessView(gpuParticleOutputResources_[frameIndex].Get(), nullptr, &outputUavDesc, srvManager_->GetCPUDescriptorHandle(gpuParticleOutputUavIndices_[frameIndex]));
+    }
+
+    gpuParticleReady_ = true;
+}
+
+/// <summary>
+/// GPUパーティクル変換に必要なリソースを解放する。
+/// </summary>
+void ParticleManager::FinalizeGpuParticleResources()
+{
+    if (srvManager_) {
+        for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+            if (gpuParticleSourceSrvIndices_[frameIndex] != UINT32_MAX) {
+                srvManager_->Free(gpuParticleSourceSrvIndices_[frameIndex]);
+            }
+            if (gpuParticleOutputSrvIndices_[frameIndex] != UINT32_MAX) {
+                srvManager_->Free(gpuParticleOutputSrvIndices_[frameIndex]);
+            }
+            if (gpuParticleOutputUavIndices_[frameIndex] != UINT32_MAX) {
+                srvManager_->Free(gpuParticleOutputUavIndices_[frameIndex]);
+            }
+        }
+    }
+
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        gpuParticleSourceSrvIndices_[frameIndex] = UINT32_MAX;
+        gpuParticleOutputSrvIndices_[frameIndex] = UINT32_MAX;
+        gpuParticleOutputUavIndices_[frameIndex] = UINT32_MAX;
+        gpuParticleOutputSrvHandlesGPU_[frameIndex] = {};
+        gpuParticleOutputStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
+        gpuParticleSourceData_[frameIndex] = nullptr;
+        gpuParticleInfoData_[frameIndex] = nullptr;
+        gpuParticleSourceResources_[frameIndex].Reset();
+        gpuParticleInfoResources_[frameIndex].Reset();
+        gpuParticleOutputResources_[frameIndex].Reset();
+    }
+
+    computePipelineState_.Reset();
+    computeRootSignature_.Reset();
+    gpuParticleReady_ = false;
+}
+
+/// <summary>
+/// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
+/// </summary>
+uint32_t ParticleManager::UploadGpuParticleSource(const ParticleGroup& group, uint32_t count, const Matrix4x4& view, const Matrix4x4& projection)
+{
+    if (!dxCommon_) {
+        return 0;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    if (!gpuParticleSourceData_[frameIndex] || !gpuParticleInfoData_[frameIndex]) {
+        return 0;
+    }
+
+    const uint32_t particleLimit = GetParticleLimit();
+    const uint32_t uploadCount = (std::min)(count, particleLimit);
+    for (uint32_t particleIndex = 0; particleIndex < uploadCount; ++particleIndex) {
+        const PM_CpuParticle& particle = group.particles[particleIndex];
+        PM_GpuParticleSource& gpuParticle = gpuParticleSourceData_[frameIndex][particleIndex];
+        gpuParticle.scale = particle.transform.scale;
+        gpuParticle.rotate = particle.transform.rotate;
+        gpuParticle.translate = particle.transform.translate;
+        gpuParticle.translate.z += static_cast<float>(particleIndex) * 1e-3f;
+        gpuParticle.color = particle.color;
+    }
+
+    PM_GpuParticleTransformInfo& info = *gpuParticleInfoData_[frameIndex];
+    info.particleCount = uploadCount;
+    info.view = view;
+    info.projection = projection;
+
+    return uploadCount;
+}
+
+/// <summary>
+/// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
+/// </summary>
+bool ParticleManager::DispatchGpuParticleTransform(uint32_t count)
+{
+    if (!gpuParticleReady_ || count == 0 || !dxCommon_ || !srvManager_) {
+        return false;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    if (!commandList || !computeRootSignature_ || !computePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
+        return false;
+    }
+
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex];
+    if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuParticleOutputResources_[frameIndex].Get(),
+            outputState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &toUavBarrier);
+        outputState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
+    commandList->SetComputeRootSignature(computeRootSignature_.Get());
+    commandList->SetPipelineState(computePipelineState_.Get());
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterSourceSrv, gpuParticleSourceSrvIndices_[frameIndex]);
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
+    commandList->SetComputeRootConstantBufferView(kComputeRootParameterInfoCbv, gpuParticleInfoResources_[frameIndex]->GetGPUVirtualAddress());
+
+    const uint32_t dispatchGroupCount = (count + kGpuParticleThreadCount - 1) / kGpuParticleThreadCount;
+    commandList->Dispatch(dispatchGroupCount, 1, 1);
+
+    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
+    commandList->ResourceBarrier(1, &uavBarrier);
+
+    D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        gpuParticleOutputResources_[frameIndex].Get(),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    commandList->ResourceBarrier(1, &toSrvBarrier);
+    outputState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
+    return true;
+}
+
+/// <summary>
+/// パーティクルを更新する。
+/// </summary>
 void ParticleManager::Update(float dt)
 {
     globalTime_ += dt;
 
     for (auto& kv : particleGroups_) {
-        auto& particles = kv.second.particles; // 更新するパーティクル配列
-        size_t writeIndex = 0; // 生存パーティクルを書き戻す位置
+        auto& particles = kv.second.particles;
+        size_t writeIndex = 0;
 
         for (size_t readIndex = 0; readIndex < particles.size(); ++readIndex) {
-            PM_CpuParticle particle = particles[readIndex]; // 更新対象のパーティクル
+            PM_CpuParticle particle = particles[readIndex];
 
             if (fieldEnabled_) {
-                const Vector3& position = particle.transform.translate; // 現在位置
+                const Vector3& position = particle.transform.translate;
                 if (position.x >= fieldMin_.x && position.y >= fieldMin_.y && position.z >= fieldMin_.z && position.x <= fieldMax_.x && position.y <= fieldMax_.y && position.z <= fieldMax_.z) {
                     particle.velocity.x += fieldAccel_.x * dt;
                     particle.velocity.y += fieldAccel_.y * dt;
@@ -570,7 +846,7 @@ void ParticleManager::Update(float dt)
             }
 
             if (damping_ > kDampingEnabledThreshold) {
-                const float dampingRate = std::clamp(kParticleRateMax - damping_ * dt, kParticleRateMin, kParticleRateMax); // 減衰率
+                const float dampingRate = std::clamp(kParticleRateMax - damping_ * dt, kParticleRateMin, kParticleRateMax);
                 particle.velocity.x *= dampingRate;
                 particle.velocity.y *= dampingRate;
                 particle.velocity.z *= dampingRate;
@@ -581,9 +857,9 @@ void ParticleManager::Update(float dt)
             particle.transform.translate.z += particle.velocity.z * dt;
 
             particle.currentTime += dt;
-            const float lifeRate = particle.lifeTime > kParticleLifeTimeCheckMin ? std::clamp(particle.currentTime / particle.lifeTime, kParticleRateMin, kParticleRateMax) : kParticleRateMax; // 寿命の進行率
+            const float lifeRate = particle.lifeTime > kParticleLifeTimeCheckMin ? std::clamp(particle.currentTime / particle.lifeTime, kParticleRateMin, kParticleRateMax) : kParticleRateMax;
             if (particle.useScaleOverLife) {
-                const float scaleRate = std::sin(lifeRate * std::numbers::pi_v<float>); // 中間で最大になる倍率
+                const float scaleRate = std::sin(lifeRate * std::numbers::pi_v<float>);
                 particle.transform.scale.x = particle.startScale.x + (particle.endScale.x - particle.startScale.x) * scaleRate;
                 particle.transform.scale.y = particle.startScale.y + (particle.endScale.y - particle.startScale.y) * scaleRate;
                 particle.transform.scale.z = particle.startScale.z + (particle.endScale.z - particle.startScale.z) * scaleRate;
@@ -598,7 +874,7 @@ void ParticleManager::Update(float dt)
             }
         }
 
-        const size_t removedCount = particles.size() - writeIndex; // 今回寿命で消えた数
+        const size_t removedCount = particles.size() - writeIndex;
         if (removedCount > 0) {
             particles.resize(writeIndex);
             totalParticleCount_ -= removedCount;
@@ -606,9 +882,8 @@ void ParticleManager::Update(float dt)
     }
 }
 
-
 /// <summary>
-/// パーティクルを描画する
+/// パーティクルを描画する。
 /// </summary>
 void ParticleManager::Draw()
 {
@@ -618,27 +893,27 @@ void ParticleManager::Draw()
 
     object3dCommon_->SetInstancingDrawSetting();
 
-    Camera* camera = object3dCommon_->GetDefaultCamera(); // 描画に使うカメラ
+    Camera* camera = object3dCommon_->GetDefaultCamera();
     Matrix4x4 view = camera ? camera->GetViewMatrix() : Matrix4x4();
     Matrix4x4 projection = camera ? camera->GetProjectionMatrix() : Matrix4x4();
-    Matrix4x4 viewProjection = MathUtil::Multiply(view, projection); // ビルボード用のビュー射影行列
-    Vector3 cameraRight = { view.m[0][0], view.m[1][0], view.m[2][0] }; // カメラの右方向
-    Vector3 cameraUp = { view.m[0][1], view.m[1][1], view.m[2][1] }; // カメラの上方向
+    Matrix4x4 viewProjection = MathUtil::Multiply(view, projection);
+    Vector3 cameraRight = { view.m[0][0], view.m[1][0], view.m[2][0] };
+    Vector3 cameraUp = { view.m[0][1], view.m[1][1], view.m[2][1] };
 
-    auto instancingData = object3dCommon_->GetInstancingData(); // インスタンス転送先
-    const uint32_t instancingSlots = object3dCommon_->GetInstancingSlotCount(); // 最大描画数
+    auto instancingData = object3dCommon_->GetInstancingData();
+    const uint32_t instancingSlots = object3dCommon_->GetInstancingSlotCount();
     if (!instancingData || instancingSlots == 0) {
         return;
     }
 
     for (auto& kv : particleGroups_) {
-        ParticleGroup& group = kv.second; // 描画対象グループ
-        const uint32_t particleCount = static_cast<uint32_t>(group.particles.size()); // グループ内の保持数
+        ParticleGroup& group = kv.second;
+        const uint32_t particleCount = static_cast<uint32_t>(group.particles.size());
         if (particleCount == 0) {
             continue;
         }
 
-        uint32_t count = particleCount; // 実際に描画へ渡すインスタンス数
+        uint32_t count = particleCount;
         if (particleCount > instancingSlots) {
             count = instancingSlots;
             if (instancingLimitWarnedGroups_.insert(kv.first).second) {
@@ -647,32 +922,44 @@ void ParticleManager::Draw()
         } else {
             instancingLimitWarnedGroups_.erase(kv.first);
         }
-        Object3d* renderObject = group.renderObject ? group.renderObject : particlePlane_; // グループ用Primitive
+
+        Object3d* renderObject = group.renderObject ? group.renderObject : particlePlane_;
         if (!renderObject) {
             continue;
         }
 
         object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, group.useBillboard);
+
+        bool useGpuParticleTransform = false;
+        const uint32_t gpuParticleCount = UploadGpuParticleSource(group, count, view, projection);
+        if (gpuParticleCount == count && DispatchGpuParticleTransform(count)) {
+            const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+            object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
+            useGpuParticleTransform = true;
+        }
+
         object3dCommon_->SetInstancingDrawSetting();
 
-        uint32_t instanceIndex = 0; // インスタンスバッファへ書き込む位置
-        for (const PM_CpuParticle& particle : group.particles) {
-            if (instanceIndex >= count) {
-                break;
+        if (!useGpuParticleTransform) {
+            uint32_t instanceIndex = 0;
+            for (const PM_CpuParticle& particle : group.particles) {
+                if (instanceIndex >= count) {
+                    break;
+                }
+                Transform transform = particle.transform;
+                transform.translate.z += static_cast<float>(instanceIndex) * 1e-3f;
+
+                Matrix4x4 world = MathUtil::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+                Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, projection));
+                Matrix4x4 worldInverse = MathUtil::Inverse(world);
+                Matrix4x4 worldInverseTranspose = MathUtil::Transpose(worldInverse);
+
+                instancingData[instanceIndex].World = world;
+                instancingData[instanceIndex].WVP = wvp;
+                instancingData[instanceIndex].WorldInverseTranspose = worldInverseTranspose;
+                instancingData[instanceIndex].color = particle.color;
+                ++instanceIndex;
             }
-            Transform transform = particle.transform;
-            transform.translate.z += static_cast<float>(instanceIndex) * 1e-3f;
-
-            Matrix4x4 world = MathUtil::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-            Matrix4x4 wvp = MathUtil::Multiply(world, MathUtil::Multiply(view, projection));
-            Matrix4x4 worldInverse = MathUtil::Inverse(world);
-            Matrix4x4 worldInverseTranspose = MathUtil::Transpose(worldInverse);
-
-            instancingData[instanceIndex].World = world;
-            instancingData[instanceIndex].WVP = wvp;
-            instancingData[instanceIndex].WorldInverseTranspose = worldInverseTranspose;
-            instancingData[instanceIndex].color = particle.color;
-            ++instanceIndex;
         }
 
         if (auto* model = renderObject->GetModel()) {
@@ -680,9 +967,9 @@ void ParticleManager::Draw()
         } else {
             renderObject->DrawInstanced(count);
         }
+        object3dCommon_->ClearInstancingSrvOverride();
     }
 }
-
 /// <summary>
 /// 寿命の範囲を設定する
 /// </summary>

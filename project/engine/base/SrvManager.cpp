@@ -150,6 +150,14 @@ void SrvManager::SetGraphicsRootDescriptorTable(UINT rootParameterIndex, uint32_
 /// <summary>
 /// ImGui初期化処理
 /// </summary>
+/// <summary>
+/// ComputeShaderのルートパラメータにディスクリプタテーブルを設定する。
+/// </summary>
+void SrvManager::SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex)
+{
+    assert(dxCommon_); // DirectXCommonが初期化されていることを前提にする
+    dxCommon_->GetCommandList()->SetComputeRootDescriptorTable(rootParameterIndex, GetGPUDescriptorHandle(srvIndex));
+}
 void SrvManager::InitImGui()
 {
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提とする
