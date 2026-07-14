@@ -242,6 +242,11 @@ private:
     bool DispatchEmitGpuParticles();
 
     /// <summary>
+    /// GPU上のParticleを経過時間で更新する。
+    /// </summary>
+    bool DispatchUpdateGpuParticles();
+
+    /// <summary>
     /// GPU Emitterの経過時間と射出許可を更新する。
     /// </summary>
     void UpdateGpuEmitter(float dt);
@@ -293,6 +298,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emitParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> updateParticlePipelineState_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleSourceResources_;
     std::array<PM_GpuParticleSource*, DirectXCommon::kFrameCount> gpuParticleSourceData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleInfoResources_;

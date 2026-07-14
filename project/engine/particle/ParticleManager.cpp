@@ -674,6 +674,22 @@ void ParticleManager::InitializeGpuParticleResources()
         return;
     }
 
+    
+    Microsoft::WRL::ComPtr<IDxcBlob> updateShaderBlob = dxCommon_->CompileShader(L"resources/shaders/UpdateParticle.CS.hlsl", L"cs_6_0");
+    if (!updateShaderBlob) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to compile UpdateParticle.CS.hlsl.\n");
+        return;
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC updatePipelineDesc {};
+    updatePipelineDesc.pRootSignature = computeRootSignature_.Get();
+    updatePipelineDesc.CS = { updateShaderBlob->GetBufferPointer(), updateShaderBlob->GetBufferSize() };
+    hr = device->CreateComputePipelineState(&updatePipelineDesc, IID_PPV_ARGS(&updateParticlePipelineState_));
+    if (FAILED(hr)) {
+        Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create update particle pipeline state.\n");
+        return;
+    }
+
     const uint32_t particleLimit = GetParticleLimit();
     const size_t sourceBufferSize = sizeof(PM_GpuParticleSource) * particleLimit;
     const size_t infoBufferSize = (sizeof(PM_GpuParticleTransformInfo) + 0xff) & ~static_cast<size_t>(0xff);
@@ -828,7 +844,7 @@ uint32_t ParticleManager::UploadGpuParticleSource(const ParticleGroup& group, ui
         return 0;
     }
 
-    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
     if (!gpuParticleSourceData_[frameIndex] || !gpuParticleInfoData_[frameIndex]) {
         return 0;
     }
@@ -870,17 +886,17 @@ bool ParticleManager::DispatchInitializeGpuParticles()
         return false;
     }
 
-    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
     if (gpuParticleInitialized_[frameIndex]) {
         return true;
     }
 
-    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
     if (!commandList || !computeRootSignature_ || !initializeParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
         return false;
     }
 
-    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex];
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex]; // Particle Resourceの現在状態
     if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
         D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
             gpuParticleOutputResources_[frameIndex].Get(),
@@ -927,8 +943,8 @@ bool ParticleManager::DispatchEmitGpuParticles()
         return true;
     }
 
-    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
-    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
     if (!commandList || !computeRootSignature_ || !emitParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex] || !gpuFreeCounterResources_[frameIndex]) {
         return false;
     }
@@ -940,7 +956,7 @@ bool ParticleManager::DispatchEmitGpuParticles()
         *gpuPerFrameData_[frameIndex] = gpuPerFrameState_;
     }
 
-    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex];
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex]; // Particle Resourceの現在状態
     if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
         D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
             gpuParticleOutputResources_[frameIndex].Get(),
@@ -980,6 +996,53 @@ bool ParticleManager::DispatchEmitGpuParticles()
     return true;
 }
 
+
+/// <summary>
+/// GPU上のParticleを経過時間で更新する。
+/// </summary>
+bool ParticleManager::DispatchUpdateGpuParticles()
+{
+    if (!gpuParticleReady_ || !dxCommon_ || !srvManager_ || gpuEmitterVisibleCount_ == 0) {
+        return true;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
+    if (!commandList || !computeRootSignature_ || !updateParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
+        return false;
+    }
+
+    if (gpuPerFrameData_[frameIndex]) {
+        *gpuPerFrameData_[frameIndex] = gpuPerFrameState_;
+    }
+
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex]; // Particle Resourceの現在状態
+    if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuParticleOutputResources_[frameIndex].Get(),
+            outputState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &toUavBarrier);
+        outputState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
+    commandList->SetComputeRootSignature(computeRootSignature_.Get());
+    commandList->SetPipelineState(updateParticlePipelineState_.Get());
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
+    commandList->SetComputeRootConstantBufferView(kComputeRootParameterPerFrameCbv, gpuPerFrameResources_[frameIndex]->GetGPUVirtualAddress());
+    commandList->Dispatch(1, 1, 1);
+
+    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
+    commandList->ResourceBarrier(1, &uavBarrier);
+
+    D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        gpuParticleOutputResources_[frameIndex].Get(),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    commandList->ResourceBarrier(1, &toSrvBarrier);
+    outputState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    return true;
+}
 /// <summary>
 /// GPU Emitterの経過時間と射出許可を更新する。
 /// </summary>
@@ -1002,13 +1065,13 @@ bool ParticleManager::DispatchGpuParticleTransform(uint32_t count)
         return false;
     }
 
-    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
-    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
     if (!commandList || !computeRootSignature_ || !computePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
         return false;
     }
 
-    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex];
+    D3D12_RESOURCE_STATES& outputState = gpuParticleOutputStates_[frameIndex]; // Particle Resourceの現在状態
     if (outputState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
         D3D12_RESOURCE_BARRIER toUavBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
             gpuParticleOutputResources_[frameIndex].Get(),
@@ -1161,7 +1224,7 @@ void ParticleManager::Draw()
             continue;
         }
 
-        const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
         object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
         object3dCommon_->SetInstancingDrawSetting();
 
@@ -1173,14 +1236,13 @@ void ParticleManager::Draw()
         object3dCommon_->ClearInstancingSrvOverride();
     }
 
-    if (gpuEmitterState_.emit != 0 && !particleGroups_.empty()) {
+    if (gpuEmitterVisibleCount_ > 0 && !particleGroups_.empty()) {
         auto drawGroupIterator = particleGroups_.begin();
         ParticleGroup& gpuEmitterGroup = drawGroupIterator->second;
         Object3d* renderObject = gpuEmitterGroup.renderObject ? gpuEmitterGroup.renderObject : particlePlane_;
-        const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex();
-        gpuParticleInitialized_[frameIndex] = false;
-        if (renderObject && DispatchInitializeGpuParticles() && DispatchEmitGpuParticles()) {
-            const uint32_t drawCount = (std::min)(gpuEmitterState_.count, instancingSlots);
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
+        if (renderObject && DispatchInitializeGpuParticles() && DispatchEmitGpuParticles() && DispatchUpdateGpuParticles()) {
+            const uint32_t drawCount = (std::min)(gpuEmitterVisibleCount_, instancingSlots);
             object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, gpuEmitterGroup.useBillboard);
             object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
             object3dCommon_->SetInstancingDrawSetting();
