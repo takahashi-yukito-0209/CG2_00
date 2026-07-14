@@ -587,6 +587,7 @@ void Game::Update()
             projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
         }
     }
+
     Matrix4x4 worldViewProjectionMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
 
     // Object3dCommon にカメラのワールド位置をセット
