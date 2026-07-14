@@ -248,6 +248,9 @@
     <FxCompile Include="resources\shaders\Particle.VS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
+    <FxCompile Include="resources\shaders\EmitParticle.CS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
     <FxCompile Include="resources\shaders\InitializeParticle.CS.hlsl">
       <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
     </FxCompile>

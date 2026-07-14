@@ -58,6 +58,21 @@ struct PM_GpuParticleTransformInfo {
     Math::Matrix4x4 view;
     Math::Matrix4x4 projection;
 };
+
+struct PM_GpuEmitterSphere {
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f };
+    float radius = 3.0f;
+    uint32_t count = 1024;
+    float frequency = 0.016f;
+    float frequencyTime = 0.0f;
+    uint32_t emit = 0;
+};
+
+struct PM_GpuPerFrame {
+    float time = 0.0f;
+    float deltaTime = 0.0f;
+    float padding[2] {};
+};
 namespace MyEngine {
 
 /// <summary>
@@ -220,6 +235,16 @@ private:
     /// GPU上のParticle Resourceを初期化する。
     /// </summary>
     bool DispatchInitializeGpuParticles();
+
+    /// <summary>
+    /// GPU上でEmitterからParticleを発生させる。
+    /// </summary>
+    bool DispatchEmitGpuParticles();
+
+    /// <summary>
+    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// </summary>
+    void UpdateGpuEmitter(float dt);
     /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
@@ -267,17 +292,28 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emitParticlePipelineState_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleSourceResources_;
     std::array<PM_GpuParticleSource*, DirectXCommon::kFrameCount> gpuParticleSourceData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleInfoResources_;
     std::array<PM_GpuParticleTransformInfo*, DirectXCommon::kFrameCount> gpuParticleInfoData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuEmitterResources_;
+    std::array<PM_GpuEmitterSphere*, DirectXCommon::kFrameCount> gpuEmitterData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuPerFrameResources_;
+    std::array<PM_GpuPerFrame*, DirectXCommon::kFrameCount> gpuPerFrameData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeCounterResources_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleOutputResources_;
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleSourceSrvIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputSrvIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuFreeCounterUavIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> gpuParticleOutputSrvHandlesGPU_ {};
     std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuParticleOutputStates_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuFreeCounterStates_ {};
     std::array<bool, DirectXCommon::kFrameCount> gpuParticleInitialized_ {};
+    PM_GpuEmitterSphere gpuEmitterState_ {};
+    PM_GpuPerFrame gpuPerFrameState_ {};
+    uint32_t gpuEmitterVisibleCount_ = 0;
     bool gpuParticleReady_ = false;
 };
 

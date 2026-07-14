@@ -22,6 +22,7 @@ class PostProcess;
 }
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace MyEngine {
@@ -60,6 +61,7 @@ public: // メンバ関数
         float dt = 0.0f; // フレームのデルタタイム
         bool* useDebugCameraForRender = nullptr; // 描画にデバッグカメラを使用するか
         int* selectedDrawType = nullptr; // 現在の描画対象を選択する値
+        std::function<void(const char*)> requestSceneChange; // ImGuiからのシーン切替要求
         const char* currentSceneName = nullptr; // 現在のシーン名
         PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス
         SrvManager* srvManager = nullptr; // Scene View用SRVをGPUハンドルへ変換する管理クラス

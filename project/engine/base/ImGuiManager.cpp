@@ -1,4 +1,5 @@
 #include "ImGuiManager.h"
+#include <cstring>
 #include "engine/utility/Logger.h"
 #include <cstdint>
 #include <d3d12.h>
@@ -315,6 +316,23 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
         }
 
+        if (ctx.requestSceneChange) {
+            const char* sceneNames[] = {
+                "Title",
+                "Play",
+            }; // ImGuiから切り替え可能なシーン名
+            constexpr int sceneCount = static_cast<int>(sizeof(sceneNames) / sizeof(sceneNames[0])); // シーン数
+            int selectedSceneIndex = 0; // 現在選択されているシーン番号
+            for (int sceneIndex = 0; sceneIndex < sceneCount; ++sceneIndex) {
+                if (ctx.currentSceneName && std::strcmp(ctx.currentSceneName, sceneNames[sceneIndex]) == 0) {
+                    selectedSceneIndex = sceneIndex;
+                    break;
+                }
+            }
+            if (ImGui::Combo("Scene##SceneSelector", &selectedSceneIndex, sceneNames, sceneCount)) {
+                ctx.requestSceneChange(sceneNames[selectedSceneIndex]);
+            }
+        }
         if (ctx.selectedDrawType) {
             const char* drawTypeLabels[] = {
                 "Model",

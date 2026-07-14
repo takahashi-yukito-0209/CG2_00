@@ -637,6 +637,18 @@ void Game::Draw()
     // ImGui の新しいフレームを開始する。これにより、ImGui の内部状態がリセットされ、UIの構築が可能になる
     impl_->imguiManager.NewFrame();
 
+    // 保留中のシーン切替はImGui構築前に反映し、UI表示と描画対象を同じシーンに揃える。
+    if (impl_->pendingSceneName.size() > 0) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
+            impl_->pendingSceneName.clear();
+        } else {
+            auto newScene = GameApp::SceneFactory::Create(impl_->pendingSceneName);
+            if (newScene && impl_->sceneManager) {
+                impl_->sceneManager->ChangeScene(std::move(newScene));
+            }
+            impl_->pendingSceneName.clear();
+        }
+    }
     ImGuiManager::Context ctx;
     // 描画に必要な情報を ImGuiManager::Context にセットして、UIの構築に使用できるようにする
     ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをセット
@@ -675,6 +687,11 @@ void Game::Draw()
     ctx.dt = kFixedDeltaTime;
     ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
     ctx.selectedDrawType = &impl_->selectedDrawType;
+    ctx.requestSceneChange = [this](const char* sceneName) {
+        if (sceneName) {
+            impl_->pendingSceneName = sceneName;
+        }
+    };
     // シーン名を ImGui に渡す
     if (impl_->sceneManager) {
         static std::string sname;
@@ -694,21 +711,6 @@ void Game::Draw()
         impl_->sceneManager->GetCurrent()->DrawImGui();
     }
 
-    // 入力処理などでシーン切替要求がある場合は、ここで安全に反映する
-    if (impl_->pendingSceneName.size() > 0) {
-
-        if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
-            impl_->pendingSceneName.clear();
-        } else {
-            auto newScene = GameApp::SceneFactory::Create(impl_->pendingSceneName);
-            if (newScene && impl_->sceneManager) {
-                impl_->sceneManager->ChangeScene(std::move(newScene));
-            }
-            impl_->pendingSceneName.clear();
-        }
-    }
-
-    // 描画前の共通処理を呼び出す（バックバッファのクリアやコマンドリストの開始など）
     DirectXCommon::GetInstance()->PreDraw();
     // SrvManager の PreDraw を呼び出して、描画に必要なシェーダーリソースビューのセットアップを行う
     impl_->srvManager.PreDraw();
