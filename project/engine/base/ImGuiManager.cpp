@@ -260,6 +260,7 @@ void ImGuiManager::DrawDockSpace()
 void ImGuiManager::DrawSceneViewWindow(Context& ctx)
 {
 #ifdef USE_IMGUI
+    sceneViewHovered_ = false; // Scene Viewが無効なフレームで前回のhover状態を残さない
     ImGui::Begin("Scene View");
 
     const bool hasSceneTexture = ctx.srvManager && ctx.sceneViewSrvIndex != UINT32_MAX; // Scene Viewへ表示できるSRVがあるか
@@ -299,6 +300,7 @@ void ImGuiManager::DrawSceneViewWindow(Context& ctx)
     D3D12_GPU_DESCRIPTOR_HANDLE sceneSrvHandle = ctx.srvManager->GetGPUDescriptorHandle(ctx.sceneViewSrvIndex); // Scene View用SRVのGPUハンドル
     ImTextureRef sceneTexture(static_cast<ImTextureID>(sceneSrvHandle.ptr)); // ImGuiへ渡すテクスチャ参照
     ImGui::Image(sceneTexture, imageSize);
+    sceneViewHovered_ = ImGui::IsItemHovered(); // Scene View画像上ならカメラ操作を許可する
 
     ImGui::End();
 #else

@@ -85,6 +85,11 @@ public: // メンバ関数
     /// </summary>
     bool IsCapturingInput();
 
+    /// <summary>
+    /// Scene Viewの描画領域にマウスが乗っているかを取得する
+    /// </summary>
+    bool IsSceneViewHovered() const { return sceneViewHovered_; }
+
 private: // メンバ関数
     /// <summary>
     /// シーン描画結果をScene Viewウィンドウへ表示する
@@ -130,5 +135,8 @@ private: // メンバ関数
     /// カメラ関連のImGuiを描画する
     /// </summary>
     void DrawCameraWindow(Context& ctx);
+
+private:
+    bool sceneViewHovered_ = false; // Scene Viewの描画領域にマウスが乗っているか
 };
 } // namespace MyEngine

@@ -21,6 +21,14 @@ struct EmitterSphere
     float frequency;
     float frequencyTime;
     uint emit;
+    float3 baseScale;
+    float randomScale;
+    float3 velocityScale;
+    float lifeTime;
+    float4 colorMin;
+    float4 colorMax;
+    uint debugGridMode;
+    float3 padding;
 };
 
 struct PerFrame
@@ -33,7 +41,8 @@ struct PerFrame
 ConstantBuffer<EmitterSphere> gEmitter : register(b1);
 ConstantBuffer<PerFrame> gPerFrame : register(b2);
 RWStructuredBuffer<Particle> gParticles : register(u0);
-RWStructuredBuffer<int> gFreeCounter : register(u1);
+RWStructuredBuffer<int> gFreeListIndex : register(u1);
+RWStructuredBuffer<uint> gFreeList : register(u2);
 
 float Rand1d(float3 seed)
 {
@@ -58,13 +67,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     for (uint countIndex = 0; countIndex < gEmitter.count; ++countIndex)
     {
-        int particleIndex = 0;
-        InterlockedAdd(gFreeCounter[0], 1, particleIndex);
-        if (particleIndex >= kMaxParticles)
+        int freeListIndex = 0;
+        InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
+        if (freeListIndex < 0 || freeListIndex >= kMaxParticles)
         {
-            continue;
+            InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
+            break;
         }
 
+        uint particleIndex = gFreeList[freeListIndex];
         float3 seed = float3(
             float(particleIndex) + float(countIndex),
             gPerFrame.time,
@@ -75,13 +86,29 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float angle = Rand1d(seed + randomColor) * 6.28318530718f;
 
         Particle particle = (Particle)0;
-        particle.scale = float3(0.15f, 0.15f, 0.15f) + randomScale * 0.25f;
-        particle.rotate = float3(0.0f, 0.0f, angle);
-        particle.translate = gEmitter.translate + (randomTranslate * 2.0f - 1.0f) * gEmitter.radius;
-        particle.velocity = (randomTranslate * 2.0f - 1.0f) * 0.5f;
-        particle.lifeTime = 1.0f;
-        particle.currentTime = 0.0f;
-        particle.color = float4(randomColor, 1.0f);
+        if (gEmitter.debugGridMode != 0)
+        {
+            uint gridX = particleIndex % 32;
+            uint gridY = particleIndex / 32;
+            float2 gridPosition = (float2(gridX, gridY) - float2(15.5f, 15.5f)) * max(gEmitter.radius, 0.05f) * 0.25f;
+            particle.scale = gEmitter.baseScale;
+            particle.rotate = float3(0.0f, 0.0f, 0.0f);
+            particle.translate = gEmitter.translate + float3(gridPosition.x, gridPosition.y, 0.0f);
+            particle.velocity = float3(0.0f, 0.0f, 0.0f);
+            particle.lifeTime = max(gEmitter.lifeTime, 0.0001f);
+            particle.currentTime = 0.0f;
+            particle.color = gEmitter.colorMax;
+        }
+        else
+        {
+            particle.scale = gEmitter.baseScale + randomScale * gEmitter.randomScale;
+            particle.rotate = float3(0.0f, 0.0f, angle);
+            particle.translate = gEmitter.translate + (randomTranslate * 2.0f - 1.0f) * gEmitter.radius;
+            particle.velocity = (randomTranslate * 2.0f - 1.0f) * gEmitter.velocityScale;
+            particle.lifeTime = max(gEmitter.lifeTime, 0.0001f);
+            particle.currentTime = 0.0f;
+            particle.color = lerp(gEmitter.colorMin, gEmitter.colorMax, float4(randomColor, Rand1d(seed + angle)));
+        }
         gParticles[particleIndex] = particle;
     }
 }

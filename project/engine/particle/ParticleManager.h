@@ -23,7 +23,7 @@ struct PM_CpuParticle {
     Math::Vector3 velocity;
     Math::Vector4 color;
     Math::Vector4 startColor;
-    float lifeTime = 1.0f;
+    float lifeTime = 0.55f;
     float currentTime = 0.0f;
     float spawnTime = 0.0f;
     bool useScaleOverLife = false;
@@ -60,12 +60,20 @@ struct PM_GpuParticleTransformInfo {
 };
 
 struct PM_GpuEmitterSphere {
-    Math::Vector3 translate { 0.0f, 0.0f, 0.0f };
-    float radius = 3.0f;
-    uint32_t count = 1024;
-    float frequency = 0.016f;
-    float frequencyTime = 0.0f;
-    uint32_t emit = 0;
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // 発生中心座標
+    float radius = 5.0f; // 球状に散らす半径
+    uint32_t count = 1024; // 1回の射出で発生させる数
+    float frequency = 0.02f; // 射出間隔
+    float frequencyTime = 0.0f; // 射出間隔の経過時間
+    uint32_t emit = 0; // 射出許可フラグ
+    Math::Vector3 baseScale { 0.10f, 0.10f, 0.10f }; // 最小スケール
+    float randomScale = 0.20f; // ランダムに加算するスケール幅
+    Math::Vector3 velocityScale { 1.2f, 1.2f, 1.2f }; // 速度倍率
+    float lifeTime = 0.55f; // 寿命
+    Math::Vector4 colorMin { 0.35f, 0.55f, 0.9f, 1.0f }; // ランダム色の最小値
+    Math::Vector4 colorMax { 1.0f, 1.0f, 1.0f, 1.0f }; // ランダム色の最大値
+    uint32_t debugGridMode = 0; // 1024個確認用の格子配置を使うか
+    float padding[3] {}; // ConstantBufferの16byte境界調整
 };
 
 struct PM_GpuPerFrame {
@@ -308,18 +316,25 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuPerFrameResources_;
     std::array<PM_GpuPerFrame*, DirectXCommon::kFrameCount> gpuPerFrameData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeCounterResources_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeListResources_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleOutputResources_;
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleSourceSrvIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputSrvIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputUavIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuFreeCounterUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuFreeListUavIndices_ { UINT32_MAX, UINT32_MAX };
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> gpuParticleOutputSrvHandlesGPU_ {};
     std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuParticleOutputStates_ {};
     std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuFreeCounterStates_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuFreeListStates_ {};
     std::array<bool, DirectXCommon::kFrameCount> gpuParticleInitialized_ {};
     PM_GpuEmitterSphere gpuEmitterState_ {};
     PM_GpuPerFrame gpuPerFrameState_ {};
     uint32_t gpuEmitterVisibleCount_ = 0;
+    bool gpuEmitterAutoEmit_ = true; // GPU Particleを自動発生させるか
+    bool gpuEmitterManualEmitRequested_ = false; // 次の更新で1回だけ発生させるか
+    bool gpuParticleUpdateEnabled_ = true; // GPU Particleの寿命と移動を更新するか
+    bool gpuParticleDrawEnabled_ = true; // GPU Particleを描画するか
     bool gpuParticleReady_ = false;
 };
 

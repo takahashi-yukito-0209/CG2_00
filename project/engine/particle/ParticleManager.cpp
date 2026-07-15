@@ -75,7 +75,8 @@ constexpr uint32_t kComputeRootParameterOutputUav = 1; // Compute出力UAVのル
 constexpr uint32_t kComputeRootParameterInfoCbv = 2; // Compute定数バッファのルート番号 // Rift破片の向き補正
 constexpr uint32_t kComputeRootParameterEmitterCbv = 3; // GPU Emitter用CBVのルート番号
 constexpr uint32_t kComputeRootParameterPerFrameCbv = 4; // GPU Emitter用フレームCBVのルート番号
-constexpr uint32_t kComputeRootParameterFreeCounterUav = 5; // GPU Emitter用Counter UAVのルート番号
+constexpr uint32_t kComputeRootParameterFreeCounterUav = 5; // GPU Emitter用FreeListIndex UAVのルート番号
+constexpr uint32_t kComputeRootParameterFreeListUav = 6; // GPU Emitter用FreeList UAVのルート番号
 }
 
 /// <summary>
@@ -588,7 +589,13 @@ void ParticleManager::InitializeGpuParticleResources()
     freeCounterUavRange.BaseShaderRegister = 1;
     freeCounterUavRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[6] {};
+    D3D12_DESCRIPTOR_RANGE freeListUavRange {};
+    freeListUavRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    freeListUavRange.NumDescriptors = 1;
+    freeListUavRange.BaseShaderRegister = 2;
+    freeListUavRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[7] {};
     rootParameters[kComputeRootParameterSourceSrv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[kComputeRootParameterSourceSrv].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[kComputeRootParameterSourceSrv].DescriptorTable.pDescriptorRanges = &sourceSrvRange;
@@ -610,6 +617,10 @@ void ParticleManager::InitializeGpuParticleResources()
     rootParameters[kComputeRootParameterFreeCounterUav].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[kComputeRootParameterFreeCounterUav].DescriptorTable.pDescriptorRanges = &freeCounterUavRange;
     rootParameters[kComputeRootParameterFreeCounterUav].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[kComputeRootParameterFreeListUav].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[kComputeRootParameterFreeListUav].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[kComputeRootParameterFreeListUav].DescriptorTable.pDescriptorRanges = &freeListUavRange;
+    rootParameters[kComputeRootParameterFreeListUav].DescriptorTable.NumDescriptorRanges = 1;
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc {};
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumParameters = _countof(rootParameters);
@@ -697,6 +708,7 @@ void ParticleManager::InitializeGpuParticleResources()
     const size_t emitterBufferSize = (sizeof(PM_GpuEmitterSphere) + 0xff) & ~static_cast<size_t>(0xff);
     const size_t perFrameBufferSize = (sizeof(PM_GpuPerFrame) + 0xff) & ~static_cast<size_t>(0xff);
     const size_t freeCounterBufferSize = sizeof(int32_t);
+    const size_t freeListBufferSize = sizeof(uint32_t) * particleLimit;
 
     D3D12_SHADER_RESOURCE_VIEW_DESC sourceSrvDesc {};
     sourceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -727,6 +739,13 @@ void ParticleManager::InitializeGpuParticleResources()
     freeCounterUavDesc.Buffer.StructureByteStride = sizeof(int32_t);
     freeCounterUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
+    D3D12_UNORDERED_ACCESS_VIEW_DESC freeListUavDesc {};
+    freeListUavDesc.Format = DXGI_FORMAT_UNKNOWN;
+    freeListUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    freeListUavDesc.Buffer.NumElements = particleLimit;
+    freeListUavDesc.Buffer.StructureByteStride = sizeof(uint32_t);
+    freeListUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
         if (!srvManager_->CanAllocate()) {
             Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate source SRV.\n");
@@ -756,6 +775,7 @@ void ParticleManager::InitializeGpuParticleResources()
         }
         gpuParticleOutputStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
         gpuFreeCounterStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
+        gpuFreeListStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
 
         if (!srvManager_->CanAllocate()) {
             Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate output SRV.\n");
@@ -789,6 +809,22 @@ void ParticleManager::InitializeGpuParticleResources()
         }
         gpuFreeCounterUavIndices_[frameIndex] = srvManager_->Allocate();
         device->CreateUnorderedAccessView(gpuFreeCounterResources_[frameIndex].Get(), nullptr, &freeCounterUavDesc, srvManager_->GetCPUDescriptorHandle(gpuFreeCounterUavIndices_[frameIndex]));
+
+        D3D12_RESOURCE_DESC freeListResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(freeListBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        hr = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &freeListResourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&gpuFreeListResources_[frameIndex]));
+        if (FAILED(hr)) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to create free list buffer.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+
+        if (!srvManager_->CanAllocate()) {
+            Logger::Warn("ParticleManager::InitializeGpuParticleResources: failed to allocate free list UAV.\n");
+            FinalizeGpuParticleResources();
+            return;
+        }
+        gpuFreeListUavIndices_[frameIndex] = srvManager_->Allocate();
+        device->CreateUnorderedAccessView(gpuFreeListResources_[frameIndex].Get(), nullptr, &freeListUavDesc, srvManager_->GetCPUDescriptorHandle(gpuFreeListUavIndices_[frameIndex]));
     }
 
     gpuParticleReady_ = true;
@@ -810,6 +846,12 @@ void ParticleManager::FinalizeGpuParticleResources()
             if (gpuParticleOutputUavIndices_[frameIndex] != UINT32_MAX) {
                 srvManager_->Free(gpuParticleOutputUavIndices_[frameIndex]);
             }
+            if (gpuFreeCounterUavIndices_[frameIndex] != UINT32_MAX) {
+                srvManager_->Free(gpuFreeCounterUavIndices_[frameIndex]);
+            }
+            if (gpuFreeListUavIndices_[frameIndex] != UINT32_MAX) {
+                srvManager_->Free(gpuFreeListUavIndices_[frameIndex]);
+            }
         }
     }
 
@@ -818,19 +860,25 @@ void ParticleManager::FinalizeGpuParticleResources()
         gpuParticleOutputSrvIndices_[frameIndex] = UINT32_MAX;
         gpuParticleOutputUavIndices_[frameIndex] = UINT32_MAX;
         gpuFreeCounterUavIndices_[frameIndex] = UINT32_MAX;
+        gpuFreeListUavIndices_[frameIndex] = UINT32_MAX;
         gpuParticleOutputSrvHandlesGPU_[frameIndex] = {};
         gpuParticleOutputStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
         gpuFreeCounterStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
+        gpuFreeListStates_[frameIndex] = D3D12_RESOURCE_STATE_COMMON;
         gpuParticleInitialized_[frameIndex] = false;
         gpuParticleSourceData_[frameIndex] = nullptr;
         gpuParticleInfoData_[frameIndex] = nullptr;
         gpuParticleSourceResources_[frameIndex].Reset();
         gpuParticleInfoResources_[frameIndex].Reset();
         gpuParticleOutputResources_[frameIndex].Reset();
+        gpuFreeCounterResources_[frameIndex].Reset();
+        gpuFreeListResources_[frameIndex].Reset();
     }
 
     computePipelineState_.Reset();
     initializeParticlePipelineState_.Reset();
+    emitParticlePipelineState_.Reset();
+    updateParticlePipelineState_.Reset();
     computeRootSignature_.Reset();
     gpuParticleReady_ = false;
 }
@@ -892,7 +940,7 @@ bool ParticleManager::DispatchInitializeGpuParticles()
     }
 
     ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
-    if (!commandList || !computeRootSignature_ || !initializeParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
+    if (!commandList || !computeRootSignature_ || !initializeParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex] || !gpuFreeCounterResources_[frameIndex] || !gpuFreeListResources_[frameIndex]) {
         return false;
     }
 
@@ -916,14 +964,29 @@ bool ParticleManager::DispatchInitializeGpuParticles()
         counterState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
 
+    D3D12_RESOURCE_STATES& freeListState = gpuFreeListStates_[frameIndex];
+    if (freeListState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER freeListBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuFreeListResources_[frameIndex].Get(),
+            freeListState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &freeListBarrier);
+        freeListState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
     commandList->SetComputeRootSignature(computeRootSignature_.Get());
     commandList->SetPipelineState(initializeParticlePipelineState_.Get());
     srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
     srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeCounterUav, gpuFreeCounterUavIndices_[frameIndex]);
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeListUav, gpuFreeListUavIndices_[frameIndex]);
     commandList->Dispatch(1, 1, 1);
 
-    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
-    commandList->ResourceBarrier(1, &uavBarrier);
+    D3D12_RESOURCE_BARRIER uavBarriers[] = {
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeCounterResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeListResources_[frameIndex].Get()),
+    };
+    commandList->ResourceBarrier(_countof(uavBarriers), uavBarriers);
 
     D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         gpuParticleOutputResources_[frameIndex].Get(),
@@ -945,7 +1008,7 @@ bool ParticleManager::DispatchEmitGpuParticles()
 
     const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
     ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
-    if (!commandList || !computeRootSignature_ || !emitParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex] || !gpuFreeCounterResources_[frameIndex]) {
+    if (!commandList || !computeRootSignature_ || !emitParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex] || !gpuFreeCounterResources_[frameIndex] || !gpuFreeListResources_[frameIndex]) {
         return false;
     }
 
@@ -976,16 +1039,32 @@ bool ParticleManager::DispatchEmitGpuParticles()
         counterState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
 
+    D3D12_RESOURCE_STATES& freeListState = gpuFreeListStates_[frameIndex];
+    if (freeListState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER freeListBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuFreeListResources_[frameIndex].Get(),
+            freeListState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &freeListBarrier);
+        freeListState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
+
     commandList->SetComputeRootSignature(computeRootSignature_.Get());
     commandList->SetPipelineState(emitParticlePipelineState_.Get());
     srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
     srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeCounterUav, gpuFreeCounterUavIndices_[frameIndex]);
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeListUav, gpuFreeListUavIndices_[frameIndex]);
     commandList->SetComputeRootConstantBufferView(kComputeRootParameterEmitterCbv, gpuEmitterResources_[frameIndex]->GetGPUVirtualAddress());
     commandList->SetComputeRootConstantBufferView(kComputeRootParameterPerFrameCbv, gpuPerFrameResources_[frameIndex]->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 
-    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
-    commandList->ResourceBarrier(1, &uavBarrier);
+    D3D12_RESOURCE_BARRIER uavBarriers[] = {
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeCounterResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeListResources_[frameIndex].Get()),
+    };
+    commandList->ResourceBarrier(_countof(uavBarriers), uavBarriers);
 
     D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         gpuParticleOutputResources_[frameIndex].Get(),
@@ -1008,7 +1087,7 @@ bool ParticleManager::DispatchUpdateGpuParticles()
 
     const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
     ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList(); // Dispatchを発行するコマンドリスト
-    if (!commandList || !computeRootSignature_ || !updateParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex]) {
+    if (!commandList || !computeRootSignature_ || !updateParticlePipelineState_ || !gpuParticleOutputResources_[frameIndex] || !gpuFreeCounterResources_[frameIndex] || !gpuFreeListResources_[frameIndex]) {
         return false;
     }
 
@@ -1026,14 +1105,40 @@ bool ParticleManager::DispatchUpdateGpuParticles()
         outputState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
 
+    D3D12_RESOURCE_STATES& counterState = gpuFreeCounterStates_[frameIndex];
+    if (counterState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER counterBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuFreeCounterResources_[frameIndex].Get(),
+            counterState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &counterBarrier);
+        counterState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
+    D3D12_RESOURCE_STATES& freeListState = gpuFreeListStates_[frameIndex];
+    if (freeListState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER freeListBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            gpuFreeListResources_[frameIndex].Get(),
+            freeListState,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->ResourceBarrier(1, &freeListBarrier);
+        freeListState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
     commandList->SetComputeRootSignature(computeRootSignature_.Get());
     commandList->SetPipelineState(updateParticlePipelineState_.Get());
     srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterOutputUav, gpuParticleOutputUavIndices_[frameIndex]);
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeCounterUav, gpuFreeCounterUavIndices_[frameIndex]);
+    srvManager_->SetComputeRootDescriptorTable(kComputeRootParameterFreeListUav, gpuFreeListUavIndices_[frameIndex]);
     commandList->SetComputeRootConstantBufferView(kComputeRootParameterPerFrameCbv, gpuPerFrameResources_[frameIndex]->GetGPUVirtualAddress());
     commandList->Dispatch(1, 1, 1);
 
-    D3D12_RESOURCE_BARRIER uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get());
-    commandList->ResourceBarrier(1, &uavBarrier);
+    D3D12_RESOURCE_BARRIER uavBarriers[] = {
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuParticleOutputResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeCounterResources_[frameIndex].Get()),
+        CD3DX12_RESOURCE_BARRIER::UAV(gpuFreeListResources_[frameIndex].Get()),
+    };
+    commandList->ResourceBarrier(_countof(uavBarriers), uavBarriers);
 
     D3D12_RESOURCE_BARRIER toSrvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         gpuParticleOutputResources_[frameIndex].Get(),
@@ -1049,14 +1154,25 @@ bool ParticleManager::DispatchUpdateGpuParticles()
 void ParticleManager::UpdateGpuEmitter(float dt)
 {
     gpuPerFrameState_.time = globalTime_;
-    gpuPerFrameState_.deltaTime = dt;
+    gpuPerFrameState_.deltaTime = gpuParticleUpdateEnabled_ ? dt : 0.0f;
+    gpuEmitterState_.emit = 0;
+
+    if (gpuEmitterManualEmitRequested_) {
+        gpuEmitterManualEmitRequested_ = false;
+        gpuEmitterState_.emit = 1;
+        gpuEmitterVisibleCount_ = (std::min)(GetParticleLimit(), gpuEmitterVisibleCount_ + gpuEmitterState_.count);
+        return;
+    }
+
+    if (!gpuEmitterAutoEmit_) {
+        return;
+    }
+
     gpuEmitterState_.frequencyTime += dt;
     if (gpuEmitterState_.frequencyTime >= gpuEmitterState_.frequency) {
         gpuEmitterState_.frequencyTime -= gpuEmitterState_.frequency;
         gpuEmitterState_.emit = 1;
         gpuEmitterVisibleCount_ = (std::min)(GetParticleLimit(), gpuEmitterVisibleCount_ + gpuEmitterState_.count);
-    } else {
-        gpuEmitterState_.emit = 0;
     }
 }
 bool ParticleManager::DispatchGpuParticleTransform(uint32_t count)
@@ -1236,7 +1352,7 @@ void ParticleManager::Draw()
         object3dCommon_->ClearInstancingSrvOverride();
     }
 
-    if (gpuEmitterVisibleCount_ > 0 && !particleGroups_.empty()) {
+    if (gpuParticleDrawEnabled_ && gpuEmitterVisibleCount_ > 0 && !particleGroups_.empty()) {
         auto drawGroupIterator = particleGroups_.begin();
         ParticleGroup& gpuEmitterGroup = drawGroupIterator->second;
         Object3d* renderObject = gpuEmitterGroup.renderObject ? gpuEmitterGroup.renderObject : particlePlane_;
@@ -1414,6 +1530,163 @@ void ParticleManager::DrawImGui()
         ImGui::ColorEdit4("Color Max", &colMax_.x);
     }
 
+    if (ImGui::CollapsingHeader("GPU Particle", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Ready: %s", gpuParticleReady_ ? "true" : "false");
+        ImGui::Text("Visible Count: %u / %u", gpuEmitterVisibleCount_, GetParticleLimit());
+        ImGui::Checkbox("Auto Emit", &gpuEmitterAutoEmit_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Update GPU Particles", &gpuParticleUpdateEnabled_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Draw GPU Particles", &gpuParticleDrawEnabled_);
+
+        ImGui::DragFloat3(
+            "Emitter Position",
+            &gpuEmitterState_.translate.x,
+            kImGuiFineStep,
+            kImGuiSpawnPositionMin,
+            kImGuiSpawnPositionMax);
+        ImGui::DragFloat(
+            "Emitter Radius",
+            &gpuEmitterState_.radius,
+            kImGuiFineStep,
+            0.0f,
+            kImGuiSpawnPositionMax);
+
+        int gpuEmitCount = static_cast<int>(gpuEmitterState_.count); // ImGui編集用の射出数
+        if (ImGui::SliderInt("Emit Count", &gpuEmitCount, 0, static_cast<int>(GetParticleLimit()))) {
+            gpuEmitterState_.count = static_cast<uint32_t>((std::max)(gpuEmitCount, 0));
+        }
+
+        ImGui::DragFloat(
+            "Frequency",
+            &gpuEmitterState_.frequency,
+            kImGuiFineStep,
+            0.001f,
+            10.0f);
+        gpuEmitterState_.frequency = (std::max)(gpuEmitterState_.frequency, 0.001f);
+
+        ImGui::DragFloat3(
+            "Base Scale",
+            &gpuEmitterState_.baseScale.x,
+            kImGuiFineStep,
+            kImGuiScaleMin,
+            kImGuiScaleMax);
+        ImGui::DragFloat(
+            "Random Scale",
+            &gpuEmitterState_.randomScale,
+            kImGuiFineStep,
+            0.0f,
+            kImGuiScaleMax);
+        gpuEmitterState_.randomScale = (std::max)(gpuEmitterState_.randomScale, 0.0f);
+
+        ImGui::DragFloat3(
+            "Velocity Scale",
+            &gpuEmitterState_.velocityScale.x,
+            kImGuiFineStep,
+            kImGuiPhysicsMin,
+            kImGuiPhysicsMax);
+        ImGui::DragFloat(
+            "Life Time",
+            &gpuEmitterState_.lifeTime,
+            kImGuiFineStep,
+            kImGuiLifeMin,
+            kImGuiLifeMax);
+        gpuEmitterState_.lifeTime = std::clamp(gpuEmitterState_.lifeTime, kImGuiLifeMin, kImGuiLifeMax);
+
+        ImGui::ColorEdit4("GPU Color Min", &gpuEmitterState_.colorMin.x);
+        ImGui::ColorEdit4("GPU Color Max", &gpuEmitterState_.colorMax.x);
+
+        bool debugGridMode = gpuEmitterState_.debugGridMode != 0; // ImGui編集用の確認配置フラグ
+        if (ImGui::Checkbox("Grid Test 1024", &debugGridMode)) {
+            gpuEmitterState_.debugGridMode = debugGridMode ? 1u : 0u;
+        }
+        if (ImGui::Button("Apply Basic Particle Settings")) {
+            gpuEmitterState_.debugGridMode = 0;
+            gpuEmitterState_.count = 24;
+            gpuEmitterState_.frequency = 0.10f;
+            gpuEmitterState_.radius = 1.6f;
+            gpuEmitterState_.baseScale = { 0.22f, 0.22f, 0.22f };
+            gpuEmitterState_.randomScale = 0.10f;
+            gpuEmitterState_.velocityScale = { 0.35f, 0.35f, 0.35f };
+            gpuEmitterState_.lifeTime = 1.2f;
+            gpuEmitterState_.colorMin = { 0.85f, 0.85f, 0.95f, 1.0f };
+            gpuEmitterState_.colorMax = { 1.0f, 1.0f, 1.0f, 1.0f };
+            gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
+            gpuEmitterVisibleCount_ = 0;
+            for (bool& initialized : gpuParticleInitialized_) {
+                initialized = false;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Apply Dense Burst Settings")) {
+            gpuEmitterState_.debugGridMode = 0;
+            gpuEmitterState_.count = 256;
+            gpuEmitterState_.frequency = 0.01f;
+            gpuEmitterState_.radius = 0.9f;
+            gpuEmitterState_.baseScale = { 0.16f, 0.16f, 0.16f };
+            gpuEmitterState_.randomScale = 0.10f;
+            gpuEmitterState_.velocityScale = { 0.18f, 0.35f, 0.18f };
+            gpuEmitterState_.lifeTime = 2.5f;
+            gpuEmitterState_.colorMin = { 0.55f, 0.35f, 0.45f, 1.0f };
+            gpuEmitterState_.colorMax = { 1.0f, 1.0f, 0.65f, 1.0f };
+            gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
+            gpuEmitterVisibleCount_ = 0;
+            for (bool& initialized : gpuParticleInitialized_) {
+                initialized = false;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Apply Random Spread Settings")) {
+            gpuEmitterState_.debugGridMode = 0;
+            gpuEmitterState_.count = GetParticleLimit();
+            gpuEmitterState_.radius = 5.0f;
+            gpuEmitterState_.baseScale = { 0.10f, 0.10f, 0.10f };
+            gpuEmitterState_.randomScale = 0.20f;
+            gpuEmitterState_.velocityScale = { 1.2f, 1.2f, 1.2f };
+            gpuEmitterState_.lifeTime = 0.55f;
+            gpuEmitterState_.colorMin = { 0.35f, 0.55f, 0.9f, 1.0f };
+            gpuEmitterState_.colorMax = { 1.0f, 1.0f, 1.0f, 1.0f };
+            gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
+            gpuEmitterVisibleCount_ = 0;
+            for (bool& initialized : gpuParticleInitialized_) {
+                initialized = false;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Apply 1024 Test Settings")) {
+            gpuEmitterState_.debugGridMode = 1;
+            gpuEmitterState_.count = GetParticleLimit();
+            gpuEmitterState_.radius = 1.0f;
+            gpuEmitterState_.baseScale = { 0.06f, 0.06f, 0.06f };
+            gpuEmitterState_.randomScale = 0.0f;
+            gpuEmitterState_.velocityScale = { 0.0f, 0.0f, 0.0f };
+            gpuEmitterState_.lifeTime = 10.0f;
+            gpuEmitterState_.colorMin = { 1.0f, 1.0f, 1.0f, 1.0f };
+            gpuEmitterState_.colorMax = { 1.0f, 1.0f, 1.0f, 1.0f };
+            gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
+            gpuEmitterVisibleCount_ = 0;
+            for (bool& initialized : gpuParticleInitialized_) {
+                initialized = false;
+            }
+        }
+
+        if (ImGui::Button("Reset GPU Particles")) {
+            gpuEmitterVisibleCount_ = 0;
+            gpuEmitterState_.frequencyTime = 0.0f;
+            gpuEmitterState_.emit = 0;
+            for (bool& initialized : gpuParticleInitialized_) {
+                initialized = false;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Emit Once")) {
+            gpuEmitterManualEmitRequested_ = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Emit Next Frame")) {
+            gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
+        }
+    }
     if (ImGui::CollapsingHeader("Groups")) {
         for (auto& kv : particleGroups_) {
             if (ImGui::TreeNode(kv.first.c_str())) {
