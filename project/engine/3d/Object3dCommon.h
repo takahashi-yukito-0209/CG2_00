@@ -193,6 +193,16 @@ public: // メンバ関数
     D3D12_GPU_DESCRIPTOR_HANDLE GetInstancingSrvGPUHandle() const;
 
     /// <summary>
+    /// インスタンシング描画で使用するSRVを一時的に差し替える。
+    /// </summary>
+    void SetInstancingSrvOverride(D3D12_GPU_DESCRIPTOR_HANDLE srvHandle) { instancingSrvOverrideGPU_ = srvHandle; }
+
+    /// <summary>
+    /// インスタンシング描画で使用するSRVの一時差し替えを解除する。
+    /// </summary>
+    void ClearInstancingSrvOverride() { instancingSrvOverrideGPU_ = {}; }
+
+    /// <summary>
     /// スロット数（インスタンシングで同時に描画できる最大インスタンス数）を取得
     /// </summary>
     uint32_t GetInstancingSlotCount() const { return kNumInstance_; }
@@ -249,6 +259,7 @@ private: // メンバ変数
     std::array<Object3d::TransformationMatrix*, DirectXCommon::kFrameCount> instancingData_ {}; // マップ済みCPUポインタ
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> instancingSrvHandlesCPU_ {};
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> instancingSrvHandlesGPU_ {};
+    D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvOverrideGPU_ {}; // GPUパーティクルなどが一時的に差し替えるSRV
     SrvManager* srvManager_ = nullptr; // SRVの割り当てと解放を管理する
     std::array<uint32_t, DirectXCommon::kFrameCount> instancingSrvIndices_ { UINT32_MAX, UINT32_MAX }; // インスタンシング用SRVの割り当て位置
     uint32_t kNumInstance_ = 0;

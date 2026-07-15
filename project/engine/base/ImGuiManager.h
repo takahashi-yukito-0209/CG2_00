@@ -22,6 +22,7 @@ class PostProcess;
 }
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace MyEngine {
@@ -60,6 +61,7 @@ public: // メンバ関数
         float dt = 0.0f; // フレームのデルタタイム
         bool* useDebugCameraForRender = nullptr; // 描画にデバッグカメラを使用するか
         int* selectedDrawType = nullptr; // 現在の描画対象を選択する値
+        std::function<void(const char*)> requestSceneChange; // ImGuiからのシーン切替要求
         const char* currentSceneName = nullptr; // 現在のシーン名
         PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス
         SrvManager* srvManager = nullptr; // Scene View用SRVをGPUハンドルへ変換する管理クラス
@@ -82,6 +84,11 @@ public: // メンバ関数
     /// ImGuiが現在マウスまたはキーボード入力を使用しているかを取得する
     /// </summary>
     bool IsCapturingInput();
+
+    /// <summary>
+    /// Scene Viewの描画領域にマウスが乗っているかを取得する
+    /// </summary>
+    bool IsSceneViewHovered() const { return sceneViewHovered_; }
 
 private: // メンバ関数
     /// <summary>
@@ -128,5 +135,8 @@ private: // メンバ関数
     /// カメラ関連のImGuiを描画する
     /// </summary>
     void DrawCameraWindow(Context& ctx);
+
+private:
+    bool sceneViewHovered_ = false; // Scene Viewの描画領域にマウスが乗っているか
 };
 } // namespace MyEngine

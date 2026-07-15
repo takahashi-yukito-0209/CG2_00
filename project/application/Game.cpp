@@ -456,65 +456,49 @@ void Game::Update()
     InputManager::GetInstance()->Update();
 
     // デバッグカメラの操作: マウスドラッグとホイールでカメラを操作する。ただし、ImGui のウィンドウやアイテムがアクティブな場合は操作しない
-    bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
+    // カメラ操作はクリック中だけ受け付ける。
+    bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl; // デバッグカメラ入力を有効にするか
     if (debugInputEnabled) {
-        long deltaX = InputManager::GetInstance()->GetMouseDeltaX(); // 前フレームからのマウスのX移動量を取得
-        long deltaY = InputManager::GetInstance()->GetMouseDeltaY(); // 前フレームからのマウスのY移動量を取得
-        long wheelDelta = InputManager::GetInstance()->GetMouseDeltaZ(); // 前フレームからのマウスホイールの移動量を取得
+        auto* input = InputManager::GetInstance(); // 入力状態を参照するためのポインタ
+        const long deltaX = input->GetMouseDeltaX(); // マウスのX移動量
+        const long deltaY = input->GetMouseDeltaY(); // マウスのY移動量
+        const long wheelDelta = input->GetMouseDeltaZ(); // ホイール回転量
 
-        // ImGui がマウスをキャプチャしていると通常はカメラ操作を受け付けないが、
-        // 右ボタンでドラッグしたときは UI 上でもカメラ操作できるようにする。
-        bool allowCameraControl = false;
-        // ImGui 上の入力やウィンドウがアクティブでない場合は許可
 #ifdef USE_IMGUI
-        if (!impl_->imguiManager.IsCapturingInput()) {
-            allowCameraControl = true;
-        }
+        const bool canUseCameraInput = !impl_->imguiManager.IsCapturingInput() || impl_->imguiManager.IsSceneViewHovered(); // Scene View上ではカメラ入力を受け付ける
 #else
-        // ImGui を使わない場合は常にカメラ操作を許可
-        allowCameraControl = true;
+        const bool canUseCameraInput = true; // ImGui未使用時は常にカメラ入力を受け付ける
 #endif
+        const bool isLeftDragging = canUseCameraInput && input->IsMouseButtonPressed(0) && (deltaX != 0 || deltaY != 0); // 左クリック中のドラッグか
+        const bool isWheelZoom = canUseCameraInput && wheelDelta != 0; // ホイールによる拡縮操作か
+        const bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender; // 描画に使うカメラ種別
 
-        // いずれかのマウスボタンを押している場合はカメラ操作を許可
-        if (InputManager::GetInstance()->IsMouseButtonPressed(0) || InputManager::GetInstance()->IsMouseButtonPressed(1) || InputManager::GetInstance()->IsMouseButtonPressed(2)) {
-            allowCameraControl = true;
-        }
-
-        // ホイールが動いた場合はカメラのズームとして処理を許可（UI スクロールと競合する可能性あり）
-        if (wheelDelta != 0) {
-            allowCameraControl = true;
-        }
-
-        if (allowCameraControl) {
-            bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
-            if (useDebugRender) {
-                // デバッグカメラを操作
-                impl_->debugCamera.OnMouseDrag(float(deltaX), float(deltaY));
-                impl_->debugCamera.OnMouseWheel(float(wheelDelta));
-                impl_->debugCamera.Update();
-            } else {
-                // デフォルトカメラを操作（UIで編集しているカメラ）
-                if (impl_->camera) {
-                    // 回転はラジアン単位で適用
-                    const float rotateSpeed = kDefaultCameraRotateSpeed;
-                    Vector3 crot = impl_->camera->GetRotate();
-                    crot.y += float(deltaX) * rotateSpeed;
-                    crot.x += float(deltaY) * rotateSpeed;
-                    impl_->camera->SetRotate(crot);
-
-                    // ホイールで前後移動（ズーム）
-                    const float zoomSpeed = kDefaultCameraZoomSpeed;
-                    Vector3 cpos = impl_->camera->GetTranslate();
-                    cpos.z += float(wheelDelta) * zoomSpeed;
-                    impl_->camera->SetTranslate(cpos);
-
-                    // カメラの行列を更新
-                    impl_->camera->Update();
-                }
+        if (useDebugRender) {
+            if (isLeftDragging) {
+                impl_->debugCamera.OnMouseDrag(static_cast<float>(deltaX), static_cast<float>(deltaY));
             }
-        } else {
-            // allowCameraControl が false でもデバッグカメラの Update は必要
+            if (isWheelZoom) {
+                impl_->debugCamera.OnMouseWheel(static_cast<float>(wheelDelta));
+            }
             impl_->debugCamera.Update();
+        } else if (impl_->camera) {
+            bool cameraChanged = false; // 通常カメラを更新する必要があるか
+            if (isLeftDragging) {
+                Vector3 cameraRotate = impl_->camera->GetRotate(); // 通常カメラの回転角
+                cameraRotate.y += static_cast<float>(deltaX) * kDefaultCameraRotateSpeed;
+                cameraRotate.x += static_cast<float>(deltaY) * kDefaultCameraRotateSpeed;
+                impl_->camera->SetRotate(cameraRotate);
+                cameraChanged = true;
+            }
+            if (isWheelZoom) {
+                Vector3 cameraTranslate = impl_->camera->GetTranslate(); // 通常カメラの位置
+                cameraTranslate.z += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
+                impl_->camera->SetTranslate(cameraTranslate);
+                cameraChanged = true;
+            }
+            if (cameraChanged) {
+                impl_->camera->Update();
+            }
         }
     }
 
@@ -529,26 +513,6 @@ void Game::Update()
     impl_->soundSystem.Poll();
 
     // デバッグカメラのマウス/ホイール入力を ImGui が入力を奪っていない場合にフォワードする
-    bool debugForwardEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
-    if (debugForwardEnabled) {
-        // ImGui が入力を処理している場合はカメラ操作を無効化
-        if (!impl_->imguiManager.IsCapturingInput()) {
-            auto input = InputManager::GetInstance();
-            long dx = input->GetMouseDeltaX();
-            long dy = input->GetMouseDeltaY();
-            long dz = input->GetMouseDeltaZ();
-            if (dx != 0 || dy != 0) {
-                impl_->debugCamera.OnMouseDrag(static_cast<float>(dx), static_cast<float>(dy));
-            }
-            if (dz != 0) {
-                impl_->debugCamera.OnMouseWheel(static_cast<float>(dz));
-            }
-        }
-        // キーボードによるデバッグカメラの移動処理（WASD等）
-        impl_->debugCamera.Update();
-    }
-
-    // 3Dオブジェクトのワールド行列、ビュー行列、プロジェクション行列を計算して、各オブジェクトの Update を呼び出す
     Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(impl_->transform.scale, impl_->transform.rotate, impl_->transform.translate);
     Matrix4x4 viewMatrix;
     Matrix4x4 projectionMatrix;
@@ -637,6 +601,18 @@ void Game::Draw()
     // ImGui の新しいフレームを開始する。これにより、ImGui の内部状態がリセットされ、UIの構築が可能になる
     impl_->imguiManager.NewFrame();
 
+    // 保留中のシーン切替はImGui構築前に反映し、UI表示と描画対象を同じシーンに揃える。
+    if (impl_->pendingSceneName.size() > 0) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
+            impl_->pendingSceneName.clear();
+        } else {
+            auto newScene = GameApp::SceneFactory::Create(impl_->pendingSceneName);
+            if (newScene && impl_->sceneManager) {
+                impl_->sceneManager->ChangeScene(std::move(newScene));
+            }
+            impl_->pendingSceneName.clear();
+        }
+    }
     ImGuiManager::Context ctx;
     // 描画に必要な情報を ImGuiManager::Context にセットして、UIの構築に使用できるようにする
     ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをセット
@@ -675,6 +651,11 @@ void Game::Draw()
     ctx.dt = kFixedDeltaTime;
     ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
     ctx.selectedDrawType = &impl_->selectedDrawType;
+    ctx.requestSceneChange = [this](const char* sceneName) {
+        if (sceneName) {
+            impl_->pendingSceneName = sceneName;
+        }
+    };
     // シーン名を ImGui に渡す
     if (impl_->sceneManager) {
         static std::string sname;
@@ -694,21 +675,6 @@ void Game::Draw()
         impl_->sceneManager->GetCurrent()->DrawImGui();
     }
 
-    // 入力処理などでシーン切替要求がある場合は、ここで安全に反映する
-    if (impl_->pendingSceneName.size() > 0) {
-
-        if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
-            impl_->pendingSceneName.clear();
-        } else {
-            auto newScene = GameApp::SceneFactory::Create(impl_->pendingSceneName);
-            if (newScene && impl_->sceneManager) {
-                impl_->sceneManager->ChangeScene(std::move(newScene));
-            }
-            impl_->pendingSceneName.clear();
-        }
-    }
-
-    // 描画前の共通処理を呼び出す（バックバッファのクリアやコマンドリストの開始など）
     DirectXCommon::GetInstance()->PreDraw();
     // SrvManager の PreDraw を呼び出して、描画に必要なシェーダーリソースビューのセットアップを行う
     impl_->srvManager.PreDraw();

@@ -8,8 +8,6 @@ namespace {
 constexpr Vector3 kInitialTranslation = { 0.0f, 0.0f, -10.0f }; // 初期カメラ位置
 constexpr Vector3 kInitialRotation = { 0.0f, 0.0f, 0.0f }; // 初期カメラ回転
 constexpr int kMouseButtonLeft = 0; // 左マウスボタン番号
-constexpr int kMouseButtonRight = 1; // 右マウスボタン番号
-constexpr int kMouseButtonMiddle = 2; // 中マウスボタン番号
 constexpr float kMouseWheelZoomSpeed = 0.1f; // ホイールズーム速度
 constexpr float kDefaultFovY = 0.45f; // 縦方向の視野角
 constexpr float kDefaultNearZ = 0.1f; // ニアクリップ距離
@@ -53,29 +51,7 @@ void DebugCamera::Initialize(float screenWidth, float screenHeight)
 /// </summary>
 void DebugCamera::Update()
 {
-    InputManager* input = InputManager::GetInstance(); // 入力マネージャのインスタンスを取得
-
-    // キーボード入力処理（WASD + QE）
-    if (input->IsKeyPressed(DIK_W)) {
-        translation_.z += moveSpeed_; // 前方に移動
-    }
-    if (input->IsKeyPressed(DIK_S)) {
-        translation_.z -= moveSpeed_; // 後方に移動
-    }
-    if (input->IsKeyPressed(DIK_D)) {
-        translation_.x -= moveSpeed_; // 右に移動
-    }
-    if (input->IsKeyPressed(DIK_A)) {
-        translation_.x += moveSpeed_; // 左に移動
-    }
-    if (input->IsKeyPressed(DIK_E)) {
-        translation_.y -= moveSpeed_; // 下に移動
-    }
-    if (input->IsKeyPressed(DIK_Q)) {
-        translation_.y += moveSpeed_; // 上に移動
-    }
-
-    // 行列更新
+    // カメラの移動・回転は OnMouseDrag / OnMouseWheel でクリック条件を満たした場合だけ変更する
     UpdateViewMatrix();
     // ビュープロジェクション行列の計算
     viewProjectionMatrix_ = viewMatrix_ * projectionMatrix_;
@@ -86,28 +62,22 @@ void DebugCamera::Update()
 /// </summary>
 void DebugCamera::OnMouseDrag(float deltaX, float deltaY)
 {
-    InputManager* input = InputManager::GetInstance(); // 入力マネージャのインスタンスを取得
+    InputManager* input = InputManager::GetInstance(); // 入力状態を参照するためのポインタ
 
-    // 左クリック・右クリック・中クリックのいずれかが押されている間だけ回転を変更
-    if (input->IsMouseButtonPressed(kMouseButtonLeft)
-        || input->IsMouseButtonPressed(kMouseButtonRight)
-        || input->IsMouseButtonPressed(kMouseButtonMiddle)) {
-        // マウス移動に応じて回転を変更
+    // 左クリック中のドラッグだけ回転として扱う
+    if (input->IsMouseButtonPressed(kMouseButtonLeft)) {
         rotation_.y += deltaX * rotateSpeed_;
         rotation_.x += deltaY * rotateSpeed_;
     }
 }
-
 /// <summary>
 /// ホイールズーム（Z方向移動）
 /// </summary>
 void DebugCamera::OnMouseWheel(float delta)
 {
-    // ホイールでZ軸移動（ズーム）
-    float zoomSpeed = kMouseWheelZoomSpeed;
-    translation_.z += delta * zoomSpeed;
+    // ホイール回転だけで拡縮として扱う
+    translation_.z += delta * kMouseWheelZoomSpeed;
 }
-
 /// <summary>
 /// ビュー行列を更新（内部用）
 /// </summary>

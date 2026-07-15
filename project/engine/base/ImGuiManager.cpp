@@ -1,4 +1,5 @@
 #include "ImGuiManager.h"
+#include <cstring>
 #include "engine/utility/Logger.h"
 #include <cstdint>
 #include <d3d12.h>
@@ -259,6 +260,7 @@ void ImGuiManager::DrawDockSpace()
 void ImGuiManager::DrawSceneViewWindow(Context& ctx)
 {
 #ifdef USE_IMGUI
+    sceneViewHovered_ = false; // Scene Viewが無効なフレームで前回のhover状態を残さない
     ImGui::Begin("Scene View");
 
     const bool hasSceneTexture = ctx.srvManager && ctx.sceneViewSrvIndex != UINT32_MAX; // Scene Viewへ表示できるSRVがあるか
@@ -298,6 +300,7 @@ void ImGuiManager::DrawSceneViewWindow(Context& ctx)
     D3D12_GPU_DESCRIPTOR_HANDLE sceneSrvHandle = ctx.srvManager->GetGPUDescriptorHandle(ctx.sceneViewSrvIndex); // Scene View用SRVのGPUハンドル
     ImTextureRef sceneTexture(static_cast<ImTextureID>(sceneSrvHandle.ptr)); // ImGuiへ渡すテクスチャ参照
     ImGui::Image(sceneTexture, imageSize);
+    sceneViewHovered_ = ImGui::IsItemHovered(); // Scene View画像上ならカメラ操作を許可する
 
     ImGui::End();
 #else
@@ -315,6 +318,23 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
             ImGui::Text("Current Scene: %s", ctx.currentSceneName);
         }
 
+        if (ctx.requestSceneChange) {
+            const char* sceneNames[] = {
+                "Title",
+                "Play",
+            }; // ImGuiから切り替え可能なシーン名
+            constexpr int sceneCount = static_cast<int>(sizeof(sceneNames) / sizeof(sceneNames[0])); // シーン数
+            int selectedSceneIndex = 0; // 現在選択されているシーン番号
+            for (int sceneIndex = 0; sceneIndex < sceneCount; ++sceneIndex) {
+                if (ctx.currentSceneName && std::strcmp(ctx.currentSceneName, sceneNames[sceneIndex]) == 0) {
+                    selectedSceneIndex = sceneIndex;
+                    break;
+                }
+            }
+            if (ImGui::Combo("Scene##SceneSelector", &selectedSceneIndex, sceneNames, sceneCount)) {
+                ctx.requestSceneChange(sceneNames[selectedSceneIndex]);
+            }
+        }
         if (ctx.selectedDrawType) {
             const char* drawTypeLabels[] = {
                 "Model",

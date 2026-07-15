@@ -14,7 +14,7 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
-constexpr uint32_t kDefaultInstancingCount = 100; // インスタンシング用の既定最大数
+constexpr uint32_t kDefaultInstancingCount = 1024; // インスタンシング用の既定最大数
 constexpr size_t kObjectLogBufferSize = 256; // Object3dCommonのログ用バッファサイズ
 constexpr UINT kObjectRenderTargetCount = 1; // 3D描画で使用するRT数
 constexpr UINT kObjectSampleCount = 1; // 3D描画のマルチサンプル数
@@ -1275,6 +1275,10 @@ Object3d::TransformationMatrix* Object3dCommon::GetInstancingData() const
 /// </summary>
 D3D12_GPU_DESCRIPTOR_HANDLE Object3dCommon::GetInstancingSrvGPUHandle() const
 {
+    if (instancingSrvOverrideGPU_.ptr != 0) {
+        return instancingSrvOverrideGPU_;
+    }
+
     const uint32_t frameIndex = dxCommon_ ? dxCommon_->GetCurrentFrameIndex() : 0;
     return instancingSrvHandlesGPU_[frameIndex];
 }

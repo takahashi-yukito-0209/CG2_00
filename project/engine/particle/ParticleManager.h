@@ -6,11 +6,14 @@
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
 #include <cstddef>
+#include <array>
+#include <d3d12.h>
 #include <vector>
 #include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <wrl.h>
 
 // CPU側のパーティクルデータ
 struct PM_CpuParticle {
@@ -20,7 +23,7 @@ struct PM_CpuParticle {
     Math::Vector3 velocity;
     Math::Vector4 color;
     Math::Vector4 startColor;
-    float lifeTime = 1.0f;
+    float lifeTime = 0.55f;
     float currentTime = 0.0f;
     float spawnTime = 0.0f;
     bool useScaleOverLife = false;
@@ -35,7 +38,49 @@ struct ParticleGroup {
     MyEngine::Object3d* renderObject = nullptr; // 描画に使うPrimitive
     bool useBillboard = true; // ビルボード描画を使うか
 };
+// GPUでインスタンシング用行列へ変換するための粒子データ
+struct PM_GpuParticleSource {
+    Math::Vector3 scale;
+    float lifeTime = 0.0f;
+    Math::Vector3 rotate;
+    float currentTime = 0.0f;
+    Math::Vector3 translate;
+    float padding0 = 0.0f;
+    Math::Vector3 velocity;
+    float padding1 = 0.0f;
+    Math::Vector4 color;
+};
 
+// ComputeShaderへ渡すパーティクル変換情報
+struct PM_GpuParticleTransformInfo {
+    uint32_t particleCount = 0;
+    float padding[3] {};
+    Math::Matrix4x4 view;
+    Math::Matrix4x4 projection;
+};
+
+struct PM_GpuEmitterSphere {
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // 発生中心座標
+    float radius = 5.0f; // 球状に散らす半径
+    uint32_t count = 1024; // 1回の射出で発生させる数
+    float frequency = 0.02f; // 射出間隔
+    float frequencyTime = 0.0f; // 射出間隔の経過時間
+    uint32_t emit = 0; // 射出許可フラグ
+    Math::Vector3 baseScale { 0.10f, 0.10f, 0.10f }; // 最小スケール
+    float randomScale = 0.20f; // ランダムに加算するスケール幅
+    Math::Vector3 velocityScale { 1.2f, 1.2f, 1.2f }; // 速度倍率
+    float lifeTime = 0.55f; // 寿命
+    Math::Vector4 colorMin { 0.35f, 0.55f, 0.9f, 1.0f }; // ランダム色の最小値
+    Math::Vector4 colorMax { 1.0f, 1.0f, 1.0f, 1.0f }; // ランダム色の最大値
+    uint32_t debugGridMode = 0; // 1024個確認用の格子配置を使うか
+    float padding[3] {}; // ConstantBufferの16byte境界調整
+};
+
+struct PM_GpuPerFrame {
+    float time = 0.0f;
+    float deltaTime = 0.0f;
+    float padding[2] {};
+};
 namespace MyEngine {
 
 /// <summary>
@@ -175,6 +220,45 @@ private:
     ParticleManager() = default;
 
     /// <summary>
+    /// GPUパーティクル変換に必要なリソースを作成する。
+    /// </summary>
+    void InitializeGpuParticleResources();
+
+    /// <summary>
+    /// GPUパーティクル変換に必要なリソースを解放する。
+    /// </summary>
+    void FinalizeGpuParticleResources();
+
+    /// <summary>
+    /// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
+    /// </summary>
+    uint32_t UploadGpuParticleSource(const ParticleGroup& group, uint32_t count, const Math::Matrix4x4& view, const Math::Matrix4x4& projection);
+
+    /// <summary>
+    /// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
+    /// </summary>
+    bool DispatchGpuParticleTransform(uint32_t count);
+
+    /// <summary>
+    /// GPU上のParticle Resourceを初期化する。
+    /// </summary>
+    bool DispatchInitializeGpuParticles();
+
+    /// <summary>
+    /// GPU上でEmitterからParticleを発生させる。
+    /// </summary>
+    bool DispatchEmitGpuParticles();
+
+    /// <summary>
+    /// GPU上のParticleを経過時間で更新する。
+    /// </summary>
+    bool DispatchUpdateGpuParticles();
+
+    /// <summary>
+    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// </summary>
+    void UpdateGpuEmitter(float dt);
+    /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
     uint32_t GetParticleLimit() const;
@@ -217,6 +301,41 @@ private:
     float damping_ = 0.0f;
 
     class ImGuiManager* imguiManager_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> initializeParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emitParticlePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> updateParticlePipelineState_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleSourceResources_;
+    std::array<PM_GpuParticleSource*, DirectXCommon::kFrameCount> gpuParticleSourceData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleInfoResources_;
+    std::array<PM_GpuParticleTransformInfo*, DirectXCommon::kFrameCount> gpuParticleInfoData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuEmitterResources_;
+    std::array<PM_GpuEmitterSphere*, DirectXCommon::kFrameCount> gpuEmitterData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuPerFrameResources_;
+    std::array<PM_GpuPerFrame*, DirectXCommon::kFrameCount> gpuPerFrameData_ {};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeCounterResources_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeListResources_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleOutputResources_;
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleSourceSrvIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputSrvIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleOutputUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuFreeCounterUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<uint32_t, DirectXCommon::kFrameCount> gpuFreeListUavIndices_ { UINT32_MAX, UINT32_MAX };
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, DirectXCommon::kFrameCount> gpuParticleOutputSrvHandlesGPU_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuParticleOutputStates_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuFreeCounterStates_ {};
+    std::array<D3D12_RESOURCE_STATES, DirectXCommon::kFrameCount> gpuFreeListStates_ {};
+    std::array<bool, DirectXCommon::kFrameCount> gpuParticleInitialized_ {};
+    PM_GpuEmitterSphere gpuEmitterState_ {};
+    PM_GpuPerFrame gpuPerFrameState_ {};
+    uint32_t gpuEmitterVisibleCount_ = 0;
+    bool gpuEmitterAutoEmit_ = true; // GPU Particleを自動発生させるか
+    bool gpuEmitterManualEmitRequested_ = false; // 次の更新で1回だけ発生させるか
+    bool gpuParticleUpdateEnabled_ = true; // GPU Particleの寿命と移動を更新するか
+    bool gpuParticleDrawEnabled_ = true; // GPU Particleを描画するか
+    bool gpuParticleReady_ = false;
 };
 
 } // namespace MyEngine

@@ -1,15 +1,19 @@
 #include "Particle.hlsli"
 
-struct ParticleForGPU
+struct Particle
 {
-    float4x4 WVP;
-    float4x4 World;
+    float3 scale;
+    float lifeTime;
+    float3 rotate;
+    float currentTime;
+    float3 translate;
+    float padding0;
+    float3 velocity;
+    float padding1;
     float4 color;
-    float4x4 WorldInverseTranspose;
 };
 
-// StructuredBuffer for instancing (vertex shader, t1)
-StructuredBuffer<ParticleForGPU> gParticle : register(t1);
+StructuredBuffer<Particle> gParticles : register(t1);
 
 struct VertexShaderInput
 {
@@ -21,34 +25,38 @@ struct VertexShaderInput
 VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
-    // select per-instance data; host must ensure instanceId < allocated count
-    ParticleForGPU p = gParticle[instanceId];
-    float4 pos = input.position;
-    float3 nrm = input.normal;
+    Particle particle = gParticles[instanceId];
+
+    float sinZ = sin(particle.rotate.z);
+    float cosZ = cos(particle.rotate.z);
+    float2 scaledLocal = input.position.xy * particle.scale.xy;
+    float2 rotatedLocal = float2(
+        scaledLocal.x * cosZ - scaledLocal.y * sinZ,
+        scaledLocal.x * sinZ + scaledLocal.y * cosZ);
+
+    float3 worldPosition;
+    float3 worldNormal;
     if (gBillboardEnable >= 0.5f)
     {
-        // Worldの移動とスケールだけを使い、回転はカメラRight/Upで置き換える
-        float3 center = float3(p.World._41, p.World._42, p.World._43);
         float3 right = normalize(gCameraRight);
         float3 up = normalize(gCameraUp);
-        float2 localScale = float2(
-            length(float3(p.World._11, p.World._12, p.World._13)),
-            length(float3(p.World._21, p.World._22, p.World._23)));
-        float2 localOffset = input.position.xy * localScale;
-        float3 billboardPos = center + right * localOffset.x + up * localOffset.y;
-        pos = float4(billboardPos, 1.0f);
-        nrm = normalize(cross(right, up));
-        output.position = mul(pos, gViewProj);
-        output.worldPosition = billboardPos;
-        output.normal = nrm;
+        worldPosition = particle.translate + right * rotatedLocal.x + up * rotatedLocal.y;
+        worldNormal = normalize(cross(right, up));
     }
     else
     {
-        output.position = mul(pos, p.WVP);
-        output.worldPosition = mul(pos, p.World).xyz;
-        output.normal = normalize(mul(nrm, (float3x3) p.WorldInverseTranspose));
+        float3 localPosition = float3(rotatedLocal, input.position.z * particle.scale.z);
+        worldPosition = localPosition + particle.translate;
+        worldNormal = normalize(float3(
+            input.normal.x * cosZ - input.normal.y * sinZ,
+            input.normal.x * sinZ + input.normal.y * cosZ,
+            input.normal.z));
     }
+
+    output.position = mul(float4(worldPosition, 1.0f), gViewProj);
     output.texcoord = input.texcoord;
-    output.color = p.color;
+    output.normal = worldNormal;
+    output.color = particle.color;
+    output.worldPosition = worldPosition;
     return output;
 }

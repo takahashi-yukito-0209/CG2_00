@@ -58,6 +58,11 @@ public: // メンバ関数
     /// </summary>
     void SetGraphicsRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex);
 
+    /// <summary>
+    /// ComputeShaderのルートパラメータにディスクリプタテーブルを設定する。
+    /// </summary>
+    void SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex);
+
 private: // メンバ変数
     // DirectXCommonへの参照（SRVヒープの取得などに使用）
     DirectXCommon* dxCommon_ = nullptr;

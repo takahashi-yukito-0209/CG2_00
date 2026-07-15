@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="ソース ファイル">
@@ -246,6 +246,18 @@
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\Particle.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\EmitParticle.CS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\InitializeParticle.CS.hlsl">
+      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\UpdateParticle.CS.hlsl">
+      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\GPUParticleUpdate.CS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\Sprite.PS.hlsl">

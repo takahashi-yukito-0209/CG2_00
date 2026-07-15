@@ -74,6 +74,11 @@ public: // メンバ関数
     void OnExit() override;
 
     /// <summary>
+    /// シーン名を取得する
+    /// </summary>
+    std::string GetName() const override { return "Play"; }
+
+    /// <summary>
     /// 描画対象の種類を設定する
     /// </summary>
     void SetSelectedDrawType(int t) override;
