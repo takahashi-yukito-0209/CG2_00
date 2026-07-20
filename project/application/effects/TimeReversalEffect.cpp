@@ -1,5 +1,6 @@
 #include "TimeReversalEffect.h"
 #include "EffectProgress.h"
+#include "EffectParticleUtility.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -37,10 +38,15 @@ constexpr float kDirectionRandomMin = -1.0f; // 粒子方向乱数の最小値
 constexpr float kDirectionRandomMax = 1.0f; // 粒子方向乱数の最大値
 constexpr float kDirectionZScale = 0.45f; // Z方向の拡散を抑える倍率
 constexpr int kMinimumParticleCount = 1; // 発生させる最小粒子数
+constexpr uint32_t kGpuFailureFallbackHitCount = 6; // GPU開始演出失敗時に補うヒット数
 constexpr float kMinimumTransformHistoryCount = 2.0f; // 補間に必要な最低履歴数
 constexpr size_t kMaximumRewindAfterimageCount = 3; // 1粒子ごとの最大残像数
 constexpr size_t kTimeReversalTargetIndex = 4; // Transformを巻き戻す対象番号
+constexpr const char* kEffectOwnerName = "TimeReversalEffect"; // GPUプリセットログに使う演出名
 constexpr const char* kRingParticleGroupName = "Ring"; // リングエフェクト名
+constexpr const char* kHitParticleGroupName = "Hit"; // GPU失敗時に使うヒットエフェクト名
+constexpr const char* kGpuSparkBurstPresetName = "Spark Burst"; // 逆行開始に使うGPUプリセット名
+constexpr const char* kGpuRewindConvergePresetName = "Rewind Converge"; // 収束に使うGPUプリセット名
 constexpr int kImGuiParticleCountMin = 1; // 粒子数の最小値
 constexpr int kImGuiParticleCountMax = 128; // 粒子数の最大値
 constexpr float kImGuiSpeedStep = 0.1f; // 速度設定の調整幅
@@ -191,6 +197,13 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
     }
 
     ConfigureInitialPostProcess(postProcess);
+
+    if (!EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuSparkBurstPresetName, settings_.effectPosition)) {
+        ParticleManager* particleManager = ParticleManager::GetInstance(); // GPU演出失敗時にCPU演出を補うパーティクル管理
+        if (particleManager) {
+            particleManager->EmitHitEffect(kHitParticleGroupName, settings_.effectPosition, static_cast<uint32_t>((std::max)(settings_.gpuFailureFallbackHitCount, 0)));
+        }
+    }
 }
 
 /// <summary>
@@ -476,6 +489,7 @@ void TimeReversalEffect::DrawImGui()
         ImGui::DragFloat("Convergence Flash Size", &settings_.convergenceFlashSize, kImGuiFlashSizeStep, kImGuiFlashSizeMin, kImGuiFlashSizeMax, "%.0f");
         ImGui::DragFloat("Convergence Flash Alpha", &settings_.convergenceFlashAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
         ImGui::SliderInt("Convergence Ring Count", &settings_.convergenceRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        ImGui::SliderInt("GPU Failure Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiRingCountMin, kImGuiParticleCountMax);
         ImGui::SeparatorText("Transform Rewind");
         ImGui::DragFloat("Transform History Duration", &settings_.transformHistoryDuration, kImGuiHistoryDurationStep, kImGuiHistoryDurationMin, kImGuiHistoryDurationMax, "%.1f sec");
         ImGui::DragFloat("Particle Size", &settings_.particleSize, kImGuiParticleSizeStep, kImGuiParticleSizeMin, kImGuiParticleSizeMax, "%.0f");
@@ -569,5 +583,6 @@ void TimeReversalEffect::StartConvergence()
             kRingParticleGroupName,
             settings_.effectPosition,
             static_cast<uint32_t>(settings_.convergenceRingCount));
+        EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuRewindConvergePresetName, settings_.effectPosition);
     }
 }

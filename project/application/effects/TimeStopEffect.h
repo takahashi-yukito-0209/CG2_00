@@ -25,6 +25,7 @@ struct TimeStopSettings {
     int startRingCount = 3; // 停止開始時に発生するリング数
     int releaseRingCount = 4; // 時間再開時に発生するリング数
     int releaseFragmentCount = 16; // 時間再開時に発生する破片数
+    int gpuFailureFallbackHitCount = 6; // GPU再開演出失敗時に補うヒット数
     Math::Vector3 effectPosition { 0.0f, 1.0f, 0.0f }; // エフェクト発生位置
 };
 

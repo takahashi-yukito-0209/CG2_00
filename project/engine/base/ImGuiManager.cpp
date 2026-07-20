@@ -1,4 +1,4 @@
-#include "ImGuiManager.h"
+﻿#include "ImGuiManager.h"
 #include <cstring>
 #include "engine/utility/Logger.h"
 #include <cstdint>
@@ -730,7 +730,7 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
         ImGui::Separator();
 
         if (ctx.particleManager) {
-            ctx.particleManager->DrawImGui();
+            ctx.particleManager->DrawImGui(ctx.postProcess);
         }
     }
 #else
@@ -921,6 +921,7 @@ bool ImGuiManager::IsCapturingInput() { return false; }
 #endif // USE_IMGUI
 
 } // namespace MyEngine
+
 
 
 

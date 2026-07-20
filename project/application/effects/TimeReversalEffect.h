@@ -56,6 +56,7 @@ struct TimeReversalSettings {
     float convergenceFlashSize = 180.0f; // 収束時のフラッシュ最大サイズ
     float convergenceFlashAlpha = 0.9f; // 収束時のフラッシュ透明度
     int convergenceRingCount = 2; // 収束時に発生するリング数
+    int gpuFailureFallbackHitCount = 6; // GPU開始演出失敗時に補うヒット数
     float transformHistoryDuration = 2.0f; // 3D対象のTransform履歴保持時間
     float particleSize = 24.0f; // 粒子スプライトの大きさ
     Math::Vector4 particleColor { 0.45f, 0.85f, 1.0f, 0.9f }; // 粒子の色

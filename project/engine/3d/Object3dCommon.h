@@ -1,6 +1,7 @@
 #pragma once
 #include "../RenderState.h"
 #include "DirectXCommon.h"
+#include <cstdint>
 #include "Object3d.h"
 #include <d3d12.h>
 #include <wrl.h>
@@ -68,35 +69,12 @@ public: // メンバ関数
     /// <summary>
     /// ビルボード描画用のカメラベクトルを設定
     /// </summary>
-    void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable)
-    {
-
-        // カメラ定数バッファが存在しない場合は設定をスキップ
-        if (!cameraCBData_) {
-            return;
-        }
-
-        // カメラベクトルと有効フラグを定数バッファに書き込む
-        cameraCBData_->right = right;
-        cameraCBData_->up = up;
-        cameraCBData_->enable = enable ? 1.0f : 0.0f;
-    }
+    void SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable);
 
     /// <summary>
     /// ビルボード描画用のカメラベクトルとビュー射影行列を設定
     /// </summary>
-    void SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Math::Matrix4x4& viewProj, bool enable)
-    {
-        // カメラ定数バッファが存在しない場合は設定をスキップ
-        if (!cameraCBData_) {
-            return;
-        }
-        // カメラベクトル、有効フラグ、ビュー射影行列を定数バッファに書き込む
-        cameraCBData_->right = right;
-        cameraCBData_->up = up;
-        cameraCBData_->enable = enable ? 1.0f : 0.0f;
-        cameraCBData_->viewProj = viewProj;
-    }
+    void SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Math::Matrix4x4& viewProj, bool enable);
 
     /// <summary>
     /// DirectXCommon へのアクセサ
@@ -275,9 +253,21 @@ private: // メンバ変数
         Math::Matrix4x4 viewProj;
     };
 
+    /// <summary>
+    /// ビルボード描画用のカメラ定数を描画単位のスロットへ保存する。
+    /// </summary>
+    void StoreBillboardCameraData(const CameraCB& cameraCB);
+
+    /// <summary>
+    /// 現在のビルボード描画用カメラ定数バッファのGPUアドレスを取得する。
+    /// </summary>
+    D3D12_GPU_VIRTUAL_ADDRESS GetCurrentBillboardCameraGpuAddress() const;
+
     // カメラ定数バッファ（ビルボード用）
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> cameraCBResources_;
-    std::array<CameraCB*, DirectXCommon::kFrameCount> mappedCameraCBData_ {};
+    std::array<uint8_t*, DirectXCommon::kFrameCount> mappedCameraCBData_ {};
+    std::array<uint32_t, DirectXCommon::kFrameCount> cameraCBWriteIndices_ {};
+    D3D12_GPU_VIRTUAL_ADDRESS currentCameraCBGpuAddress_ = 0;
     CameraCB cameraCBState_ {};
     CameraCB* cameraCBData_ = &cameraCBState_;
 

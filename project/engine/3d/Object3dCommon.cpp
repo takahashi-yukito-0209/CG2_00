@@ -6,6 +6,7 @@
 #include "engine/base/SrvManager.h"
 #include "mathUtility.h"
 #include <algorithm>
+#include <cstring>
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -14,7 +15,9 @@ using namespace Math;
 using namespace MyEngine;
 
 namespace {
-constexpr uint32_t kDefaultInstancingCount = 1024; // インスタンシング用の既定最大数
+constexpr uint32_t kDefaultInstancingCount = 16384; // インスタンシング用の既定最大数
+constexpr uint32_t kBillboardCameraCbCount = 256; // 1フレーム中に保持するビルボード用カメラCB数
+constexpr size_t kConstantBufferAlignment = 0x100; // D3D12定数バッファのアラインメント
 constexpr size_t kObjectLogBufferSize = 256; // Object3dCommonのログ用バッファサイズ
 constexpr UINT kObjectRenderTargetCount = 1; // 3D描画で使用するRT数
 constexpr UINT kObjectSampleCount = 1; // 3D描画のマルチサンプル数
@@ -143,8 +146,9 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
     }
 
     // ビルボード用のカメラ定数バッファ（b2）を作成
+    const size_t billboardCameraCbStride = (sizeof(CameraCB) + kConstantBufferAlignment - 1) & ~(kConstantBufferAlignment - 1); // ビルボード用CBの1要素サイズ
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
-        cameraCBResources_[frameIndex] = dxCommon_->CreateBufferResource(sizeof(CameraCB));
+        cameraCBResources_[frameIndex] = dxCommon_->CreateBufferResource(billboardCameraCbStride * kBillboardCameraCbCount);
         cameraCBResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedCameraCBData_[frameIndex]));
     }
     // バッファが作成できた場合はマッピングして初期値を設定する
@@ -156,6 +160,7 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
         // 初期のViewProjは単位行列
         cameraCBData_->pad0 = 0.0f; // パディングを書き込むことを保証
         cameraCBData_->enable = 0.0f;
+        cameraCBData_->viewProj = MathUtil::MakeIdentity4x4();
     }
 
     // カメラ用定数バッファ
@@ -175,6 +180,17 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 
     // グラフィックスパイプラインの生成
     // ルートシグネチャはブレンドモードに依存しないため一度だけ生成する
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (!mappedCameraCBData_[frameIndex]) {
+            continue;
+        }
+        std::memcpy(mappedCameraCBData_[frameIndex], cameraCBData_, sizeof(CameraCB));
+        cameraCBWriteIndices_[frameIndex] = 1;
+    }
+    if (dxCommon_ && cameraCBResources_[dxCommon_->GetCurrentFrameIndex()]) {
+        currentCameraCBGpuAddress_ = cameraCBResources_[dxCommon_->GetCurrentFrameIndex()]->GetGPUVirtualAddress();
+    }
+
     CreateRootSignature();
     for (int modeIndex = 0; modeIndex < static_cast<int>(BlendMode::Count); ++modeIndex) {
         BlendMode mode = static_cast<BlendMode>(modeIndex); // 作成対象のブレンドモード
@@ -496,7 +512,7 @@ void Object3dCommon::SetInstancingDrawSetting()
         *mappedCameraData_[frameIndex] = cameraState_;
     }
     if (mappedCameraCBData_[frameIndex]) {
-        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+        StoreBillboardCameraData(cameraCBState_);
     }
 
     // 実行時のヌル参照を回避するための防御チェック
@@ -536,8 +552,9 @@ void Object3dCommon::SetInstancingDrawSetting()
     // プリミティブトポロジーをセットするコマンド
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     // 使用可能ならビルボード用カメラCB（VSのb2 -> ルートインデックス5）をバインド
-    if (cameraCBResources_[frameIndex]) {
-        cmdList->SetGraphicsRootConstantBufferView(5, cameraCBResources_[frameIndex]->GetGPUVirtualAddress());
+    const D3D12_GPU_VIRTUAL_ADDRESS billboardCameraAddress = GetCurrentBillboardCameraGpuAddress(); // この描画で使うビルボード用CB
+    if (billboardCameraAddress != 0) {
+        cmdList->SetGraphicsRootConstantBufferView(5, billboardCameraAddress);
     }
 
     // スポットライトCBVをルートにバインド (ルートインデックス8 -> PS b5)
@@ -561,6 +578,73 @@ void Object3dCommon::SetInstancingDrawSetting()
 }
 
 /// <summary>
+/// ビルボード描画用のカメラベクトルを設定する。
+/// </summary>
+void Object3dCommon::SetBillboardCamera(const Math::Vector3& right, const Math::Vector3& up, bool enable)
+{
+    CameraCB cameraCB = cameraCBState_; // 更新元にする現在のカメラCB
+    cameraCB.right = right;
+    cameraCB.up = up;
+    cameraCB.enable = enable ? 1.0f : 0.0f;
+    StoreBillboardCameraData(cameraCB);
+}
+
+/// <summary>
+/// ビルボード描画用のカメラベクトルとビュー射影行列を設定する。
+/// </summary>
+void Object3dCommon::SetBillboardCameraWithVP(const Math::Vector3& right, const Math::Vector3& up, const Math::Matrix4x4& viewProj, bool enable)
+{
+    CameraCB cameraCB = cameraCBState_; // 更新元にする現在のカメラCB
+    cameraCB.right = right;
+    cameraCB.up = up;
+    cameraCB.enable = enable ? 1.0f : 0.0f;
+    cameraCB.viewProj = viewProj;
+    StoreBillboardCameraData(cameraCB);
+}
+
+/// <summary>
+/// ビルボード描画用のカメラ定数を描画単位のスロットへ保存する。
+/// </summary>
+void Object3dCommon::StoreBillboardCameraData(const CameraCB& cameraCB)
+{
+    cameraCBState_ = cameraCB;
+    cameraCBData_ = &cameraCBState_;
+    if (!dxCommon_) {
+        currentCameraCBGpuAddress_ = 0;
+        return;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 書き込み対象のフレーム番号
+    if (!cameraCBResources_[frameIndex] || !mappedCameraCBData_[frameIndex]) {
+        currentCameraCBGpuAddress_ = 0;
+        return;
+    }
+
+    const uint32_t slotIndex = cameraCBWriteIndices_[frameIndex] % kBillboardCameraCbCount; // 今回使うCBスロット
+    const size_t billboardCameraCbStride = (sizeof(CameraCB) + kConstantBufferAlignment - 1) & ~(kConstantBufferAlignment - 1); // ビルボード用CBの1要素サイズ
+    const size_t writeOffset = static_cast<size_t>(slotIndex) * billboardCameraCbStride; // 256byte境界の書き込み位置
+    std::memcpy(mappedCameraCBData_[frameIndex] + writeOffset, &cameraCBState_, sizeof(CameraCB));
+    currentCameraCBGpuAddress_ = cameraCBResources_[frameIndex]->GetGPUVirtualAddress() + writeOffset;
+    ++cameraCBWriteIndices_[frameIndex];
+}
+
+/// <summary>
+/// 現在のビルボード描画用カメラ定数バッファのGPUアドレスを取得する。
+/// </summary>
+D3D12_GPU_VIRTUAL_ADDRESS Object3dCommon::GetCurrentBillboardCameraGpuAddress() const
+{
+    if (currentCameraCBGpuAddress_ != 0) {
+        return currentCameraCBGpuAddress_;
+    }
+    if (!dxCommon_) {
+        return 0;
+    }
+
+    const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 参照対象のフレーム番号
+    return cameraCBResources_[frameIndex] ? cameraCBResources_[frameIndex]->GetGPUVirtualAddress() : 0;
+}
+
+/// <summary>
 /// Skinning用の描画設定をコマンドリストに設定
 /// </summary>
 void Object3dCommon::SetSkinningDrawSetting()
@@ -579,7 +663,7 @@ void Object3dCommon::SetSkinningDrawSetting()
         *mappedCameraData_[frameIndex] = cameraState_;
     }
     if (mappedCameraCBData_[frameIndex]) {
-        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+        StoreBillboardCameraData(cameraCBState_);
     }
 
     auto cmdList = dxCommon_->GetCommandList(); // 描画コマンドリスト
@@ -628,7 +712,7 @@ void Object3dCommon::SetSkeletonDebugDrawSetting()
         *mappedCameraData_[frameIndex] = cameraState_;
     }
     if (mappedCameraCBData_[frameIndex]) {
-        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+        StoreBillboardCameraData(cameraCBState_);
     }
 
     auto cmdList = dxCommon_->GetCommandList(); // 描画コマンドリスト
@@ -675,7 +759,7 @@ void Object3dCommon::SetCommonDrawSetting()
         *mappedCameraData_[frameIndex] = cameraState_;
     }
     if (mappedCameraCBData_[frameIndex]) {
-        *mappedCameraCBData_[frameIndex] = cameraCBState_;
+        StoreBillboardCameraData(cameraCBState_);
     }
 
     // 実行時のヌル参照を回避するための防御チェック

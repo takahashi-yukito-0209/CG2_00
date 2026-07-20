@@ -9,22 +9,22 @@ class ImGuiManager;
 }
 
 /// <summary>
-/// パーティクルを発生させるエミッタークラス
+/// パーティクルを発生させるエミッタークラス。
 /// </summary>
 class ParticleEmitter {
 public:
     /// <summary>
-    /// 設定されたグループにパーティクルを発生させる
+    /// 設定されたグループにパーティクルを発生させる。
     /// </summary>
     void Emit();
 
     /// <summary>
-    /// 経過時間を加算して、発生間隔を超えたらパーティクルを発生させる
+    /// 経過時間を進め、発生間隔を超えた分だけ発生させる。
     /// </summary>
     void Update(float deltaTime);
 
     /// <summary>
-    /// ImGuiでエミッター設定を編集する
+    /// ImGuiでエミッター設定を編集する。
     /// </summary>
     void DrawImGui();
 
@@ -34,6 +34,6 @@ public:
     float frequency = 0.0f; // 発生間隔
     float elapsed = 0.0f; // 前回発生からの経過時間
     bool useHitEffect = false; // ヒットエフェクト用の発生を使うか
-    bool useRingEffect = false; // Ringエフェクト用の発生を使うか
-    bool useCylinderEffect = false; // Cylinderエフェクト用の発生を使うか
+    bool useRingEffect = false; // リングエフェクト用の発生を使うか
+    bool useCylinderEffect = false; // 円柱エフェクト用の発生を使うか
 };

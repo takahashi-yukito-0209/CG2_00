@@ -1,5 +1,6 @@
 #include "TemporalRiftEffect.h"
 #include "EffectProgress.h"
+#include "EffectParticleUtility.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -57,9 +58,12 @@ constexpr int kAfterimageLifeRateDenominatorMin = 1; // 残像の新しさ計算
 constexpr int kMinimumCrackEmitCount = 1; // 亀裂を発生させる最小数
 constexpr int kMinimumBurstEmitCount = 0; // 破砕時に発生させる数の最小値
 constexpr uint32_t kInnerRingCountBias = 1u; // 奇数リング数を内側へ寄せる加算値
+constexpr const char* kEffectOwnerName = "TemporalRiftEffect"; // GPUプリセットログに使う演出名
 constexpr const char* kRingParticleGroupName = "Ring"; // リング用パーティクルグループ名
 constexpr const char* kHitParticleGroupName = "Hit"; // 亀裂と破片用パーティクルグループ名
 constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱用パーティクルグループ名
+constexpr const char* kGpuConeRisePresetName = "Cone Rise"; // 圧縮予兆に使うGPUプリセット名
+constexpr const char* kGpuSparkBurstPresetName = "Spark Burst"; // 破砕衝撃に使うGPUプリセット名
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
 constexpr int kMaximumCrackPatternCount = 7; // 定義済みの亀裂パターン数
 constexpr std::array<float, kMaximumCrackPatternCount> kCrackAngles = {
@@ -76,6 +80,7 @@ constexpr std::array<Vector3, kMaximumCrackPatternCount> kCrackOffsets = {
 }; // 中心から少しずらして見せる位置補正
 constexpr int kCrackWidthVariationCycle = 2; // 亀裂幅の変化周期
 constexpr uint32_t kRingColorGroupCount = 2u; // 内側と外側に分けるリング色グループ数
+
 constexpr size_t kTemporalTargetIndex = 4; // 時間ずれと残像の対象にする要素番号
 constexpr float kImGuiDurationStep = 0.01f; // 時間設定の調整幅
 constexpr float kImGuiDurationMin = 0.01f; // 時間設定の最小値
@@ -263,6 +268,7 @@ void TemporalRiftEffect::Start(PostProcess& postProcess, std::vector<std::unique
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 圧縮予兆を生成するパーティクル管理
     if (particleManager) {
         particleManager->EmitCylinderEffect(kCylinderParticleGroupName, effectPosition_, kStartCylinderCount);
+        EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuConeRisePresetName, effectPosition_);
     }
 }
 
@@ -570,6 +576,7 @@ void TemporalRiftEffect::DrawImGui()
     if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::SliderInt("Ring Count", &settings_.ringCount, kImGuiRingCountMin, kImGuiRingCountMax);
         ImGui::SliderInt("Fragment Count", &settings_.fragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+        ImGui::SliderInt("GPU Failure Fragment Count", &settings_.gpuFailureFallbackFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
         ImGui::ColorEdit4("Inner Ring Color", &settings_.innerRingColor.x);
         ImGui::ColorEdit4("Outer Ring Color", &settings_.outerRingColor.x);
         ImGui::ColorEdit4("Fragment Color", &settings_.fragmentColor.x);
@@ -747,5 +754,16 @@ void TemporalRiftEffect::EmitRiftBurst()
         settings_.fragmentMinSpeed,
         settings_.fragmentMaxSpeed,
         settings_.fragmentLifeTime);
+    if (!EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuSparkBurstPresetName, effectPosition_)
+        && settings_.gpuFailureFallbackFragmentCount > 0) {
+        particleManager->EmitRiftFragments(
+            kHitParticleGroupName,
+            effectPosition_,
+            static_cast<uint32_t>(settings_.gpuFailureFallbackFragmentCount),
+            settings_.fragmentColor,
+            settings_.fragmentMinSpeed,
+            settings_.fragmentMaxSpeed,
+            settings_.fragmentLifeTime);
+    }
 
 }

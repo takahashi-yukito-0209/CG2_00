@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "effect": {
+    "effectName": "Spark Burst",
+    "description": "Short radial burst for hit or impact feedback."
+  },
+  "playback": {
+    "autoEmit": 0,
+    "updateParticles": 1,
+    "drawParticles": 1
+  },
+  "render": {
+    "texture": "resources/textures/circle.png",
+    "usePostProcess": 0
+  },
+  "emitter": {
+    "spawnShape": 0,
+    "translate": [0.0000, 0.0000, 0.0000],
+    "radius": 0.4500,
+    "count": 96,
+    "frequency": 0.0300,
+    "baseScale": [0.0700, 0.0700, 0.0700],
+    "randomScale": 0.0450,
+    "velocityScale": [1.2000, 1.0000, 1.2000],
+    "lifeTime": 0.5500,
+    "colorMin": [1.0000, 0.4500, 0.1200, 1.0000],
+    "colorMax": [1.0000, 0.9500, 0.3500, 1.0000],
+    "scaleOverLife": 1,
+    "endScale": [0.0100, 0.0100, 0.0100],
+    "gravity": [0.0000, -1.2000, 0.0000],
+    "damping": 0.3500,
+    "colorOverLife": 1,
+    "endColor": [1.0000, 0.1800, 0.0500, 0.0000]
+  },
+  "postProcess": {
+    "postProcessEnabled": 1,
+    "postEffectType": 1,
+    "postRadialBlurCenter": [0.5000, 0.5000, 0.0000],
+    "postRadialBlurWidth": 0.0100,
+    "postRadialBlurSampleCount": 10,
+    "postDistortionCenter": [0.5000, 0.5000, 0.0000],
+    "postDistortionStrength": 0.0200,
+    "postDistortionRadius": 0.3500,
+    "postDistortionWaveCount": 3.0000,
+    "postDistortionProgress": 0.0000,
+    "postDissolveThreshold": 0.0000,
+    "postDissolveEdgeWidth": 0.0300,
+    "postDissolveEdgeColor": [1.0000, 0.4000, 0.3000],
+    "postRandomStrength": 1.0000,
+    "postRandomScale": 600.0000,
+    "postRandomSpeed": 1.0000
+  }
+}
