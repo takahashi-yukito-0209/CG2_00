@@ -8,7 +8,7 @@ namespace {
 constexpr Vector3 kInitialTranslation = { 0.0f, 0.0f, -10.0f }; // 初期カメラ位置
 constexpr Vector3 kInitialRotation = { 0.0f, 0.0f, 0.0f }; // 初期カメラ回転
 constexpr int kMouseButtonLeft = 0; // 左マウスボタン番号
-constexpr float kMouseWheelZoomSpeed = 0.1f; // ホイールズーム速度
+constexpr float kMouseWheelZoomSpeed = 0.05f; // ホイールズーム速度
 constexpr float kDefaultFovY = 0.45f; // 縦方向の視野角
 constexpr float kDefaultNearZ = 0.1f; // ニアクリップ距離
 constexpr float kDefaultFarZ = 1000.0f; // ファークリップ距離

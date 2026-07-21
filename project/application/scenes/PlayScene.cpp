@@ -59,6 +59,7 @@ constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
 constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
 constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
 constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
+constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
 constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
@@ -67,19 +68,23 @@ constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // 
 constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
 
-constexpr std::array<const char*, 10> kSceneModelFileNames = {
-    "plane/plane.gltf",
-    "bunny/bunny.obj",
-    "teapot/teapot.obj",
-    "fence/fence.obj",
-    "sphere/sphere.gltf",
-    "terrain/terrain.obj",
-    kAnimatedCubeModelFileName,
-    kSimpleSkinModelFileName,
-    kHumanSneakWalkModelFileName,
-    kHumanWalkModelFileName,
-}; // シーンで生成するモデルファイル名
+struct SceneModelLoadDesc {
+    const char* fileName; // モデルファイル名
+    bool loadOnStartup; // PlayScene遷移直後に読み込むか
+};
 
+constexpr std::array<SceneModelLoadDesc, 10> kSceneModelLoadDescs = {
+    SceneModelLoadDesc { "plane/plane.gltf", true },
+    SceneModelLoadDesc { "bunny/bunny.obj", false },
+    SceneModelLoadDesc { "teapot/teapot.obj", false },
+    SceneModelLoadDesc { "fence/fence.obj", true },
+    SceneModelLoadDesc { "sphere/sphere.gltf", true },
+    SceneModelLoadDesc { "terrain/terrain.obj", false },
+    SceneModelLoadDesc { kAnimatedCubeModelFileName, false },
+    SceneModelLoadDesc { kSimpleSkinModelFileName, false },
+    SceneModelLoadDesc { kHumanSneakWalkModelFileName, false },
+    SceneModelLoadDesc { kHumanWalkModelFileName, false },
+}; // シーンで扱うモデルと起動時ロード設定
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
@@ -264,6 +269,22 @@ bool IsSkinningPreviewModelFile(const std::string& modelFileName)
         || modelFileName == kHumanSneakWalkModelFileName
         || modelFileName == kHumanWalkModelFileName;
 }
+
+/// <summary>
+/// 指定したテクスチャをPlayScene遷移直後に読み込むか判定する。
+/// </summary>
+bool ShouldLoadTextureOnStartup(const char* textureName)
+{
+    if (!textureName) {
+        return false;
+    }
+
+    if (!kLoadEnvironmentMapOnStartup && std::string(textureName) == kEnvironmentMapTextureName) {
+        return false;
+    }
+
+    return true;
+}
 }
 
 /// <summary>
@@ -394,27 +415,40 @@ void PlayScene::InitializeParticleEffects()
 void PlayScene::InitializeTemporalEffectSprites()
 {
     temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
-    for (int afterimageIndex = 0; afterimageIndex < kMaximumTemporalAfterimageCount; ++afterimageIndex) {
-        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
+    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
+    timeReversalAfterimageSprites_.reserve(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount);
+}
+
+/// <summary>
+/// 時空破砕で使用する残像スプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTemporalRiftSprites()
+{
+    while (temporalAfterimageSprites_.size() < kMaximumTemporalAfterimageCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時空破砕の残像表示に使うスプライト
         temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
+}
 
-    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
-    for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
-        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行用の粒子スプライト
+/// <summary>
+/// 時間逆行で使用するスプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTimeReversalSprites()
+{
+    while (timeReversalSprites_.size() < kMaximumTimeReversalParticleCount) {
+        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の粒子表示に使うスプライト
         timeReversalSprites_.push_back(std::move(particleSprite));
     }
 
-    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount; // 確保する残像スプライト総数
-    timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
-    for (int afterimageIndex = 0;
-        afterimageIndex < maximumRewindAfterimageSpriteCount;
-        ++afterimageIndex) {
-        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
+    const size_t maximumRewindAfterimageSpriteCount = static_cast<size_t>(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount); // 時間逆行の軌跡表示に必要な残像数
+    while (timeReversalAfterimageSprites_.size() < maximumRewindAfterimageSpriteCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の軌跡表示に使うスプライト
         timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
     }
 
-    timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
+    if (!timeReversalConvergenceSprite_) {
+        timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
+    }
 }
 
 /// <summary>
@@ -498,7 +532,14 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
 /// </summary>
 void PlayScene::InitializeSceneObjects()
 {
-    for (const char* modelFileName : kSceneModelFileNames) {
+    objects3d_.reserve(kSceneModelLoadDescs.size());
+    for (const SceneModelLoadDesc& modelDesc : kSceneModelLoadDescs) {
+        const char* modelFileName = modelDesc.fileName; // 初期化対象のモデルファイル名
+        if (!modelDesc.loadOnStartup) {
+            objects3d_.push_back(nullptr);
+            continue;
+        }
+
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelFileName);
@@ -523,6 +564,9 @@ void PlayScene::LoadSceneTextures()
     }
 
     for (const char* textureName : kSceneTextureNames) {
+        if (!ShouldLoadTextureOnStartup(textureName)) {
+            continue;
+        }
         ctx_.textureManager->LoadTexture(textureName);
     }
 }
@@ -532,6 +576,10 @@ void PlayScene::LoadSceneTextures()
 /// </summary>
 void PlayScene::InitializeSkyBox()
 {
+    if (!kLoadEnvironmentMapOnStartup) {
+        return;
+    }
+
     if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
         return;
     }

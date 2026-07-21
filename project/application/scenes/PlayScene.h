@@ -333,6 +333,16 @@ private:
     void InitializeTemporalEffectSprites();
 
     /// <summary>
+    /// 時空破砕で使用する残像スプライトを必要になった時点で作成する
+    /// </summary>
+    void EnsureTemporalRiftSprites();
+
+    /// <summary>
+    /// 時間逆行で使用するスプライトを必要になった時点で作成する
+    /// </summary>
+    void EnsureTimeReversalSprites();
+
+    /// <summary>
     /// ポストプロセス用レンダーターゲットを初期化する
     /// </summary>
     void InitializePostProcessTargets();

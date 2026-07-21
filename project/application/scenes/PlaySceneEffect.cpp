@@ -185,6 +185,7 @@ bool PlayScene::IsTimeStopped() const
 /// </summary>
 void PlayScene::StartTimeReversalEffect()
 {
+    EnsureTimeReversalSprites();
     timeReversalEffect_.Start(postProcess_, timeReversalSprites_.size());
 }
 
@@ -201,6 +202,10 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
 /// </summary>
 void PlayScene::UpdateTimeReversalSprites()
 {
+    if (!timeReversalEffect_.IsPlaying()) {
+        return;
+    }
+
     timeReversalEffect_.UpdateSprites(
         timeReversalSprites_,
         timeReversalAfterimageSprites_,
@@ -225,6 +230,10 @@ void PlayScene::UpdateTimeReversalTransformHistory()
 /// </summary>
 void PlayScene::DrawTimeReversalParticles()
 {
+    if (!timeReversalEffect_.IsPlaying()) {
+        return;
+    }
+
     timeReversalEffect_.DrawParticles(
         ctx_.spriteCommon,
         timeReversalSprites_,
@@ -237,6 +246,7 @@ void PlayScene::DrawTimeReversalParticles()
 /// </summary>
 void PlayScene::StartTemporalRiftEffect()
 {
+    EnsureTemporalRiftSprites();
     temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
     temporalRiftEffect_.Start(postProcess_, objects3d_, temporalRiftEffect_.GetScreenUv());
 }
@@ -278,6 +288,10 @@ void PlayScene::UpdateTemporalAfterimages()
 /// </summary>
 void PlayScene::UpdateAfterimageSprites()
 {
+    if (!temporalRiftEffect_.IsPlaying()) {
+        return;
+    }
+
     temporalRiftEffect_.UpdateAfterimageSprites(
         temporalAfterimageSprites_,
         [this](const Vector3& worldPosition) {
@@ -290,6 +304,10 @@ void PlayScene::UpdateAfterimageSprites()
 /// </summary>
 void PlayScene::DrawTemporalAfterimages()
 {
+    if (!temporalRiftEffect_.IsPlaying()) {
+        return;
+    }
+
     temporalRiftEffect_.DrawAfterimages(ctx_.spriteCommon, temporalAfterimageSprites_);
 }
 
