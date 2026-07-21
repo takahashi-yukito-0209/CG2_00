@@ -2,110 +2,173 @@
 #include "MathTypes.h"
 
 /// <summary>
-/// 数学ユーティリティ関数をまとめた名前空間
+/// 数学ユーティリティ関数をまとめた名前空間。
 /// </summary>
 namespace MathUtil {
 
 /// <summary>
-/// ベクトルを正規化する関数
+/// 値を 0.0f から 1.0f の範囲に収める。
+/// </summary>
+float Clamp01(float value);
+
+/// <summary>
+/// 度数法の角度をラジアンへ変換する。
+/// </summary>
+float DegToRad(float degree);
+
+/// <summary>
+/// ラジアンの角度を度数法へ変換する。
+/// </summary>
+float RadToDeg(float radian);
+
+/// <summary>
+/// Vector3 同士の内積を計算する。
+/// </summary>
+float Dot(const Math::Vector3& a, const Math::Vector3& b);
+
+/// <summary>
+/// Vector3 同士の外積を計算する。
+/// </summary>
+Math::Vector3 Cross(const Math::Vector3& a, const Math::Vector3& b);
+
+/// <summary>
+/// Vector3 の長さの二乗を計算する。
+/// </summary>
+float LengthSquared(const Math::Vector3& v);
+
+/// <summary>
+/// Vector3 の長さを計算する。
+/// </summary>
+float Length(const Math::Vector3& v);
+
+/// <summary>
+/// 2点間の距離の二乗を計算する。
+/// </summary>
+float DistanceSquared(const Math::Vector3& a, const Math::Vector3& b);
+
+/// <summary>
+/// 2点間の距離を計算する。
+/// </summary>
+float Distance(const Math::Vector3& a, const Math::Vector3& b);
+
+/// <summary>
+/// ベクトルを正規化する。
 /// </summary>
 Math::Vector3 Normalize(const Math::Vector3& v);
 
 /// <summary>
-/// 平行移動行列を作成する関数
+/// 長さがほぼ 0 の場合は代替方向を返してベクトルを正規化する。
+/// </summary>
+Math::Vector3 SafeNormalize(const Math::Vector3& v, const Math::Vector3& fallback = { 0.0f, -1.0f, 0.0f });
+
+/// <summary>
+/// 平行移動行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeTranslateMatrix(const Math::Vector3& translate);
 
 /// <summary>
-/// 拡大縮小行列を作成する関数
+/// 拡大縮小行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeScaleMatrix(const Math::Vector3& scale);
 
 /// <summary>
-/// ベクトルを行列で変換する関数
+/// ベクトルを行列で変換する。
 /// </summary>
 Math::Vector3 Transform(const Math::Vector3& vector, const Math::Matrix4x4& matrix);
 
 /// <summary>
-/// 4x4行列同士を乗算する関数
+/// 4x4 行列同士を乗算する。
 /// </summary>
 Math::Matrix4x4 Multiply(const Math::Matrix4x4& m1, const Math::Matrix4x4& m2);
 
 /// <summary>
-/// 4x4行列の逆行列を計算する関数
+/// 4x4 行列の逆行列を計算する。
 /// </summary>
 Math::Matrix4x4 Inverse(const Math::Matrix4x4& m);
 
 /// <summary>
-/// 4x4行列の転置を計算する関数
+/// 4x4 行列の転置行列を計算する。
 /// </summary>
 Math::Matrix4x4 Transpose(const Math::Matrix4x4& m);
 
 /// <summary>
-/// 単位行列を作成する関数
+/// 単位行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeIdentity4x4();
 
 /// <summary>
-/// X軸回転行列を作成する関数
+/// X 軸回転行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeRotateXMatrix(float radian);
 
 /// <summary>
-/// Y軸回転行列を作成する関数
+/// Y 軸回転行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeRotateYMatrix(float radian);
 
 /// <summary>
-/// Z軸回転行列を作成する関数
+/// Z 軸回転行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeRotateZMatrix(float radian);
 
 /// <summary>
-/// 拡大・回転・平行移動を組み合わせたアフィン変換行列を作成する関数
+/// scale、Euler 回転、translate からアフィン変換行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeAffineMatrix(const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& translate);
 
 /// <summary>
-/// 2つのVector3を線形補間する
+/// 2つの Vector3 を線形補間する。
 /// </summary>
 Math::Vector3 Lerp(const Math::Vector3& start, const Math::Vector3& end, float t);
 
 /// <summary>
-/// 2つのQuaternionを球面線形補間する
+/// 2つの Quaternion を球面線形補間する。
 /// </summary>
 Math::Quaternion Slerp(const Math::Quaternion& start, const Math::Quaternion& end, float t);
 
 /// <summary>
-/// Quaternionから回転行列を作成する
+/// Quaternion から回転行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeRotateMatrix(const Math::Quaternion& rotate);
 
 /// <summary>
-/// scale、Quaternion回転、translateからアフィン行列を作成する
+/// scale、Quaternion 回転、translate からアフィン変換行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeAffineMatrix(const Math::Vector3& scale, const Math::Quaternion& rotate, const Math::Vector3& translate);
 
 /// <summary>
-/// 透視投影行列を作成する関数
+/// 透視投影行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
 
 /// <summary>
-/// 直交投影行列を作成する関数
+/// 正射影行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
 
 /// <summary>
-/// ビューポート変換行列を作成する関数
+/// ビューポート変換行列を作成する。
 /// </summary>
 Math::Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
-}
 
-/// 既存コード互換のための簡易なラッパクラス
+} // namespace MathUtil
+
+/// <summary>
+/// 既存コード互換のための簡易ラッパークラス。
+/// </summary>
 class MathUtility {
 public:
+    float Clamp01(float value) { return MathUtil::Clamp01(value); }
+    float DegToRad(float degree) { return MathUtil::DegToRad(degree); }
+    float RadToDeg(float radian) { return MathUtil::RadToDeg(radian); }
+    float Dot(const Math::Vector3& a, const Math::Vector3& b) { return MathUtil::Dot(a, b); }
+    Math::Vector3 Cross(const Math::Vector3& a, const Math::Vector3& b) { return MathUtil::Cross(a, b); }
+    float LengthSquared(const Math::Vector3& v) { return MathUtil::LengthSquared(v); }
+    float Length(const Math::Vector3& v) { return MathUtil::Length(v); }
+    float DistanceSquared(const Math::Vector3& a, const Math::Vector3& b) { return MathUtil::DistanceSquared(a, b); }
+    float Distance(const Math::Vector3& a, const Math::Vector3& b) { return MathUtil::Distance(a, b); }
     Math::Vector3 Normalize(const Math::Vector3& v) { return MathUtil::Normalize(v); }
+    Math::Vector3 SafeNormalize(const Math::Vector3& v, const Math::Vector3& fallback = { 0.0f, -1.0f, 0.0f }) { return MathUtil::SafeNormalize(v, fallback); }
     Math::Matrix4x4 MakeTranslateMatrix(const Math::Vector3& translate) { return MathUtil::MakeTranslateMatrix(translate); }
     Math::Matrix4x4 MakeScaleMatrix(const Math::Vector3& scale) { return MathUtil::MakeScaleMatrix(scale); }
     Math::Vector3 Transform(const Math::Vector3& vector, const Math::Matrix4x4& matrix) { return MathUtil::Transform(vector, matrix); }

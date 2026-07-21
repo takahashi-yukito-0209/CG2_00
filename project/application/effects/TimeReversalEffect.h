@@ -5,7 +5,6 @@
 #include <deque>
 #include <functional>
 #include <memory>
-#include <random>
 #include <vector>
 
 namespace MyEngine {
@@ -170,5 +169,4 @@ private:
     MyEngine::PostEffectType previousPostEffect_ = MyEngine::PostEffectType::Copy; // 再生前のポストエフェクト
     std::vector<TimeReversalParticle> particles_; // 時間逆行用パーティクル
     std::deque<Math::Transform> transformHistory_; // 巻き戻し対象のTransform履歴
-    std::mt19937 random_ { std::random_device {}() }; // 粒子生成に使用する乱数
 };

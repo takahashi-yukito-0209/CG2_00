@@ -1,4 +1,6 @@
 #include "DirectXCommon.h"
+#include "engine/utility/DebugUtility.h"
+#include "engine/utility/ResourceResolver.h"
 #include "Logger.h"
 #include "StringUtility.h"
 #include "WinApp.h"
@@ -296,10 +298,8 @@ void DirectXCommon::WaitForCommandExecution()
     // Fenceの値を更新し、シグナルを送る
     fenceValue_++;
     HRESULT hr = commandQueue_->Signal(fence_.Get(), fenceValue_);
-    if (FAILED(hr)) {
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::WaitForCommandExecution: Signal failed.")) {
         char buf[256];
-        sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: Signal failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
@@ -312,10 +312,8 @@ void DirectXCommon::WaitForCommandExecution()
     if (fence_->GetCompletedValue() < fenceValue_) {
         // GPUの処理完了時にイベントを通知するように設定
         HRESULT hr2 = fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
-        if (FAILED(hr2)) {
+        if (!MYENGINE_CHECK_HRESULT(hr2, "DirectXCommon::WaitForCommandExecution: SetEventOnCompletion failed.")) {
             char buf[256];
-            sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: SetEventOnCompletion failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr2));
-            Logger::Error(std::string(buf));
             if (device_) {
                 HRESULT reason = device_->GetDeviceRemovedReason();
                 sprintf_s(buf, "DirectXCommon::WaitForCommandExecution: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
@@ -338,10 +336,8 @@ void DirectXCommon::ResetCommandList()
 
     // コマンドアロケータをリセット
     HRESULT hr = commandAllocators_[frameIndex]->Reset();
-    if (FAILED(hr)) {
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::ResetCommandList: commandAllocator_->Reset failed.")) {
         char buf[256];
-        sprintf_s(buf, "DirectXCommon::ResetCommandList: commandAllocator_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
@@ -353,10 +349,8 @@ void DirectXCommon::ResetCommandList()
     // コマンドリストをリセット（アロケータを再設定）
     // 第二引数（PipelineStateObject）はnullでOK
     hr = commandList_->Reset(commandAllocators_[frameIndex].Get(), nullptr);
-    if (FAILED(hr)) {
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::ResetCommandList: commandList_->Reset failed.")) {
         char buf[256];
-        sprintf_s(buf, "DirectXCommon::ResetCommandList: commandList_->Reset failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::ResetCommandList: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
@@ -416,7 +410,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     // リソースの生成
     HRESULT hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&rt->colorResource));
 
-    if (FAILED(hr)) {
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::CreateRenderTarget: Create color resource failed.")) {
         return -1;
     }
 
@@ -431,7 +425,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
     rtvDesc.NumDescriptors = 1;
     rtvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     hr = device_->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&rt->rtvHeap));
-    if (FAILED(hr)) {
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::CreateRenderTarget: Create RTV heap failed.")) {
         return -1;
     }
     rt->rtvHandle = rt->rtvHeap->GetCPUDescriptorHandleForHeapStart();
@@ -449,7 +443,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
 
         // 深度ステンシルバッファのリソースを生成
         hr = device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &ddesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &dclear, IID_PPV_ARGS(&rt->depthResource));
-        if (FAILED(hr)) {
+        if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::CreateRenderTarget: Create depth resource failed.")) {
             return -1;
         }
 
@@ -459,7 +453,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
         dsvDesc.NumDescriptors = 1;
         dsvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         hr = device_->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&rt->dsvHeap));
-        if (FAILED(hr)) {
+        if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::CreateRenderTarget: Create DSV heap failed.")) {
             return -1;
         }
 
@@ -876,8 +870,7 @@ void DirectXCommon::PreDraw()
     const UINT64 frameFenceValue = frameFenceValues_[frameIndex]; // 対象フレームが使用中のFence値
     if (frameFenceValue != 0 && fence_->GetCompletedValue() < frameFenceValue) {
         HRESULT hrWait = fence_->SetEventOnCompletion(frameFenceValue, fenceEvent_);
-        if (FAILED(hrWait)) {
-            Logger::Error("DirectXCommon::PreDraw: failed to set frame fence event\n");
+        if (!MYENGINE_CHECK_HRESULT(hrWait, "DirectXCommon::PreDraw: failed to set frame fence event.")) {
             return;
         }
         WaitForSingleObject(fenceEvent_, INFINITE);
@@ -939,10 +932,8 @@ void DirectXCommon::PostDraw()
 
     ExecuteCommandList();
     HRESULT hrPresent = swapChain_->Present(1, 0);
-    if (FAILED(hrPresent)) {
+    if (!MYENGINE_CHECK_HRESULT(hrPresent, "DirectXCommon::PostDraw: swapChain_->Present failed.")) {
         char buf[256];
-        sprintf_s(buf, "DirectXCommon::PostDraw: swapChain_->Present failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hrPresent));
-        Logger::Error(std::string(buf));
         if (device_) {
             HRESULT reason = device_->GetDeviceRemovedReason();
             sprintf_s(buf, "DirectXCommon::PostDraw: GetDeviceRemovedReason=0x%08X\n", static_cast<unsigned int>(reason));
@@ -952,8 +943,7 @@ void DirectXCommon::PostDraw()
 
     fenceValue_++;
     HRESULT hrSignal = commandQueue_->Signal(fence_.Get(), fenceValue_);
-    if (FAILED(hrSignal)) {
-        Logger::Error("DirectXCommon::PostDraw: failed to signal frame fence\n");
+    if (!MYENGINE_CHECK_HRESULT(hrSignal, "DirectXCommon::PostDraw: failed to signal frame fence.")) {
         return;
     }
     frameFenceValues_[bbIndex] = fenceValue_;
@@ -1101,11 +1091,18 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     HRESULT hr;
     ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
 
+    const std::string requestedPath = StringUtility::ConvertString(filePath); // 呼び出し元から渡されたシェーダーパス
+    std::string resolvedPath = ResourceResolver::Resolve(requestedPath, ResourceResolver::Type::Shader); // Resolverで解決したシェーダーパス
+    if (resolvedPath.empty()) {
+        resolvedPath = requestedPath;
+    }
+    const std::wstring resolvedFilePath = StringUtility::ConvertString(resolvedPath); // DXCへ渡すワイド文字パス
+
     // 1. シェーダーファイルを読み込み
     // DXCユーティリティを使用して、指定されたファイルパスのシェーダーコードをBlobとして読み込む
-    hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
+    hr = dxcUtils_->LoadFile(resolvedFilePath.c_str(), nullptr, &shaderSource);
     if (FAILED(hr)) {
-        std::string msg = std::string("Error: Failed to load shader file: ") + StringUtility::ConvertString(filePath) + "\n";
+        std::string msg = std::string("Error: Failed to load shader file: ") + resolvedPath + "\n";
         Logger::Warn(msg);
         assert(false);
         return nullptr;
@@ -1120,7 +1117,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
 
     // 3. コンパイル引数の設定
     std::vector<std::wstring> argStrings;
-    argStrings.push_back(filePath);
+    argStrings.push_back(resolvedFilePath);
     argStrings.push_back(L"-E"); // エントリポイント指定
     argStrings.push_back(L"main"); // エントリポイントは "main" に固定
     argStrings.push_back(L"-T"); // プロファイル指定
@@ -1163,7 +1160,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errorBlob), nullptr);
     if (errorBlob && errorBlob->GetStringLength() > 0) {
         // エラーが存在する場合、ログ出力してアサート
-        std::string msg = std::string("Shader Compile Error (") + StringUtility::ConvertString(filePath) + "):\n" + errorBlob->GetStringPointer() + "\n";
+        std::string msg = std::string("Shader Compile Error (") + resolvedPath + "):\n" + errorBlob->GetStringPointer() + "\n";
         Logger::Error(msg);
         assert(false);
         return nullptr;
@@ -1408,10 +1405,10 @@ void DirectXCommon::CreateSwapChain()
     // バックバッファ取得
     for (int i = 0; i < kBackBufferCount; ++i) {
         hr = swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainResources_[i]));
-        if (FAILED(hr)) {
-            wchar_t buf[128];
-            swprintf_s(buf, L"GetBuffer[%d] failed. HRESULT=0x%08X\n", i, hr);
-            OutputDebugString(buf);
+        if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::CreateSwapChain: GetBuffer failed.")) {
+            char buf[128]; // 失敗したバックバッファ番号
+            sprintf_s(buf, "DirectXCommon::CreateSwapChain: GetBuffer index=%d\n", i);
+            Logger::Error(std::string(buf));
             assert(false);
             return;
         }
@@ -1601,10 +1598,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
 
     // swap chain のリサイズ
     HRESULT hr = swapChain_->ResizeBuffers(kBackBufferCount, width, height, swapChainFormat_, 0);
-    if (FAILED(hr)) {
-        char buf[256];
-        sprintf_s(buf, "DirectXCommon::OnWindowResize: ResizeBuffers failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hr));
-        Logger::Error(std::string(buf));
+    if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::OnWindowResize: ResizeBuffers failed.")) {
         // 失敗時はフラグを戻して終了
         resizingInProgress_ = false;
         return;
@@ -1613,9 +1607,9 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
     // バックバッファを再取得
     for (int i = 0; i < kBackBufferCount; ++i) {
         hr = swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainResources_[i]));
-        if (FAILED(hr)) {
+        if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::OnWindowResize: GetBuffer failed.")) {
             char buf[256];
-            sprintf_s(buf, "DirectXCommon::OnWindowResize: GetBuffer[%d] failed. HRESULT=0x%08X\n", i, static_cast<unsigned int>(hr));
+            sprintf_s(buf, "DirectXCommon::OnWindowResize: GetBuffer index=%d\n", i);
             Logger::Error(std::string(buf));
             resizingInProgress_ = false;
             return;
@@ -1629,8 +1623,7 @@ void DirectXCommon::OnWindowResize(uint32_t width, uint32_t height)
         desc.NumDescriptors = kBackBufferCount;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         hr = device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rtvDescriptorHeap_));
-        if (FAILED(hr)) {
-            Logger::Error("DirectXCommon::OnWindowResize: CreateDescriptorHeap(RTV) failed\n");
+        if (!MYENGINE_CHECK_HRESULT(hr, "DirectXCommon::OnWindowResize: CreateDescriptorHeap(RTV) failed.")) {
             resizingInProgress_ = false;
             return;
         }

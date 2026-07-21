@@ -1,7 +1,6 @@
 #include "InputManager.h"
+#include "engine/utility/DebugUtility.h"
 #include "Logger.h"
-#include <cstddef>
-#include <cstdio>
 #include <cstring>
 
 #pragma comment(lib, "dinput8.lib")
@@ -10,19 +9,8 @@
 using namespace MyEngine;
 
 namespace {
-constexpr size_t kInputLogBufferSize = 256; // 入力初期化ログ用バッファサイズ
 constexpr uint8_t kInputPressedMask = 0x80; // DirectInputの押下状態を示すビット
-
-/// <summary>
-/// DirectInput初期化時の失敗内容をログへ出力する
-/// </summary>
-void LogDirectInputInitializeFailure(const char* step, HRESULT hr)
-{
-    char message[kInputLogBufferSize] = {}; // ログへ出力するエラー内容
-    sprintf_s(message, "InputManager::Initialize failed at %s. HRESULT=0x%08X\n", step, static_cast<unsigned int>(hr));
-    Logger::Error(message);
-}
-}
+} // namespace
 
 /// <summary>
 /// シングルトンインスタンスを取得する
@@ -51,55 +39,49 @@ bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
     }
 
     HRESULT hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(), nullptr); // キーボードデバイスを生成
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("CreateDevice Keyboard", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at CreateDevice Keyboard.")) {
         Finalize();
         return false;
     }
 
     hr = keyboard_->SetDataFormat(&c_dfDIKeyboard); // キーボードのデータ形式を設定
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("SetDataFormat Keyboard", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at SetDataFormat Keyboard.")) {
         Finalize();
         return false;
     }
 
     hr = keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // キーボードの協調レベルを設定
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("SetCooperativeLevel Keyboard", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at SetCooperativeLevel Keyboard.")) {
         Finalize();
         return false;
     }
 
     hr = keyboard_->Acquire(); // キーボード入力を取得開始
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("Acquire Keyboard", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at Acquire Keyboard.")) {
+        // 初回Acquireの失敗はUpdate内の再取得処理に任せる
     }
 
     hr = directInput->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(), nullptr); // マウスデバイスを生成
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("CreateDevice Mouse", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at CreateDevice Mouse.")) {
         Finalize();
         return false;
     }
 
     hr = mouse_->SetDataFormat(&c_dfDIMouse2); // マウスのデータ形式を設定
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("SetDataFormat Mouse", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at SetDataFormat Mouse.")) {
         Finalize();
         return false;
     }
 
     hr = mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE); // マウスの協調レベルを設定
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("SetCooperativeLevel Mouse", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at SetCooperativeLevel Mouse.")) {
         Finalize();
         return false;
     }
 
     hr = mouse_->Acquire(); // マウス入力を取得開始
-    if (FAILED(hr)) {
-        LogDirectInputInitializeFailure("Acquire Mouse", hr);
+    if (!MYENGINE_CHECK_HRESULT(hr, "InputManager::Initialize failed at Acquire Mouse.")) {
+        // 初回Acquireの失敗はUpdate内の再取得処理に任せる
     }
 
     return true;

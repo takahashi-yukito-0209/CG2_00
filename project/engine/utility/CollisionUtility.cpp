@@ -59,6 +59,165 @@ static inline Vector3 NormalizeVec(const Vector3& v)
     return { v.x * inv, v.y * inv, v.z * inv };
 }
 
+
+/// <summary>
+/// AABB の中心座標を取得する。
+/// </summary>
+Vector3 GetAABBCenter(const AABB& box)
+{
+    return Mul(Add(box.min, box.max), 0.5f);
+}
+
+/// <summary>
+/// AABB の各軸方向の半分サイズを取得する。
+/// </summary>
+Vector3 GetAABBHalfSize(const AABB& box)
+{
+    return Mul(Sub(box.max, box.min), 0.5f);
+}
+
+/// <summary>
+/// AABB の各軸方向のサイズを取得する。
+/// </summary>
+Vector3 GetAABBSize(const AABB& box)
+{
+    return Sub(box.max, box.min);
+}
+
+/// <summary>
+/// 指定点を AABB 内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointAABB(const AABB& box, const Vector3& point)
+{
+    return {
+        std::max(box.min.x, std::min(point.x, box.max.x)),
+        std::max(box.min.y, std::min(point.y, box.max.y)),
+        std::max(box.min.z, std::min(point.z, box.max.z))
+    };
+}
+
+/// <summary>
+/// 指定点が AABB 内に含まれているか判定する。
+/// </summary>
+bool ContainsPointAABB(const AABB& box, const Vector3& point)
+{
+    return point.x >= box.min.x && point.x <= box.max.x
+        && point.y >= box.min.y && point.y <= box.max.y
+        && point.z >= box.min.z && point.z <= box.max.z;
+}
+
+/// <summary>
+/// 2 つの AABB を内包する AABB を作成する。
+/// </summary>
+AABB MergeAABB(const AABB& a, const AABB& b)
+{
+    AABB merged {}; // 結合後の AABB
+    merged.min = {
+        std::min(a.min.x, b.min.x),
+        std::min(a.min.y, b.min.y),
+        std::min(a.min.z, b.min.z)
+    };
+    merged.max = {
+        std::max(a.max.x, b.max.x),
+        std::max(a.max.y, b.max.y),
+        std::max(a.max.z, b.max.z)
+    };
+    return merged;
+}
+
+/// <summary>
+/// AABB を指定量だけ外側へ広げる。
+/// </summary>
+AABB ExpandAABB(const AABB& box, const Vector3& padding)
+{
+    AABB expanded {}; // 拡張後の AABB
+    expanded.min = Sub(box.min, padding);
+    expanded.max = Add(box.max, padding);
+    return expanded;
+}
+/// <summary>
+/// 指定点を OBB 内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointOBB(const OBB& obb, const Vector3& point)
+{
+    Vector3 distanceFromCenter = Sub(point, obb.center); // OBB 中心から指定点へのベクトル
+    Vector3 closest = obb.center; // OBB 内の最近点
+
+    for (int axisIndex = 0; axisIndex < 3; ++axisIndex) {
+        float projectedLength = Dot(distanceFromCenter, obb.axis[axisIndex]); // OBB 軸上への投影距離
+        float clampedLength = std::max(-obb.halfLength[axisIndex], std::min(projectedLength, obb.halfLength[axisIndex])); // OBB 内に収めた投影距離
+        closest = Add(closest, Mul(obb.axis[axisIndex], clampedLength));
+    }
+
+    return closest;
+}
+
+/// <summary>
+/// 指定点が球内に含まれているか判定する。
+/// </summary>
+bool ContainsPointSphere(const Sphere& sphere, const Vector3& point)
+{
+    Vector3 difference = Sub(point, sphere.center); // 球中心から指定点へのベクトル
+    return LengthSq(difference) <= sphere.radius * sphere.radius;
+}
+
+/// <summary>
+/// 指定点を球内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointSphere(const Sphere& sphere, const Vector3& point)
+{
+    Vector3 difference = Sub(point, sphere.center); // 球中心から指定点へのベクトル
+    float distanceSquared = LengthSq(difference); // 球中心から指定点までの距離の二乗
+
+    if (distanceSquared <= sphere.radius * sphere.radius || distanceSquared <= 1e-12f) {
+        return point;
+    }
+
+    float distance = std::sqrt(distanceSquared); // 球中心から指定点までの距離
+    float scale = sphere.radius / distance; // 球面上まで縮める倍率
+    return Add(sphere.center, Mul(difference, scale));
+}
+
+/// <summary>
+/// 球を内包する AABB を作成する。
+/// </summary>
+AABB GetSphereAABB(const Sphere& sphere)
+{
+    Vector3 radiusVector { sphere.radius, sphere.radius, sphere.radius }; // 各軸方向の半径
+    AABB bounds {}; // 球を内包する AABB
+    bounds.min = Sub(sphere.center, radiusVector);
+    bounds.max = Add(sphere.center, radiusVector);
+    return bounds;
+}
+
+/// <summary>
+/// OBB を内包する AABB を作成する。
+/// </summary>
+AABB GetOBBAABB(const OBB& obb)
+{
+    Vector3 corner = Add(Add(obb.center, Mul(obb.axis[0], -obb.halfLength[0])), Add(Mul(obb.axis[1], -obb.halfLength[1]), Mul(obb.axis[2], -obb.halfLength[2]))); // 最初の頂点
+    AABB bounds { corner, corner }; // OBB を内包する AABB
+
+    for (int sx = -1; sx <= 1; sx += 2) {
+        for (int sy = -1; sy <= 1; sy += 2) {
+            for (int sz = -1; sz <= 1; sz += 2) {
+                Vector3 current = obb.center; // 現在計算中の頂点
+                current = Add(current, Mul(obb.axis[0], obb.halfLength[0] * static_cast<float>(sx)));
+                current = Add(current, Mul(obb.axis[1], obb.halfLength[1] * static_cast<float>(sy)));
+                current = Add(current, Mul(obb.axis[2], obb.halfLength[2] * static_cast<float>(sz)));
+
+                bounds.min.x = std::min(bounds.min.x, current.x);
+                bounds.min.y = std::min(bounds.min.y, current.y);
+                bounds.min.z = std::min(bounds.min.z, current.z);
+                bounds.max.x = std::max(bounds.max.x, current.x);
+                bounds.max.y = std::max(bounds.max.y, current.y);
+                bounds.max.z = std::max(bounds.max.z, current.z);
+            }
+        }
+    }
+
+    return bounds;
+}
 /// <summary>
 /// AABB と AABB の交差判定
 /// </summary>
@@ -269,31 +428,8 @@ bool IntersectOBB_OBB(const OBB& A, const OBB& B)
 /// </summary>
 bool IntersectSphere_OBB(const Sphere& s, const OBB& obb)
 {
-    // OBB 中心から球中心へのベクトルを計算
-    Vector3 d = Sub(s.center, obb.center);
-
-    // OBB のローカル軸に沿って、球の中心に最も近い点を求める
-    Vector3 closest = obb.center;
-    // 各軸に対して、球の中心からの距離を計算し、OBB の半長さでクランプする
-    for (int i = 0; i < 3; ++i) {
-        // d を OBB の軸に投影して距離を求める
-        float dist = Dot(d, obb.axis[i]);
-        // 距離を半長さでクランプ
-        if (dist > obb.halfLength[i]) {
-            dist = obb.halfLength[i];
-        }
-        // 負の方向も同様にクランプ
-        if (dist < -obb.halfLength[i]) {
-            dist = -obb.halfLength[i];
-        }
-
-        // クランプされた距離を OBB の中心からのベクトルに変換して、最近接点を更新
-        closest = Add(closest, Mul(obb.axis[i], dist));
-    }
-
-    // 最近接点と球の中心のベクトルを計算
-    Vector3 diff = Sub(s.center, closest);
-    // 距離の二乗が半径の二乗以下なら交差している
+    Vector3 closest = ClosestPointOBB(obb, s.center); // 球中心に最も近い OBB 内の点
+    Vector3 diff = Sub(s.center, closest); // 最近接点から球中心へのベクトル
     return LengthSq(diff) <= s.radius * s.radius;
 }
 
@@ -360,15 +496,13 @@ bool RayIntersectAABB(const Ray& ray, const AABB& box, float* outT)
         return false;
     }
 
-    // すべての軸で交差しているので、tmin と tmax の範囲内にヒットポイントが存在する
+    // すべての軸で交差していても、交差範囲がレイの後方だけにある場合はヒットしない
+    if (tmax < 0.0f) {
+        return false;
+    }
+
     if (outT) {
         // tmin が負の場合は、レイの開始点が AABB 内にあるので、tmax をヒット距離として使用する
-        // もし tmax が負であればボックスはレイの後方にありヒットしない
-        if (tmax < 0.0f) {
-            return false;
-        }
-
-        // tmin が負であっても、tmax が正であればレイは AABB 内にあるので、tmax をヒット距離として使用する
         *outT = tmin >= 0.0f ? tmin : tmax; // ndir を使って計算しているので t は実距離
     }
 
@@ -458,46 +592,8 @@ bool RayIntersectSphere(const Ray& ray, const Sphere& s, float* outT)
 namespace CollisionUtility {
 AABB MakeAABBFromTransform(const Transform& t, const Vector3& halfLengths)
 {
-    // Transform から OBB を作成
-    OBB obb = MakeOBBFromTransform(t, halfLengths);
-
-    // OBB の8つのコーナーを計算
-    Vector3 corners[8];
-    // OBB の中心から各軸方向に半長さを加減してコーナーを求める
-    int idx = 0;
-    // sx, sy, sz はそれぞれ -1 と 1 を取ることで、8つのコーナーを生成
-    for (int sx = -1; sx <= 1; sx += 2) {
-        for (int sy = -1; sy <= 1; sy += 2) {
-            for (int sz = -1; sz <= 1; sz += 2) {
-                // OBB の中心から、各軸方向に半長さを加減してコーナーを求める
-                Vector3 corner = obb.center;
-                // 各軸方向に半長さを加減してコーナーを求める
-                corner = Add(corner, Mul(obb.axis[0], obb.halfLength[0] * (float)sx)); // X軸方向に半長さを加減
-                corner = Add(corner, Mul(obb.axis[1], obb.halfLength[1] * (float)sy)); // Y軸方向に半長さを加減
-                corner = Add(corner, Mul(obb.axis[2], obb.halfLength[2] * (float)sz)); // Z軸方向に半長さを加減
-                corners[idx++] = corner; // コーナーを配列に保存
-            }
-        }
-    }
-
-    // 8つのコーナーから AABB を作成
-    Vector3 min = corners[0]; // 最初のコーナーを初期値として最小点を設定
-    Vector3 max = corners[0]; // 最初のコーナーを初期値として最大点を設定
-    // 8つのコーナーをループして、最小点と最大点を更新
-    for (int i = 1; i < 8; ++i) {
-        min.x = std::min(min.x, corners[i].x); // X軸方向の最小点を更新
-        min.y = std::min(min.y, corners[i].y); // Y軸方向の最小点を更新
-        min.z = std::min(min.z, corners[i].z); // Z軸方向の最小点を更新
-        max.x = std::max(max.x, corners[i].x); // X軸方向の最大点を更新
-        max.y = std::max(max.y, corners[i].y); // Y軸方向の最大点を更新
-        max.z = std::max(max.z, corners[i].z); // Z軸方向の最大点を更新
-    }
-
-    // 最小点と最大点から AABB を作成して返す
-    AABB box;
-    box.min = min; // AABB の最小点を設定
-    box.max = max; // AABB の最大点を設定
-    return box; // AABB を返す
+    OBB obb = MakeOBBFromTransform(t, halfLengths); // Transform から作成した OBB
+    return GetOBBAABB(obb);
 }
 } // namespace CollisionUtility
 
@@ -1640,9 +1736,9 @@ OBB MakeOBBFromTransform(const Transform& t, const Vector3& halfLengths)
     obb.axis[2] = NormalizeVec({ r02, r12, r22 }); // OBB の軸[2] に回転行列の第3列を設定（正規化）
 
     // OBB の半長さは、Transform の scale を掛けた halfLengths になる
-    obb.halfLength[0] = halfLengths.x * t.scale.x; // OBB の半長さ[0] に halfLengths.x に Transform の scale.x を掛けた値を設定する
-    obb.halfLength[1] = halfLengths.y * t.scale.y; // OBB の半長さ[1] に halfLengths.y に Transform の scale.y を掛けた値を設定する
-    obb.halfLength[2] = halfLengths.z * t.scale.z; // OBB の半長さ[2] に halfLengths.z に Transform の scale.z を掛けた値を設定する
+    obb.halfLength[0] = std::fabs(halfLengths.x * t.scale.x); // OBB の半長さ[0] に scale を反映した絶対値を設定する
+    obb.halfLength[1] = std::fabs(halfLengths.y * t.scale.y); // OBB の半長さ[1] に scale を反映した絶対値を設定する
+    obb.halfLength[2] = std::fabs(halfLengths.z * t.scale.z); // OBB の半長さ[2] に scale を反映した絶対値を設定する
 
     // OBB を返す
     return obb;

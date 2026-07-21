@@ -2,25 +2,109 @@
 #include <algorithm>
 #include <assert.h>
 #include <cmath>
+#include <numbers>
 
 using namespace Math;
 
-Math::Vector3 MathUtil::Normalize(const Math::Vector3& v)
-{
-    Math::Vector3 result = {};
-    float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    if (length > 0.000001f) {
-        result.x = v.x / length;
-        result.y = v.y / length;
-        result.z = v.z / length;
-    } else {
-        result.x = 0.0f;
-        result.y = -1.0f;
-        result.z = 0.0f;
-    }
-    return result;
+namespace {
+constexpr float kNormalizeEpsilon = 0.000001f; // 正規化でゼロ長とみなすしきい値
 }
 
+/// <summary>
+/// 値を 0.0f から 1.0f の範囲に収める。
+/// </summary>
+float MathUtil::Clamp01(float value)
+{
+    return std::clamp(value, 0.0f, 1.0f);
+}
+
+/// <summary>
+/// 度数法の角度をラジアンへ変換する。
+/// </summary>
+float MathUtil::DegToRad(float degree)
+{
+    return degree * std::numbers::pi_v<float> / 180.0f;
+}
+
+/// <summary>
+/// ラジアンの角度を度数法へ変換する。
+/// </summary>
+float MathUtil::RadToDeg(float radian)
+{
+    return radian * 180.0f / std::numbers::pi_v<float>;
+}
+
+/// <summary>
+/// Vector3 同士の内積を計算する。
+/// </summary>
+float MathUtil::Dot(const Math::Vector3& a, const Math::Vector3& b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+/// <summary>
+/// Vector3 同士の外積を計算する。
+/// </summary>
+Math::Vector3 MathUtil::Cross(const Math::Vector3& a, const Math::Vector3& b)
+{
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
+
+/// <summary>
+/// Vector3 の長さの二乗を計算する。
+/// </summary>
+float MathUtil::LengthSquared(const Math::Vector3& v)
+{
+    return Dot(v, v);
+}
+
+/// <summary>
+/// Vector3 の長さを計算する。
+/// </summary>
+float MathUtil::Length(const Math::Vector3& v)
+{
+    return std::sqrt(LengthSquared(v));
+}
+
+/// <summary>
+/// 2点間の距離の二乗を計算する。
+/// </summary>
+float MathUtil::DistanceSquared(const Math::Vector3& a, const Math::Vector3& b)
+{
+    return LengthSquared(a - b);
+}
+
+/// <summary>
+/// 2点間の距離を計算する。
+/// </summary>
+float MathUtil::Distance(const Math::Vector3& a, const Math::Vector3& b)
+{
+    return std::sqrt(DistanceSquared(a, b));
+}
+
+/// <summary>
+/// ベクトルを正規化する。
+/// </summary>
+Math::Vector3 MathUtil::Normalize(const Math::Vector3& v)
+{
+    return SafeNormalize(v);
+}
+
+/// <summary>
+/// 長さがほぼ 0 の場合は代替方向を返してベクトルを正規化する。
+/// </summary>
+Math::Vector3 MathUtil::SafeNormalize(const Math::Vector3& v, const Math::Vector3& fallback)
+{
+    const float length = Length(v); // ベクトルの長さ
+    if (length > kNormalizeEpsilon) {
+        return v / length;
+    }
+    return fallback;
+}
 Math::Matrix4x4 MathUtil::Transpose(const Math::Matrix4x4& m)
 {
     Math::Matrix4x4 r = {};

@@ -25,8 +25,37 @@ enum class PostEffectType {
     RadialBlur, // 指定した中心から放射状にぼかす
     Dissolve, // ノイズマスクの閾値で画面を消去する
     Random, // GPUで生成した乱数を入力画像へ乗算する
+    Count, // ポストエフェクト種類数
 };
 
+/// <summary>
+/// ポストエフェクト種類数を取得する。
+/// </summary>
+constexpr uint32_t GetPostEffectTypeCount()
+{
+    return static_cast<uint32_t>(PostEffectType::Count);
+}
+
+/// <summary>
+/// ポストエフェクト種類の最大番号を取得する。
+/// </summary>
+constexpr uint32_t GetMaxPostEffectTypeIndex()
+{
+    return GetPostEffectTypeCount() - 1u;
+}
+
+/// <summary>
+/// ポストエフェクト種類が有効範囲内か確認する。
+/// </summary>
+constexpr bool IsValidPostEffectType(PostEffectType effectType)
+{
+    return static_cast<uint32_t>(effectType) < GetPostEffectTypeCount();
+}
+
+/// <summary>
+/// ポストエフェクト種類の表示名を取得する。
+/// </summary>
+const char* GetPostEffectTypeName(PostEffectType effectType);
 /// <summary>
 /// 全画面ポストエフェクトを管理するクラス
 /// </summary>
@@ -90,7 +119,10 @@ public:
     /// <summary>
     /// 使用するポストエフェクトを設定する
     /// </summary>
-    void SetEffectType(PostEffectType effectType) { effectType_ = effectType; }
+    void SetEffectType(PostEffectType effectType)
+    {
+        effectType_ = IsValidPostEffectType(effectType) ? effectType : PostEffectType::Copy;
+    }
 
     /// <summary>
     /// 現在選択されているポストエフェクトを取得する

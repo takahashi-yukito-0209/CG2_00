@@ -1,4 +1,4 @@
-﻿#include "ImGuiManager.h"
+#include "ImGuiManager.h"
 #include <cstring>
 #include "engine/utility/Logger.h"
 #include <cstdint>
@@ -380,29 +380,20 @@ void ImGuiManager::DrawPostProcessSection(Context& ctx)
         }
 
         int effectIndex = static_cast<int>(ctx.postProcess->GetEffectType()); // 現在のエフェクト番号
-        const char* effectNames[] = {
-            "Distortion",
-            "Copy",
-            "Grayscale",
-            "Vignette",
-            "Box Filter",
-            "Gaussian Filter",
-            "Luminance Outline",
-            "Depth Outline",
-            "Radial Blur",
-            "Dissolve",
-            "Random"
-        }; // 選択可能なエフェクト名
+        const uint32_t effectTypeCount = GetPostEffectTypeCount(); // 選択可能なポストエフェクト種類数
+        const char* effectNames[static_cast<uint32_t>(PostEffectType::Count)] {}; // 選択可能なエフェクト名
+        for (uint32_t effectTypeIndex = 0; effectTypeIndex < effectTypeCount; ++effectTypeIndex) {
+            effectNames[effectTypeIndex] = GetPostEffectTypeName(static_cast<PostEffectType>(effectTypeIndex));
+        }
 
         if (ImGui::Combo(
                 "Effect",
                 &effectIndex,
                 effectNames,
-                IM_ARRAYSIZE(effectNames))) {
+                static_cast<int>(effectTypeCount))) {
             ctx.postProcess->SetEffectType(
                 static_cast<PostEffectType>(effectIndex));
         }
-
         if (ctx.postProcess->GetEffectType() == PostEffectType::BoxFilter) {
             int kernelIndex = ctx.postProcess->GetBoxFilterKernelSize() == kKernelSize5x5
                 ? kKernelIndex5x5

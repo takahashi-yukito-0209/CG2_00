@@ -46,6 +46,68 @@ struct Mesh {
 };
 
 // ----------------------
+// 形状データ補助関数
+// ----------------------
+
+/// <summary>
+/// AABB の中心座標を取得する。
+/// </summary>
+Math::Vector3 GetAABBCenter(const AABB& box);
+
+/// <summary>
+/// AABB の各軸方向の半分サイズを取得する。
+/// </summary>
+Math::Vector3 GetAABBHalfSize(const AABB& box);
+
+/// <summary>
+/// AABB の各軸方向のサイズを取得する。
+/// </summary>
+Math::Vector3 GetAABBSize(const AABB& box);
+
+/// <summary>
+/// 指定点を AABB 内に収めた最近点を取得する。
+/// </summary>
+Math::Vector3 ClosestPointAABB(const AABB& box, const Math::Vector3& point);
+
+/// <summary>
+/// 指定点が AABB 内に含まれているか判定する。
+/// </summary>
+bool ContainsPointAABB(const AABB& box, const Math::Vector3& point);
+
+/// <summary>
+/// 2 つの AABB を内包する AABB を作成する。
+/// </summary>
+AABB MergeAABB(const AABB& a, const AABB& b);
+
+/// <summary>
+/// AABB を指定量だけ外側へ広げる。
+/// </summary>
+AABB ExpandAABB(const AABB& box, const Math::Vector3& padding);
+/// <summary>
+/// 指定点を OBB 内に収めた最近点を取得する。
+/// </summary>
+Math::Vector3 ClosestPointOBB(const OBB& obb, const Math::Vector3& point);
+
+/// <summary>
+/// 指定点が球内に含まれているか判定する。
+/// </summary>
+bool ContainsPointSphere(const Sphere& sphere, const Math::Vector3& point);
+
+/// <summary>
+/// 指定点を球内に収めた最近点を取得する。
+/// </summary>
+Math::Vector3 ClosestPointSphere(const Sphere& sphere, const Math::Vector3& point);
+
+/// <summary>
+/// 球を内包する AABB を作成する。
+/// </summary>
+AABB GetSphereAABB(const Sphere& sphere);
+
+/// <summary>
+/// OBB を内包する AABB を作成する。
+/// </summary>
+AABB GetOBBAABB(const OBB& obb);
+// ----------------------
 // 衝突判定関数
 // ----------------------
 

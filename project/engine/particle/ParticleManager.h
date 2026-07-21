@@ -6,10 +6,10 @@
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
 #include <cstddef>
+#include <iosfwd>
 #include <array>
 #include <d3d12.h>
 #include <vector>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -254,9 +254,154 @@ public:
     /// </summary>
     void DrawImGui(PostProcess* postProcess = nullptr);
 
+
 private:
     ParticleManager() = default;
 
+    /// <summary>
+    /// 現在のPostProcess設定をGPU Emitter設定へ取り込む。
+    /// </summary>
+    void CaptureGpuEmitterPostProcessSettings(const PostProcess& postProcess);
+
+    /// <summary>
+    /// GPU Emitterに保存しているPostProcess設定を反映する。
+    /// </summary>
+    void ApplyGpuEmitterPostProcessSettings(PostProcess& postProcess) const;
+
+    /// <summary>
+    /// GPU Emitterプリセット状態を現在の設定へ適用する。
+    /// </summary>
+    void ApplyGpuEmitterPresetState(const PM_GpuEmitterSphere& presetState);
+
+    /// <summary>
+    /// GPU Emitterの基本プリセットを適用する。
+    /// </summary>
+    void ApplyGpuEmitterBasicSettings();
+
+    /// <summary>
+    /// GPU Emitterの密集バーストプリセットを適用する。
+    /// </summary>
+    void ApplyGpuEmitterDenseBurstSettings();
+
+    /// <summary>
+    /// GPU Emitterのランダム拡散プリセットを適用する。
+    /// </summary>
+    void ApplyGpuEmitterRandomSpreadSettings();
+
+    /// <summary>
+    /// GPU EmitterのGPU側パーティクル状態をリセットする。
+    /// </summary>
+    void ResetGpuEmitterParticles();
+
+    /// <summary>
+    /// GPU Emitterの実行時パーティクル状態をクリアする。
+    /// </summary>
+    void ClearGpuEmitterRuntimeParticleState();
+
+    /// <summary>
+    /// GPU Emitter用テクスチャを描画グループへ反映する。
+    /// </summary>
+    void ApplyGpuEmitterTextureToDrawGroup();
+
+    /// <summary>
+    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// </summary>
+    void UpdateGpuEmitter(float dt);
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterImGui(PostProcess* postProcess);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの基本情報を表示する。
+    /// </summary>
+    void DrawGpuEmitterStatusImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterのeffect情報を編集する。
+    /// </summary>
+    void DrawGpuEmitterEffectImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterに紐づくPostProcess設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterPostProcessImGui(PostProcess* postProcess);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの発生設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの再生フラグを編集する。
+    /// </summary>
+    void DrawGpuEmitterPlaybackStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの発生範囲と発生数を編集する。
+    /// </summary>
+    void DrawGpuEmitterSpawnStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterのスケールと寿命を編集する。
+    /// </summary>
+    void DrawGpuEmitterScaleLifeStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの物理挙動を編集する。
+    /// </summary>
+    void DrawGpuEmitterPhysicsStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの色変化を編集する。
+    /// </summary>
+    void DrawGpuEmitterColorStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterのプリセット適用ボタンを表示する。
+    /// </summary>
+    void DrawGpuEmitterPresetImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの保存と読み込みを操作する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定名を編集する。
+    /// </summary>
+    void DrawGpuEmitterSettingsNameImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの選択欄を表示する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileComboImGui(const std::vector<std::string>& settingsFiles, const std::string& settingsPreview);
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの操作ボタンを表示する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileButtonsImGui(const std::string& saveSettingsPath, const std::string& selectedSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定を指定パスへ保存して結果メッセージを更新する。
+    /// </summary>
+    void SaveGpuEmitterSettingsFromImGui(const std::string& saveSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定を指定パスから読み込んで結果メッセージを更新する。
+    /// </summary>
+    void LoadGpuEmitterSettingsFromImGui(const std::string& loadSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定ファイルを削除して結果メッセージを更新する。
+    /// </summary>
+    void DeleteGpuEmitterSettingsFromImGui(const std::string& selectedSettingsPath);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの実行操作を表示する。
+    /// </summary>
+    void DrawGpuEmitterControlImGui();
     /// <summary>
     /// GPUパーティクル変換に必要なリソースを作成する。
     /// </summary>
@@ -311,16 +456,41 @@ private:
     /// GPU Emitter設定をJSONファイルから読み込む。
     /// </summary>
     bool LoadGpuEmitterSettings(const std::string& filePath);
+    /// <summary>
+    /// GPU Emitter設定をJSON形式で書き出す。
+    /// </summary>
+    void WriteGpuEmitterSettingsJson(std::ostream& file) const;
 
     /// <summary>
-    /// GPU Emitter用テクスチャを描画グループへ反映する。
+    /// JSONのeffect/renderカテゴリからGPU Emitterの基本情報を読み込む。
     /// </summary>
-    void ApplyGpuEmitterTextureToDrawGroup();
+    void LoadGpuEmitterEffectSettings(const std::string& effectSection, const std::string& renderSection);
 
     /// <summary>
-    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// JSONのplayback/renderカテゴリからGPU Emitterの再生設定を読み込む。
     /// </summary>
-    void UpdateGpuEmitter(float dt);
+    void LoadGpuEmitterPlaybackSettings(const std::string& playbackSection, const std::string& renderSection);
+
+    /// <summary>
+    /// JSONのpostProcessカテゴリからGPU EmitterのPostProcess設定を読み込む。
+    /// </summary>
+    void LoadGpuEmitterPostProcessSettings(const std::string& postProcessSection);
+
+    /// <summary>
+    /// JSONのemitterカテゴリからGPU Emitterの発生設定を読み込む。
+    /// </summary>
+    void LoadGpuEmitterStateSettings(const std::string& emitterSection);
+
+    /// <summary>
+    /// GPU Emitter設定を実行時に扱える範囲へ整える。
+    /// </summary>
+    void NormalizeGpuEmitterStateForRuntime();
+
+    /// <summary>
+    /// 読み込み後のGPU Emitter設定を実行時に扱える範囲へ整える。
+    /// </summary>
+    void NormalizeGpuEmitterStateAfterLoad();
+
     /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
@@ -348,7 +518,6 @@ private:
     Math::Vector3 fieldMin_ { -1.0f, -1.0f, -1.0f };
     Math::Vector3 fieldMax_ { 1.0f, 1.0f, 1.0f };
     float globalTime_ = 0.0f;
-    std::mt19937 rng_ { std::random_device {}() };
 
     Math::Vector3 spawnPosMin_ { 0.0f, 0.0f, 0.0f };
     Math::Vector3 spawnPosMax_ { 0.0f, 0.0f, 0.0f };

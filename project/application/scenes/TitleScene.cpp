@@ -126,7 +126,7 @@ void TitleScene::Update(float dt)
         particleManager->Update(dt);
     }
 
-    InputManager* inputManager = InputManager::GetInstance(); // 蜈･蜉帷ｮ｡逅・
+    InputManager* inputManager = InputManager::GetInstance(); // 入力管理
     if (inputManager && inputManager->IsKeyJustPressed(DIK_SPACE)) {
         if (ctx_.requestSceneChange) {
             ctx_.requestSceneChange("Play");
@@ -170,7 +170,7 @@ void TitleScene::Draw()
     DrawWorldObjects();
 
     if (ctx_.spriteCommon) {
-        const int selectedDrawType = ctx_.selectedDrawType; // ImGui縺ｧ驕ｸ謚槭＆繧後※縺・ｋ謠冗判遞ｮ蛻･
+        const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
         if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeSprite || selectedDrawType == kDrawTypeAll) {
             for (auto& sprite : sprites_) {
                 if (sprite) {
@@ -194,7 +194,7 @@ void TitleScene::DrawWorldObjects()
         return;
     }
 
-    const int selectedDrawType = ctx_.selectedDrawType; // ImGui縺ｧ驕ｸ謚槭＆繧後※縺・ｋ謠冗判遞ｮ蛻･
+    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
     if (selectedDrawType != kDrawTypeLegacyAll && selectedDrawType != kDrawTypeModel && selectedDrawType != kDrawTypeParticle && selectedDrawType != kDrawTypeAll) {
         return;
     }

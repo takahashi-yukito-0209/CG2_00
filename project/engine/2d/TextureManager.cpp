@@ -4,8 +4,6 @@
 #include "Logger.h"
 #include "StringUtility.h"
 #include "engine/base/SrvManager.h"
-#include <algorithm>
-#include <cctype>
 #include <utility>
 
 using namespace MyEngine;
@@ -98,9 +96,8 @@ void TextureManager::LoadTexture(const std::string& filePath)
     // テクスチャファイルを読み込む
     DirectX::ScratchImage image {};
     HRESULT hr = S_OK;
-    std::string lowerPath = storePath; // 拡張子判定用の小文字化パス
-    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
-    bool isDDS = (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".dds"); // DDS形式かどうか
+    const std::string lowerPath = StringUtility::ToLower(storePath); // 拡張子判定用の小文字化パス
+    const bool isDDS = StringUtility::EndsWith(lowerPath, ".dds"); // DDS形式かどうか
 
     if (isDDS) {
         hr = DirectX::LoadFromDDSFile(wfilePath.c_str(), static_cast<DirectX::DDS_FLAGS>(0), nullptr, image);

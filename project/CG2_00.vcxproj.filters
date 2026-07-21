@@ -120,6 +120,27 @@
     <ClCompile Include="engine\utility\mathUtility.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
+    <ClCompile Include="engine\utility\Easing.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\CurveUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\FileUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\JsonUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\DebugUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\RandomUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\TimeUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
     <ClCompile Include="engine\3d\DebugCamera.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
@@ -130,7 +151,7 @@
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\RenderTarget.cpp">
-      <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
+      <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\Logger.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
@@ -184,6 +205,9 @@
       <Filter>ソース ファイル\engine\sound</Filter>
     </ClCompile>
     <ClCompile Include="engine\particle\ParticleEmitter.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\GpuEmitterSettingsUtility.cpp">
       <Filter>ソース ファイル\engine\particle</Filter>
     </ClCompile>
     <ClCompile Include="engine\particle\ParticleManager.cpp">
@@ -255,10 +279,10 @@
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\InitializeParticle.CS.hlsl">
-      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+      <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\UpdateParticle.CS.hlsl">
-      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+      <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\GPUParticleUpdate.CS.hlsl">
       <Filter>シェーダーファイル</Filter>
@@ -269,7 +293,37 @@
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
-  </ItemGroup>
+    <FxCompile Include="resources\shaders\BoxFilter.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\DepthBasedOutline.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Dissolve.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Distortion.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Fullscreen.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\GaussianFilter.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Grayscale.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\LuminanceBasedOutline.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\RadialBlur.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Random.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkinningObject3D.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkyBox.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkyBox.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Vignette.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>  </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h">
       <Filter>externals\imgui</Filter>
@@ -304,6 +358,27 @@
     <ClInclude Include="engine\utility\mathUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
     </ClInclude>
+    <ClInclude Include="engine\utility\Easing.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\CurveUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\FileUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\JsonUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\DebugUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\RandomUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\TimeUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
     <ClInclude Include="engine\base\WinApp.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
@@ -311,7 +386,7 @@
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\RenderTarget.h">
-      <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
+      <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\StringUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
@@ -371,6 +446,9 @@
       <Filter>ヘッダー ファイル\engine\sound</Filter>
     </ClInclude>
     <ClInclude Include="engine\particle\ParticleEmitter.h">
+      <Filter>ヘッダー ファイル\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\particle\GpuEmitterSettingsUtility.h">
       <Filter>ヘッダー ファイル\engine\particle</Filter>
     </ClInclude>
     <ClInclude Include="engine\particle\ParticleManager.h">

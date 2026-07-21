@@ -11,6 +11,7 @@
 #include "../../engine/base/WinApp.h"
 #include "../../engine/particle/ParticleManager.h"
 #include "../../engine/utility/mathUtility.h"
+#include "../../engine/utility/RandomUtility.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -34,8 +35,6 @@ constexpr float kConvergenceFlashStartScale = 0.25f; // 収束フラッシュの
 constexpr float kConvergenceFlashScaleRange = 0.75f; // 収束フラッシュの拡大幅
 constexpr float kConvergenceFlashColorAlpha = 0.75f; // 収束フラッシュ色の基準アルファ
 constexpr float kConvergenceFlashGreen = 0.92f; // 収束フラッシュ色の緑成分
-constexpr float kDirectionRandomMin = -1.0f; // 粒子方向乱数の最小値
-constexpr float kDirectionRandomMax = 1.0f; // 粒子方向乱数の最大値
 constexpr float kDirectionZScale = 0.45f; // Z方向の拡散を抑える倍率
 constexpr int kMinimumParticleCount = 1; // 発生させる最小粒子数
 constexpr uint32_t kGpuFailureFallbackHitCount = 6; // GPU開始演出失敗時に補うヒット数
@@ -170,18 +169,13 @@ void TimeReversalEffect::Start(PostProcess& postProcess, size_t maximumSpriteCou
         static_cast<int>(maximumSpriteCount)); // 実際に発生する粒子数
     const float minimumSpeed = (std::min)(settings_.minSpeed, settings_.maxSpeed); // 発生速度の最小値
     const float maximumSpeed = (std::max)(settings_.minSpeed, settings_.maxSpeed); // 発生速度の最大値
-    std::uniform_real_distribution<float> directionDistribution(kDirectionRandomMin, kDirectionRandomMax); // 方向成分の乱数
-    std::uniform_real_distribution<float> speedDistribution(minimumSpeed, maximumSpeed); // 拡散速度の乱数
 
     particles_.reserve(static_cast<size_t>(particleCount));
     for (int particleIndex = 0; particleIndex < particleCount; ++particleIndex) {
-        Vector3 direction = {
-            directionDistribution(random_),
-            directionDistribution(random_),
-            directionDistribution(random_) * kDirectionZScale,
-        }; // 放射状に飛ばすための仮方向
+        Vector3 direction = RandomUtility::RandomDirection3D(); // 放射状に飛ばすための仮方向
+        direction.z *= kDirectionZScale;
         direction = MathUtil::Normalize(direction);
-        const float speed = speedDistribution(random_); // 現在の粒子へ与える速度
+        const float speed = RandomUtility::RandomFloat(minimumSpeed, maximumSpeed); // 現在の粒子へ与える速度
 
         TimeReversalParticle particle {}; // 生成する時間逆行用パーティクル
         particle.position = settings_.effectPosition;

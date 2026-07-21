@@ -43,6 +43,40 @@ constexpr float kRandomSpeedMax = 20.0f; // ランダムエフェクト速度の
 constexpr float kPositiveDeltaTimeMin = 0.0f; // 時間更新を行う最小デルタ時間
 } // namespace
 /// <summary>
+/// ポストエフェクト種類の表示名を取得する。
+/// </summary>
+const char* MyEngine::GetPostEffectTypeName(PostEffectType effectType)
+{
+    switch (effectType) {
+    case PostEffectType::Distortion:
+        return "Distortion";
+    case PostEffectType::Copy:
+        return "Copy";
+    case PostEffectType::Grayscale:
+        return "Grayscale";
+    case PostEffectType::Vignette:
+        return "Vignette";
+    case PostEffectType::BoxFilter:
+        return "Box Filter";
+    case PostEffectType::GaussianFilter:
+        return "Gaussian Filter";
+    case PostEffectType::LuminanceOutline:
+        return "Luminance Outline";
+    case PostEffectType::DepthOutline:
+        return "Depth Outline";
+    case PostEffectType::RadialBlur:
+        return "Radial Blur";
+    case PostEffectType::Dissolve:
+        return "Dissolve";
+    case PostEffectType::Random:
+        return "Random";
+    case PostEffectType::Count:
+    default:
+        return "Unknown";
+    }
+}
+
+/// <summary>
 /// デストラクタ
 /// </summary>
 PostProcess::~PostProcess()
