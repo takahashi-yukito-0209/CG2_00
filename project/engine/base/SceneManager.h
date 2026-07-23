@@ -45,13 +45,7 @@ public: // メンバ関数
     /// 描画処理。現在のシーンのDrawを呼び出す。
     /// </summary>
     void Draw();
-
-    /// <summary>
-    /// 描画モードをシーンコンテキストに設定する
-    /// </summary>
-    void SetSelectedDrawType(int t);
-
-    /// <summary>
+/// <summary>
     /// ウィンドウリサイズをシーンへ伝播する
     /// </summary>
     void OnWindowResize(uint32_t width, uint32_t height);

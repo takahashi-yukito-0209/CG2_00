@@ -67,8 +67,14 @@
     <Filter Include="ヘッダー ファイル\engine\sound">
       <UniqueIdentifier>{8c49e122-dc20-47da-a5e5-b98911af3345}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\engine\debug">
+      <UniqueIdentifier>{35a1bbd7-a1bd-4af5-a728-9eb1e4a41411}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソース ファイル\engine\particle">
       <UniqueIdentifier>{2c8b3318-0eaf-45ea-b3fa-6667e5ce7e75}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\engine\debug">
+      <UniqueIdentifier>{4f7c88b5-0883-4a47-a10e-472425da845e}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\engine\particle">
       <UniqueIdentifier>{87ee9c2f-b0b0-4f4b-8fcd-02b452d83782}</UniqueIdentifier>
@@ -258,11 +264,20 @@
     <ClCompile Include="application\scenes\SceneFactory.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="engine\debug\DebugRenderer.cpp">
+      <Filter>ソース ファイル\engine\debug</Filter>
+    </ClCompile>
     <ClCompile Include="engine\base\PostProcess.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="resources\shaders\DebugLine.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\DebugLine.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
@@ -435,6 +450,9 @@
     </ClInclude>
     <ClInclude Include="engine\base\SceneManager.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\debug\DebugRenderer.h">
+      <Filter>ヘッダー ファイル\engine\debug</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\SrvManager.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>

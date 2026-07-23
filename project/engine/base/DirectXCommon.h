@@ -33,6 +33,12 @@ public:
     ~DirectXCommon();
     static constexpr uint32_t kFrameCount = 2;
 
+    enum class FrameSyncMode {
+        VSync, // Present側の垂直同期でフレームを待つ
+        Fixed60, // CPU sleepで60FPSへ近づける
+        Unlimited // 明示的な待ちを行わない
+    };
+
 public: // 公開メンバ関数
     /// <summary>
     /// 初期化処理
@@ -127,6 +133,16 @@ public: // 公開メンバ関数
     /// 現在の描画高さを取得する
     /// </summary>
     float GetRenderHeight() const { return viewport_.Height; }
+
+    /// <summary>
+    /// フレーム同期モードを設定する。
+    /// </summary>
+    void SetFrameSyncMode(FrameSyncMode mode);
+
+    /// <summary>
+    /// 現在のフレーム同期モードを取得する。
+    /// </summary>
+    FrameSyncMode GetFrameSyncMode() const;
 
     /// <summary>
     /// DSVハンドルを取得する
@@ -329,6 +345,8 @@ private: // メンバ関数
 
     // 記録時間(FPS固定用)
     std::chrono::steady_clock::time_point reference_;
+
+    FrameSyncMode frameSyncMode_ = FrameSyncMode::VSync; // 現在のフレーム同期モード
 
 private: // Private Static メンバ関数（ディスクリプタヘルパー）
     /// <summary>

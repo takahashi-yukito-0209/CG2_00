@@ -10,6 +10,9 @@ using namespace MyEngine;
 namespace {
 constexpr size_t kGroupNameInputBufferSize = 256; // グループ名入力用バッファサイズ
 constexpr float kImGuiTranslateStep = 0.01f; // 発生位置の調整幅
+constexpr float kImGuiRotateStep = 0.01f; // 発生回転の調整幅
+constexpr float kImGuiScaleStep = 0.01f; // 発生スケールの調整幅
+constexpr float kImGuiRangeStep = 0.01f; // デバッグ範囲の調整幅
 constexpr int kImGuiCountStep = 1; // 発生数の調整幅
 constexpr int kImGuiCountMin = 0; // 発生数の最小値
 constexpr int kImGuiCountMax = 1000; // 発生数の最大値
@@ -81,7 +84,9 @@ void ParticleEmitter::DrawImGui()
     if (ImGui::InputText("GroupName", buf, sizeof(buf))) {
         groupName = std::string(buf);
     }
-    // 発生位置を編集する
+    // SRTを編集する
+    ImGui::DragFloat3("Scale", &transform.scale.x, kImGuiScaleStep);
+    ImGui::DragFloat3("Rotate", &transform.rotate.x, kImGuiRotateStep);
     ImGui::DragFloat3("Translate", &transform.translate.x, kImGuiTranslateStep);
     // 発生数を編集する
     int tmpCount = static_cast<int>(count);
@@ -92,6 +97,11 @@ void ParticleEmitter::DrawImGui()
     ImGui::Checkbox("Use Hit Effect", &useHitEffect);
     ImGui::Checkbox("Use Ring Effect", &useRingEffect);
     ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);
+    ImGui::Separator();
+    ImGui::Checkbox("Show Debug Range", &showDebugRange);
+    ImGui::DragFloat3("Debug Range Half", &debugRangeHalfSize.x, kImGuiRangeStep, 0.0f, 100.0f);
+    ImGui::DragInt("Debug Grid Half Lines", &debugGridHalfLineCount, 1, 1, 64);
+    ImGui::DragFloat("Debug Grid Spacing", &debugGridSpacing, kImGuiRangeStep, 0.01f, 100.0f);
 #else
     (void)buf;
 #endif

@@ -3,16 +3,25 @@
 #include "DirectXCommon.h"
 namespace MyEngine {
 
+/// <summary>
+/// レンダーターゲットを破棄し、保持しているハンドルを解放する。
+/// </summary>
 RenderTarget::~RenderTarget()
 {
     Finalize();
 }
 
+/// <summary>
+/// 他のレンダーターゲットから所有権を移動して生成する。
+/// </summary>
 RenderTarget::RenderTarget(RenderTarget&& other) noexcept
 {
     MoveFrom(other);
 }
 
+/// <summary>
+/// 他のレンダーターゲットから所有権を移動して代入する。
+/// </summary>
 RenderTarget& RenderTarget::operator=(RenderTarget&& other) noexcept
 {
     if (this != &other) {
@@ -22,11 +31,17 @@ RenderTarget& RenderTarget::operator=(RenderTarget&& other) noexcept
     return *this;
 }
 
+/// <summary>
+/// 互換用の引数を受け取り、レンダーターゲットを初期化する。
+/// </summary>
 bool RenderTarget::Initialize(DirectXCommon* directXCommon, SrvManager*, const RenderTargetDesc& desc)
 {
     return Initialize(directXCommon, desc);
 }
 
+/// <summary>
+/// 指定された設定でレンダーターゲットを初期化する。
+/// </summary>
 bool RenderTarget::Initialize(DirectXCommon* directXCommon, const RenderTargetDesc& desc)
 {
     Finalize();
@@ -113,6 +128,9 @@ bool RenderTarget::CreateDepthSrvIfNeeded()
     return depthSrvIndex_ != UINT32_MAX;
 }
 
+/// <summary>
+/// レンダーターゲット実体と関連SRVを解放する。
+/// </summary>
 void RenderTarget::Finalize()
 {
     if (directXCommon_ && handle_ >= 0) {
@@ -121,6 +139,9 @@ void RenderTarget::Finalize()
     ResetMembers();
 }
 
+/// <summary>
+/// このレンダーターゲットへの描画を開始する。
+/// </summary>
 void RenderTarget::Begin(bool clear) const
 {
     if (directXCommon_ && handle_ >= 0) {
@@ -128,6 +149,9 @@ void RenderTarget::Begin(bool clear) const
     }
 }
 
+/// <summary>
+/// このレンダーターゲットへの描画を終了する。
+/// </summary>
 void RenderTarget::End() const
 {
     if (directXCommon_ && handle_ >= 0) {
@@ -135,6 +159,9 @@ void RenderTarget::End() const
     }
 }
 
+/// <summary>
+/// レンダーターゲットを指定サイズへ変更する。
+/// </summary>
 void RenderTarget::Resize(uint32_t width, uint32_t height)
 {
     if (directXCommon_ && handle_ >= 0 && width > 0 && height > 0) {
@@ -144,11 +171,17 @@ void RenderTarget::Resize(uint32_t width, uint32_t height)
     }
 }
 
+/// <summary>
+/// レンダーターゲットとして利用可能か確認する。
+/// </summary>
 bool RenderTarget::IsValid() const
 {
     return directXCommon_ && handle_ >= 0;
 }
 
+/// <summary>
+/// 他のレンダーターゲットから内部状態を移動する。
+/// </summary>
 void RenderTarget::MoveFrom(RenderTarget& other) noexcept
 {
     directXCommon_ = other.directXCommon_;
@@ -163,6 +196,9 @@ void RenderTarget::MoveFrom(RenderTarget& other) noexcept
     other.depthSrvIndex_ = UINT32_MAX;
 }
 
+/// <summary>
+/// 内部状態を未初期化状態へ戻す。
+/// </summary>
 void RenderTarget::ResetMembers()
 {
     directXCommon_ = nullptr;

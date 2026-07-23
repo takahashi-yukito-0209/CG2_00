@@ -48,15 +48,11 @@ constexpr bool kNoAlphaCutoutSampler = false; // アルファ抜き用サンプ�
 constexpr Vector3 kEmitterDefaultPosition = { 0.0f, 0.0f, 0.0f }; // エミッターの初期位置
 constexpr int kHitEmitterParticleCount = 8; // ヒット演出で発生させる粒子数
 constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる粒子数
-constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
+constexpr float kEmitterDefaultFrequency = 0.25f; // エフェクト確認時に短寿命粒子が途切れにくい初期発生間隔
 constexpr float kStoppedDeltaTime = 0.0f; // ヒットストップや時間停止中に使用する停止時間
 constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終了したとみなす残り時間
-constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
-constexpr uint32_t kDemoSpriteTextureSwitchInterval = 2; // 同じ確認用テクスチャを連続で使う枚数
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
-constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
-constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
 constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
 constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
 constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
@@ -73,29 +69,46 @@ struct SceneModelLoadDesc {
     bool loadOnStartup; // PlayScene遷移直後に読み込むか
 };
 
-constexpr std::array<SceneModelLoadDesc, 10> kSceneModelLoadDescs = {
-    SceneModelLoadDesc { "plane/plane.gltf", true },
-    SceneModelLoadDesc { "bunny/bunny.obj", false },
-    SceneModelLoadDesc { "teapot/teapot.obj", false },
-    SceneModelLoadDesc { "fence/fence.obj", true },
+constexpr std::array<SceneModelLoadDesc, 1> kSceneModelLoadDescs = {
     SceneModelLoadDesc { "sphere/sphere.gltf", true },
-    SceneModelLoadDesc { "terrain/terrain.obj", false },
-    SceneModelLoadDesc { kAnimatedCubeModelFileName, false },
-    SceneModelLoadDesc { kSimpleSkinModelFileName, false },
-    SceneModelLoadDesc { kHumanSneakWalkModelFileName, false },
-    SceneModelLoadDesc { kHumanWalkModelFileName, false },
 }; // シーンで扱うモデルと起動時ロード設定
+constexpr std::array<const char*, 10> kSceneObjectCreateModelNames = {
+    "plane/plane.gltf",
+    "bunny/bunny.obj",
+    "teapot/teapot.obj",
+    "fence/fence.obj",
+    "sphere/sphere.gltf",
+    "terrain/terrain.obj",
+    kAnimatedCubeModelFileName,
+    kSimpleSkinModelFileName,
+    kHumanSneakWalkModelFileName,
+    kHumanWalkModelFileName,
+}; // ImGuiから生成できる3Dモデル名
+constexpr std::array<const char*, 10> kSceneObjectCreateModelDisplayNames = {
+    "plane.gltf",
+    "bunny.obj",
+    "teapot.obj",
+    "fence.obj",
+    "sphere.gltf",
+    "terrain.obj",
+    "AnimatedCube.gltf",
+    "simpleSkin.gltf",
+    "sneakWalk.gltf",
+    "walk.gltf",
+}; // ImGuiに表示する3Dモデル名
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
 constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
 constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
 constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
-constexpr std::array<const char*, 2> kDemoSpriteTextureNames = {
+constexpr std::array<const char*, 5> kSceneSpriteCreateTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
-}; // 確認用スプライトに使用するテクスチャ名
-
+    kCircleTextureName,
+    kCircleFlashTextureName,
+    kGradationLineTextureName,
+}; // ImGuiから生成できるスプライト用テクスチャ名
 constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
 constexpr std::array<const char*, 5> kSceneTextureNames = {
     kUvCheckerTextureName,
@@ -120,6 +133,19 @@ enum class ParticleEmitterEffectType {
     Ring,
     Cylinder,
 };
+
+/// <summary>
+/// パス文字列から表示用のファイル名部分だけを取得する。
+/// </summary>
+std::string GetDisplayFileName(const std::string& path)
+{
+    const size_t separatorPosition = path.find_last_of("/\\"); // 最後に見つかったパス区切り位置
+    if (separatorPosition == std::string::npos) {
+        return path;
+    }
+
+    return path.substr(separatorPosition + 1);
+}
 
 /// <summary>
 /// パーティクルエミッターの共通設定を適用する
@@ -204,17 +230,6 @@ std::unique_ptr<Object3d> CreateParticleDrawObject(
     object3d->SetEnableLighting(false);
     object3d->SetUseAlphaCutoutSampler(useAlphaCutoutSampler);
     return object3d;
-}
-
-/// <summary>
-/// 確認用スプライト番号から使用するテクスチャ名を取得する
-/// </summary>
-const char* GetDemoSpriteTextureName(uint32_t spriteIndex)
-{
-    const size_t textureIndex = (std::min)(
-        static_cast<size_t>(spriteIndex / kDemoSpriteTextureSwitchInterval),
-        kDemoSpriteTextureNames.size() - 1); // 使用する確認用テクスチャ番号
-    return kDemoSpriteTextureNames[textureIndex];
 }
 
 /// <summary>
@@ -493,21 +508,101 @@ void PlayScene::InitializePostProcessTargets()
 }
 
 /// <summary>
-/// 確認用スプライトを初期化する。
+/// 指定したテクスチャ名からシーン用スプライトを生成する。
 /// </summary>
-void PlayScene::InitializeDemoSprites()
+void PlayScene::CreateSceneSprite(const std::string& textureName)
 {
-    for (uint32_t spriteIndex = 0; spriteIndex < kDemoSpriteCount; ++spriteIndex) {
-        auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
-        const char* textureName = GetDemoSpriteTextureName(spriteIndex); // 使用する確認用テクスチャ名
-        sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
-        sprites_.push_back(std::move(sprite));
+    if (ctx_.textureManager) {
+        ctx_.textureManager->LoadTexture(textureName);
     }
+
+    auto sprite = std::make_unique<Sprite>(); // 生成するスプライト
+    sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
+    sprite->Update();
+    sprites_.push_back(std::move(sprite));
 }
 
 /// <summary>
-/// 3Dオブジェクトの初期設定を適用する。
+/// 指定した番号のシーン用スプライトを削除する。
 /// </summary>
+void PlayScene::DeleteSceneSprite(size_t spriteIndex)
+{
+    if (sprites_.size() <= spriteIndex) {
+        return;
+    }
+
+    sprites_.erase(sprites_.begin() + spriteIndex);
+}
+
+/// <summary>
+/// ImGuiでシーン内スプライトの生成と削除を行う。
+/// </summary>
+void PlayScene::DrawSceneSpriteEditImGui()
+{
+#ifdef USE_IMGUI
+    static int selectedCreateTextureIndex = 0; // 生成に使用するテクスチャ番号
+    static int selectedDeleteSpriteIndex = 0; // 削除対象のスプライト番号
+
+    ImGui::SeparatorText("Create");
+    const char* textureNames[kSceneSpriteCreateTextureNames.size()] = {}; // Combo表示用のテクスチャ名一覧
+    for (size_t textureIndex = 0; textureIndex < kSceneSpriteCreateTextureNames.size(); ++textureIndex) {
+        textureNames[textureIndex] = kSceneSpriteCreateTextureNames[textureIndex];
+    }
+
+    ImGui::Combo(
+        "Texture",
+        &selectedCreateTextureIndex,
+        textureNames,
+        static_cast<int>(kSceneSpriteCreateTextureNames.size()));
+    selectedCreateTextureIndex = (std::clamp)(
+        selectedCreateTextureIndex,
+        0,
+        static_cast<int>(kSceneSpriteCreateTextureNames.size()) - 1);
+    if (ImGui::Button("Create Sprite")) {
+        const std::string textureName = kSceneSpriteCreateTextureNames[static_cast<size_t>(selectedCreateTextureIndex)]; // 生成するスプライトのテクスチャ名
+        CreateSceneSprite(textureName);
+        selectedDeleteSpriteIndex = static_cast<int>(sprites_.size()) - 1;
+    }
+
+    ImGui::SeparatorText("Delete");
+    if (!sprites_.empty()) {
+        const int spriteCount = static_cast<int>(sprites_.size()); // 削除対象として選択できるスプライト数
+        selectedDeleteSpriteIndex = (std::clamp)(selectedDeleteSpriteIndex, 0, spriteCount - 1);
+
+        std::string preview = "Sprite " + std::to_string(selectedDeleteSpriteIndex); // Comboの現在表示名
+        Sprite* previewSprite = sprites_[static_cast<size_t>(selectedDeleteSpriteIndex)].get(); // 現在選択中のスプライト
+        if (previewSprite && !previewSprite->GetTextureFilePath().empty()) {
+            preview += " : " + GetDisplayFileName(previewSprite->GetTextureFilePath());
+        }
+
+        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
+            for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
+                Sprite* sprite = sprites_[static_cast<size_t>(spriteIndex)].get(); // 表示名を作る対象のスプライト
+                std::string label = "Sprite " + std::to_string(spriteIndex); // Comboに表示するスプライト名
+                if (sprite && !sprite->GetTextureFilePath().empty()) {
+                    label += " : " + GetDisplayFileName(sprite->GetTextureFilePath());
+                }
+
+                const bool isSelected = selectedDeleteSpriteIndex == spriteIndex; // 現在選択中かどうか
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedDeleteSpriteIndex = spriteIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::Button("Delete Sprite")) {
+            DeleteSceneSprite(static_cast<size_t>(selectedDeleteSpriteIndex));
+            selectedDeleteSpriteIndex = (std::min)(selectedDeleteSpriteIndex, static_cast<int>(sprites_.size()) - 1);
+        }
+    } else {
+        ImGui::Text("No sprites.");
+    }
+#endif
+}
 void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::string& modelFileName)
 {
     const bool isFenceModel = IsFenceModelFile(modelFileName); // アルファ抜き用サンプラーが必要なモデルか
@@ -527,30 +622,112 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetTranslate(kSkinningPreviewTranslate);
     }
 }
+
 /// <summary>
-/// シーンで使用する3Dオブジェクトを初期化する。
+/// 指定したモデルファイル名からシーン用3Dオブジェクトを生成する
 /// </summary>
+void PlayScene::CreateSceneObject(const std::string& modelFileName)
+{
+    auto object3d = std::make_unique<Object3d>(); // 生成する3Dオブジェクト
+    object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    object3d->SetModel(modelFileName);
+    if (IsAnimationModelFile(modelFileName)) {
+        object3d->SetAnimation(modelFileName);
+    }
+    ApplySceneObjectInitialSettings(*object3d, modelFileName);
+    objects3d_.push_back(std::move(object3d));
+}
+
+/// <summary>
+/// 指定した番号のシーン用3Dオブジェクトを削除する
+/// </summary>
+void PlayScene::DeleteSceneObject(size_t objectIndex)
+{
+    if (objects3d_.size() <= objectIndex) {
+        return;
+    }
+
+    objects3d_.erase(objects3d_.begin() + objectIndex);
+}
+
+/// <summary>
+/// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
+/// </summary>
+void PlayScene::DrawSceneObjectEditImGui()
+{
+#ifdef USE_IMGUI
+    static int selectedCreateModelIndex = 0; // 生成に使用するモデル番号
+    static int selectedDeleteObjectIndex = 0; // 削除対象のオブジェクト番号
+
+    ImGui::SeparatorText("Create");
+    const char* modelNames[kSceneObjectCreateModelDisplayNames.size()] = {}; // Combo表示用のモデル名一覧
+    for (size_t modelIndex = 0; modelIndex < kSceneObjectCreateModelDisplayNames.size(); ++modelIndex) {
+        modelNames[modelIndex] = kSceneObjectCreateModelDisplayNames[modelIndex];
+    }
+
+    ImGui::Combo(
+        "Model",
+        &selectedCreateModelIndex,
+        modelNames,
+        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()));
+    selectedCreateModelIndex = (std::clamp)(
+        selectedCreateModelIndex,
+        0,
+        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()) - 1);
+    if (ImGui::Button("Create Object")) {
+        const std::string modelFileName = kSceneObjectCreateModelNames[static_cast<size_t>(selectedCreateModelIndex)]; // 生成するモデルファイル名
+        CreateSceneObject(modelFileName);
+        selectedDeleteObjectIndex = static_cast<int>(objects3d_.size()) - 1;
+    }
+
+    ImGui::SeparatorText("Delete");
+    if (!objects3d_.empty()) {
+        const int objectCount = static_cast<int>(objects3d_.size()); // 削除対象として選択できるオブジェクト数
+        selectedDeleteObjectIndex = (std::clamp)(selectedDeleteObjectIndex, 0, objectCount - 1);
+
+        std::string preview = "Object " + std::to_string(selectedDeleteObjectIndex); // Comboの現在表示名
+        Object3d* previewObject = objects3d_[static_cast<size_t>(selectedDeleteObjectIndex)].get(); // 現在選択中のオブジェクト
+        if (previewObject && !previewObject->GetDebugName().empty()) {
+            preview += " : " + GetDisplayFileName(previewObject->GetDebugName());
+        }
+
+        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
+            for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
+                Object3d* object = objects3d_[static_cast<size_t>(objectIndex)].get(); // 表示名を作る対象のオブジェクト
+                std::string label = "Object " + std::to_string(objectIndex); // Comboに表示するオブジェクト名
+                if (object && !object->GetDebugName().empty()) {
+                    label += " : " + GetDisplayFileName(object->GetDebugName());
+                }
+
+                const bool isSelected = selectedDeleteObjectIndex == objectIndex; // 現在選択中かどうか
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedDeleteObjectIndex = objectIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::Button("Delete Object")) {
+            DeleteSceneObject(static_cast<size_t>(selectedDeleteObjectIndex));
+            selectedDeleteObjectIndex = (std::min)(selectedDeleteObjectIndex, static_cast<int>(objects3d_.size()) - 1);
+        }
+    } else {
+        ImGui::Text("No objects.");
+    }
+#endif
+}
 void PlayScene::InitializeSceneObjects()
 {
     objects3d_.reserve(kSceneModelLoadDescs.size());
     for (const SceneModelLoadDesc& modelDesc : kSceneModelLoadDescs) {
-        const char* modelFileName = modelDesc.fileName; // 初期化対象のモデルファイル名
-        if (!modelDesc.loadOnStartup) {
-            objects3d_.push_back(nullptr);
-            continue;
-        }
-
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        object3d->SetModel(modelFileName);
-        if (IsAnimationModelFile(modelFileName)) {
-            object3d->SetAnimation(modelFileName);
-        }
-        ApplySceneObjectInitialSettings(*object3d, modelFileName);
+        object3d->SetModel(modelDesc.fileName);
+        ApplySceneObjectInitialSettings(*object3d, modelDesc.fileName);
         objects3d_.push_back(std::move(object3d));
-    }
-    if (objects3d_.size() > kTerrainObjectIndex && objects3d_[kTerrainObjectIndex]) {
-        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainInitialScale);
     }
 }
 
@@ -601,7 +778,6 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     LoadSceneTextures();
     InitializeSkyBox();
-    InitializeDemoSprites();
     InitializeSceneObjects();
     InitializeParticleObjects();
     InitializeParticleEffects();
@@ -763,7 +939,6 @@ void PlayScene::Update(float dt)
 
     UpdateParticleSystems(dt);
     UpdateSceneObjects(dt);
-    UpdateDemoSprites();
 
     UpdateAfterimageSprites();
     UpdateTimeReversalSprites();
@@ -806,17 +981,6 @@ void PlayScene::UpdateSceneObjects(float deltaTime)
 }
 
 /// <summary>
-/// 確認用スプライトを更新する。
-/// </summary>
-void PlayScene::UpdateDemoSprites()
-{
-    for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
-        if (sprite) {
-            sprite->Update();
-        }
-    }
-}
-/// <summary>
 /// 描画処理を行う
 /// </summary>
 void PlayScene::Draw()
@@ -826,7 +990,9 @@ void PlayScene::Draw()
     }
 
     DrawSceneContent();
+    DrawDebugLines3D();
     DrawSprites();
+    DrawDebugLines2D();
 }
 
 /// <summary>
@@ -838,14 +1004,6 @@ void PlayScene::OnEnter() { std::cout << "PlayScene OnEnter\n"; }
 /// シーンから出るときの処理
 /// </summary>
 void PlayScene::OnExit() { std::cout << "PlayScene OnExit\n"; }
-
-/// <summary>
-/// 描画モードの更新を受け取る
-/// </summary>
-void PlayScene::SetSelectedDrawType(int t)
-{
-    ctx_.selectedDrawType = t;
-}
 
 /// <summary>
 /// Scene View用のオフスクリーン描画だけにするか設定する
@@ -891,6 +1049,21 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 /// <summary>
 /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
 /// </summary>
+
+/// <summary>
+/// シーンが所有するパーティクルエミッターポインタ群を ImGui に渡すために埋めるフック
+/// </summary>
+void PlayScene::FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out)
+{
+    if (!out) {
+        return;
+    }
+    out->clear();
+    out->reserve(3);
+    out->push_back(&pmEmitter_);
+    out->push_back(&ringEmitter_);
+    out->push_back(&cylinderEmitter_);
+}
 void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
 {
     if (!out)

@@ -5,9 +5,10 @@
 #include <string>
 #include <vector>
 
+class ParticleEmitter;
+
 namespace MyEngine {
 
-// 前方宣言
 class Object3dCommon;
 class SpriteCommon;
 class Camera;
@@ -18,114 +19,104 @@ class DirectXCommon;
 class Object3d;
 class Sprite;
 class PostProcess;
-
-// シーンコンテキスト構造体（シーンに渡される共通リソースの集約）
+class DebugRenderer;
 struct SceneContext {
-    Object3dCommon* object3dCommon = nullptr;
-    SpriteCommon* spriteCommon = nullptr;
-    Camera* camera = nullptr;
-    ParticleManager* particleManager = nullptr;
-    TextureManager* textureManager = nullptr;
-    SrvManager* srvManager = nullptr;
-    DirectXCommon* directXCommon = nullptr;
-    // ImGuiManagerへのポインタ（シーンが必要に応じてImGui描画用のフックを提供するために使用）
-    class ImGuiManager* imguiManager = nullptr;
-    // 描画タイプ（Game の ImGui で選択された描画モードを渡すため）
-    // 0=Model,1=Particle,2=Sprite,3=Bunny,4=Fence,5=Checker,6=Sphere,7=All
-    int selectedDrawType = -1;
-    std::function<void(const std::string&)> requestSceneChange; // シーン側からのシーン切替要求
+    Object3dCommon* object3dCommon = nullptr; // 3D オブジェクト共通管理
+    SpriteCommon* spriteCommon = nullptr; // スプライト共通管理
+    Camera* camera = nullptr; // 通常描画用カメラ
+    ParticleManager* particleManager = nullptr; // パーティクル管理
+    TextureManager* textureManager = nullptr; // テクスチャ管理
+    SrvManager* srvManager = nullptr; // SRV 管理
+    DirectXCommon* directXCommon = nullptr; // DirectX 共通管理
+    DebugRenderer* debugRenderer = nullptr; // デバッグ描画管理
+    class ImGuiManager* imguiManager = nullptr; // ImGui 管理
+    std::function<void(const std::string&)> requestSceneChange; // シーン切り替え要求の通知先
 };
 
 /// <summary>
-/// シーンのインターフェースクラス
+/// シーンの共通インターフェース。
 /// </summary>
 class IScene {
-public: // メンバ関数
+public:
     /// <summary>
-    /// 仮想デストラクタ（インターフェースクラスには必須）
+    /// 仮想デストラクタ。
     /// </summary>
     virtual ~IScene() { }
 
     /// <summary>
-    /// 初期化処理
+    /// シーンを初期化する。
     /// </summary>
     virtual void Initialize(const SceneContext& ctx) = 0;
 
     /// <summary>
-    /// 終了処理
+    /// シーンを終了する。
     /// </summary>
     virtual void Finalize() = 0;
 
     /// <summary>
-    /// 更新処理（引数は前のフレームからの経過時間）
+    /// シーンを更新する。
     /// </summary>
     virtual void Update(float dt) = 0;
 
     /// <summary>
-    /// 描画処理
+    /// シーンを描画する。
     /// </summary>
     virtual void Draw() = 0;
 
     /// <summary>
-    /// シーンに入るときの処理（オプション、必要に応じてオーバーライド）
+    /// シーンへ入るときの処理を行う。
     /// </summary>
     virtual void OnEnter() { }
 
     /// <summary>
-    /// シーンから出るときの処理（オプション、必要に応じてオーバーライド）
+    /// シーンから出るときの処理を行う。
     /// </summary>
     virtual void OnExit() { }
 
     /// <summary>
-    /// シーンの名前を取得（オプション、必要に応じてオーバーライド）
+    /// シーン名を取得する。
     /// </summary>
     virtual std::string GetName() const { return std::string(); }
 
     /// <summary>
-    /// 外部から描画モードの更新を通知するためのフック（デフォルトは何もしない）
-    /// </summary>
-    virtual void SetSelectedDrawType(int) { }
-
-    /// <summary>
-    /// シーン描画をScene View用のオフスクリーン描画だけにするか設定する
+    /// Scene View 用の描画だけにするかを設定する。
     /// </summary>
     virtual void SetSceneViewOnly(bool) { }
 
     /// <summary>
-    /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
-    /// デフォルト実装は何もしない
+    /// シーンが保持する 3D オブジェクトのポインタを取得する。
     /// </summary>
     virtual void FillObject3dPointers(std::vector<class Object3d*>* out) { }
 
     /// <summary>
-    /// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
-    /// デフォルト実装は何もしない
+    /// シーンが保持するスプライトのポインタを取得する。
     /// </summary>
     virtual void FillSpritePointers(std::vector<class Sprite*>* out) { }
 
     /// <summary>
-    /// シーン表示用テクスチャのSRV番号を取得する
+    /// シーンが保持するパーティクルエミッターのポインタを取得する。
+    /// </summary>
+    virtual void FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out) { }
+
+    /// <summary>
+    /// Scene View テクスチャの SRV 番号を取得する。
     /// </summary>
     virtual uint32_t GetSceneViewSrvIndex() const { return UINT32_MAX; }
 
     /// <summary>
-    /// シーンが使用しているポストプロセスを取得する
+    /// シーンが使用するポストプロセスを取得する。
     /// </summary>
     virtual PostProcess* GetPostProcess() { return nullptr; }
 
     /// <summary>
-    /// シーン固有のImGuiを描画する
+    /// シーン固有の ImGui を描画する。
     /// </summary>
     virtual void DrawImGui() { }
 
     /// <summary>
-    /// ウィンドウリサイズ通知: シーン固有のリサイズ処理が必要な場合にオーバーライドする
+    /// ウィンドウリサイズ時の処理を行う。
     /// </summary>
     virtual void OnWindowResize(uint32_t /*width*/, uint32_t /*height*/) { }
 };
 
 } // namespace MyEngine
-
-
-
-

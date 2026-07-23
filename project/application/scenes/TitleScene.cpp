@@ -1,5 +1,6 @@
 #include "TitleScene.h"
 #include "../../engine/2d/Sprite.h"
+#include "../../engine/2d/SpriteCommon.h"
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
@@ -14,11 +15,6 @@ using namespace MyEngine;
 using namespace Math;
 
 namespace {
-constexpr int kDrawTypeLegacyAll = -1; // 旧形式の全描画指定
-constexpr int kDrawTypeModel = 0; // 3Dモデル描画
-constexpr int kDrawTypeParticle = 1; // パーティクル描画
-constexpr int kDrawTypeSprite = 2; // スプライト描画
-constexpr int kDrawTypeAll = 10; // すべての描画対象
 constexpr const char* kTitleGpuParticleGroupName = "TitleGpuParticle"; // タイトル確認用GPUパーティクルグループ名
 constexpr const char* kTitleGpuParticleTextureName = "circle.png"; // タイトル確認用GPUパーティクルテクスチャ
 constexpr std::array<float, 4> kTitleSceneClearColor = { 0.10f, 0.12f, 0.16f, 1.0f }; // タイトルScene Viewのクリア色
@@ -170,12 +166,10 @@ void TitleScene::Draw()
     DrawWorldObjects();
 
     if (ctx_.spriteCommon) {
-        const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
-        if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeSprite || selectedDrawType == kDrawTypeAll) {
-            for (auto& sprite : sprites_) {
-                if (sprite) {
-                    sprite->Draw();
-                }
+        ctx_.spriteCommon->SetCommonDrawSetting();
+        for (auto& sprite : sprites_) {
+            if (sprite) {
+                sprite->Draw();
             }
         }
     }
@@ -190,16 +184,7 @@ void TitleScene::Draw()
 /// </summary>
 void TitleScene::DrawWorldObjects()
 {
-    if (!ctx_.object3dCommon) {
-        return;
-    }
-
-    const int selectedDrawType = ctx_.selectedDrawType; // ImGuiで選択されている描画種別
-    if (selectedDrawType != kDrawTypeLegacyAll && selectedDrawType != kDrawTypeModel && selectedDrawType != kDrawTypeParticle && selectedDrawType != kDrawTypeAll) {
-        return;
-    }
-
-    if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeModel || selectedDrawType == kDrawTypeAll) {
+    if (ctx_.object3dCommon) {
         ctx_.object3dCommon->SetCommonDrawSetting();
         for (auto& object : objects3d_) {
             if (object) {
@@ -208,14 +193,12 @@ void TitleScene::DrawWorldObjects()
         }
     }
 
-    if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeParticle || selectedDrawType == kDrawTypeAll) {
-        ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
-            particleManager = ParticleManager::GetInstance();
-        }
-        if (particleManager) {
-            particleManager->Draw();
-        }
+    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
+    if (!particleManager) {
+        particleManager = ParticleManager::GetInstance();
+    }
+    if (particleManager) {
+        particleManager->Draw();
     }
 }
 
@@ -233,14 +216,6 @@ void TitleScene::OnEnter()
 void TitleScene::OnExit()
 {
     std::cout << "TitleScene OnExit\n";
-}
-
-/// <summary>
-/// 描画モードの更新を受け取る
-/// </summary>
-void TitleScene::SetSelectedDrawType(int type)
-{
-    ctx_.selectedDrawType = type;
 }
 /// <summary>
 /// Scene View用のオフスクリーン描画だけにするか設定する。

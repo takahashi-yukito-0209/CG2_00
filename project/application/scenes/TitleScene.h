@@ -54,13 +54,7 @@ public:
     /// シーンから出るときの処理
     /// </summary>
     void OnExit() override;
-
-    /// <summary>
-    /// 描画モードの更新を受け取る
-    /// </summary>
-    void SetSelectedDrawType(int type) override;
-
-    /// <summary>
+/// <summary>
     /// Scene View用のオフスクリーン描画だけにするか設定する。
     /// </summary>
     void SetSceneViewOnly(bool enabled) override;

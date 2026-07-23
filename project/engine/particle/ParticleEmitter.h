@@ -36,4 +36,8 @@ public:
     bool useHitEffect = false; // ヒットエフェクト用の発生を使うか
     bool useRingEffect = false; // リングエフェクト用の発生を使うか
     bool useCylinderEffect = false; // 円柱エフェクト用の発生を使うか
+    bool showDebugRange = true; // デバッグ表示で発生範囲を表示するか
+    Math::Vector3 debugRangeHalfSize = { 1.0f, 0.5f, 1.0f }; // デバッグ表示用の発生範囲半径
+    int debugGridHalfLineCount = 4; // デバッグ範囲グリッドの片側ライン数
+    float debugGridSpacing = 0.25f; // デバッグ範囲グリッドの線間隔
 };

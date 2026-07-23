@@ -42,6 +42,7 @@ constexpr float kRandomScaleMax = 2000.0f; // ランダムエフェクトスケ�
 constexpr float kRandomSpeedMax = 20.0f; // ランダムエフェクト速度の最大値
 constexpr float kPositiveDeltaTimeMin = 0.0f; // 時間更新を行う最小デルタ時間
 } // namespace
+
 /// <summary>
 /// ポストエフェクト種類の表示名を取得する。
 /// </summary>
@@ -565,9 +566,6 @@ void PostProcess::SetRadialBlurWidth(float width)
     }
 }
 
-/// <summary>
-/// Radial Blurのサンプル数を設定する
-/// </summary>
 void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
 {
     if (sampleCount >= 1 && sampleCount <= 32) {
@@ -575,9 +573,6 @@ void PostProcess::SetRadialBlurSampleCount(uint32_t sampleCount)
     }
 }
 
-/// <summary>
-/// Dissolveの閾値を設定する
-/// </summary>
 /// <summary>
 /// 画面歪みの中心UV座標を設定する
 /// </summary>

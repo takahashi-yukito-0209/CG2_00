@@ -216,6 +216,16 @@ public:
     void RequestGpuEmitterEmit();
 
     /// <summary>
+    /// GPU Emitter設定を編集用に取得する。
+    /// </summary>
+    PM_GpuEmitterSphere* GetMutableGpuEmitterState();
+
+    /// <summary>
+    /// GPU Emitter設定を参照用に取得する。
+    /// </summary>
+    const PM_GpuEmitterSphere* GetGpuEmitterState() const;
+
+    /// <summary>
     /// GPU Emitterプリセットを読み込み、設定内の位置で1回だけ発生させる。
     /// </summary>
     bool PlayGpuEmitterPreset(const std::string& presetName);
@@ -267,26 +277,6 @@ private:
     /// GPU Emitterに保存しているPostProcess設定を反映する。
     /// </summary>
     void ApplyGpuEmitterPostProcessSettings(PostProcess& postProcess) const;
-
-    /// <summary>
-    /// GPU Emitterプリセット状態を現在の設定へ適用する。
-    /// </summary>
-    void ApplyGpuEmitterPresetState(const PM_GpuEmitterSphere& presetState);
-
-    /// <summary>
-    /// GPU Emitterの基本プリセットを適用する。
-    /// </summary>
-    void ApplyGpuEmitterBasicSettings();
-
-    /// <summary>
-    /// GPU Emitterの密集バーストプリセットを適用する。
-    /// </summary>
-    void ApplyGpuEmitterDenseBurstSettings();
-
-    /// <summary>
-    /// GPU Emitterのランダム拡散プリセットを適用する。
-    /// </summary>
-    void ApplyGpuEmitterRandomSpreadSettings();
 
     /// <summary>
     /// GPU EmitterのGPU側パーティクル状態をリセットする。
@@ -357,11 +347,6 @@ private:
     /// ImGuiでGPU Emitterの色変化を編集する。
     /// </summary>
     void DrawGpuEmitterColorStateImGui();
-
-    /// <summary>
-    /// ImGuiでGPU Emitterのプリセット適用ボタンを表示する。
-    /// </summary>
-    void DrawGpuEmitterPresetImGui();
 
     /// <summary>
     /// ImGuiでGPU Emitter設定ファイルの保存と読み込みを操作する。

@@ -1500,6 +1500,9 @@ void Object3d::RefreshSkinningResourcesFromModel()
     ReleaseSkinningResources();
 }
 
+/// <summary>
+/// 使用するテクスチャを指定し、マテリアル情報へ反映する。
+/// </summary>
 void Object3d::SetTexture(const std::string& filePath)
 {
     std::string resolvedTexturePath; // 実際にTextureManagerへ渡すテクスチャパス
@@ -1669,6 +1672,9 @@ void Object3d::SetLightingMode(int mode)
     }
 }
 
+/// <summary>
+/// 環境マップ反射強度を設定する。
+/// </summary>
 void Object3d::SetEnvironmentCoefficient(float coefficient)
 {
     if (materialData_) {
@@ -1679,6 +1685,9 @@ void Object3d::SetEnvironmentCoefficient(float coefficient)
     }
 }
 
+/// <summary>
+/// 環境マップ反射強度を取得する。
+/// </summary>
 float Object3d::GetEnvironmentCoefficient() const
 {
     return materialData_ ? materialData_->environmentCoefficient : 0.0f;

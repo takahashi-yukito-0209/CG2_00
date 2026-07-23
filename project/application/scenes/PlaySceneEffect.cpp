@@ -18,7 +18,7 @@ constexpr float kNdcToUvScale = 0.5f; // NDC座標をUV座標へ変換する倍�
 constexpr float kNdcToUvOffset = 0.5f; // NDC座標をUV座標へ変換するオフセット
 constexpr float kScreenUvMin = 0.0f; // 画面UVの最小値
 constexpr float kScreenUvMax = 1.0f; // 画面UVの最大値
-constexpr const char* kEffectControllerWindowName = "Effect Controller"; // エフェクト操作用ImGuiウィンドウ名
+constexpr const char* kSceneEditorWindowName = "Scene Editor"; // シーン編集用ImGuiウィンドウ名
 constexpr const char* kEffectTypeComboLabel = "Effect Type"; // エフェクト種別選択のImGuiラベル
 constexpr const char* kEffectTriggerKeyText = "Trigger Key: R"; // エフェクト開始キーの表示文
 constexpr const char* kPlayEffectButtonLabel = "Play Effect"; // エフェクト再生ボタンの表示文
@@ -116,14 +116,34 @@ void PlayScene::DrawSelectedEffectImGui()
 }
 
 /// <summary>
-/// エフェクト操作用のImGuiを描画する。
+/// シーン編集用のImGuiを描画する。
 /// </summary>
 void PlayScene::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Begin(kEffectControllerWindowName);
-    DrawEffectControllerImGui();
-    DrawSelectedEffectImGui();
+    ImGui::Begin(kSceneEditorWindowName);
+
+    if (ImGui::BeginTabBar("SceneEditorTabs")) {
+        if (ImGui::BeginTabItem("Objects")) {
+            DrawSceneObjectEditImGui();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Sprites")) {
+            DrawSceneSpriteEditImGui();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Effects")) {
+            DrawEffectControllerImGui();
+            ImGui::Separator();
+            DrawSelectedEffectImGui();
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
+
     ImGui::End();
 #endif
 }

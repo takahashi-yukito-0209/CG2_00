@@ -52,6 +52,7 @@ struct RenderTargetInternal {
 } // namespace MyEngine
 
 namespace {
+
 /// <summary>
 /// オフスクリーン用カラーバッファのリソース設定を作成する。
 /// </summary>
@@ -144,17 +145,17 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetCPUDescriptorHandle(
     return handle;
 }
 
+/// <summary>
+/// ウィンドウリサイズ時に呼び出すコールバックを設定する。
+/// </summary>
 void DirectXCommon::SetOnResizeCallback(const std::function<void(uint32_t, uint32_t)>& cb)
 {
     onResizeCallback_ = cb;
 }
 
 /// <summary>
-/// ウィンドウリサイズ通知 (デフォルト実装はファイル下部にある実装を使用)
+/// SRV管理クラスへの参照を登録する。
 /// </summary>
-// (OnWindowResize implementation is defined later in this file)
-
-// SrvManager の登録実装
 void DirectXCommon::SetSrvManager(SrvManager* mgr)
 {
     srvManager_ = mgr;
@@ -180,6 +181,23 @@ DirectXCommon* DirectXCommon::GetInstance()
     // ローカル静的変数としてシングルトンインスタンスを定義
     static DirectXCommon instance;
     return &instance;
+}
+
+/// <summary>
+/// フレーム同期モードを設定する。
+/// </summary>
+void DirectXCommon::SetFrameSyncMode(FrameSyncMode mode)
+{
+    frameSyncMode_ = mode;
+    reference_ = std::chrono::steady_clock::now();
+}
+
+/// <summary>
+/// 現在のフレーム同期モードを取得する。
+/// </summary>
+DirectXCommon::FrameSyncMode DirectXCommon::GetFrameSyncMode() const
+{
+    return frameSyncMode_;
 }
 
 /// <summary>
@@ -360,23 +378,25 @@ void DirectXCommon::ResetCommandList()
     }
 }
 
-// ----------------------------------------------------------------------
-// Public メンバ関数の実装
-// ----------------------------------------------------------------------
-
-// SRV特化型Getterの実装
+/// <summary>
+/// SRV用CPUディスクリプタハンドルを取得する。
+/// </summary>
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVCPUDescriptorHandle(uint32_t index) const
 {
     return GetCPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
-// SRV特化型Getterの実装
+/// <summary>
+/// SRV用GPUディスクリプタハンドルを取得する。
+/// </summary>
 D3D12_GPU_DESCRIPTOR_HANDLE DirectXCommon::GetSRVGPUDescriptorHandle(uint32_t index) const
 {
     return GetGPUDescriptorHandle(srvDescriptorHeap_, descriptorSizeSRV_, index);
 }
 
-// DSVヒープの先頭CPUディスクリプタハンドルを取得
+/// <summary>
+/// DSVヒープの先頭CPUディスクリプタハンドルを取得する。
+/// </summary>
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDSVHandle() const
 {
     // DSVヒープが存在しない場合は無効なハンドルを返す
@@ -573,6 +593,9 @@ uint32_t DirectXCommon::CreateRenderTargetSRV(int handle)
     return srvIndex;
 }
 
+/// <summary>
+/// 指定SRV番号へレンダーターゲットのカラーSRVを作成する。
+/// </summary>
 void DirectXCommon::CreateRenderTargetSRV(int handle, uint32_t srvIndex)
 {
     if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
@@ -617,6 +640,9 @@ uint32_t DirectXCommon::CreateRenderTargetDepthSRV(int handle)
     return srvIndex;
 }
 
+/// <summary>
+/// 指定SRV番号へレンダーターゲットの深度SRVを作成する。
+/// </summary>
 void DirectXCommon::CreateRenderTargetDepthSRV(int handle, uint32_t srvIndex)
 {
     if (handle < 0 || static_cast<size_t>(handle) >= renderTargets_.size()) {
@@ -931,7 +957,9 @@ void DirectXCommon::PostDraw()
     assert(SUCCEEDED(hr));
 
     ExecuteCommandList();
-    HRESULT hrPresent = swapChain_->Present(1, 0);
+
+    const UINT presentSyncInterval = frameSyncMode_ == FrameSyncMode::VSync ? 1u : 0u; // Presentで待つ垂直同期数
+    HRESULT hrPresent = swapChain_->Present(presentSyncInterval, 0);
     if (!MYENGINE_CHECK_HRESULT(hrPresent, "DirectXCommon::PostDraw: swapChain_->Present failed.")) {
         char buf[256];
         if (device_) {
@@ -948,7 +976,9 @@ void DirectXCommon::PostDraw()
     }
     frameFenceValues_[bbIndex] = fenceValue_;
 
-    UpdateFixFPS();
+    if (frameSyncMode_ == FrameSyncMode::Fixed60) {
+        UpdateFixFPS();
+    }
 }
 
 /// <summary>
@@ -1303,15 +1333,16 @@ void DirectXCommon::InitCommandRelated()
 }
 
 /// <summary>
-/// スワップチェーンの生成とバックバッファの取得
-/// </summary>
-/// <summary>
 /// 現在描画対象になっているフレーム番号を取得する
 /// </summary>
 uint32_t DirectXCommon::GetCurrentFrameIndex() const
 {
     return swapChain_ ? swapChain_->GetCurrentBackBufferIndex() : 0;
 }
+
+/// <summary>
+/// スワップチェーンを作成する。
+/// </summary>
 void DirectXCommon::CreateSwapChain()
 {
     HRESULT hr;

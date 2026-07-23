@@ -11,6 +11,7 @@ namespace {
 constexpr uint32_t kReservedSrvIndexForImGui = 0; // ImGui用に予約するSRVインデックス
 constexpr uint32_t kFirstUsableSrvIndex = 1; // 通常割り当てを開始するSRVインデックス
 } // namespace
+
 /// <summary>
 /// 初期化処理
 /// </summary>
@@ -148,9 +149,6 @@ void SrvManager::SetGraphicsRootDescriptorTable(UINT rootParameterIndex, uint32_
 }
 
 /// <summary>
-/// ImGui初期化処理
-/// </summary>
-/// <summary>
 /// ComputeShaderのルートパラメータにディスクリプタテーブルを設定する。
 /// </summary>
 void SrvManager::SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex)
@@ -158,6 +156,10 @@ void SrvManager::SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提にする
     dxCommon_->GetCommandList()->SetComputeRootDescriptorTable(rootParameterIndex, GetGPUDescriptorHandle(srvIndex));
 }
+
+/// <summary>
+/// ImGui初期化処理
+/// </summary>
 void SrvManager::InitImGui()
 {
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提とする

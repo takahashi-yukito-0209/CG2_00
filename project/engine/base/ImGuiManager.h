@@ -1,4 +1,5 @@
 #pragma once
+#include <MathTypes.h>
 
 #ifdef USE_IMGUI
 
@@ -52,6 +53,7 @@ public: // メンバ関数
     // ImGuiの構築に必要な参照をまとめた構造体
     struct Context {
         ParticleEmitter* particleEmitter = nullptr; // パーティクルエミッター
+        std::vector<ParticleEmitter*>* particleEmitters = nullptr; // 表示・編集対象のパーティクルエミッター一覧
         Object3dCommon* object3dCommon = nullptr; // 3Dオブジェクト共通設定
         std::vector<Object3d*>* objects3d = nullptr; // 表示・編集対象の3Dオブジェクト一覧
         std::vector<class Sprite*>* sprites = nullptr; // 表示・編集対象のスプライト一覧
@@ -60,7 +62,6 @@ public: // メンバ関数
         class ParticleManager* particleManager = nullptr; // パーティクル管理
         float dt = 0.0f; // フレームのデルタタイム
         bool* useDebugCameraForRender = nullptr; // 描画にデバッグカメラを使用するか
-        int* selectedDrawType = nullptr; // 現在の描画対象を選択する値
         std::function<void(const char*)> requestSceneChange; // ImGuiからのシーン切替要求
         const char* currentSceneName = nullptr; // 現在のシーン名
         PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス
@@ -68,6 +69,8 @@ public: // メンバ関数
         uint32_t sceneViewSrvIndex = UINT32_MAX; // Scene Viewに表示するシーン描画結果のSRV番号
         float sceneViewWidth = 0.0f; // Scene Viewに表示する画像の横幅
         float sceneViewHeight = 0.0f; // Scene Viewに表示する画像の縦幅
+        const Math::Matrix4x4* sceneViewMatrix = nullptr; // Scene View描画に使うビュー行列
+        const Math::Matrix4x4* sceneProjectionMatrix = nullptr; // Scene View描画に使う射影行列
     };
 
     /// <summary>
@@ -95,6 +98,53 @@ private: // メンバ関数
     /// シーン描画結果をScene Viewウィンドウへ表示する
     /// </summary>
     void DrawSceneViewWindow(Context& ctx);
+
+#ifdef USE_IMGUI
+    /// <summary>
+    /// Scene View上に選択中オブジェクトの移動ギズモを描画する
+    /// </summary>
+    void DrawTranslationGizmo(Context& ctx, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// ワールド座標をScene View上のスクリーン座標へ変換する
+    /// </summary>
+    bool ProjectWorldToSceneView(const Math::Vector3& worldPosition, const Math::Matrix4x4& viewProjectionMatrix, const ImVec2& imageMin, const ImVec2& imageSize, ImVec2* outScreenPosition) const;
+
+    /// <summary>
+    /// Scene View上のクリック位置に近い3Dオブジェクトを選択する
+    /// </summary>
+    void SelectObjectBySceneViewClick(Context& ctx, const Math::Matrix4x4& viewProjectionMatrix, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// Scene View上のクリック位置に重なるスプライトを選択する
+    /// </summary>
+    void SelectSpriteBySceneViewClick(Context& ctx, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// Scene View上に選択中スプライトの2Dギズモを描画する
+    /// </summary>
+    void DrawSprite2DGizmo(Context& ctx, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// Scene View上に選択中パーティクルエミッターの3Dギズモを描画する
+    /// </summary>
+    void DrawParticleEmitterGizmo(Context& ctx, const Math::Matrix4x4& viewProjectionMatrix, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// Scene View上にGPU Emitterの3Dギズモを描画する
+    /// </summary>
+    void DrawGpuParticleEmitterGizmo(Context& ctx, const Math::Matrix4x4& viewProjectionMatrix, const ImVec2& imageMin, const ImVec2& imageSize);
+
+    /// <summary>
+    /// 移動ギズモの1軸を描画し、ドラッグ時は平行移動量を返す
+    /// </summary>
+    bool DrawGizmoAxis(const char* id, const ImVec2& origin, const ImVec2& axisEnd, ImU32 color, float axisWorldLength, bool drawAxis, float* outMoveAmount, bool* outIsActive, bool* outIsActivated);
+
+    /// <summary>
+    /// 現在の描画対象に対応するギズモ操作対象番号を取得する
+    /// </summary>
+    int ResolveGizmoObjectIndex(const Context& ctx) const;
+#endif
 
     /// <summary>
     /// シーン情報のImGuiを描画する
@@ -138,5 +188,13 @@ private: // メンバ関数
 
 private:
     bool sceneViewHovered_ = false; // Scene Viewの描画領域にマウスが乗っているか
+    int selectedObjectIndex_ = 0; // ImGuiで選択中の3Dオブジェクト番号
+    int selectedSpriteIndex_ = 0; // ImGuiで選択中のスプライト番号
+    int selectedEmitterIndex_ = 0; // ImGuiで選択中のパーティクルエミッター番号
+    int gizmoTargetMode_ = 0; // Scene Viewギズモの対象種別
+    int gizmoOperationMode_ = 0; // Scene Viewギズモの操作モード
+    int gizmoTransformSpaceMode_ = 0; // Scene Viewギズモの座標空間
+    int activeGizmoOperationMode_ = -1; // ドラッグ中のギズモ操作
+    int activeGizmoAxisIndex_ = -1; // ドラッグ中のギズモ軸
 };
 } // namespace MyEngine

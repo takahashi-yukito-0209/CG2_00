@@ -77,13 +77,7 @@ public: // メンバ関数
     /// シーン名を取得する
     /// </summary>
     std::string GetName() const override { return "Play"; }
-
-    /// <summary>
-    /// 描画対象の種類を設定する
-    /// </summary>
-    void SetSelectedDrawType(int t) override;
-
-    /// <summary>
+/// <summary>
     /// Scene View用のオフスクリーン描画だけにするか設定する
     /// </summary>
     void SetSceneViewOnly(bool enabled) override;
@@ -107,6 +101,11 @@ public: // メンバ関数
     /// スプライトのポインタ一覧を取得する
     /// </summary>
     void FillSpritePointers(std::vector<MyEngine::Sprite*>* out);
+
+    /// <summary>
+    /// パーティクルエミッターのポインタ一覧を取得する
+    /// </summary>
+    void FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out) override;
 
 private:
     /// <summary>
@@ -176,6 +175,16 @@ private:
     /// エフェクト選択と再生操作用のImGuiを描画する。
     /// </summary>
     void DrawEffectControllerImGui();
+
+    /// <summary>
+    /// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
+    /// </summary>
+    void DrawSceneObjectEditImGui();
+
+    /// <summary>
+    /// ImGuiでシーン内スプライトの生成と削除を行う。
+    /// </summary>
+    void DrawSceneSpriteEditImGui();
 
     /// <summary>
     /// 選択中エフェクトの詳細ImGuiを描画する。
@@ -288,11 +297,6 @@ private:
     void UpdateSceneObjects(float deltaTime);
 
     /// <summary>
-    /// 確認用スプライトを更新する。
-    /// </summary>
-    void UpdateDemoSprites();
-
-    /// <summary>
     /// パーティクル描画用オブジェクトを初期化する
     /// </summary>
     void InitializeParticleObjects();
@@ -358,14 +362,29 @@ private:
     void InitializeSkyBox();
 
     /// <summary>
-    /// 確認用スプライトを初期化する。
-    /// </summary>
-    void InitializeDemoSprites();
-
-    /// <summary>
     /// 3Dオブジェクトの初期設定を適用する。
     /// </summary>
     void ApplySceneObjectInitialSettings(MyEngine::Object3d& object3d, const std::string& modelFileName);
+
+    /// <summary>
+    /// 指定したモデルファイル名からシーン用3Dオブジェクトを生成する
+    /// </summary>
+    void CreateSceneObject(const std::string& modelFileName);
+
+    /// <summary>
+    /// 指定した番号のシーン用3Dオブジェクトを削除する
+    /// </summary>
+    void DeleteSceneObject(size_t objectIndex);
+
+    /// <summary>
+    /// 指定したテクスチャ名からシーン用スプライトを生成する。
+    /// </summary>
+    void CreateSceneSprite(const std::string& textureName);
+
+    /// <summary>
+    /// 指定した番号のシーン用スプライトを削除する。
+    /// </summary>
+    void DeleteSceneSprite(size_t spriteIndex);
 
     /// <summary>
     /// シーンで使用する3Dオブジェクトを初期化する。
@@ -445,41 +464,29 @@ private:
     /// シーン内の3D要素を描画する
     /// </summary>
     void DrawSceneContent();
-
     /// <summary>
-    /// 指定した番号の3Dオブジェクトを描画する。
+    /// 登録済みの3Dオブジェクトを描画する。
     /// </summary>
-    void DrawObject3dAtIndex(size_t objectIndex);
-
-    /// <summary>
-    /// すべての3Dオブジェクトを描画する。
-    /// </summary>
-    void DrawAllObjects3d();
-
-    /// <summary>
-    /// 選択中の描画種別に対応する3Dオブジェクトを描画する。
-    /// </summary>
-    void DrawSelectedObjects3d(int selectedDrawType);
-
-    /// <summary>
-    /// パーティクルを描画する必要があるか判定する。
-    /// </summary>
-    bool ShouldDrawParticles(int selectedDrawType) const;
-
-    /// <summary>
-    /// 必要な場合だけパーティクルを描画する。
-    /// </summary>
-    void DrawParticlesIfNeeded(int selectedDrawType);
-
-    /// <summary>
+    void DrawSceneObjects();
+/// <summary>
     /// 3D空間とパーティクルを描画する
     /// </summary>
     void DrawWorldAndParticles();
 
     /// <summary>
+    /// 蓄積した 3D デバッグラインを現在の描画先へ描画する。
+    /// </summary>
+    void DrawDebugLines3D();
+
+    /// <summary>
     /// ポストプロセスの影響を受けないスプライトを描画する
     /// </summary>
     void DrawSprites();
+
+    /// <summary>
+    /// 蓄積した 2D デバッグラインを現在の描画先へ描画する。
+    /// </summary>
+    void DrawDebugLines2D();
 
 private: // メンバー変数
     MyEngine::SceneContext ctx_;

@@ -145,6 +145,9 @@ void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, S
     srvManager_ = srv;
     texManager_ = texMgr;
     imguiManager_ = imguiManager;
+    ClearGpuEmitterRuntimeParticleState();
+    gpuEmitterManualEmitRequested_ = false;
+    gpuEmitterState_.emit = 0;
     InitializeGpuParticleResources();
 }
 
@@ -153,10 +156,24 @@ void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, S
 /// </summary>
 void ParticleManager::Finalize()
 {
+    if (dxCommon_ && gpuParticleReady_) {
+        dxCommon_->WaitForCommandExecution();
+    }
+
     particleGroups_.clear();
     instancingLimitWarnedGroups_.clear();
     totalParticleCount_ = 0;
+    ClearGpuEmitterRuntimeParticleState();
+    gpuEmitterManualEmitRequested_ = false;
+    gpuEmitterState_.emit = 0;
     FinalizeGpuParticleResources();
+
+    dxCommon_ = nullptr;
+    object3dCommon_ = nullptr;
+    srvManager_ = nullptr;
+    texManager_ = nullptr;
+    imguiManager_ = nullptr;
+    particlePlane_ = nullptr;
 }
 
 /// <summary>
@@ -970,64 +987,64 @@ void ParticleManager::WriteGpuEmitterSettingsJson(std::ostream& file) const
     const Vector3 postDistortionCenter { gpuEmitterDistortionCenter_.x, gpuEmitterDistortionCenter_.y, 0.0f }; // JSON保存用のDistortion中心
 
     file << std::fixed << std::setprecision(4);
-    file << "{\n";
-    file << "  \"version\": 2,\n";
+    file << R"({)" << '\n';
+    file << R"(  "version": 2,)" << '\n';
 
-    file << "  \"effect\": {\n";
-    file << "    \"effectName\": \"" << JsonUtility::EscapeString(gpuEmitterEffectName_) << "\",\n";
-    file << "    \"description\": \"" << JsonUtility::EscapeString(gpuEmitterDescription_) << "\"\n";
-    file << "  },\n";
+    file << R"(  "effect": {)" << '\n';
+    file << R"(    "effectName": ")" << JsonUtility::EscapeString(gpuEmitterEffectName_) << R"(",)" << '\n';
+    file << R"(    "description": ")" << JsonUtility::EscapeString(gpuEmitterDescription_) << R"(")" << '\n';
+    file << R"(  },)" << '\n';
 
-    file << "  \"playback\": {\n";
-    file << "    \"autoEmit\": " << (gpuEmitterAutoEmit_ ? 1 : 0) << ",\n";
-    file << "    \"updateParticles\": " << (gpuParticleUpdateEnabled_ ? 1 : 0) << ",\n";
-    file << "    \"drawParticles\": " << (gpuParticleDrawEnabled_ ? 1 : 0) << "\n";
-    file << "  },\n";
+    file << R"(  "playback": {)" << '\n';
+    file << R"(    "autoEmit": )" << (gpuEmitterAutoEmit_ ? 1 : 0) << R"(,)" << '\n';
+    file << R"(    "updateParticles": )" << (gpuParticleUpdateEnabled_ ? 1 : 0) << R"(,)" << '\n';
+    file << R"(    "drawParticles": )" << (gpuParticleDrawEnabled_ ? 1 : 0) << '\n';
+    file << R"(  },)" << '\n';
 
-    file << "  \"render\": {\n";
-    file << "    \"texture\": \"" << JsonUtility::EscapeString(gpuEmitterTexturePath_) << "\",\n";
-    file << "    \"usePostProcess\": " << (gpuEmitterUsePostProcess_ ? 1 : 0) << "\n";
-    file << "  },\n";
+    file << R"(  "render": {)" << '\n';
+    file << R"(    "texture": ")" << JsonUtility::EscapeString(gpuEmitterTexturePath_) << R"(",)" << '\n';
+    file << R"(    "usePostProcess": )" << (gpuEmitterUsePostProcess_ ? 1 : 0) << '\n';
+    file << R"(  },)" << '\n';
 
-    file << "  \"emitter\": {\n";
-    file << "    \"spawnShape\": " << gpuEmitterState_.spawnShape << ",\n";
-    file << "    \"translate\": [" << gpuEmitterState_.translate.x << ", " << gpuEmitterState_.translate.y << ", " << gpuEmitterState_.translate.z << "],\n";
-    file << "    \"radius\": " << gpuEmitterState_.radius << ",\n";
-    file << "    \"count\": " << gpuEmitterState_.count << ",\n";
-    file << "    \"frequency\": " << gpuEmitterState_.frequency << ",\n";
-    file << "    \"baseScale\": [" << gpuEmitterState_.baseScale.x << ", " << gpuEmitterState_.baseScale.y << ", " << gpuEmitterState_.baseScale.z << "],\n";
-    file << "    \"randomScale\": " << gpuEmitterState_.randomScale << ",\n";
-    file << "    \"velocityScale\": [" << gpuEmitterState_.velocityScale.x << ", " << gpuEmitterState_.velocityScale.y << ", " << gpuEmitterState_.velocityScale.z << "],\n";
-    file << "    \"lifeTime\": " << gpuEmitterState_.lifeTime << ",\n";
-    file << "    \"colorMin\": [" << gpuEmitterState_.colorMin.x << ", " << gpuEmitterState_.colorMin.y << ", " << gpuEmitterState_.colorMin.z << ", " << gpuEmitterState_.colorMin.w << "],\n";
-    file << "    \"colorMax\": [" << gpuEmitterState_.colorMax.x << ", " << gpuEmitterState_.colorMax.y << ", " << gpuEmitterState_.colorMax.z << ", " << gpuEmitterState_.colorMax.w << "],\n";
-    file << "    \"scaleOverLife\": " << gpuEmitterState_.scaleOverLife << ",\n";
-    file << "    \"endScale\": [" << gpuEmitterState_.endScale.x << ", " << gpuEmitterState_.endScale.y << ", " << gpuEmitterState_.endScale.z << "],\n";
-    file << "    \"gravity\": [" << gpuEmitterState_.gravity.x << ", " << gpuEmitterState_.gravity.y << ", " << gpuEmitterState_.gravity.z << "],\n";
-    file << "    \"damping\": " << gpuEmitterState_.damping << ",\n";
-    file << "    \"colorOverLife\": " << gpuEmitterState_.colorOverLife << ",\n";
-    file << "    \"endColor\": [" << gpuEmitterState_.endColor.x << ", " << gpuEmitterState_.endColor.y << ", " << gpuEmitterState_.endColor.z << ", " << gpuEmitterState_.endColor.w << "]\n";
-    file << "  },\n";
+    file << R"(  "emitter": {)" << '\n';
+    file << R"(    "spawnShape": )" << gpuEmitterState_.spawnShape << R"(,)" << '\n';
+    file << R"(    "translate": [)" << gpuEmitterState_.translate.x << ", " << gpuEmitterState_.translate.y << ", " << gpuEmitterState_.translate.z << R"(],)" << '\n';
+    file << R"(    "radius": )" << gpuEmitterState_.radius << R"(,)" << '\n';
+    file << R"(    "count": )" << gpuEmitterState_.count << R"(,)" << '\n';
+    file << R"(    "frequency": )" << gpuEmitterState_.frequency << R"(,)" << '\n';
+    file << R"(    "baseScale": [)" << gpuEmitterState_.baseScale.x << ", " << gpuEmitterState_.baseScale.y << ", " << gpuEmitterState_.baseScale.z << R"(],)" << '\n';
+    file << R"(    "randomScale": )" << gpuEmitterState_.randomScale << R"(,)" << '\n';
+    file << R"(    "velocityScale": [)" << gpuEmitterState_.velocityScale.x << ", " << gpuEmitterState_.velocityScale.y << ", " << gpuEmitterState_.velocityScale.z << R"(],)" << '\n';
+    file << R"(    "lifeTime": )" << gpuEmitterState_.lifeTime << R"(,)" << '\n';
+    file << R"(    "colorMin": [)" << gpuEmitterState_.colorMin.x << ", " << gpuEmitterState_.colorMin.y << ", " << gpuEmitterState_.colorMin.z << ", " << gpuEmitterState_.colorMin.w << R"(],)" << '\n';
+    file << R"(    "colorMax": [)" << gpuEmitterState_.colorMax.x << ", " << gpuEmitterState_.colorMax.y << ", " << gpuEmitterState_.colorMax.z << ", " << gpuEmitterState_.colorMax.w << R"(],)" << '\n';
+    file << R"(    "scaleOverLife": )" << gpuEmitterState_.scaleOverLife << R"(,)" << '\n';
+    file << R"(    "endScale": [)" << gpuEmitterState_.endScale.x << ", " << gpuEmitterState_.endScale.y << ", " << gpuEmitterState_.endScale.z << R"(],)" << '\n';
+    file << R"(    "gravity": [)" << gpuEmitterState_.gravity.x << ", " << gpuEmitterState_.gravity.y << ", " << gpuEmitterState_.gravity.z << R"(],)" << '\n';
+    file << R"(    "damping": )" << gpuEmitterState_.damping << R"(,)" << '\n';
+    file << R"(    "colorOverLife": )" << gpuEmitterState_.colorOverLife << R"(,)" << '\n';
+    file << R"(    "endColor": [)" << gpuEmitterState_.endColor.x << ", " << gpuEmitterState_.endColor.y << ", " << gpuEmitterState_.endColor.z << ", " << gpuEmitterState_.endColor.w << R"(])" << '\n';
+    file << R"(  },)" << '\n';
 
-    file << "  \"postProcess\": {\n";
-    file << "    \"postProcessEnabled\": " << (gpuEmitterPostProcessEnabled_ ? 1 : 0) << ",\n";
-    file << "    \"postEffectType\": " << gpuEmitterPostEffectType_ << ",\n";
-    file << "    \"postRadialBlurCenter\": [" << postRadialBlurCenter.x << ", " << postRadialBlurCenter.y << ", " << postRadialBlurCenter.z << "],\n";
-    file << "    \"postRadialBlurWidth\": " << gpuEmitterRadialBlurWidth_ << ",\n";
-    file << "    \"postRadialBlurSampleCount\": " << gpuEmitterRadialBlurSampleCount_ << ",\n";
-    file << "    \"postDistortionCenter\": [" << postDistortionCenter.x << ", " << postDistortionCenter.y << ", " << postDistortionCenter.z << "],\n";
-    file << "    \"postDistortionStrength\": " << gpuEmitterDistortionStrength_ << ",\n";
-    file << "    \"postDistortionRadius\": " << gpuEmitterDistortionRadius_ << ",\n";
-    file << "    \"postDistortionWaveCount\": " << gpuEmitterDistortionWaveCount_ << ",\n";
-    file << "    \"postDistortionProgress\": " << gpuEmitterDistortionProgress_ << ",\n";
-    file << "    \"postDissolveThreshold\": " << gpuEmitterDissolveThreshold_ << ",\n";
-    file << "    \"postDissolveEdgeWidth\": " << gpuEmitterDissolveEdgeWidth_ << ",\n";
-    file << "    \"postDissolveEdgeColor\": [" << gpuEmitterDissolveEdgeColor_.x << ", " << gpuEmitterDissolveEdgeColor_.y << ", " << gpuEmitterDissolveEdgeColor_.z << "],\n";
-    file << "    \"postRandomStrength\": " << gpuEmitterRandomStrength_ << ",\n";
-    file << "    \"postRandomScale\": " << gpuEmitterRandomScale_ << ",\n";
-    file << "    \"postRandomSpeed\": " << gpuEmitterRandomSpeed_ << "\n";
-    file << "  }\n";
-    file << "}\n";
+    file << R"(  "postProcess": {)" << '\n';
+    file << R"(    "postProcessEnabled": )" << (gpuEmitterPostProcessEnabled_ ? 1 : 0) << R"(,)" << '\n';
+    file << R"(    "postEffectType": )" << gpuEmitterPostEffectType_ << R"(,)" << '\n';
+    file << R"(    "postRadialBlurCenter": [)" << postRadialBlurCenter.x << ", " << postRadialBlurCenter.y << ", " << postRadialBlurCenter.z << R"(],)" << '\n';
+    file << R"(    "postRadialBlurWidth": )" << gpuEmitterRadialBlurWidth_ << R"(,)" << '\n';
+    file << R"(    "postRadialBlurSampleCount": )" << gpuEmitterRadialBlurSampleCount_ << R"(,)" << '\n';
+    file << R"(    "postDistortionCenter": [)" << postDistortionCenter.x << ", " << postDistortionCenter.y << ", " << postDistortionCenter.z << R"(],)" << '\n';
+    file << R"(    "postDistortionStrength": )" << gpuEmitterDistortionStrength_ << R"(,)" << '\n';
+    file << R"(    "postDistortionRadius": )" << gpuEmitterDistortionRadius_ << R"(,)" << '\n';
+    file << R"(    "postDistortionWaveCount": )" << gpuEmitterDistortionWaveCount_ << R"(,)" << '\n';
+    file << R"(    "postDistortionProgress": )" << gpuEmitterDistortionProgress_ << R"(,)" << '\n';
+    file << R"(    "postDissolveThreshold": )" << gpuEmitterDissolveThreshold_ << R"(,)" << '\n';
+    file << R"(    "postDissolveEdgeWidth": )" << gpuEmitterDissolveEdgeWidth_ << R"(,)" << '\n';
+    file << R"(    "postDissolveEdgeColor": [)" << gpuEmitterDissolveEdgeColor_.x << ", " << gpuEmitterDissolveEdgeColor_.y << ", " << gpuEmitterDissolveEdgeColor_.z << R"(],)" << '\n';
+    file << R"(    "postRandomStrength": )" << gpuEmitterRandomStrength_ << R"(,)" << '\n';
+    file << R"(    "postRandomScale": )" << gpuEmitterRandomScale_ << R"(,)" << '\n';
+    file << R"(    "postRandomSpeed": )" << gpuEmitterRandomSpeed_ << '\n';
+    file << R"(  })" << '\n';
+    file << R"(})" << '\n';
 }
 
 /// <summary>
@@ -1209,6 +1226,22 @@ void ParticleManager::RequestGpuEmitterEmit()
 }
 
 /// <summary>
+/// GPU Emitter設定を編集用に取得する。
+/// </summary>
+PM_GpuEmitterSphere* ParticleManager::GetMutableGpuEmitterState()
+{
+    return &gpuEmitterState_;
+}
+
+/// <summary>
+/// GPU Emitter設定を参照用に取得する。
+/// </summary>
+const PM_GpuEmitterSphere* ParticleManager::GetGpuEmitterState() const
+{
+    return &gpuEmitterState_;
+}
+
+/// <summary>
 /// GPU Emitterプリセットを読み込み、設定内の位置で1回だけ発生させる。
 /// </summary>
 bool ParticleManager::PlayGpuEmitterPreset(const std::string& presetName)
@@ -1236,6 +1269,7 @@ bool ParticleManager::PlayGpuEmitterPreset(const std::string& presetName, const 
     RequestGpuEmitterEmit();
     return true;
 }
+
 /// <summary>
 /// GPU Emitter用テクスチャを描画グループへ反映する。
 /// </summary>
@@ -1259,6 +1293,7 @@ void ParticleManager::ApplyGpuEmitterTextureToDrawGroup()
         drawGroup.renderObject->SetTexture(gpuEmitterTexturePath_);
     }
 }
+
 /// <summary>
 /// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
 /// </summary>
@@ -1301,9 +1336,6 @@ uint32_t ParticleManager::UploadGpuParticleSource(const ParticleGroup& group, ui
     return uploadCount;
 }
 
-/// <summary>
-/// ComputeShaderでパーティクルをインスタンシング用行列へ変換する。
-/// </summary>
 /// <summary>
 /// GPU上のParticle Resourceを初期化する。
 /// </summary>
@@ -1378,12 +1410,13 @@ bool ParticleManager::DispatchInitializeGpuParticles()
     gpuParticleInitialized_[frameIndex] = true;
     return true;
 }
+
 /// <summary>
 /// GPU上でEmitterからParticleを発生させる。
 /// </summary>
 bool ParticleManager::DispatchEmitGpuParticles()
 {
-    if (!gpuParticleReady_ || !dxCommon_ || !srvManager_ || gpuEmitterState_.emit == 0) {
+    if (!gpuParticleReady_ || !dxCommon_ || !srvManager_ || gpuEmitterState_.emit == 0 || gpuEmitterState_.count == 0) {
         return true;
     }
 
@@ -1533,6 +1566,7 @@ bool ParticleManager::DispatchUpdateGpuParticles()
     outputState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     return true;
 }
+
 /// <summary>
 /// GPU Emitterの経過時間と射出許可を更新する。
 /// </summary>
@@ -1547,6 +1581,12 @@ void ParticleManager::UpdateGpuEmitter(float dt)
     gpuPerFrameState_.scaleOverLife = gpuEmitterState_.scaleOverLife;
     gpuPerFrameState_.colorOverLife = gpuEmitterState_.colorOverLife;
     gpuEmitterState_.emit = 0;
+
+    if (gpuEmitterState_.count == 0) {
+        gpuEmitterManualEmitRequested_ = false;
+        ClearGpuEmitterRuntimeParticleState();
+        return;
+    }
 
     if (gpuEmitterManualEmitRequested_) {
         gpuEmitterManualEmitRequested_ = false;
@@ -1749,7 +1789,12 @@ void ParticleManager::Draw()
         Object3d* renderObject = gpuEmitterGroup.renderObject ? gpuEmitterGroup.renderObject : particlePlane_;
         const uint32_t frameIndex = dxCommon_->GetCurrentFrameIndex(); // 更新対象のフレーム番号
         if (renderObject && DispatchInitializeGpuParticles() && DispatchEmitGpuParticles() && DispatchUpdateGpuParticles()) {
-            const uint32_t drawCount = (std::min)(GetParticleLimit(), instancingSlots);
+            const uint32_t particleLimit = GetParticleLimit(); // GPU Particleの上限数
+            const uint32_t drawLimit = (std::min)(particleLimit, instancingSlots); // 実際に描画できる最大数
+            const uint32_t drawCount = (std::min)(gpuEmitterVisibleCount_, drawLimit); // GPU Emitterから描画する数
+            if (drawCount == 0) {
+                return;
+            }
             object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, gpuEmitterGroup.useBillboard);
             object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
             object3dCommon_->SetInstancingDrawSetting();
@@ -1762,6 +1807,7 @@ void ParticleManager::Draw()
         }
     }
 }
+
 /// <summary>
 /// 寿命の範囲を設定する
 /// </summary>
@@ -1831,6 +1877,7 @@ void ParticleManager::ClearGpuEmitterRuntimeParticleState()
         initialized = false;
     }
 }
+
 /// <summary>
 /// 現在のPostProcess設定をGPU Emitter設定へ取り込む。
 /// </summary>
@@ -1880,90 +1927,6 @@ void ParticleManager::ApplyGpuEmitterPostProcessSettings(PostProcess& postProces
 }
 
 /// <summary>
-/// GPU Emitterプリセット状態を現在の設定へ適用する。
-/// </summary>
-void ParticleManager::ApplyGpuEmitterPresetState(const PM_GpuEmitterSphere& presetState)
-{
-    gpuEmitterState_ = presetState;
-    NormalizeGpuEmitterStateForRuntime();
-    gpuEmitterState_.frequencyTime = gpuEmitterState_.frequency;
-    gpuEmitterState_.emit = 0;
-    ClearGpuEmitterRuntimeParticleState();
-}
-
-/// <summary>
-/// GPU Emitterの基本プリセットを適用する。
-/// </summary>
-void ParticleManager::ApplyGpuEmitterBasicSettings()
-{
-    PM_GpuEmitterSphere presetState = gpuEmitterState_; // 適用する基本プリセット状態
-    presetState.count = 24;
-    presetState.frequency = 0.10f;
-    presetState.radius = 1.6f;
-    presetState.baseScale = { 0.22f, 0.22f, 0.22f };
-    presetState.randomScale = 0.10f;
-    presetState.velocityScale = { 0.35f, 0.35f, 0.35f };
-    presetState.lifeTime = 1.2f;
-    presetState.colorMin = { 0.85f, 0.85f, 0.95f, 1.0f };
-    presetState.colorMax = { 1.0f, 1.0f, 1.0f, 1.0f };
-    presetState.scaleOverLife = 1;
-    presetState.endScale = { 0.02f, 0.02f, 0.02f };
-    presetState.colorOverLife = 1;
-    presetState.endColor = { 1.0f, 1.0f, 1.0f, 0.0f };
-    presetState.gravity = { 0.0f, -0.3f, 0.0f };
-    presetState.damping = 0.0f;
-    ApplyGpuEmitterPresetState(presetState);
-}
-
-/// <summary>
-/// GPU Emitterの密集バーストプリセットを適用する。
-/// </summary>
-void ParticleManager::ApplyGpuEmitterDenseBurstSettings()
-{
-    PM_GpuEmitterSphere presetState = gpuEmitterState_; // 適用する密集バーストプリセット状態
-    presetState.count = 256;
-    presetState.frequency = 0.01f;
-    presetState.radius = 0.9f;
-    presetState.baseScale = { 0.16f, 0.16f, 0.16f };
-    presetState.randomScale = 0.10f;
-    presetState.velocityScale = { 0.18f, 0.35f, 0.18f };
-    presetState.lifeTime = 2.5f;
-    presetState.colorMin = { 0.55f, 0.35f, 0.45f, 1.0f };
-    presetState.colorMax = { 1.0f, 1.0f, 0.65f, 1.0f };
-    presetState.scaleOverLife = 1;
-    presetState.endScale = { 0.05f, 0.05f, 0.05f };
-    presetState.colorOverLife = 1;
-    presetState.endColor = { 1.0f, 0.35f, 0.15f, 0.0f };
-    presetState.gravity = { 0.0f, -0.2f, 0.0f };
-    presetState.damping = 0.2f;
-    ApplyGpuEmitterPresetState(presetState);
-}
-
-/// <summary>
-/// GPU Emitterのランダム拡散プリセットを適用する。
-/// </summary>
-void ParticleManager::ApplyGpuEmitterRandomSpreadSettings()
-{
-    PM_GpuEmitterSphere presetState = gpuEmitterState_; // 適用するランダム拡散プリセット状態
-    presetState.count = 1024;
-    presetState.frequency = 0.12f;
-    presetState.radius = 1.3f;
-    presetState.baseScale = { 0.08f, 0.08f, 0.08f };
-    presetState.randomScale = 0.02f;
-    presetState.velocityScale = { 0.08f, 0.10f, 0.08f };
-    presetState.lifeTime = 5.0f;
-    presetState.colorMin = { 0.35f, 0.55f, 0.9f, 1.0f };
-    presetState.colorMax = { 1.0f, 1.0f, 1.0f, 1.0f };
-    presetState.scaleOverLife = 0;
-    presetState.endScale = { 0.02f, 0.02f, 0.02f };
-    presetState.colorOverLife = 0;
-    presetState.endColor = { 0.2f, 0.4f, 1.0f, 0.0f };
-    presetState.gravity = { 0.0f, -0.05f, 0.0f };
-    presetState.damping = 0.05f;
-    ApplyGpuEmitterPresetState(presetState);
-}
-
-/// <summary>
 /// GPU EmitterのGPU側パーティクル状態をリセットする。
 /// </summary>
 void ParticleManager::ResetGpuEmitterParticles()
@@ -1974,6 +1937,7 @@ void ParticleManager::ResetGpuEmitterParticles()
 }
 
 #ifdef USE_IMGUI
+
 /// <summary>
 /// ImGuiでGPU Emitterの基本情報を表示する。
 /// </summary>
@@ -2074,6 +2038,11 @@ void ParticleManager::DrawGpuEmitterSpawnStateImGui()
     int gpuEmitCount = static_cast<int>(gpuEmitterState_.count); // ImGui編集用の射出数
     if (ImGui::SliderInt("Emit Count", &gpuEmitCount, 0, static_cast<int>(GetParticleLimit()))) {
         gpuEmitterState_.count = static_cast<uint32_t>((std::max)(gpuEmitCount, 0));
+        if (gpuEmitterState_.count == 0) {
+            ClearGpuEmitterRuntimeParticleState();
+            gpuEmitterManualEmitRequested_ = false;
+            gpuEmitterState_.emit = 0;
+        }
     }
 
     ImGui::DragFloat("Frequency", &gpuEmitterState_.frequency, kImGuiFineStep, 0.001f, 10.0f);
@@ -2118,23 +2087,6 @@ void ParticleManager::DrawGpuEmitterColorStateImGui()
         gpuEmitterState_.colorOverLife = colorOverLife ? 1u : 0u;
     }
     ImGui::ColorEdit4("End Color", &gpuEmitterState_.endColor.x);
-}
-/// <summary>
-/// ImGuiでGPU Emitterのプリセット適用ボタンを表示する。
-/// </summary>
-void ParticleManager::DrawGpuEmitterPresetImGui()
-{
-    if (ImGui::Button("Apply Basic Particle Settings")) {
-        ApplyGpuEmitterBasicSettings();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Apply Dense Burst Settings")) {
-        ApplyGpuEmitterDenseBurstSettings();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Apply Random Spread Settings")) {
-        ApplyGpuEmitterRandomSpreadSettings();
-    }
 }
 
 /// <summary>
@@ -2265,6 +2217,7 @@ void ParticleManager::DeleteGpuEmitterSettingsFromImGui(const std::string& selec
         gpuEmitterSettingsMessage_ = "Delete failed: " + selectedSettingsPath;
     }
 }
+
 /// <summary>
 /// ImGuiでGPU Emitterの実行操作を表示する。
 /// </summary>
@@ -2293,12 +2246,12 @@ void ParticleManager::DrawGpuEmitterImGui(PostProcess* postProcess)
         DrawGpuEmitterEffectImGui();
         DrawGpuEmitterPostProcessImGui(postProcess);
         DrawGpuEmitterStateImGui();
-        DrawGpuEmitterPresetImGui();
         DrawGpuEmitterSettingsFileImGui();
         DrawGpuEmitterControlImGui();
     }
 }
 #endif
+
 /// <summary>
 /// ImGuiでパーティクル設定を編集する
 /// </summary>

@@ -28,6 +28,7 @@ void PlayScene::DrawSceneToPostProcessTarget()
 {
     sceneRenderTarget_.Begin(true);
     DrawSceneContent();
+    DrawDebugLines3D();
     sceneRenderTarget_.End();
 }
 
@@ -158,6 +159,7 @@ void PlayScene::DrawPostProcessOutputToCurrentTarget(const PostProcessDrawContex
         drawContext.finalEffectType,
         drawContext.useGaussianFilter);
     DrawSprites();
+    DrawDebugLines2D();
 }
 
 /// <summary>
