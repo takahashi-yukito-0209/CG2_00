@@ -105,6 +105,7 @@ void TitleScene::Finalize()
     sceneRenderTarget_.Finalize();
     particlePlane_.reset();
     sprites_.clear();
+    spritePointerView_.clear();
     objects3d_.clear();
     objectPointerView_.clear();
     ctx_ = {};
@@ -248,6 +249,20 @@ void TitleScene::OnWindowResize(uint32_t width, uint32_t height)
 }
 
 /// <summary>
+/// 所有中のスプライトから参照用ビューを作り直す。
+/// </summary>
+void TitleScene::RebuildSpritePointerView()
+{
+    spritePointerView_.clear();
+    spritePointerView_.reserve(sprites_.size());
+    for (auto& sprite : sprites_) {
+        if (sprite) {
+            spritePointerView_.push_back(sprite.get());
+        }
+    }
+}
+
+/// <summary>
 /// 所有中の3Dオブジェクトから参照用ビューを作り直す。
 /// </summary>
 void TitleScene::RebuildObjectPointerView()
@@ -285,10 +300,8 @@ void TitleScene::FillSpritePointers(std::vector<Sprite*>* out)
         return;
     }
 
-    out->reserve(sprites_.size());
-    for (auto& sprite : sprites_) {
-        if (sprite) {
-            out->push_back(sprite.get());
-        }
-    }
+    RebuildSpritePointerView();
+    out->clear();
+    out->reserve(spritePointerView_.size());
+    out->insert(out->end(), spritePointerView_.begin(), spritePointerView_.end());
 }

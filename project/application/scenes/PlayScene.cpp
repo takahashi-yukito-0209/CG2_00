@@ -515,9 +515,11 @@ void PlayScene::CreateSceneSprite(const std::string& textureName)
     }
 
     auto sprite = std::make_unique<Sprite>(); // 生成するスプライト
+    sprite->SetSpriteId(IssueSpriteId());
     sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
     sprite->Update();
     sprites_.push_back(std::move(sprite));
+    RebuildSpritePointerView();
 }
 
 /// <summary>
@@ -529,7 +531,13 @@ void PlayScene::DeleteSceneSprite(size_t spriteIndex)
         return;
     }
 
+    if (ctx_.imguiManager) {
+        const size_t remainingSpriteCount = sprites_.size() - 1; // 削除後に残るスプライト数
+        ctx_.imguiManager->NotifySpriteDeleted(spriteIndex, remainingSpriteCount);
+    }
+
     sprites_.erase(sprites_.begin() + spriteIndex);
+    RebuildSpritePointerView();
 }
 
 /// <summary>
@@ -822,6 +830,8 @@ void PlayScene::FinalizeParticleManager()
 void PlayScene::ReleaseSceneObjects()
 {
     sprites_.clear();
+    spritePointerView_.clear();
+    nextSpriteId_ = 1;
     objects3d_.clear();
     objectPointerView_.clear();
     nextObjectId_ = 1;
@@ -1043,6 +1053,20 @@ PostProcess* PlayScene::GetPostProcess()
 }
 
 /// <summary>
+/// 所有中のスプライトから参照用ビューを作り直す。
+/// </summary>
+void PlayScene::RebuildSpritePointerView()
+{
+    spritePointerView_.clear();
+    spritePointerView_.reserve(sprites_.size());
+    for (auto& sprite : sprites_) {
+        if (sprite) {
+            spritePointerView_.push_back(sprite.get());
+        }
+    }
+}
+
+/// <summary>
 /// 所有中の3Dオブジェクトから参照用ビューを作り直す。
 /// </summary>
 void PlayScene::RebuildObjectPointerView()
@@ -1054,6 +1078,16 @@ void PlayScene::RebuildObjectPointerView()
             objectPointerView_.push_back(object.get());
         }
     }
+}
+
+/// <summary>
+/// 次に生成するスプライトへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueSpriteId()
+{
+    const uint32_t issuedSpriteId = nextSpriteId_; // 今回割り当てるスプライトID
+    nextSpriteId_++;
+    return issuedSpriteId;
 }
 
 /// <summary>
@@ -1082,10 +1116,6 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 }
 
 /// <summary>
-/// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
-/// </summary>
-
-/// <summary>
 /// シーンが所有するパーティクルエミッターポインタ群を ImGui に渡すために埋めるフック
 /// </summary>
 void PlayScene::FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out)
@@ -1099,13 +1129,18 @@ void PlayScene::FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out
     out->push_back(&ringEmitter_);
     out->push_back(&cylinderEmitter_);
 }
+
+/// <summary>
+/// シーンが所有するスプライトポインタ群を ImGui に渡すために埋めるフック
+/// </summary>
 void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
 {
-    if (!out)
+    if (!out) {
         return;
-    out->clear();
-    out->reserve(sprites_.size());
-    for (auto& s : sprites_) {
-        out->push_back(s.get());
     }
+
+    RebuildSpritePointerView();
+    out->clear();
+    out->reserve(spritePointerView_.size());
+    out->insert(out->end(), spritePointerView_.begin(), spritePointerView_.end());
 }

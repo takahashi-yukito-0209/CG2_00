@@ -124,6 +124,22 @@ std::string BuildObjectDisplayLabel(const Object3d* object, int objectIndex)
 }
 
 /// <summary>
+/// スプライトのImGui表示名を作成する。
+/// </summary>
+std::string BuildSpriteDisplayLabel(const Sprite* sprite, int spriteIndex)
+{
+    std::string label = "Sprite " + std::to_string(spriteIndex); // indexベースの表示名
+    if (sprite) {
+        label += " [ID " + std::to_string(sprite->GetSpriteId()) + "]";
+        const std::string displayName = GetDisplayFileName(sprite->GetTextureFilePath()); // テクスチャ由来の表示名
+        if (!displayName.empty()) {
+            label += " : " + displayName;
+        }
+    }
+    return label;
+}
+
+/// <summary>
 /// 2Dベクトルを正規化して返す。
 /// </summary>
 ImVec2 NormalizeImVec2(const ImVec2& vector)
@@ -454,6 +470,37 @@ void ImGuiManager::NotifyObjectDeleted(size_t deletedObjectIndex, size_t remaini
         selectedObjectIndex_--;
     }
     selectedObjectIndex_ = (std::clamp)(selectedObjectIndex_, 0, maxObjectIndex);
+}
+
+/// <summary>
+/// スプライト削除後の選択状態を補正する。
+/// </summary>
+void ImGuiManager::NotifySpriteDeleted(size_t deletedSpriteIndex, size_t remainingSpriteCount)
+{
+    activeGizmoOperationMode_ = -1;
+    activeGizmoAxisIndex_ = -1;
+
+    if (remainingSpriteCount == 0) {
+        selectedSpriteIndex_ = 0;
+        return;
+    }
+
+    const int maxSpriteIndex = static_cast<int>(remainingSpriteCount - 1); // 削除後に選択できる最大番号
+    if (deletedSpriteIndex > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        selectedSpriteIndex_ = (std::clamp)(selectedSpriteIndex_, 0, maxSpriteIndex);
+        return;
+    }
+
+    const int deletedIndex = static_cast<int>(deletedSpriteIndex); // 削除されたスプライト番号
+    if (selectedSpriteIndex_ == deletedIndex) {
+        selectedSpriteIndex_ = (std::min)(deletedIndex, maxSpriteIndex);
+        return;
+    }
+
+    if (selectedSpriteIndex_ > deletedIndex) {
+        selectedSpriteIndex_--;
+    }
+    selectedSpriteIndex_ = (std::clamp)(selectedSpriteIndex_, 0, maxSpriteIndex);
 }
 
 bool ImGuiManager::IsCapturingInput()
@@ -2075,18 +2122,12 @@ void ImGuiManager::DrawSpriteSection(Context& ctx)
         selectedSpriteIndex_ = (std::clamp)(selectedSpriteIndex_, 0, spriteCount - 1);
 
         Sprite* previewSprite = (*ctx.sprites)[selectedSpriteIndex_]; // コンボで現在選択しているスプライト
-        std::string preview = "Sprite " + std::to_string(selectedSpriteIndex_); // コンボの現在表示名
-        if (previewSprite && !GetDisplayFileName(previewSprite->GetTextureFilePath()).empty()) {
-            preview += " : " + GetDisplayFileName(previewSprite->GetTextureFilePath());
-        }
+        std::string preview = BuildSpriteDisplayLabel(previewSprite, selectedSpriteIndex_); // コンボの現在表示名
 
         if (ImGui::BeginCombo("Target", preview.c_str())) {
             for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
                 Sprite* sprite = (*ctx.sprites)[spriteIndex]; // 表示名を取得するスプライト
-                std::string label = "Sprite " + std::to_string(spriteIndex); // 選択候補の表示名
-                if (sprite && !GetDisplayFileName(sprite->GetTextureFilePath()).empty()) {
-                    label += " : " + GetDisplayFileName(sprite->GetTextureFilePath());
-                }
+                std::string label = BuildSpriteDisplayLabel(sprite, spriteIndex); // 選択候補の表示名
 
                 const bool isSelected = selectedSpriteIndex_ == spriteIndex; // 現在選択中か
                 if (ImGui::Selectable(label.c_str(), isSelected)) {
@@ -2192,6 +2233,11 @@ void ImGuiManager::Render(ID3D12GraphicsCommandList* /*commandList*/) { }
 /// ImGui無効時の3Dオブジェクト削除通知を受け取る。
 /// </summary>
 void ImGuiManager::NotifyObjectDeleted(size_t /*deletedObjectIndex*/, size_t /*remainingObjectCount*/) { }
+
+/// <summary>
+/// ImGui無効時のスプライト削除通知を受け取る。
+/// </summary>
+void ImGuiManager::NotifySpriteDeleted(size_t /*deletedSpriteIndex*/, size_t /*remainingSpriteCount*/) { }
 
 bool ImGuiManager::IsCapturingInput() { return false; }
 

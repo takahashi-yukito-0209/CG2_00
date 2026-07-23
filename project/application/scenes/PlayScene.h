@@ -475,9 +475,19 @@ private:
     void RebuildObjectPointerView();
 
     /// <summary>
+    /// 所有中のスプライトから参照用ビューを作り直す。
+    /// </summary>
+    void RebuildSpritePointerView();
+
+    /// <summary>
     /// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
     /// </summary>
     uint32_t IssueObjectId();
+
+    /// <summary>
+    /// 次に生成するスプライトへ割り当てるIDを取得する。
+    /// </summary>
+    uint32_t IssueSpriteId();
 
     /// <summary>
     /// 3D空間とパーティクルを描画する
@@ -502,6 +512,8 @@ private:
 private: // メンバー変数
     MyEngine::SceneContext ctx_;
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
+    std::vector<MyEngine::Sprite*> spritePointerView_; // ImGuiなど外部参照用のスプライト一覧
+    uint32_t nextSpriteId_ = 1; // 次に生成するスプライトへ割り当てるID
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_;
     std::vector<MyEngine::Object3d*> objectPointerView_; // ImGuiなど外部参照用の3Dオブジェクト一覧
     uint32_t nextObjectId_ = 1; // 次に生成する3Dオブジェクトへ割り当てるID

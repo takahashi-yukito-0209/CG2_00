@@ -99,6 +99,11 @@ public: // メンバ関数
     /// </summary>
     void NotifyObjectDeleted(size_t deletedObjectIndex, size_t remainingObjectCount);
 
+    /// <summary>
+    /// スプライト削除後の選択状態を補正する。
+    /// </summary>
+    void NotifySpriteDeleted(size_t deletedSpriteIndex, size_t remainingSpriteCount);
+
 private: // メンバ関数
     /// <summary>
     /// シーン描画結果をScene Viewウィンドウへ表示する

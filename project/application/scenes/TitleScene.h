@@ -95,11 +95,17 @@ private:
     /// </summary>
     void RebuildObjectPointerView();
 
+    /// <summary>
+    /// 所有中のスプライトから参照用ビューを作り直す。
+    /// </summary>
+    void RebuildSpritePointerView();
+
 private:
     MyEngine::SceneContext ctx_; // シーンへ渡された共通コンテキスト
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_; // タイトル表示用3Dオブジェクト
     std::vector<MyEngine::Object3d*> objectPointerView_; // ImGuiなど外部参照用の3Dオブジェクト一覧
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_; // タイトル表示用スプライト
+    std::vector<MyEngine::Sprite*> spritePointerView_; // ImGuiなど外部参照用のスプライト一覧
     std::unique_ptr<MyEngine::Object3d> particlePlane_; // GPUパーティクル確認用の描画平面
     MyEngine::RenderTarget sceneRenderTarget_; // Scene Viewに表示するタイトル描画結果
     bool sceneViewOnly_ = false; // Scene View用RTだけへ描画するか

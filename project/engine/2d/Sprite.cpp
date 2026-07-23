@@ -155,8 +155,62 @@ void Sprite::Initialize(SpriteCommon* spriteCommon, std::string textureFilePath,
     (void)imguiManager;
 }
 
+/// <summary>
+/// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+/// </summary>
+void Sprite::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = spriteCommon_ ? spriteCommon_->GetDxCommon() : nullptr; // 遅延解放を管理するDirectX共通処理
+    if (dxCommon) {
+        dxCommon->DeferReleaseResource(resource);
+        return;
+    }
+
+    resource.Reset();
+}
+
+/// <summary>
+/// Spriteが直接保持するGPUリソースを解放予約する。
+/// </summary>
+void Sprite::ReleaseGpuResources()
+{
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (vertexResources_[frameIndex] && mappedVertexData_[frameIndex]) {
+            vertexResources_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedVertexData_[frameIndex] = nullptr;
+        DeferReleaseResource(vertexResources_[frameIndex]);
+
+        if (materialResources_[frameIndex] && mappedMaterialData_[frameIndex]) {
+            materialResources_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedMaterialData_[frameIndex] = nullptr;
+        DeferReleaseResource(materialResources_[frameIndex]);
+
+        if (transformationMatrixResources_[frameIndex] && mappedTransformationMatrixData_[frameIndex]) {
+            transformationMatrixResources_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedTransformationMatrixData_[frameIndex] = nullptr;
+        DeferReleaseResource(transformationMatrixResources_[frameIndex]);
+    }
+
+    if (indexResource_ && indexData_) {
+        indexResource_->Unmap(0, nullptr);
+    }
+    indexData_ = nullptr;
+    DeferReleaseResource(indexResource_);
+    vertexBufferView_ = {};
+    indexBufferView_ = {};
+}
+
 Sprite::~Sprite()
 {
+    ReleaseGpuResources();
+    spriteCommon_ = nullptr;
     // no ImGui unregister needed; registration is centralized
 }
 

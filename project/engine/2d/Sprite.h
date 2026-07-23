@@ -162,6 +162,16 @@ public: // メンバ関数
     const std::string& GetTextureFilePath() const { return textureFilePath_; }
 
     /// <summary>
+    /// シーン内で安定して識別するためのIDを設定する。
+    /// </summary>
+    void SetSpriteId(uint32_t spriteId) { spriteId_ = spriteId; }
+
+    /// <summary>
+    /// シーン内で安定して識別するためのIDを取得する。
+    /// </summary>
+    uint32_t GetSpriteId() const { return spriteId_; }
+
+    /// <summary>
     /// ImGuiでスプライトの状態を表示・編集する
     /// </summary>
     void DrawImGui();
@@ -178,6 +188,16 @@ private: // メンバ関数
     /// 現在フレーム用GPUバッファへCPU側の状態を転送する
     /// </summary>
     void UpdateFrameResources();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
+
+    /// <summary>
+    /// Spriteが直接保持するGPUリソースを解放予約する。
+    /// </summary>
+    void ReleaseGpuResources();
 
 private: // メンバ変数
     SpriteCommon* spriteCommon_ = nullptr; // スプライト描画の共通設定を管理するクラスへの参照
@@ -210,6 +230,7 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW indexBufferView_ = {};
 
     // SRV ディスクリプタヒープ内のテクスチャスロット番号。
+    uint32_t spriteId_ = 0; // シーン内で安定して識別するためのID
     uint32_t textureIndex_ = 0; // 使用するテクスチャのSRVインデックス
     std::string textureFilePath_; // ImGuiで識別するためのテクスチャ名
 
