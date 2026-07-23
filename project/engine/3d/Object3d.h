@@ -1,5 +1,6 @@
 #pragma once
 #include "Logger.h"
+#include "Object3dTypes.h"
 #include <MathTypes.h>
 #include <array>
 #include <cmath>
@@ -27,144 +28,29 @@ class Model;
 /// </summary>
 class Object3d {
 public: // メンバ構造体
-    static constexpr uint32_t kNumMaxInfluence = 4; // 1頂点に割り当てる最大Joint影響数
+    static constexpr uint32_t kNumMaxInfluence = Object3dTypes::kNumMaxInfluence; // 1頂点に割り当てる最大Joint影響数
 
-    // 頂点データ構造体
-    struct VertexData {
-        Math::Vector4 position;
-        Math::Vector2 texcoord;
-        Math::Vector3 normal;
-    };
-
-
-    struct VertexInfluence {
-        std::array<float, kNumMaxInfluence> weights {}; // 各Jointの重み
-        std::array<int32_t, kNumMaxInfluence> jointIndices {}; // 影響するJointのIndex
-    };
-
-    struct JointWeightData {
-        Math::Matrix4x4 inverseBindPoseMatrix; // BindPoseを打ち消すための逆行列
-    };
-
-    struct WellForGPU {
-        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での最終変換行列
-        Math::Matrix4x4 skeletonSpaceInverseTransposeMatrix; // 法線変換用の逆転置行列
-    };
-    // マテリアル構造体
-    struct Material {
-        Math::Vector4 color;
-        int32_t enableLighting;
-        float padding[3];
-        Math::Matrix4x4 uvTransform;
-        int lightingMode;
-        int32_t useAlphaCutoutSampler; // 0以外の場合、アルファカットアウト用にpoint+clampサンプラーを使用
-        int32_t useAlphaDiscard; // 0以外の場合、透過ピクセルをdiscardする
-        float padding2[1];
-        float shininess; // 反射の鋭さ（スペキュラー強度の指数）
-        float environmentCoefficient; // 環境マップ反射強度
-        float pad3[2];
-    };
-
-    // 座標変換行列データ
-    struct TransformationMatrix {
-        Math::Matrix4x4 WVP;
-        Math::Matrix4x4 World;
-        Math::Vector4 color; // インスタンスごとの色（wはアルファ）
-        Math::Matrix4x4 WorldInverseTranspose;
-    };
-
-    // 平行光源データ構造体
-    struct DirectionalLight {
-        Math::Vector4 color; // ライトの色
-        Math::Vector3 direction; // ライトの向き
-        float intensity; // 輝度
-    };
-
-    // 点光源データ構造体
-    struct PointLight {
-        Math::Vector4 position;
-        Math::Vector4 color;
-        float radius;
-        float decay;
-        int32_t enabled;
-        float padding;
-    };
-
-    // スポットライトデータ構造体
-    struct SpotLight {
-        Math::Vector4 position;
-        Math::Vector4 color;
-        Math::Vector3 direction;
-        float distance;
-        float decay;
-        float cosAngle;
-        float cosFalloffStart;
-        int32_t enabled;
-        float padding;
-    };
-
-    // マテリアルデータ構造体
-    struct MaterialData {
-        std::string textureFilePath;
-        uint32_t textureIndex = UINT32_MAX;
-    };
-
+    using VertexData = Object3dTypes::VertexData;
+    using VertexInfluence = Object3dTypes::VertexInfluence;
+    using JointWeightData = Object3dTypes::JointWeightData;
+    using WellForGPU = Object3dTypes::WellForGPU;
+    using Material = Object3dTypes::Material;
+    using TransformationMatrix = Object3dTypes::TransformationMatrix;
+    using DirectionalLight = Object3dTypes::DirectionalLight;
+    using PointLight = Object3dTypes::PointLight;
+    using SpotLight = Object3dTypes::SpotLight;
+    using MaterialData = Object3dTypes::MaterialData;
     template <typename TValue>
-    struct Keyframe {
-        float time; // キーフレームの時刻
-        TValue value; // キーフレームの値
-    };
-
-    using KeyframeVector3 = Keyframe<Math::Vector3>;
-    using KeyframeQuaternion = Keyframe<Math::Quaternion>;
-
+    using Keyframe = Object3dTypes::Keyframe<TValue>;
+    using KeyframeVector3 = Object3dTypes::KeyframeVector3;
+    using KeyframeQuaternion = Object3dTypes::KeyframeQuaternion;
     template <typename TValue>
-    struct AnimationCurve {
-        std::vector<Keyframe<TValue>> keyframes; // 時刻順に並んだキーフレーム
-    };
-
-    struct NodeAnimation {
-        AnimationCurve<Math::Vector3> translate; // 平行移動のアニメーション
-        AnimationCurve<Math::Quaternion> rotate; // 回転のアニメーション
-        AnimationCurve<Math::Vector3> scale; // スケールのアニメーション
-    };
-
-    struct Animation {
-        float duration = 0.0f; // アニメーション全体の長さ
-        std::unordered_map<std::string, NodeAnimation> nodeAnimations; // ノード名ごとのアニメーション
-    };
-
-    // モデルデータ構造体
-    struct ModelData {
-        std::vector<VertexData> vertices;
-        std::vector<uint32_t> indices; // Index描画で参照する頂点番号
-        std::vector<VertexInfluence> vertexInfluences; // 展開済み頂点ごとのSkinning影響情報
-        std::unordered_map<std::string, JointWeightData> skinClusterData; // Joint名ごとの逆BindPose情報
-        MaterialData material;
-        // ルートノード情報（Assimpのノードツリーを格納）
-        struct Node {
-            Math::QuaternionTransform transform; // ノードの座標変換情報
-            Math::Matrix4x4 localMatrix; // ノードのローカル行列
-            std::string name; // ノード名
-            std::vector<Node> children; // 子ノードの一覧
-        } rootNode;
-    };
-    struct Joint {
-        Math::QuaternionTransform transform; // Jointの座標変換情報
-        Math::Matrix4x4 localMatrix; // Jointのローカル行列
-        Math::Matrix4x4 skeletonSpaceMatrix; // Skeleton空間での変換行列
-        std::string name; // Joint名
-        std::vector<int32_t> children; // 子JointのIndex一覧
-        int32_t index = 0; // 自分のIndex
-        std::optional<int32_t> parent; // 親JointのIndex（なければnull）
-    };
-
-    struct Skeleton {
-        int32_t root = 0; // RootJointのIndex
-        std::map<std::string, int32_t> jointMap; // Joint名からIndexを引くための辞書
-        std::vector<Joint> joints; // 所属しているJoint一覧
-    };
-
+    using AnimationCurve = Object3dTypes::AnimationCurve<TValue>;
+    using NodeAnimation = Object3dTypes::NodeAnimation;
+    using Animation = Object3dTypes::Animation;
+    using ModelData = Object3dTypes::ModelData;
+    using Joint = Object3dTypes::Joint;
+    using Skeleton = Object3dTypes::Skeleton;
 public: // メンバ関数
     /// <summary>
     /// 3Dオブジェクトの描画に必要な初期リソースを生成する
@@ -581,6 +467,16 @@ private: // 内部関数
     /// Skeletonデバッグ描画用GPUリソースを解放する
     /// </summary>
     void ReleaseSkeletonDebugResources();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
+
+    /// <summary>
+    /// Object3dが直接保持するGPUリソースを解放予約する。
+    /// </summary>
+    void ReleaseOwnedGpuResources();
 
     /// <summary>
     /// Skeletonデバッグ描画用マテリアルを作成する

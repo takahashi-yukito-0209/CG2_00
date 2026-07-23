@@ -16,6 +16,7 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include <array>
 #include <thread>
+#include <utility>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -223,6 +224,8 @@ void DirectXCommon::Finalize()
         }
     }
 
+    ProcessDeferredReleaseResources();
+
     // 明示的にComPtrをリセットして参照カウントを減らす
     // コマンド周り
     if (commandList_) {
@@ -342,6 +345,7 @@ void DirectXCommon::WaitForCommandExecution()
         // イベントが発生するまで待機
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+    ProcessDeferredReleaseResources();
 }
 
 /// <summary>
@@ -902,6 +906,7 @@ void DirectXCommon::PreDraw()
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
+    ProcessDeferredReleaseResources();
     ResetCommandList();
     FlushTextureUploads();
 
@@ -1338,6 +1343,64 @@ void DirectXCommon::InitCommandRelated()
 uint32_t DirectXCommon::GetCurrentFrameIndex() const
 {
     return swapChain_ ? swapChain_->GetCurrentBackBufferIndex() : 0;
+}
+
+/// <summary>
+/// GPUが完了済みのFence値を取得する。
+/// </summary>
+uint64_t DirectXCommon::GetCompletedFenceValue() const
+{
+    return fence_ ? fence_->GetCompletedValue() : fenceValue_;
+}
+
+/// <summary>
+/// リソース解放後に再利用してよいFence値を取得する。
+/// </summary>
+uint64_t DirectXCommon::GetFenceValueForResourceRelease() const
+{
+    return fenceValue_ + 1;
+}
+
+/// <summary>
+/// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+/// </summary>
+void DirectXCommon::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    if (!fence_) {
+        resource.Reset();
+        return;
+    }
+
+    const uint64_t releaseFenceValue = GetFenceValueForResourceRelease(); // 解放可能になるFence値
+    deferredReleaseResources_.push_back({ std::move(resource), releaseFenceValue });
+}
+
+/// <summary>
+/// GPU完了済みの遅延解放リソースを破棄する。
+/// </summary>
+void DirectXCommon::ProcessDeferredReleaseResources()
+{
+    if (deferredReleaseResources_.empty()) {
+        return;
+    }
+
+    const uint64_t completedFenceValue = fence_ ? GetCompletedFenceValue() : UINT64_MAX; // GPU完了済みFence値
+    for (size_t index = 0; index < deferredReleaseResources_.size();) { // 遅延解放リストの確認位置
+        const DeferredReleaseResource& pendingResource = deferredReleaseResources_[index]; // 確認対象のリソース
+        if (pendingResource.fenceValue > completedFenceValue) {
+            index++;
+            continue;
+        }
+
+        if (index != deferredReleaseResources_.size() - 1) {
+            deferredReleaseResources_[index] = std::move(deferredReleaseResources_.back());
+        }
+        deferredReleaseResources_.pop_back();
+    }
 }
 
 /// <summary>

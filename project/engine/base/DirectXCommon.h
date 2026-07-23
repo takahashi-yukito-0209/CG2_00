@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <d3d12.h>
 #include <dxcapi.h>
 #include <dxgi1_6.h>
@@ -103,6 +104,21 @@ public: // 公開メンバ関数
     /// 現在のフレーム番号を取得する
     /// </summary>
     uint32_t GetCurrentFrameIndex() const;
+
+    /// <summary>
+    /// GPUが完了済みのFence値を取得する。
+    /// </summary>
+    uint64_t GetCompletedFenceValue() const;
+
+    /// <summary>
+    /// リソース解放後に再利用してよいFence値を取得する。
+    /// </summary>
+    uint64_t GetFenceValueForResourceRelease() const;
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
 
     /// <summary>
     /// SRV用CPUディスクリプタハンドルを取得する
@@ -238,6 +254,11 @@ public: // 公開メンバ関数
     // GPUコマンドの完了を待機する
     void WaitForCommandExecution();
 
+    /// <summary>
+    /// GPU完了済みの遅延解放リソースを破棄する。
+    /// </summary>
+    void ProcessDeferredReleaseResources();
+
     // コマンドアロケータとコマンドリストをリセットする
     void ResetCommandList();
 
@@ -252,6 +273,12 @@ public: // 公開メンバ関数
 
     // 深度バッファを指定サイズで再作成する（リサイズ時に使用）
     void ResizeDepthStencil(uint32_t width, uint32_t height);
+
+private: // 型定義
+    struct DeferredReleaseResource {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource; // GPU完了まで保持するD3D12リソース
+        uint64_t fenceValue = 0; // 解放可能になるFence値
+    };
 
 private: // Private メンバ変数
     // WinApp のポインタ（外部で管理される）
@@ -306,6 +333,9 @@ private: // Private メンバ変数
     HANDLE fenceEvent_ = nullptr;
     UINT64 fenceValue_ = 0;
     std::array<UINT64, kFrameCount> frameFenceValues_ {};
+
+    // GPU完了待ちの遅延解放リソース
+    std::vector<DeferredReleaseResource> deferredReleaseResources_;
 
     // リサイズ処理中フラグ（再入防止）
     std::atomic<bool> resizingInProgress_ { false };
