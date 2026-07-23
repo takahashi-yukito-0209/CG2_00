@@ -2,6 +2,7 @@
 #include <cstring>
 #include "engine/utility/Logger.h"
 #include <cstdint>
+#include <limits>
 #include <d3d12.h>
 #include <sstream>
 #include <string>
@@ -104,6 +105,22 @@ std::string GetDisplayFileName(const std::string& path)
         return path;
     }
     return path.substr(slashPosition + 1);
+}
+
+/// <summary>
+/// 3DオブジェクトのImGui表示名を作成する。
+/// </summary>
+std::string BuildObjectDisplayLabel(const Object3d* object, int objectIndex)
+{
+    std::string label = "Object " + std::to_string(objectIndex); // indexベースの表示名
+    if (object) {
+        label += " [ID " + std::to_string(object->GetObjectId()) + "]";
+        const std::string displayName = GetDisplayFileName(object->GetDebugName()); // モデル由来の表示名
+        if (!displayName.empty()) {
+            label += " : " + displayName;
+        }
+    }
+    return label;
 }
 
 /// <summary>
@@ -406,6 +423,37 @@ void ImGuiManager::Render(ID3D12GraphicsCommandList* commandList)
         ImGui::UpdatePlatformWindows(); // メイン画面外へ出したImGuiウィンドウを更新する
         ImGui::RenderPlatformWindowsDefault(); // 追加ウィンドウの描画を実行する
     }
+}
+
+/// <summary>
+/// 3Dオブジェクト削除後の選択状態を補正する。
+/// </summary>
+void ImGuiManager::NotifyObjectDeleted(size_t deletedObjectIndex, size_t remainingObjectCount)
+{
+    activeGizmoOperationMode_ = -1;
+    activeGizmoAxisIndex_ = -1;
+
+    if (remainingObjectCount == 0) {
+        selectedObjectIndex_ = 0;
+        return;
+    }
+
+    const int maxObjectIndex = static_cast<int>(remainingObjectCount - 1); // 削除後に選択できる最大番号
+    if (deletedObjectIndex > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        selectedObjectIndex_ = (std::clamp)(selectedObjectIndex_, 0, maxObjectIndex);
+        return;
+    }
+
+    const int deletedIndex = static_cast<int>(deletedObjectIndex); // 削除された3Dオブジェクト番号
+    if (selectedObjectIndex_ == deletedIndex) {
+        selectedObjectIndex_ = (std::min)(deletedIndex, maxObjectIndex);
+        return;
+    }
+
+    if (selectedObjectIndex_ > deletedIndex) {
+        selectedObjectIndex_--;
+    }
+    selectedObjectIndex_ = (std::clamp)(selectedObjectIndex_, 0, maxObjectIndex);
 }
 
 bool ImGuiManager::IsCapturingInput()
@@ -1983,18 +2031,12 @@ void ImGuiManager::DrawObjectSection(Context& ctx)
         selectedObjectIndex_ = (std::clamp)(selectedObjectIndex_, 0, objectCount - 1);
 
         Object3d* previewObject = (*ctx.objects3d)[selectedObjectIndex_]; // コンボで現在選択している3Dオブジェクト
-        std::string preview = "Object " + std::to_string(selectedObjectIndex_); // コンボの現在表示名
-        if (previewObject && !GetDisplayFileName(previewObject->GetDebugName()).empty()) {
-            preview += " : " + GetDisplayFileName(previewObject->GetDebugName());
-        }
+        std::string preview = BuildObjectDisplayLabel(previewObject, selectedObjectIndex_); // コンボの現在表示名
 
         if (ImGui::BeginCombo("Target", preview.c_str())) {
             for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
                 Object3d* object = (*ctx.objects3d)[objectIndex]; // 表示名を取得する3Dオブジェクト
-                std::string label = "Object " + std::to_string(objectIndex); // 選択候補の表示名
-                if (object && !GetDisplayFileName(object->GetDebugName()).empty()) {
-                    label += " : " + GetDisplayFileName(object->GetDebugName());
-                }
+                std::string label = BuildObjectDisplayLabel(object, objectIndex); // 選択候補の表示名
 
                 const bool isSelected = selectedObjectIndex_ == objectIndex; // 現在選択中か
                 if (ImGui::Selectable(label.c_str(), isSelected)) {
@@ -2145,6 +2187,11 @@ void ImGuiManager::Shutdown() { }
 void ImGuiManager::BuildUI(Context& /*ctx*/) { }
 
 void ImGuiManager::Render(ID3D12GraphicsCommandList* /*commandList*/) { }
+
+/// <summary>
+/// ImGui無効時の3Dオブジェクト削除通知を受け取る。
+/// </summary>
+void ImGuiManager::NotifyObjectDeleted(size_t /*deletedObjectIndex*/, size_t /*remainingObjectCount*/) { }
 
 bool ImGuiManager::IsCapturingInput() { return false; }
 

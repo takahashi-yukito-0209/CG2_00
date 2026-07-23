@@ -468,7 +468,18 @@ private:
     /// 登録済みの3Dオブジェクトを描画する。
     /// </summary>
     void DrawSceneObjects();
-/// <summary>
+
+    /// <summary>
+    /// 所有中の3Dオブジェクトから参照用ビューを作り直す。
+    /// </summary>
+    void RebuildObjectPointerView();
+
+    /// <summary>
+    /// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
+    /// </summary>
+    uint32_t IssueObjectId();
+
+    /// <summary>
     /// 3D空間とパーティクルを描画する
     /// </summary>
     void DrawWorldAndParticles();
@@ -492,6 +503,8 @@ private: // メンバー変数
     MyEngine::SceneContext ctx_;
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_;
+    std::vector<MyEngine::Object3d*> objectPointerView_; // ImGuiなど外部参照用の3Dオブジェクト一覧
+    uint32_t nextObjectId_ = 1; // 次に生成する3Dオブジェクトへ割り当てるID
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;

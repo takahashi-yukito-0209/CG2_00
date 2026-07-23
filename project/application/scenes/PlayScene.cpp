@@ -1,7 +1,5 @@
 #include "PlayScene.h"
-#ifdef USE_IMGUI
 #include "ImGuiManager.h"
-#endif
 #include "../../engine/2d/Sprite.h"
 #include "../../engine/2d/SpriteCommon.h"
 #include "../../engine/2d/TextureManager.h"
@@ -629,6 +627,7 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
 void PlayScene::CreateSceneObject(const std::string& modelFileName)
 {
     auto object3d = std::make_unique<Object3d>(); // 生成する3Dオブジェクト
+    object3d->SetObjectId(IssueObjectId());
     object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     object3d->SetModel(modelFileName);
     if (IsAnimationModelFile(modelFileName)) {
@@ -636,6 +635,7 @@ void PlayScene::CreateSceneObject(const std::string& modelFileName)
     }
     ApplySceneObjectInitialSettings(*object3d, modelFileName);
     objects3d_.push_back(std::move(object3d));
+    RebuildObjectPointerView();
 }
 
 /// <summary>
@@ -647,7 +647,13 @@ void PlayScene::DeleteSceneObject(size_t objectIndex)
         return;
     }
 
+    if (ctx_.imguiManager) {
+        const size_t remainingObjectCount = objects3d_.size() - 1; // 削除後に残る3Dオブジェクト数
+        ctx_.imguiManager->NotifyObjectDeleted(objectIndex, remainingObjectCount);
+    }
+
     objects3d_.erase(objects3d_.begin() + objectIndex);
+    RebuildObjectPointerView();
 }
 
 /// <summary>
@@ -724,11 +730,13 @@ void PlayScene::InitializeSceneObjects()
     objects3d_.reserve(kSceneModelLoadDescs.size());
     for (const SceneModelLoadDesc& modelDesc : kSceneModelLoadDescs) {
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
+        object3d->SetObjectId(IssueObjectId());
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(modelDesc.fileName);
         ApplySceneObjectInitialSettings(*object3d, modelDesc.fileName);
         objects3d_.push_back(std::move(object3d));
     }
+    RebuildObjectPointerView();
 }
 
 /// <summary>
@@ -815,6 +823,8 @@ void PlayScene::ReleaseSceneObjects()
 {
     sprites_.clear();
     objects3d_.clear();
+    objectPointerView_.clear();
+    nextObjectId_ = 1;
     temporalAfterimageSprites_.clear();
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
@@ -1033,17 +1043,42 @@ PostProcess* PlayScene::GetPostProcess()
 }
 
 /// <summary>
+/// 所有中の3Dオブジェクトから参照用ビューを作り直す。
+/// </summary>
+void PlayScene::RebuildObjectPointerView()
+{
+    objectPointerView_.clear();
+    objectPointerView_.reserve(objects3d_.size());
+    for (auto& object : objects3d_) {
+        if (object) {
+            objectPointerView_.push_back(object.get());
+        }
+    }
+}
+
+/// <summary>
+/// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueObjectId()
+{
+    const uint32_t issuedObjectId = nextObjectId_; // 今回割り当てる3DオブジェクトID
+    nextObjectId_++;
+    return issuedObjectId;
+}
+
+/// <summary>
 /// シーンが所有するオブジェクトポインタ群を ImGui に渡すために埋めるフック
 /// </summary>
 void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 {
-    if (!out)
+    if (!out) {
         return;
-    out->clear();
-    out->reserve(objects3d_.size());
-    for (auto& o : objects3d_) {
-        out->push_back(o.get());
     }
+
+    RebuildObjectPointerView();
+    out->clear();
+    out->reserve(objectPointerView_.size());
+    out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }
 
 /// <summary>

@@ -106,6 +106,7 @@ void TitleScene::Finalize()
     particlePlane_.reset();
     sprites_.clear();
     objects3d_.clear();
+    objectPointerView_.clear();
     ctx_ = {};
 }
 
@@ -247,6 +248,20 @@ void TitleScene::OnWindowResize(uint32_t width, uint32_t height)
 }
 
 /// <summary>
+/// 所有中の3Dオブジェクトから参照用ビューを作り直す。
+/// </summary>
+void TitleScene::RebuildObjectPointerView()
+{
+    objectPointerView_.clear();
+    objectPointerView_.reserve(objects3d_.size());
+    for (auto& object : objects3d_) {
+        if (object) {
+            objectPointerView_.push_back(object.get());
+        }
+    }
+}
+
+/// <summary>
 /// シーンが所有する3Dオブジェクトのポインタを収集する
 /// </summary>
 void TitleScene::FillObject3dPointers(std::vector<Object3d*>* out)
@@ -255,12 +270,10 @@ void TitleScene::FillObject3dPointers(std::vector<Object3d*>* out)
         return;
     }
 
-    out->reserve(objects3d_.size());
-    for (auto& object : objects3d_) {
-        if (object) {
-            out->push_back(object.get());
-        }
-    }
+    RebuildObjectPointerView();
+    out->clear();
+    out->reserve(objectPointerView_.size());
+    out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }
 
 /// <summary>

@@ -237,6 +237,16 @@ public: // メンバ関数
     /// </summary>
     const std::string& GetDebugName() const { return debugName_; }
 
+    /// <summary>
+    /// シーン内で安定して識別するためのIDを設定する。
+    /// </summary>
+    void SetObjectId(uint32_t objectId) { objectId_ = objectId; }
+
+    /// <summary>
+    /// シーン内で安定して識別するためのIDを取得する。
+    /// </summary>
+    uint32_t GetObjectId() const { return objectId_; }
+
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
 
@@ -304,6 +314,7 @@ private: // メンバ変数
 
     // 設定されているモデルへのポインタ
     Model* model_ = nullptr;
+    uint32_t objectId_ = 0; // シーン内で安定して識別するためのID
     std::string debugName_ = "No Model"; // ImGuiで識別するための表示名
     // モデル用にこのObject3dが所有するModelCommon
     std::unique_ptr<ModelCommon> modelCommon_;

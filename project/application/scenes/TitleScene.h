@@ -90,9 +90,15 @@ private:
     /// </summary>
     void DrawWorldObjects();
 
+    /// <summary>
+    /// 所有中の3Dオブジェクトから参照用ビューを作り直す。
+    /// </summary>
+    void RebuildObjectPointerView();
+
 private:
     MyEngine::SceneContext ctx_; // シーンへ渡された共通コンテキスト
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_; // タイトル表示用3Dオブジェクト
+    std::vector<MyEngine::Object3d*> objectPointerView_; // ImGuiなど外部参照用の3Dオブジェクト一覧
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_; // タイトル表示用スプライト
     std::unique_ptr<MyEngine::Object3d> particlePlane_; // GPUパーティクル確認用の描画平面
     MyEngine::RenderTarget sceneRenderTarget_; // Scene Viewに表示するタイトル描画結果

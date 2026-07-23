@@ -22,6 +22,7 @@ class ParticleManager;
 class PostProcess;
 }
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -92,6 +93,11 @@ public: // メンバ関数
     /// Scene Viewの描画領域にマウスが乗っているかを取得する
     /// </summary>
     bool IsSceneViewHovered() const { return sceneViewHovered_; }
+
+    /// <summary>
+    /// 3Dオブジェクト削除後の選択状態を補正する。
+    /// </summary>
+    void NotifyObjectDeleted(size_t deletedObjectIndex, size_t remainingObjectCount);
 
 private: // メンバ関数
     /// <summary>
