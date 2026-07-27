@@ -140,6 +140,21 @@ std::string BuildSpriteDisplayLabel(const Sprite* sprite, int spriteIndex)
 }
 
 /// <summary>
+/// パーティクルエミッターのImGui表示名を作成する。
+/// </summary>
+std::string BuildParticleEmitterDisplayLabel(const ParticleEmitter* emitter, int emitterIndex)
+{
+    std::string label = "Emitter " + std::to_string(emitterIndex); // indexベースの表示名
+    if (emitter) {
+        label += " [ID " + std::to_string(emitter->GetEmitterId()) + "]";
+        if (!emitter->groupName.empty()) {
+            label += " : " + emitter->groupName;
+        }
+    }
+    return label;
+}
+
+/// <summary>
 /// 2Dベクトルを正規化して返す。
 /// </summary>
 ImVec2 NormalizeImVec2(const ImVec2& vector)
@@ -501,6 +516,37 @@ void ImGuiManager::NotifySpriteDeleted(size_t deletedSpriteIndex, size_t remaini
         selectedSpriteIndex_--;
     }
     selectedSpriteIndex_ = (std::clamp)(selectedSpriteIndex_, 0, maxSpriteIndex);
+}
+
+/// <summary>
+/// パーティクルエミッター削除後の選択状態を補正する。
+/// </summary>
+void ImGuiManager::NotifyParticleEmitterDeleted(size_t deletedEmitterIndex, size_t remainingEmitterCount)
+{
+    activeGizmoOperationMode_ = -1;
+    activeGizmoAxisIndex_ = -1;
+
+    if (remainingEmitterCount == 0) {
+        selectedEmitterIndex_ = 0;
+        return;
+    }
+
+    const int maxEmitterIndex = static_cast<int>(remainingEmitterCount - 1); // 削除後に選択できる最大番号
+    if (deletedEmitterIndex > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        selectedEmitterIndex_ = (std::clamp)(selectedEmitterIndex_, 0, maxEmitterIndex);
+        return;
+    }
+
+    const int deletedIndex = static_cast<int>(deletedEmitterIndex); // 削除されたパーティクルエミッター番号
+    if (selectedEmitterIndex_ == deletedIndex) {
+        selectedEmitterIndex_ = (std::min)(deletedIndex, maxEmitterIndex);
+        return;
+    }
+
+    if (selectedEmitterIndex_ > deletedIndex) {
+        selectedEmitterIndex_--;
+    }
+    selectedEmitterIndex_ = (std::clamp)(selectedEmitterIndex_, 0, maxEmitterIndex);
 }
 
 bool ImGuiManager::IsCapturingInput()
@@ -2017,18 +2063,12 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
             const int emitterCount = static_cast<int>(ctx.particleEmitters->size()); // 編集可能なCPUエミッター数
             selectedEmitterIndex_ = (std::clamp)(selectedEmitterIndex_, 0, emitterCount - 1);
             ParticleEmitter* previewEmitter = (*ctx.particleEmitters)[selectedEmitterIndex_]; // コンボの現在選択エミッター
-            std::string preview = "Emitter " + std::to_string(selectedEmitterIndex_); // コンボ表示名
-            if (previewEmitter && !previewEmitter->groupName.empty()) {
-                preview += " : " + previewEmitter->groupName;
-            }
+            std::string preview = BuildParticleEmitterDisplayLabel(previewEmitter, selectedEmitterIndex_); // コンボの現在表示名
 
             if (ImGui::BeginCombo("CPU Emitter Target", preview.c_str())) {
                 for (int emitterIndex = 0; emitterIndex < emitterCount; ++emitterIndex) {
                     ParticleEmitter* emitter = (*ctx.particleEmitters)[emitterIndex]; // 表示名を作るエミッター
-                    std::string label = "Emitter " + std::to_string(emitterIndex); // 選択候補名
-                    if (emitter && !emitter->groupName.empty()) {
-                        label += " : " + emitter->groupName;
-                    }
+                    std::string label = BuildParticleEmitterDisplayLabel(emitter, emitterIndex); // 選択候補の表示名
                     const bool isSelected = selectedEmitterIndex_ == emitterIndex; // 現在選択中か
                     if (ImGui::Selectable(label.c_str(), isSelected)) {
                         selectedEmitterIndex_ = emitterIndex;
@@ -2238,6 +2278,11 @@ void ImGuiManager::NotifyObjectDeleted(size_t /*deletedObjectIndex*/, size_t /*r
 /// ImGui無効時のスプライト削除通知を受け取る。
 /// </summary>
 void ImGuiManager::NotifySpriteDeleted(size_t /*deletedSpriteIndex*/, size_t /*remainingSpriteCount*/) { }
+
+/// <summary>
+/// ImGui無効時のパーティクルエミッター削除通知を受け取る。
+/// </summary>
+void ImGuiManager::NotifyParticleEmitterDeleted(size_t /*deletedEmitterIndex*/, size_t /*remainingEmitterCount*/) { }
 
 bool ImGuiManager::IsCapturingInput() { return false; }
 

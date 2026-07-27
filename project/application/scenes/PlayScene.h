@@ -480,6 +480,11 @@ private:
     void RebuildSpritePointerView();
 
     /// <summary>
+    /// 所有中のパーティクルエミッターから参照用ビューを作り直す。
+    /// </summary>
+    void RebuildParticleEmitterPointerView();
+
+    /// <summary>
     /// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
     /// </summary>
     uint32_t IssueObjectId();
@@ -488,6 +493,11 @@ private:
     /// 次に生成するスプライトへ割り当てるIDを取得する。
     /// </summary>
     uint32_t IssueSpriteId();
+
+    /// <summary>
+    /// 次に生成するパーティクルエミッターへ割り当てるIDを取得する。
+    /// </summary>
+    uint32_t IssueParticleEmitterId();
 
     /// <summary>
     /// 3D空間とパーティクルを描画する
@@ -523,6 +533,8 @@ private: // メンバー変数
     ParticleEmitter pmEmitter_;
     ParticleEmitter ringEmitter_;
     ParticleEmitter cylinderEmitter_;
+    std::vector<ParticleEmitter*> particleEmitterPointerView_; // ImGuiなど外部参照用のパーティクルエミッター一覧
+    uint32_t nextParticleEmitterId_ = 1; // 次に生成するパーティクルエミッターへ割り当てるID
     std::unique_ptr<MyEngine::SkyBox> skybox_;
     std::vector<std::unique_ptr<MyEngine::Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像スプライト
     std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalSprites_; // 時間逆行用パーティクルの表示スプライト

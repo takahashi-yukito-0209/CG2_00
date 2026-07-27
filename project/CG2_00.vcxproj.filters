@@ -228,6 +228,15 @@
     <ClCompile Include="engine\particle\ParticleManager.cpp">
       <Filter>ソース ファイル\engine\particle</Filter>
     </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerGpuEmitterSettings.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerGpu.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerImGui.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
     <ClCompile Include="engine\utility\ResourceResolver.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>

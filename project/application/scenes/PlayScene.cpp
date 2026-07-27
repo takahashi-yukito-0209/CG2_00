@@ -408,9 +408,15 @@ void PlayScene::InitializeCylinderParticleEmitter()
 /// </summary>
 void PlayScene::InitializeParticleEmitters()
 {
+    nextParticleEmitterId_ = 1;
+    pmEmitter_.SetEmitterId(IssueParticleEmitterId());
+    ringEmitter_.SetEmitterId(IssueParticleEmitterId());
+    cylinderEmitter_.SetEmitterId(IssueParticleEmitterId());
+
     InitializeHitParticleEmitter();
     InitializeRingParticleEmitter();
     InitializeCylinderParticleEmitter();
+    RebuildParticleEmitterPointerView();
 }
 
 /// <summary>
@@ -835,6 +841,8 @@ void PlayScene::ReleaseSceneObjects()
     objects3d_.clear();
     objectPointerView_.clear();
     nextObjectId_ = 1;
+    particleEmitterPointerView_.clear();
+    nextParticleEmitterId_ = 1;
     temporalAfterimageSprites_.clear();
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
@@ -1081,6 +1089,18 @@ void PlayScene::RebuildObjectPointerView()
 }
 
 /// <summary>
+/// 所有中のパーティクルエミッターから参照用ビューを作り直す。
+/// </summary>
+void PlayScene::RebuildParticleEmitterPointerView()
+{
+    particleEmitterPointerView_.clear();
+    particleEmitterPointerView_.reserve(3);
+    particleEmitterPointerView_.push_back(&pmEmitter_);
+    particleEmitterPointerView_.push_back(&ringEmitter_);
+    particleEmitterPointerView_.push_back(&cylinderEmitter_);
+}
+
+/// <summary>
 /// 次に生成するスプライトへ割り当てるIDを取得する。
 /// </summary>
 uint32_t PlayScene::IssueSpriteId()
@@ -1098,6 +1118,16 @@ uint32_t PlayScene::IssueObjectId()
     const uint32_t issuedObjectId = nextObjectId_; // 今回割り当てる3DオブジェクトID
     nextObjectId_++;
     return issuedObjectId;
+}
+
+/// <summary>
+/// 次に生成するパーティクルエミッターへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueParticleEmitterId()
+{
+    const uint32_t issuedEmitterId = nextParticleEmitterId_; // 今回割り当てるパーティクルエミッターID
+    nextParticleEmitterId_++;
+    return issuedEmitterId;
 }
 
 /// <summary>
@@ -1123,11 +1153,11 @@ void PlayScene::FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out
     if (!out) {
         return;
     }
+
+    RebuildParticleEmitterPointerView();
     out->clear();
-    out->reserve(3);
-    out->push_back(&pmEmitter_);
-    out->push_back(&ringEmitter_);
-    out->push_back(&cylinderEmitter_);
+    out->reserve(particleEmitterPointerView_.size());
+    out->insert(out->end(), particleEmitterPointerView_.begin(), particleEmitterPointerView_.end());
 }
 
 /// <summary>

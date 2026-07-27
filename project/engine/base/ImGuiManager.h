@@ -104,6 +104,11 @@ public: // メンバ関数
     /// </summary>
     void NotifySpriteDeleted(size_t deletedSpriteIndex, size_t remainingSpriteCount);
 
+    /// <summary>
+    /// パーティクルエミッター削除後の選択状態を補正する。
+    /// </summary>
+    void NotifyParticleEmitterDeleted(size_t deletedEmitterIndex, size_t remainingEmitterCount);
+
 private: // メンバ関数
     /// <summary>
     /// シーン描画結果をScene Viewウィンドウへ表示する

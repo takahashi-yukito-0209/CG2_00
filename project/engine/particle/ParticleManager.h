@@ -398,6 +398,16 @@ private:
     void FinalizeGpuParticleResources();
 
     /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
+
+    /// <summary>
+    /// 指定フレームのGPU Particle用リソースを解放予約する。
+    /// </summary>
+    void ReleaseGpuParticleFrameResources(uint32_t frameIndex);
+
+    /// <summary>
     /// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
     /// </summary>
     uint32_t UploadGpuParticleSource(const ParticleGroup& group, uint32_t count, const Math::Matrix4x4& view, const Math::Matrix4x4& projection);
@@ -582,8 +592,3 @@ private:
 };
 
 } // namespace MyEngine
-
-
-
-
-

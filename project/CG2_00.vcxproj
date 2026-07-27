@@ -176,6 +176,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\particle\ParticleEmitter.cpp" />
     <ClCompile Include="engine\particle\GpuEmitterSettingsUtility.cpp" />
     <ClCompile Include="engine\particle\ParticleManager.cpp" />
+    <ClCompile Include="engine\particle\ParticleManagerGpuEmitterSettings.cpp" />
+    <ClCompile Include="engine\particle\ParticleManagerGpu.cpp" />
+    <ClCompile Include="engine\particle\ParticleManagerImGui.cpp" />
     <ClCompile Include="engine\sound\Sound.cpp" />
     <ClCompile Include="engine\utility\CollisionUtility.cpp" />
     <ClCompile Include="engine\utility\Easing.cpp" />
