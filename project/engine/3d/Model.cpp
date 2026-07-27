@@ -64,7 +64,7 @@ void Model::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resourc
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_ ? modelCommon_->GetDxCommon() : nullptr; // 遅延解放を管理するDirectX共通処理
+    DirectXCommon* dxCommon = dxCommon_; // 遅延解放を管理するDirectX共通処理
     if (dxCommon) {
         dxCommon->DeferReleaseResource(resource);
         return;
@@ -276,9 +276,9 @@ void Model::Draw(Object3d* owner)
     DirectXCommon* dxCommon = nullptr;
     if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
         dxCommon = owner->GetObject3dCommon()->GetDxCommon();
-    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
-        // フォールバック: モデル初期化時に渡された ModelCommon を使う
-        dxCommon = modelCommon_->GetDxCommon();
+    } else if (dxCommon_) {
+        // フォールバック: モデル初期化時に保持したDirectXCommonを使う
+        dxCommon = dxCommon_;
     }
 
     // DirectXCommon が取得できない場合は描画できない
@@ -381,9 +381,9 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
         // オーナーの Object3dCommon から DirectXCommon を取得
         dxCommon = owner->GetObject3dCommon()->GetDxCommon();
-    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
-        // フォールバック: モデル初期化時に渡された ModelCommon から DirectXCommon を取得
-        dxCommon = modelCommon_->GetDxCommon();
+    } else if (dxCommon_) {
+        // フォールバック: モデル初期化時に保持したDirectXCommonを使う
+        dxCommon = dxCommon_;
     }
 
     // DirectXCommon が取得できない場合は描画できない
@@ -475,11 +475,11 @@ void Model::CreateVertexBuffer()
     DeferReleaseResource(vertexResource_);
     vertexBufferView_ = {};
 
-    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.vertices.empty()) {
+    if (!dxCommon_ || modelData_.vertices.empty()) {
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t vertexBufferSize = sizeof(Object3d::VertexData) * modelData_.vertices.size(); // 頂点バッファサイズ
     vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
 
@@ -503,11 +503,11 @@ void Model::CreateIndexBuffer()
     DeferReleaseResource(indexResource_);
     indexBufferView_ = {};
 
-    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.indices.empty()) {
+    if (!dxCommon_ || modelData_.indices.empty()) {
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t indexBufferSize = sizeof(uint32_t) * modelData_.indices.size(); // Indexバッファサイズ
     indexResource_ = dxCommon->CreateBufferResource(indexBufferSize);
 
@@ -529,14 +529,14 @@ void Model::CreateVertexInfluenceBuffer()
     DeferReleaseResource(vertexInfluenceResource_);
     vertexInfluenceBufferView_ = {};
 
-    if (!modelCommon_ || !modelCommon_->GetDxCommon()) {
+    if (!dxCommon_) {
         return;
     }
     if (modelData_.vertexInfluences.empty() || modelData_.vertexInfluences.size() != modelData_.vertices.size()) {
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t bufferSize = sizeof(Object3d::VertexInfluence) * modelData_.vertexInfluences.size(); // 影響情報バッファサイズ
     vertexInfluenceResource_ = dxCommon->CreateBufferResource(bufferSize);
 
@@ -574,7 +574,7 @@ void Model::InitializeModelResources()
 /// </summary>
 void Model::Initialize(ModelCommon* modelCommon)
 {
-    modelCommon_ = modelCommon;
+    dxCommon_ = modelCommon ? modelCommon->GetDxCommon() : nullptr;
     // 前提条件のチェック
     if (modelData_.vertices.empty()) {
         return;

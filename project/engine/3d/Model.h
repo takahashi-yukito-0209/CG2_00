@@ -8,6 +8,7 @@
 namespace MyEngine {
 
 // 前方宣言
+class DirectXCommon;
 class ModelCommon;
 class Object3d;
 
@@ -132,8 +133,8 @@ private: // メンバ変数
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
 
 
-    // モデル共通情報へのポインタ
-    ModelCommon* modelCommon_ = nullptr;
+    // GPUリソース生成と遅延解放に使うDirectX共通処理
+    DirectXCommon* dxCommon_ = nullptr;
 
     // 読み込んだモデルの構造データ
     Object3d::ModelData modelData_;

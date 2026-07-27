@@ -660,8 +660,6 @@ void Game::Finalize()
     impl_->initialized = false;
     impl_->endRequested = true;
 
-    CloseWindow(impl_->hwnd);
-
     if (impl_->sceneManager) {
         impl_->sceneManager->Finalize();
         impl_->sceneManager.reset();
@@ -680,7 +678,12 @@ void Game::Finalize()
     impl_->imguiManager.Shutdown();
 
     impl_->debugRenderer.reset();
+
     impl_->spriteCommon.reset();
+
+    // ModelのGPUリソースを解放予約できるよう、DirectXCommon破棄より先にモデルキャッシュを破棄する
+    ModelManager::GetInstance()->Finalize();
+
     if (impl_->object3dCommon) {
         impl_->object3dCommon->Finalize();
         impl_->object3dCommon.reset();
@@ -691,8 +694,6 @@ void Game::Finalize()
     DirectXCommon::GetInstance()->DestroyAllRenderTargets();
 
     impl_->srvManager.Finalize();
-
-    ModelManager::GetInstance()->Finalize();
 
     DirectXCommon::GetInstance()->Finalize();
 
@@ -705,7 +706,6 @@ void Game::Finalize()
 
     Framework::Finalize();
 }
-
 /// <summary>
 /// 終了要求が出ているかを返す。
 /// </summary>
