@@ -252,6 +252,9 @@
     <ClCompile Include="engine\base\ImGuiManagerGizmo.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManagerPostProcess.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="engine\base\ImGuiManagerSections.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
@@ -295,6 +298,12 @@
       <Filter>ソース ファイル\engine\debug</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\PostProcess.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\PostProcessPipeline.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\PostProcessSettings.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
   </ItemGroup>
@@ -548,6 +557,12 @@
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\PostProcess.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcessPipeline.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcessSettings.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
   </ItemGroup>
