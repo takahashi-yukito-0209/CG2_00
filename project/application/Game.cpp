@@ -376,6 +376,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     InitializeCameraAndLighting();
     InitializeDebugToolsAndSound();
 
+    ParticleManager::GetInstance()->Initialize(
+        DirectXCommon::GetInstance(),
+        impl_->object3dCommon.get(),
+        &impl_->srvManager,
+        TextureManager::GetInstance(),
+        &impl_->imguiManager);
+
     impl_->initialized = true;
     impl_->endRequested = false;
 

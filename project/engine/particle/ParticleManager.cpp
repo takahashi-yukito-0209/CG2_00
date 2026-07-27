@@ -108,15 +108,31 @@ void AppendCpuParticles(std::vector<PM_CpuParticle>& particles, const CpuParticl
 /// </summary>
 void ParticleManager::Initialize(DirectXCommon* dx, Object3dCommon* objCommon, SrvManager* srv, TextureManager* texMgr, ImGuiManager* imguiManager)
 {
+    if (gpuParticleReady_) {
+        FinalizeGpuParticleResources();
+    }
+
     dxCommon_ = dx;
     object3dCommon_ = objCommon;
     srvManager_ = srv;
     texManager_ = texMgr;
     imguiManager_ = imguiManager;
+    ClearSceneParticles();
+    InitializeGpuParticleResources();
+}
+
+/// <summary>
+/// シーンが登録したパーティクル状態と描画参照をクリアする。
+/// </summary>
+void ParticleManager::ClearSceneParticles()
+{
+    particleGroups_.clear();
+    instancingLimitWarnedGroups_.clear();
+    totalParticleCount_ = 0;
     ClearGpuEmitterRuntimeParticleState();
     gpuEmitterManualEmitRequested_ = false;
     gpuEmitterState_.emit = 0;
-    InitializeGpuParticleResources();
+    particlePlane_ = nullptr;
 }
 
 /// <summary>
@@ -128,12 +144,7 @@ void ParticleManager::Finalize()
         dxCommon_->WaitForCommandExecution();
     }
 
-    particleGroups_.clear();
-    instancingLimitWarnedGroups_.clear();
-    totalParticleCount_ = 0;
-    ClearGpuEmitterRuntimeParticleState();
-    gpuEmitterManualEmitRequested_ = false;
-    gpuEmitterState_.emit = 0;
+    ClearSceneParticles();
     FinalizeGpuParticleResources();
 
     dxCommon_ = nullptr;

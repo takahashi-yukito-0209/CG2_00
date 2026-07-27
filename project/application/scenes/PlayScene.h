@@ -267,9 +267,9 @@ private:
     void FinalizePostProcessTargets();
 
     /// <summary>
-    /// ParticleManagerを解放する。
+    /// シーンで登録したParticleManagerの状態をクリアする。
     /// </summary>
-    void FinalizeParticleManager();
+    void ClearSceneParticles();
 
     /// <summary>
     /// シーンが保持している表示用オブジェクトを解放する。

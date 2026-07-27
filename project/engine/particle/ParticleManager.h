@@ -125,6 +125,11 @@ public:
     void Finalize();
 
     /// <summary>
+    /// シーンが登録したパーティクル状態と描画参照をクリアする。
+    /// </summary>
+    void ClearSceneParticles();
+
+    /// <summary>
     /// 既定の描画Primitiveを設定する
     /// </summary>
     void SetParticlePlane(Object3d* plane);

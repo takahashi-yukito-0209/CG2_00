@@ -75,12 +75,11 @@ void TitleScene::Initialize(const SceneContext& ctx)
     }
 
     ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
+    if (!particleManager) {
         particleManager = ParticleManager::GetInstance();
     }
 
     if (particleManager) {
-        particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
         particleManager->SetParticlePlane(particlePlane_.get());
         particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
         particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
@@ -94,12 +93,12 @@ void TitleScene::Finalize()
 {
     std::cout << "TitleScene Finalize\n";
 
-    ParticleManager* particleManager = ctx_.particleManager; // タイトルで登録したパーティクル管理
-        if (!particleManager) {
+    ParticleManager* particleManager = ctx_.particleManager; // タイトルで登録したパーティクル状態をクリアする管理
+    if (!particleManager) {
         particleManager = ParticleManager::GetInstance();
     }
     if (particleManager) {
-        particleManager->Finalize();
+        particleManager->ClearSceneParticles();
     }
 
     sceneRenderTarget_.Finalize();
@@ -117,7 +116,7 @@ void TitleScene::Finalize()
 void TitleScene::Update(float dt)
 {
     ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
+    if (!particleManager) {
         particleManager = ParticleManager::GetInstance();
     }
     if (particleManager) {

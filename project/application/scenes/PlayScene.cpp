@@ -353,7 +353,6 @@ void PlayScene::InitializeParticleManager()
         return;
     }
 
-    particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
     particleManager->SetParticlePlane(particlePlane_.get());
     particleManager->CreateParticleGroup(kCircleParticleGroupName, kCircleTextureName);
     particleManager->CreateParticleGroup(kCheckerParticleGroupName, kUvCheckerTextureName);
@@ -820,13 +819,13 @@ void PlayScene::FinalizePostProcessTargets()
 }
 
 /// <summary>
-/// ParticleManagerを解放する。
+/// シーンで登録したParticleManagerの状態をクリアする。
 /// </summary>
-void PlayScene::FinalizeParticleManager()
+void PlayScene::ClearSceneParticles()
 {
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // 解放対象のパーティクル管理
+    ParticleManager* particleManager = ParticleManager::GetInstance(); // シーン登録状態をクリアするパーティクル管理
     if (particleManager) {
-        particleManager->Finalize();
+        particleManager->ClearSceneParticles();
     }
 }
 
@@ -884,7 +883,7 @@ void PlayScene::Finalize()
     StopCameraShake();
 
     FinalizePostProcessTargets();
-    FinalizeParticleManager();
+    ClearSceneParticles();
     ReleaseSceneObjects();
     timeReversalEffect_.ResetState();
     ReleaseParticleObjects();
