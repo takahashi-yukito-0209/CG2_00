@@ -41,6 +41,25 @@ constexpr float kRandomScaleMin = 1.0f; // ランダムエフェクトスケー�
 constexpr float kRandomScaleMax = 2000.0f; // ランダムエフェクトスケールの最大値
 constexpr float kRandomSpeedMax = 20.0f; // ランダムエフェクト速度の最大値
 constexpr float kPositiveDeltaTimeMin = 0.0f; // 時間更新を行う最小デルタ時間
+
+/// <summary>
+/// float値を32bitルート定数へ渡すビット表現へ変換する。
+/// </summary>
+uint32_t ConvertFloatToRootConstant(float value)
+{
+    uint32_t bits = 0; // float値のビット表現
+    std::memcpy(&bits, &value, sizeof(float));
+    return bits;
+}
+
+/// <summary>
+/// float値を指定した位置のルート定数へ書き込む。
+/// </summary>
+void WriteFloatRootConstant(uint32_t* constants, uint32_t index, float value)
+{
+    constants[index] = ConvertFloatToRootConstant(value);
+}
+
 } // namespace
 
 /// <summary>
@@ -330,7 +349,75 @@ ID3D12PipelineState* PostProcess::GetPipelineState(
 }
 
 /// <summary>
-/// 指定したポストエフェクトでテクスチャを描画する
+/// 通常の1passポストエフェクト用ルート定数を作成する。
+/// </summary>
+PostProcess::RootConstantData PostProcess::BuildTextureRootConstants(PostEffectType effectType) const
+{
+    RootConstantData filterSettings {}; // 通常の1passエフェクト用設定
+    filterSettings[0] = boxFilterKernelSize_;
+    filterSettings[2] = ConvertFloatToRootConstant(gaussianSigma_);
+    WriteFloatRootConstant(filterSettings.data(), 3, outlineStrength_);
+    std::memcpy(&filterSettings[4], &radialBlurCenter_, sizeof(Math::Vector2));
+    WriteFloatRootConstant(filterSettings.data(), 6, radialBlurWidth_);
+    filterSettings[7] = radialBlurSampleCount_;
+    WriteFloatRootConstant(filterSettings.data(), 8, dissolveThreshold_);
+    WriteFloatRootConstant(filterSettings.data(), 9, dissolveEdgeWidth_);
+    std::memcpy(&filterSettings[12], &dissolveEdgeColor_, sizeof(Math::Vector3));
+    WriteFloatRootConstant(filterSettings.data(), 16, randomTime_);
+    WriteFloatRootConstant(filterSettings.data(), 17, randomStrength_);
+    WriteFloatRootConstant(filterSettings.data(), 18, randomScale_);
+
+    if (effectType == PostEffectType::Distortion) {
+        std::memcpy(&filterSettings[4], &distortionCenter_, sizeof(Math::Vector2));
+        WriteFloatRootConstant(filterSettings.data(), 6, distortionStrength_);
+        WriteFloatRootConstant(filterSettings.data(), 8, distortionRadius_);
+        WriteFloatRootConstant(filterSettings.data(), 9, distortionWaveCount_);
+        WriteFloatRootConstant(filterSettings.data(), 10, distortionProgress_);
+    }
+
+    return filterSettings;
+}
+
+/// <summary>
+/// Gaussian Filter用ルート定数を作成する。
+/// </summary>
+PostProcess::RootConstantData PostProcess::BuildGaussianRootConstants(uint32_t direction) const
+{
+    RootConstantData filterSettings {}; // Gaussian Filter用設定
+    filterSettings[0] = gaussianKernelSize_;
+    filterSettings[1] = direction;
+    filterSettings[2] = ConvertFloatToRootConstant(gaussianSigma_);
+    return filterSettings;
+}
+
+/// <summary>
+/// Dissolve用ルート定数を作成する。
+/// </summary>
+PostProcess::RootConstantData PostProcess::BuildDissolveRootConstants() const
+{
+    RootConstantData dissolveSettings {}; // Dissolve用ルート定数
+    WriteFloatRootConstant(dissolveSettings.data(), 8, dissolveThreshold_);
+    WriteFloatRootConstant(dissolveSettings.data(), 9, dissolveEdgeWidth_);
+    std::memcpy(&dissolveSettings[12], &dissolveEdgeColor_, sizeof(Math::Vector3));
+    return dissolveSettings;
+}
+
+/// <summary>
+/// Depth Outline用ルート定数を作成する。
+/// </summary>
+PostProcess::RootConstantData PostProcess::BuildDepthOutlineRootConstants(const Math::Matrix4x4& projectionMatrix) const
+{
+    RootConstantData outlineSettings {}; // Outline用ルート定数
+    Math::Matrix4x4 projectionInverse = MathUtil::Inverse(projectionMatrix); // View空間復元用の逆射影行列
+    WriteFloatRootConstant(outlineSettings.data(), 3, outlineStrength_);
+    WriteFloatRootConstant(outlineSettings.data(), 0, depthOutlineThreshold_);
+    WriteFloatRootConstant(outlineSettings.data(), 1, depthOutlineSoftness_);
+    std::memcpy(&outlineSettings[4], &projectionInverse, sizeof(Math::Matrix4x4));
+    return outlineSettings;
+}
+
+/// <summary>
+/// 指定したポストエフェクトでテクスチャを描画する。
 /// </summary>
 void PostProcess::DrawTexture(
     uint32_t srvIndex,
@@ -355,74 +442,11 @@ void PostProcess::DrawTexture(
     commandList->SetPipelineState(pipelineState);
     commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
-    uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
-    std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
-    uint32_t filterSettings[20] = {}; // 通常の1パスエフェクト用設定
-    filterSettings[0] = boxFilterKernelSize_;
-    filterSettings[2] = sigmaBits;
-    std::memcpy(
-        &filterSettings[3],
-        &outlineStrength_,
-        sizeof(float));
-    std::memcpy(
-        &filterSettings[4],
-        &radialBlurCenter_,
-        sizeof(Math::Vector2));
-    std::memcpy(
-        &filterSettings[6],
-        &radialBlurWidth_,
-        sizeof(float));
-    filterSettings[7] = radialBlurSampleCount_;
-    std::memcpy(
-        &filterSettings[8],
-        &dissolveThreshold_,
-        sizeof(float));
-    std::memcpy(
-        &filterSettings[9],
-        &dissolveEdgeWidth_,
-        sizeof(float));
-    std::memcpy(
-        &filterSettings[12],
-        &dissolveEdgeColor_,
-        sizeof(Math::Vector3));
-    std::memcpy(
-        &filterSettings[16],
-        &randomTime_,
-        sizeof(float));
-    std::memcpy(
-        &filterSettings[17],
-        &randomStrength_,
-        sizeof(float));
-    std::memcpy(
-        &filterSettings[18],
-        &randomScale_,
-        sizeof(float));
-    if (effectType == PostEffectType::Distortion) {
-        std::memcpy(
-            &filterSettings[4],
-            &distortionCenter_,
-            sizeof(Math::Vector2));
-        std::memcpy(
-            &filterSettings[6],
-            &distortionStrength_,
-            sizeof(float));
-        std::memcpy(
-            &filterSettings[8],
-            &distortionRadius_,
-            sizeof(float));
-        std::memcpy(
-            &filterSettings[9],
-            &distortionWaveCount_,
-            sizeof(float));
-        std::memcpy(
-            &filterSettings[10],
-            &distortionProgress_,
-            sizeof(float));
-    }
+    const RootConstantData filterSettings = BuildTextureRootConstants(effectType); // 通常の1passエフェクト用設定
     commandList->SetGraphicsRoot32BitConstants(
         2,
-        _countof(filterSettings),
-        filterSettings,
+        static_cast<UINT>(filterSettings.size()),
+        filterSettings.data(),
         0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -475,12 +499,7 @@ void PostProcess::DrawGaussianPass(uint32_t srvIndex, uint32_t direction)
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
 
-    uint32_t sigmaBits = 0; // ルート定数へ渡す標準偏差のビット表現
-    std::memcpy(&sigmaBits, &gaussianSigma_, sizeof(float));
-    uint32_t filterSettings[20] = {}; // Gaussian Filter用設定
-    filterSettings[0] = gaussianKernelSize_;
-    filterSettings[1] = direction;
-    filterSettings[2] = sigmaBits;
+    const RootConstantData filterSettings = BuildGaussianRootConstants(direction); // Gaussian Filter用設定
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(gaussianFilterPipelineState_.Get());
@@ -488,8 +507,8 @@ void PostProcess::DrawGaussianPass(uint32_t srvIndex, uint32_t direction)
     commandList->SetGraphicsRootDescriptorTable(0, srvHandle);
     commandList->SetGraphicsRoot32BitConstants(
         2,
-        _countof(filterSettings),
-        filterSettings,
+        static_cast<UINT>(filterSettings.size()),
+        filterSettings.data(),
         0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -663,19 +682,7 @@ void PostProcess::DrawDissolveTexture(
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
 
-    uint32_t dissolveSettings[20] = {}; // Dissolve用ルート定数
-    std::memcpy(
-        &dissolveSettings[8],
-        &dissolveThreshold_,
-        sizeof(float));
-    std::memcpy(
-        &dissolveSettings[9],
-        &dissolveEdgeWidth_,
-        sizeof(float));
-    std::memcpy(
-        &dissolveSettings[12],
-        &dissolveEdgeColor_,
-        sizeof(Math::Vector3));
+    const RootConstantData dissolveSettings = BuildDissolveRootConstants(); // Dissolve用ルート定数
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(dissolvePipelineState_.Get());
@@ -684,8 +691,8 @@ void PostProcess::DrawDissolveTexture(
     commandList->SetGraphicsRootDescriptorTable(1, maskSrvHandle);
     commandList->SetGraphicsRoot32BitConstants(
         2,
-        _countof(dissolveSettings),
-        dissolveSettings,
+        static_cast<UINT>(dissolveSettings.size()),
+        dissolveSettings.data(),
         0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -751,24 +758,7 @@ void PostProcess::DrawDepthOutline(
         dxCommon_->GetSrvDescriptorHeap()
     }; // 描画で使用するSRVヒープ
 
-    Math::Matrix4x4 projectionInverse = MathUtil::Inverse(projectionMatrix); // View空間復元用の逆射影行列
-    uint32_t outlineSettings[20] = {}; // Outline用ルート定数
-    std::memcpy(
-        &outlineSettings[3],
-        &outlineStrength_,
-        sizeof(float));
-    std::memcpy(
-        &outlineSettings[0],
-        &depthOutlineThreshold_,
-        sizeof(float));
-    std::memcpy(
-        &outlineSettings[1],
-        &depthOutlineSoftness_,
-        sizeof(float));
-    std::memcpy(
-        &outlineSettings[4],
-        &projectionInverse,
-        sizeof(Math::Matrix4x4));
+    const RootConstantData outlineSettings = BuildDepthOutlineRootConstants(projectionMatrix); // Outline用ルート定数
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(depthOutlinePipelineState_.Get());
@@ -777,8 +767,8 @@ void PostProcess::DrawDepthOutline(
     commandList->SetGraphicsRootDescriptorTable(1, depthSrvHandle);
     commandList->SetGraphicsRoot32BitConstants(
         2,
-        _countof(outlineSettings),
-        outlineSettings,
+        static_cast<UINT>(outlineSettings.size()),
+        outlineSettings.data(),
         0);
     commandList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -795,22 +785,33 @@ void PostProcess::DrawTexture(uint32_t srvIndex)
     DrawTexture(srvIndex, drawEffectType);
 }
 
-
+/// <summary>
+/// RenderTargetのカラーSRVを指定したポストエフェクトで描画する。
+/// </summary>
 void PostProcess::DrawTexture(const RenderTarget& sourceRenderTarget, PostEffectType effectType)
 {
     DrawTexture(sourceRenderTarget.GetColorSrvIndex(), effectType);
 }
 
+/// <summary>
+/// RenderTargetのカラーSRVを現在のポストエフェクトで描画する。
+/// </summary>
 void PostProcess::DrawTexture(const RenderTarget& sourceRenderTarget)
 {
     DrawTexture(sourceRenderTarget.GetColorSrvIndex());
 }
 
+/// <summary>
+/// RenderTargetのカラーSRVからGaussian Filterの1方向分を描画する。
+/// </summary>
 void PostProcess::DrawGaussianPass(const RenderTarget& sourceRenderTarget, uint32_t direction)
 {
     DrawGaussianPass(sourceRenderTarget.GetColorSrvIndex(), direction);
 }
 
+/// <summary>
+/// RenderTargetを中間描画先として分離型Gaussian Filterを描画する。
+/// </summary>
 void PostProcess::DrawGaussianTexture(uint32_t sourceSrvIndex, RenderTarget& intermediateRenderTarget)
 {
     if (!enabled_) {
@@ -825,6 +826,9 @@ void PostProcess::DrawGaussianTexture(uint32_t sourceSrvIndex, RenderTarget& int
     DrawGaussianPass(intermediateRenderTarget.GetColorSrvIndex(), 1);
 }
 
+/// <summary>
+/// RenderTargetの深度SRVを使用してOutlineを描画する。
+/// </summary>
 void PostProcess::DrawDepthOutline(
     uint32_t colorSrvIndex,
     const RenderTarget& depthSourceRenderTarget,
@@ -833,6 +837,9 @@ void PostProcess::DrawDepthOutline(
     DrawDepthOutline(colorSrvIndex, depthSourceRenderTarget.GetDepthSrvIndex(), projectionMatrix);
 }
 
+/// <summary>
+/// RenderTargetのカラーSRVとノイズマスクを使用してDissolveを描画する。
+/// </summary>
 void PostProcess::DrawDissolveTexture(
     const RenderTarget& sourceRenderTarget,
     uint32_t maskSrvIndex)

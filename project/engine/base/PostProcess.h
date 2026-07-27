@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MathTypes.h>
+#include <array>
 #include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
@@ -448,6 +449,28 @@ public:
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
 
 private:
+    using RootConstantData = std::array<uint32_t, 20>; // ポストエフェクト用ルート定数データ
+
+    /// <summary>
+    /// 通常の1passポストエフェクト用ルート定数を作成する
+    /// </summary>
+    RootConstantData BuildTextureRootConstants(PostEffectType effectType) const;
+
+    /// <summary>
+    /// Gaussian Filter用ルート定数を作成する
+    /// </summary>
+    RootConstantData BuildGaussianRootConstants(uint32_t direction) const;
+
+    /// <summary>
+    /// Dissolve用ルート定数を作成する
+    /// </summary>
+    RootConstantData BuildDissolveRootConstants() const;
+
+    /// <summary>
+    /// Depth Outline用ルート定数を作成する
+    /// </summary>
+    RootConstantData BuildDepthOutlineRootConstants(const Math::Matrix4x4& projectionMatrix) const;
+
     /// <summary>
     /// 全画面描画用のルートシグネチャを生成する
     /// </summary>
