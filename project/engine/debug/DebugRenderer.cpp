@@ -40,6 +40,60 @@ Math::Vector2 MakeVector2(float x, float y)
 } // namespace
 
 /// <summary>
+/// デストラクタ。
+/// </summary>
+DebugRenderer::~DebugRenderer()
+{
+    Finalize();
+}
+
+/// <summary>
+/// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+/// </summary>
+void DebugRenderer::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    if (dxCommon_) {
+        dxCommon_->DeferReleaseResource(resource);
+        return;
+    }
+
+    resource.Reset();
+}
+
+/// <summary>
+/// GPUリソースを解放する。
+/// </summary>
+void DebugRenderer::Finalize()
+{
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (vertexResources_[frameIndex] && mappedVertexData_[frameIndex]) {
+            vertexResources_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedVertexData_[frameIndex] = nullptr;
+        DeferReleaseResource(vertexResources_[frameIndex]);
+
+        if (transformationResources_[frameIndex] && mappedTransformationData_[frameIndex]) {
+            transformationResources_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedTransformationData_[frameIndex] = nullptr;
+        DeferReleaseResource(transformationResources_[frameIndex]);
+    }
+
+    rootSignature_.Reset();
+    pipelineState_.Reset();
+    pipelineStateNoDepth_.Reset();
+    vertexBufferView_ = {};
+    vertexCapacity_ = 0;
+    lineVertices3D_.clear();
+    lineVertices2D_.clear();
+    dxCommon_ = nullptr;
+}
+
+/// <summary>
 /// デバッグライン描画に必要な GPU リソースを初期化する。
 /// </summary>
 void DebugRenderer::Initialize(DirectXCommon* dxCommon)
@@ -336,8 +390,11 @@ void DebugRenderer::EnsureVertexCapacity(size_t vertexCount)
     }
 
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (vertexResources_[frameIndex] && mappedVertexData_[frameIndex]) {
+            vertexResources_[frameIndex]->Unmap(0, nullptr);
+        }
         mappedVertexData_[frameIndex] = nullptr;
-        vertexResources_[frameIndex].Reset();
+        DeferReleaseResource(vertexResources_[frameIndex]);
         vertexResources_[frameIndex] = dxCommon_->CreateBufferResource(sizeof(VertexData) * newCapacity);
         HRESULT hr = vertexResources_[frameIndex]->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData_[frameIndex])); // 頂点バッファのマップ結果
         if (FAILED(hr)) {

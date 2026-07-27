@@ -19,6 +19,11 @@ class Sprite;
 class DebugRenderer {
 public:
     /// <summary>
+    /// デストラクタ。
+    /// </summary>
+    ~DebugRenderer();
+
+    /// <summary>
     /// デバッグライン描画に必要な GPU リソースを初期化する。
     /// </summary>
     void Initialize(DirectXCommon* dxCommon);
@@ -93,6 +98,16 @@ private:
     /// </summary>
     void CreateGraphicsPipeline();
     void CreateGraphicsPipeline(bool enableDepth, Microsoft::WRL::ComPtr<ID3D12PipelineState>& pipelineState);
+
+    /// <summary>
+    /// GPUリソースを解放する。
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
 
     /// <summary>
     /// 必要な頂点数に合わせて頂点バッファを拡張する。

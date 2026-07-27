@@ -48,6 +48,47 @@ uint32_t ResolveModelMaterialTextureIndex(TextureManager* textureManager, const 
 }
 
 /// <summary>
+/// モデルの終了処理
+/// </summary>
+Model::~Model()
+{
+    FinalizeGpuResources();
+}
+
+/// <summary>
+/// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+/// </summary>
+void Model::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = modelCommon_ ? modelCommon_->GetDxCommon() : nullptr; // 遅延解放を管理するDirectX共通処理
+    if (dxCommon) {
+        dxCommon->DeferReleaseResource(resource);
+        return;
+    }
+
+    resource.Reset();
+}
+
+/// <summary>
+/// モデルが保持するGPUリソースを解放予約する。
+/// </summary>
+void Model::FinalizeGpuResources()
+{
+    DeferReleaseResource(vertexResource_);
+    DeferReleaseResource(intermediateResource_);
+    DeferReleaseResource(indexResource_);
+    DeferReleaseResource(vertexInfluenceResource_);
+
+    vertexBufferView_ = {};
+    indexBufferView_ = {};
+    vertexInfluenceBufferView_ = {};
+}
+
+/// <summary>
 /// Object3d側で明示指定されたテクスチャ番号を取得する。
 /// </summary>
 uint32_t Model::ResolveOwnerTextureOverrideIndex(const Object3d* owner) const
@@ -431,6 +472,13 @@ bool Model::LoadFromFile(const std::string& directoryPath, const std::string& fi
 /// </summary>
 void Model::CreateVertexBuffer()
 {
+    DeferReleaseResource(vertexResource_);
+    vertexBufferView_ = {};
+
+    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.vertices.empty()) {
+        return;
+    }
+
     DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
     const size_t vertexBufferSize = sizeof(Object3d::VertexData) * modelData_.vertices.size(); // 頂点バッファサイズ
     vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
@@ -452,7 +500,7 @@ void Model::CreateVertexBuffer()
 /// </summary>
 void Model::CreateIndexBuffer()
 {
-    indexResource_.Reset();
+    DeferReleaseResource(indexResource_);
     indexBufferView_ = {};
 
     if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.indices.empty()) {
@@ -478,7 +526,7 @@ void Model::CreateIndexBuffer()
 /// </summary>
 void Model::CreateVertexInfluenceBuffer()
 {
-    vertexInfluenceResource_.Reset();
+    DeferReleaseResource(vertexInfluenceResource_);
     vertexInfluenceBufferView_ = {};
 
     if (!modelCommon_ || !modelCommon_->GetDxCommon()) {
@@ -509,6 +557,7 @@ void Model::InitializeModelResources()
 {
     auto textureManager = TextureManager::GetInstance(); // テクスチャ管理
     EnsureFallbackModelTextureLoaded(textureManager);
+    textureIndex_ = UINT32_MAX;
 
     CreateVertexBuffer();
     CreateIndexBuffer();

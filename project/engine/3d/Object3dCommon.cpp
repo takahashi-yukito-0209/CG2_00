@@ -248,6 +248,18 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 /// </summary>
 void Object3dCommon::Finalize()
 {
+    auto releaseMappedResource = [this](Microsoft::WRL::ComPtr<ID3D12Resource>& resource, auto*& mappedData) {
+        if (resource && mappedData) {
+            resource->Unmap(0, nullptr);
+        }
+        mappedData = nullptr;
+        if (dxCommon_) {
+            dxCommon_->DeferReleaseResource(resource);
+            return;
+        }
+        resource.Reset();
+    }; // マップ済みGPUリソースを安全に解放予約する処理
+
     for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
         if (srvManager_ && instancingSrvIndices_[frameIndex] != UINT32_MAX) {
             srvManager_->Free(instancingSrvIndices_[frameIndex]);
@@ -255,11 +267,32 @@ void Object3dCommon::Finalize()
         instancingSrvIndices_[frameIndex] = UINT32_MAX;
         instancingSrvHandlesCPU_[frameIndex] = {};
         instancingSrvHandlesGPU_[frameIndex] = {};
-        instancingData_[frameIndex] = nullptr;
-        instancingResources_[frameIndex].Reset();
+        releaseMappedResource(directionalLightResources_[frameIndex], mappedDirectionalLightData_[frameIndex]);
+        releaseMappedResource(pointLightsResources_[frameIndex], mappedPointLightsData_[frameIndex]);
+        releaseMappedResource(spotLightResources_[frameIndex], mappedSpotLightData_[frameIndex]);
+        releaseMappedResource(cameraResources_[frameIndex], mappedCameraData_[frameIndex]);
+        releaseMappedResource(cameraCBResources_[frameIndex], mappedCameraCBData_[frameIndex]);
+        releaseMappedResource(instancingResources_[frameIndex], instancingData_[frameIndex]);
+        cameraCBWriteIndices_[frameIndex] = 0;
     }
+
+    rootSignature_.Reset();
+    for (auto& pipelineState : graphicsPipelineStates_) {
+        pipelineState.Reset();
+    }
+    for (auto& pipelineState : skinningPipelineStates_) {
+        pipelineState.Reset();
+    }
+    for (auto& pipelineState : skeletonDebugPipelineStates_) {
+        pipelineState.Reset();
+    }
+    instancingPipelineState_.Reset();
+
+    currentCameraCBGpuAddress_ = 0;
+    environmentMapSrvHandleGPU_ = {};
     kNumInstance_ = 0;
     srvManager_ = nullptr;
+    dxCommon_ = nullptr;
 }
 
 void Object3dCommon::SetEnvironmentMapSrvIndex(uint32_t srvIndex)

@@ -17,7 +17,7 @@ class Object3d;
 class Model {
 public: // メンバ関数
     Model() = default; // デフォルトコンストラクタ
-    ~Model() = default; // デストラクタ
+    ~Model(); // デストラクタ
 
     /// <summary>
     /// モデルファイルを読み込み、頂点データとマテリアル情報を初期化する
@@ -95,6 +95,16 @@ private: // メンバ変数
     /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する
     /// </summary>
     void InitializeModelResources();
+
+    /// <summary>
+    /// モデルが保持するGPUリソースを解放予約する
+    /// </summary>
+    void FinalizeGpuResources();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
 
     /// <summary>
     /// モデルの頂点データから頂点バッファを作成する
