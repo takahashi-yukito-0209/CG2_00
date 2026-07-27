@@ -75,6 +75,12 @@ public: // メンバ関数
     /// </summary>
     std::string GetCurrentSceneName() const;
 
+private: // メンバ関数
+    /// <summary>
+    /// シーン破棄前にGPUコマンドの完了を待機する。
+    /// </summary>
+    void WaitForGpuBeforeSceneFinalize();
+
 private: // メンバ変数
     std::unique_ptr<IScene> current_; // 現在のシーン
     // PushSceneで退避した初期化済み・非アクティブ状態のシーン

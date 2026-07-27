@@ -514,6 +514,9 @@ void DirectXCommon::DestroyRenderTarget(int handle)
             srvManager_->Free(rt->depthSrvIndex);
             rt->depthSrvIndex = UINT32_MAX;
         }
+
+        DeferReleaseResource(rt->colorResource);
+        DeferReleaseResource(rt->depthResource);
     }
     renderTargets_[handle].reset();
 }

@@ -47,6 +47,14 @@ void TextureManager::Finalize()
         }
     }
 
+    if (dxCommon_) {
+        for (auto& kv : textureDatas) {
+            TextureData& textureData = kv.second; // 遅延解放へ渡すテクスチャデータ
+            dxCommon_->DeferReleaseResource(textureData.Resource);
+            dxCommon_->DeferReleaseResource(textureData.IntermediateResource);
+        }
+    }
+
     textureDatas.clear();
     dxCommon_ = nullptr;
     srvManager_ = nullptr;

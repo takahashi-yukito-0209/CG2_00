@@ -1,4 +1,5 @@
 #include "SceneManager.h"
+#include "DirectXCommon.h"
 #include "../utility/Logger.h"
 #include <utility>
 #include <cstddef>
@@ -54,6 +55,7 @@ void SceneManager::Finalize()
 {
     // 現在のシーンがあればFinalizeを呼び出してクリーンアップする
     if (current_) {
+        WaitForGpuBeforeSceneFinalize();
         // 現在のシーンから退出処理を行い、Finalizeして破棄する
         current_->OnExit();
         current_->Finalize();
@@ -61,6 +63,9 @@ void SceneManager::Finalize()
     }
 
     // 退避時にOnExit済みのため、スタック内シーンはFinalizeのみ行う
+    if (!stack_.empty()) {
+        WaitForGpuBeforeSceneFinalize();
+    }
     for (auto& sc : stack_) {
         if (sc) {
             sc->Finalize();
@@ -113,6 +118,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene)
 
     // 現在のシーンがあればFinalizeを呼び出してクリーンアップする
     if (current_) {
+        WaitForGpuBeforeSceneFinalize();
         current_->OnExit();
         current_->Finalize();
     }
@@ -163,6 +169,7 @@ void SceneManager::PopScene()
 
     // 現在のシーンを終了して破棄する
     if (current_) {
+        WaitForGpuBeforeSceneFinalize();
         current_->OnExit();
         current_->Finalize();
         current_.reset();
@@ -196,6 +203,19 @@ std::string SceneManager::GetCurrentSceneName() const
 
     // 現在のシーンが存在しない場合は空文字列を返す
     return std::string();
+}
+
+/// <summary>
+/// シーン破棄前にGPUコマンドの完了を待機する。
+/// </summary>
+void SceneManager::WaitForGpuBeforeSceneFinalize()
+{
+    DirectXCommon* directXCommon = ctx_.directXCommon; // GPU同期に使用するDirectX基盤
+    if (!directXCommon) {
+        return;
+    }
+
+    directXCommon->WaitForCommandExecution();
 }
 
 } // namespace MyEngine
