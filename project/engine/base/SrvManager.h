@@ -42,12 +42,20 @@ public: // メンバ関数
     /// </summary>
     void ShutdownImGui();
 
-    // SRV確保（次インデックスを返す）
+    /// <summary>
+    /// SRVを確保し、使用するインデックスを返す。
+    /// </summary>
     uint32_t Allocate();
-    // SRV解放（インデックスを指定して解放、再利用可能にする）
+
+    /// <summary>
+    /// SRVを解放予約し、GPU参照が終わってから再利用可能にする。
+    /// </summary>
     void Free(uint32_t index);
-    // 上限未満ならtrue
-    bool CanAllocate() const;
+
+    /// <summary>
+    /// SRVを追加で確保できるかを返す。
+    /// </summary>
+    bool CanAllocate();
 
     // ハンドル取得
     D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(uint32_t index) const;
@@ -63,6 +71,18 @@ public: // メンバ関数
     /// </summary>
     void SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex);
 
+private: // 型定義
+    struct PendingFreeSrv {
+        uint32_t index = 0; // 再利用待ちのSRVインデックス
+        uint64_t fenceValue = 0; // 再利用可能になるFence値
+    };
+
+private: // メンバ関数
+    /// <summary>
+    /// GPU完了済みのSRV解放予約をフリーリストへ戻す。
+    /// </summary>
+    void ProcessPendingFrees();
+
 private: // メンバ変数
     // DirectXCommonへの参照（SRVヒープの取得などに使用）
     DirectXCommon* dxCommon_ = nullptr;
@@ -77,6 +97,8 @@ private: // メンバ変数
 
     // 解放済みインデックスの再利用用フリーリスト
     std::vector<uint32_t> freeList_;
+    // GPU完了待ちの解放済みインデックス
+    std::vector<PendingFreeSrv> pendingFreeList_;
     // 現在割り当て中のインデックス集合（重複解放検出用）
     std::unordered_set<uint32_t> allocatedSet_;
 };

@@ -10,6 +10,9 @@ using namespace MyEngine;
 namespace {
 constexpr size_t kGroupNameInputBufferSize = 256; // グループ名入力用バッファサイズ
 constexpr float kImGuiTranslateStep = 0.01f; // 発生位置の調整幅
+constexpr float kImGuiRotateStep = 0.01f; // 発生回転の調整幅
+constexpr float kImGuiScaleStep = 0.01f; // 発生スケールの調整幅
+constexpr float kImGuiRangeStep = 0.01f; // デバッグ範囲の調整幅
 constexpr int kImGuiCountStep = 1; // 発生数の調整幅
 constexpr int kImGuiCountMin = 0; // 発生数の最小値
 constexpr int kImGuiCountMax = 1000; // 発生数の最大値
@@ -25,11 +28,11 @@ static_assert(true, "ImGui available");
 #endif
 
 /// <summary>
-/// 発生させるパーティクルグループの名前を指定してエミッタを作成
+/// 現在の設定に従ってパーティクルを発生させる。
 /// </summary>
 void ParticleEmitter::Emit()
 {
-    // グループ名が空なら発生させない
+    // グループ未設定なら発生させない
     if (groupName.empty()) {
         return;
     }
@@ -46,13 +49,13 @@ void ParticleEmitter::Emit()
 }
 
 /// <summary>
-///  経過時間を加算し、発生間隔を超えたら発生させる
+/// 経過時間を進め、発生間隔を超えた分だけ発生させる。
 /// </summary>
 void ParticleEmitter::Update(float deltaTime)
 {
-    // 経過時間を加算
+    // 経過時間を進める
     elapsed += deltaTime;
-    // 発生間隔が0以下なら毎フレーム発生
+    // 発生間隔が0以下なら毎フレーム発生させる
     if (frequency <= kAlwaysEmitFrequencyThreshold) {
         if (count) {
             Emit();
@@ -68,7 +71,7 @@ void ParticleEmitter::Update(float deltaTime)
 }
 
 /// <summary>
-/// ImGuiコントロールを描画（プロパティ編集）
+/// ImGuiでエミッター設定を編集する。
 /// </summary>
 void ParticleEmitter::DrawImGui()
 {
@@ -76,22 +79,29 @@ void ParticleEmitter::DrawImGui()
     char buf[kGroupNameInputBufferSize] = {};
     // 現在のグループ名をバッファにコピー（安全な関数を使用）
     strncpy_s(buf, sizeof(buf), groupName.c_str(), _TRUNCATE);
-    // ImGuiのInputTextで編集。変更があったらグループ名を更新
+    // 入力内容が変わったらグループ名を更新する
 #ifdef USE_IMGUI
     if (ImGui::InputText("GroupName", buf, sizeof(buf))) {
         groupName = std::string(buf);
     }
-    // 座標（平行移動）の編集
+    // SRTを編集する
+    ImGui::DragFloat3("Scale", &transform.scale.x, kImGuiScaleStep);
+    ImGui::DragFloat3("Rotate", &transform.rotate.x, kImGuiRotateStep);
     ImGui::DragFloat3("Translate", &transform.translate.x, kImGuiTranslateStep);
-    // 発生数の編集
+    // 発生数を編集する
     int tmpCount = static_cast<int>(count);
-    // 1以上1000以下の整数として編集。変更があったらcountを更新
+    // 変更があったら発生数へ反映する
     if (ImGui::DragInt("Count", &tmpCount, kImGuiCountStep, kImGuiCountMin, kImGuiCountMax))
         count = static_cast<uint32_t>(tmpCount);
     ImGui::DragFloat("Frequency", &frequency, kImGuiFrequencyStep, kImGuiFrequencyMin, kImGuiFrequencyMax);
     ImGui::Checkbox("Use Hit Effect", &useHitEffect);
     ImGui::Checkbox("Use Ring Effect", &useRingEffect);
     ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);
+    ImGui::Separator();
+    ImGui::Checkbox("Show Debug Range", &showDebugRange);
+    ImGui::DragFloat3("Debug Range Half", &debugRangeHalfSize.x, kImGuiRangeStep, 0.0f, 100.0f);
+    ImGui::DragInt("Debug Grid Half Lines", &debugGridHalfLineCount, 1, 1, 64);
+    ImGui::DragFloat("Debug Grid Spacing", &debugGridSpacing, kImGuiRangeStep, 0.01f, 100.0f);
 #else
     (void)buf;
 #endif

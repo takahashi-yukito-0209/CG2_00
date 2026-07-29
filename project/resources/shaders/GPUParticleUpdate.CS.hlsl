@@ -9,6 +9,9 @@ struct Particle
     float3 velocity;
     float padding1;
     float4 color;
+    float3 startScale;
+    float padding2;
+    float4 startColor;
 };
 
 cbuffer ParticleTransformInfo : register(b0)

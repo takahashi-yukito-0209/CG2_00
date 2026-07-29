@@ -9,7 +9,9 @@ using namespace Math;
 
 namespace CollisionUtility {
 
-// ヘルパー関数
+// ----------------------
+// 内部ヘルパー
+// ----------------------
 
 // ベクトルのドット積
 static inline float Dot(const Vector3& a, const Vector3& b)
@@ -41,7 +43,21 @@ static inline float LengthSq(const Vector3& v)
     return Dot(v, v);
 }
 
+// ベクトルの外積
+static inline Vector3 Cross(const Vector3& a, const Vector3& b)
+{
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
 // ベクトルを正規化して返す（長さがほぼゼロならそのまま返す）
+static inline float Clamp01(float value)
+{
+    return std::max(0.0f, std::min(value, 1.0f));
+}
+
 static inline Vector3 NormalizeVec(const Vector3& v)
 {
     // 長さの二乗を計算
@@ -58,6 +74,357 @@ static inline Vector3 NormalizeVec(const Vector3& v)
     // 正規化されたベクトルを返す
     return { v.x * inv, v.y * inv, v.z * inv };
 }
+
+
+// 内部線分距離関数の前方宣言
+float DistanceSqSegmentSegment(const Vector3& aStart, const Vector3& aEnd, const Vector3& bStart, const Vector3& bEnd);
+
+/// <summary>
+/// 指定点に最も近い三角形上の点を取得する。
+/// </summary>
+Vector3 ClosestPointTriangle(const Vector3& point, const Triangle& triangle)
+{
+    const Vector3 edgeAB = Sub(triangle.b, triangle.a); // AB辺ベクトル
+    const Vector3 edgeAC = Sub(triangle.c, triangle.a); // AC辺ベクトル
+    const Vector3 pointA = Sub(point, triangle.a); // Aから点へのベクトル
+    const float d1 = Dot(edgeAB, pointA); // AB方向への投影
+    const float d2 = Dot(edgeAC, pointA); // AC方向への投影
+    if (d1 <= 0.0f && d2 <= 0.0f) {
+        return triangle.a;
+    }
+
+    const Vector3 pointB = Sub(point, triangle.b); // Bから点へのベクトル
+    const float d3 = Dot(edgeAB, pointB); // AB方向への投影
+    const float d4 = Dot(edgeAC, pointB); // AC方向への投影
+    if (d3 >= 0.0f && d4 <= d3) {
+        return triangle.b;
+    }
+
+    const float vertexRegionC = d1 * d4 - d3 * d2; // AB辺領域の判定値
+    if (vertexRegionC <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
+        const float edgeRate = d1 / (d1 - d3); // AB辺上の最近割合
+        return Add(triangle.a, Mul(edgeAB, edgeRate));
+    }
+
+    const Vector3 pointC = Sub(point, triangle.c); // Cから点へのベクトル
+    const float d5 = Dot(edgeAB, pointC); // AB方向への投影
+    const float d6 = Dot(edgeAC, pointC); // AC方向への投影
+    if (d6 >= 0.0f && d5 <= d6) {
+        return triangle.c;
+    }
+
+    const float vertexRegionB = d5 * d2 - d1 * d6; // AC辺領域の判定値
+    if (vertexRegionB <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
+        const float edgeRate = d2 / (d2 - d6); // AC辺上の最近割合
+        return Add(triangle.a, Mul(edgeAC, edgeRate));
+    }
+
+    const float vertexRegionA = d3 * d6 - d5 * d4; // BC辺領域の判定値
+    if (vertexRegionA <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
+        const float edgeRate = (d4 - d3) / ((d4 - d3) + (d5 - d6)); // BC辺上の最近割合
+        return Add(triangle.b, Mul(Sub(triangle.c, triangle.b), edgeRate));
+    }
+
+    const float denominator = 1.0f / (vertexRegionA + vertexRegionB + vertexRegionC); // 面内座標の分母
+    const float v = vertexRegionB * denominator; // B方向の面内割合
+    const float w = vertexRegionC * denominator; // C方向の面内割合
+    return Add(triangle.a, Add(Mul(edgeAB, v), Mul(edgeAC, w)));
+}
+
+/// <summary>
+/// 点と三角形の距離の二乗を取得する。
+/// </summary>
+float DistanceSqPointTriangle(const Vector3& point, const Triangle& triangle)
+{
+    const Vector3 closestPoint = ClosestPointTriangle(point, triangle); // 三角形上の最近点
+    return LengthSq(Sub(point, closestPoint));
+}
+
+/// <summary>
+/// 線分と三角形の距離の二乗を取得する。
+/// </summary>
+float DistanceSqSegmentTriangle(const Vector3& start, const Vector3& end, const Triangle& triangle)
+{
+    const Vector3 segment = Sub(end, start); // 線分方向
+    const float segmentLength = std::sqrt(LengthSq(segment)); // 線分長
+    if (segmentLength <= 1e-8f) {
+        return DistanceSqPointTriangle(start, triangle);
+    }
+
+    const Ray segmentRay { start, segment }; // 線分をレイとして扱う
+    float hitDistance = 0.0f; // 線分と三角形の交差距離
+    if (RayIntersectTriangle(segmentRay, triangle, &hitDistance, nullptr, nullptr) && hitDistance >= 0.0f && hitDistance <= segmentLength) {
+        return 0.0f;
+    }
+
+    float minDistanceSquared = (std::min)(DistanceSqPointTriangle(start, triangle), DistanceSqPointTriangle(end, triangle)); // 端点と三角形の最小距離
+    minDistanceSquared = (std::min)(minDistanceSquared, DistanceSqSegmentSegment(start, end, triangle.a, triangle.b));
+    minDistanceSquared = (std::min)(minDistanceSquared, DistanceSqSegmentSegment(start, end, triangle.b, triangle.c));
+    minDistanceSquared = (std::min)(minDistanceSquared, DistanceSqSegmentSegment(start, end, triangle.c, triangle.a));
+    return minDistanceSquared;
+}
+
+/// <summary>
+/// 2つの線分間の距離の二乗を取得する。
+/// </summary>
+float DistanceSqSegmentSegment(const Vector3& aStart, const Vector3& aEnd, const Vector3& bStart, const Vector3& bEnd)
+{
+    constexpr float kSegmentEpsilon = 1e-8f; // 線分を点として扱う最小長さ
+    const Vector3 segmentA = Sub(aEnd, aStart); // 1本目の線分方向
+    const Vector3 segmentB = Sub(bEnd, bStart); // 2本目の線分方向
+    const Vector3 startDifference = Sub(aStart, bStart); // 始点同士の差分
+    const float lengthA = Dot(segmentA, segmentA); // 1本目の線分長の二乗
+    const float lengthB = Dot(segmentB, segmentB); // 2本目の線分長の二乗
+    const float projectionB = Dot(segmentB, startDifference); // 2本目方向への始点差分投影
+    float parameterA = 0.0f; // 1本目の最近点割合
+    float parameterB = 0.0f; // 2本目の最近点割合
+
+    if (lengthA <= kSegmentEpsilon && lengthB <= kSegmentEpsilon) {
+        return LengthSq(startDifference);
+    }
+
+    if (lengthA <= kSegmentEpsilon) {
+        parameterB = Clamp01(projectionB / lengthB);
+    } else {
+        const float projectionA = Dot(segmentA, startDifference); // 1本目方向への始点差分投影
+        if (lengthB <= kSegmentEpsilon) {
+            parameterA = Clamp01(-projectionA / lengthA);
+        } else {
+            const float crossProjection = Dot(segmentA, segmentB); // 線分方向同士の投影
+            const float denominator = lengthA * lengthB - crossProjection * crossProjection; // 連立計算の分母
+            if (denominator != 0.0f) {
+                parameterA = Clamp01((crossProjection * projectionB - projectionA * lengthB) / denominator);
+            }
+            parameterB = (crossProjection * parameterA + projectionB) / lengthB;
+            if (parameterB < 0.0f) {
+                parameterB = 0.0f;
+                parameterA = Clamp01(-projectionA / lengthA);
+            } else if (parameterB > 1.0f) {
+                parameterB = 1.0f;
+                parameterA = Clamp01((crossProjection - projectionA) / lengthA);
+            }
+        }
+    }
+
+    const Vector3 closestA = Add(aStart, Mul(segmentA, parameterA)); // 1本目の最近点
+    const Vector3 closestB = Add(bStart, Mul(segmentB, parameterB)); // 2本目の最近点
+    return LengthSq(Sub(closestA, closestB));
+}
+
+/// <summary>
+/// 線分と半径分だけ拡張したAABBの交差を判定する。
+/// </summary>
+bool IntersectSegmentExpandedAABB(const Vector3& start, const Vector3& end, const AABB& box, float radius)
+{
+    const AABB expandedBox = ExpandAABB(box, { radius, radius, radius }); // カプセル半径で拡張したAABB
+    if (ContainsPointAABB(expandedBox, start) || ContainsPointAABB(expandedBox, end)) {
+        return true;
+    }
+
+    const Ray segmentRay { start, Sub(end, start) }; // 線分を始点と方向で表したレイ
+    float hitDistance = 0.0f; // レイと拡張AABBの交差距離
+    if (!RayIntersectAABB(segmentRay, expandedBox, &hitDistance)) {
+        return false;
+    }
+
+    const float segmentLength = std::sqrt(LengthSq(Sub(end, start))); // 線分長
+    return hitDistance >= 0.0f && hitDistance <= segmentLength;
+}
+/// <summary>
+/// AABB の中心座標を取得する。
+/// </summary>
+Vector3 GetAABBCenter(const AABB& box)
+{
+    return Mul(Add(box.min, box.max), 0.5f);
+}
+
+/// <summary>
+/// AABB の各軸方向の半分サイズを取得する。
+/// </summary>
+Vector3 GetAABBHalfSize(const AABB& box)
+{
+    return Mul(Sub(box.max, box.min), 0.5f);
+}
+
+/// <summary>
+/// AABB の各軸方向のサイズを取得する。
+/// </summary>
+Vector3 GetAABBSize(const AABB& box)
+{
+    return Sub(box.max, box.min);
+}
+
+/// <summary>
+/// 指定点を AABB 内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointAABB(const AABB& box, const Vector3& point)
+{
+    return {
+        std::max(box.min.x, std::min(point.x, box.max.x)),
+        std::max(box.min.y, std::min(point.y, box.max.y)),
+        std::max(box.min.z, std::min(point.z, box.max.z))
+    };
+}
+
+/// <summary>
+/// 指定点が AABB 内に含まれているか判定する。
+/// </summary>
+bool ContainsPointAABB(const AABB& box, const Vector3& point)
+{
+    return point.x >= box.min.x && point.x <= box.max.x
+        && point.y >= box.min.y && point.y <= box.max.y
+        && point.z >= box.min.z && point.z <= box.max.z;
+}
+
+/// <summary>
+/// 2 つの AABB を内包する AABB を作成する。
+/// </summary>
+AABB MergeAABB(const AABB& a, const AABB& b)
+{
+    AABB merged {}; // 結合後の AABB
+    merged.min = {
+        std::min(a.min.x, b.min.x),
+        std::min(a.min.y, b.min.y),
+        std::min(a.min.z, b.min.z)
+    };
+    merged.max = {
+        std::max(a.max.x, b.max.x),
+        std::max(a.max.y, b.max.y),
+        std::max(a.max.z, b.max.z)
+    };
+    return merged;
+}
+
+/// <summary>
+/// AABB を指定量だけ外側へ広げる。
+/// </summary>
+AABB ExpandAABB(const AABB& box, const Vector3& padding)
+{
+    AABB expanded {}; // 拡張後の AABB
+    expanded.min = Sub(box.min, padding);
+    expanded.max = Add(box.max, padding);
+    return expanded;
+}
+/// <summary>
+/// 指定点を OBB 内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointOBB(const OBB& obb, const Vector3& point)
+{
+    Vector3 distanceFromCenter = Sub(point, obb.center); // OBB 中心から指定点へのベクトル
+    Vector3 closest = obb.center; // OBB 内の最近点
+
+    for (int axisIndex = 0; axisIndex < 3; ++axisIndex) {
+        float projectedLength = Dot(distanceFromCenter, obb.axis[axisIndex]); // OBB 軸上への投影距離
+        float clampedLength = std::max(-obb.halfLength[axisIndex], std::min(projectedLength, obb.halfLength[axisIndex])); // OBB 内に収めた投影距離
+        closest = Add(closest, Mul(obb.axis[axisIndex], clampedLength));
+    }
+
+    return closest;
+}
+
+/// <summary>
+/// 指定点が球内に含まれているか判定する。
+/// </summary>
+bool ContainsPointSphere(const Sphere& sphere, const Vector3& point)
+{
+    Vector3 difference = Sub(point, sphere.center); // 球中心から指定点へのベクトル
+    return LengthSq(difference) <= sphere.radius * sphere.radius;
+}
+
+/// <summary>
+/// 指定点を球内に収めた最近点を取得する。
+/// </summary>
+Vector3 ClosestPointSphere(const Sphere& sphere, const Vector3& point)
+{
+    Vector3 difference = Sub(point, sphere.center); // 球中心から指定点へのベクトル
+    float distanceSquared = LengthSq(difference); // 球中心から指定点までの距離の二乗
+
+    if (distanceSquared <= sphere.radius * sphere.radius || distanceSquared <= 1e-12f) {
+        return point;
+    }
+
+    float distance = std::sqrt(distanceSquared); // 球中心から指定点までの距離
+    float scale = sphere.radius / distance; // 球面上まで縮める倍率
+    return Add(sphere.center, Mul(difference, scale));
+}
+/// <summary>
+/// 指定点に最も近い線分上の点を取得する。
+/// </summary>
+Vector3 ClosestPointSegment(const Vector3& start, const Vector3& end, const Vector3& point)
+{
+    const Vector3 segment = Sub(end, start); // 線分方向
+    const float segmentLengthSquared = LengthSq(segment); // 線分長の二乗
+    if (segmentLengthSquared <= 1e-12f) {
+        return start;
+    }
+
+    const float rate = Clamp01(Dot(Sub(point, start), segment) / segmentLengthSquared); // 線分上の最近割合
+    return Add(start, Mul(segment, rate));
+}
+
+/// <summary>
+/// カプセルを内包する AABB を作成する。
+/// </summary>
+AABB GetCapsuleAABB(const Capsule& capsule)
+{
+    AABB bounds {}; // カプセルを内包するAABB
+    bounds.min = {
+        std::min(capsule.start.x, capsule.end.x) - capsule.radius,
+        std::min(capsule.start.y, capsule.end.y) - capsule.radius,
+        std::min(capsule.start.z, capsule.end.z) - capsule.radius
+    };
+    bounds.max = {
+        std::max(capsule.start.x, capsule.end.x) + capsule.radius,
+        std::max(capsule.start.y, capsule.end.y) + capsule.radius,
+        std::max(capsule.start.z, capsule.end.z) + capsule.radius
+    };
+    return bounds;
+}
+
+/// <summary>
+/// 球を内包する AABB を作成する。
+/// </summary>
+AABB GetSphereAABB(const Sphere& sphere)
+{
+    Vector3 radiusVector { sphere.radius, sphere.radius, sphere.radius }; // 各軸方向の半径
+    AABB bounds {}; // 球を内包する AABB
+    bounds.min = Sub(sphere.center, radiusVector);
+    bounds.max = Add(sphere.center, radiusVector);
+    return bounds;
+}
+
+/// <summary>
+/// OBB を内包する AABB を作成する。
+/// </summary>
+AABB GetOBBAABB(const OBB& obb)
+{
+    Vector3 corner = Add(Add(obb.center, Mul(obb.axis[0], -obb.halfLength[0])), Add(Mul(obb.axis[1], -obb.halfLength[1]), Mul(obb.axis[2], -obb.halfLength[2]))); // 最初の頂点
+    AABB bounds { corner, corner }; // OBB を内包する AABB
+
+    for (int sx = -1; sx <= 1; sx += 2) {
+        for (int sy = -1; sy <= 1; sy += 2) {
+            for (int sz = -1; sz <= 1; sz += 2) {
+                Vector3 current = obb.center; // 現在計算中の頂点
+                current = Add(current, Mul(obb.axis[0], obb.halfLength[0] * static_cast<float>(sx)));
+                current = Add(current, Mul(obb.axis[1], obb.halfLength[1] * static_cast<float>(sy)));
+                current = Add(current, Mul(obb.axis[2], obb.halfLength[2] * static_cast<float>(sz)));
+
+                bounds.min.x = std::min(bounds.min.x, current.x);
+                bounds.min.y = std::min(bounds.min.y, current.y);
+                bounds.min.z = std::min(bounds.min.z, current.z);
+                bounds.max.x = std::max(bounds.max.x, current.x);
+                bounds.max.y = std::max(bounds.max.y, current.y);
+                bounds.max.z = std::max(bounds.max.z, current.z);
+            }
+        }
+    }
+
+    return bounds;
+}
+
+// ----------------------
+// 基本交差判定
+// ----------------------
 
 /// <summary>
 /// AABB と AABB の交差判定
@@ -269,33 +636,87 @@ bool IntersectOBB_OBB(const OBB& A, const OBB& B)
 /// </summary>
 bool IntersectSphere_OBB(const Sphere& s, const OBB& obb)
 {
-    // OBB 中心から球中心へのベクトルを計算
-    Vector3 d = Sub(s.center, obb.center);
-
-    // OBB のローカル軸に沿って、球の中心に最も近い点を求める
-    Vector3 closest = obb.center;
-    // 各軸に対して、球の中心からの距離を計算し、OBB の半長さでクランプする
-    for (int i = 0; i < 3; ++i) {
-        // d を OBB の軸に投影して距離を求める
-        float dist = Dot(d, obb.axis[i]);
-        // 距離を半長さでクランプ
-        if (dist > obb.halfLength[i]) {
-            dist = obb.halfLength[i];
-        }
-        // 負の方向も同様にクランプ
-        if (dist < -obb.halfLength[i]) {
-            dist = -obb.halfLength[i];
-        }
-
-        // クランプされた距離を OBB の中心からのベクトルに変換して、最近接点を更新
-        closest = Add(closest, Mul(obb.axis[i], dist));
-    }
-
-    // 最近接点と球の中心のベクトルを計算
-    Vector3 diff = Sub(s.center, closest);
-    // 距離の二乗が半径の二乗以下なら交差している
+    Vector3 closest = ClosestPointOBB(obb, s.center); // 球中心に最も近い OBB 内の点
+    Vector3 diff = Sub(s.center, closest); // 最近接点から球中心へのベクトル
     return LengthSq(diff) <= s.radius * s.radius;
 }
+
+/// <summary>
+/// カプセル同士の交差を判定する。
+/// </summary>
+bool IntersectCapsule_Capsule(const Capsule& a, const Capsule& b)
+{
+    const float radius = a.radius + b.radius; // 半径の合計
+    return DistanceSqSegmentSegment(a.start, a.end, b.start, b.end) <= radius * radius;
+}
+
+/// <summary>
+/// カプセルと球の交差を判定する。
+/// </summary>
+bool IntersectCapsule_Sphere(const Capsule& capsule, const Sphere& sphere)
+{
+    const Vector3 closestPoint = ClosestPointSegment(capsule.start, capsule.end, sphere.center); // 球中心に最も近いカプセル軸点
+    const float radius = capsule.radius + sphere.radius; // 半径の合計
+    return LengthSq(Sub(sphere.center, closestPoint)) <= radius * radius;
+}
+
+/// <summary>
+/// カプセルと AABB の交差を判定する。
+/// </summary>
+bool IntersectCapsule_AABB(const Capsule& capsule, const AABB& box)
+{
+    return IntersectSegmentExpandedAABB(capsule.start, capsule.end, box, capsule.radius);
+}
+
+/// <summary>
+/// カプセルと OBB の交差を判定する。
+/// </summary>
+bool IntersectCapsule_OBB(const Capsule& capsule, const OBB& obb)
+{
+    const Vector3 localStart {
+        Dot(Sub(capsule.start, obb.center), obb.axis[0]),
+        Dot(Sub(capsule.start, obb.center), obb.axis[1]),
+        Dot(Sub(capsule.start, obb.center), obb.axis[2])
+    }; // OBBローカル空間のカプセル開始点
+    const Vector3 localEnd {
+        Dot(Sub(capsule.end, obb.center), obb.axis[0]),
+        Dot(Sub(capsule.end, obb.center), obb.axis[1]),
+        Dot(Sub(capsule.end, obb.center), obb.axis[2])
+    }; // OBBローカル空間のカプセル終了点
+    const AABB localBox {
+        { -obb.halfLength[0], -obb.halfLength[1], -obb.halfLength[2] },
+        { obb.halfLength[0], obb.halfLength[1], obb.halfLength[2] }
+    }; // OBBをローカルAABBとして扱う範囲
+    return IntersectSegmentExpandedAABB(localStart, localEnd, localBox, capsule.radius);
+}
+/// <summary>
+/// カプセルとメッシュの交差を判定する。
+/// </summary>
+bool IntersectCapsule_Mesh(const Capsule& capsule, const Mesh& mesh)
+{
+    if (mesh.triangles.empty()) {
+        return false;
+    }
+
+    Collider meshCollider {}; // メッシュAABB計算用の一時Collider
+    meshCollider.type = ColliderType::Mesh;
+    meshCollider.mesh = mesh;
+    if (!IntersectAABB_AABB(GetCapsuleAABB(capsule), GetColliderAABB(meshCollider))) {
+        return false;
+    }
+
+    const float radiusSquared = capsule.radius * capsule.radius; // カプセル半径の二乗
+    for (const Triangle& triangle : mesh.triangles) {
+        if (DistanceSqSegmentTriangle(capsule.start, capsule.end, triangle) <= radiusSquared) {
+            return true;
+        }
+    }
+
+    return false;
+}
+// ----------------------
+// 基本レイキャスト
+// ----------------------
 
 /// <summary>
 /// レイと AABB の交差判定（スラブ法）
@@ -360,15 +781,13 @@ bool RayIntersectAABB(const Ray& ray, const AABB& box, float* outT)
         return false;
     }
 
-    // すべての軸で交差しているので、tmin と tmax の範囲内にヒットポイントが存在する
+    // すべての軸で交差していても、交差範囲がレイの後方だけにある場合はヒットしない
+    if (tmax < 0.0f) {
+        return false;
+    }
+
     if (outT) {
         // tmin が負の場合は、レイの開始点が AABB 内にあるので、tmax をヒット距離として使用する
-        // もし tmax が負であればボックスはレイの後方にありヒットしない
-        if (tmax < 0.0f) {
-            return false;
-        }
-
-        // tmin が負であっても、tmax が正であればレイは AABB 内にあるので、tmax をヒット距離として使用する
         *outT = tmin >= 0.0f ? tmin : tmax; // ndir を使って計算しているので t は実距離
     }
 
@@ -450,61 +869,26 @@ bool RayIntersectSphere(const Ray& ray, const Sphere& s, float* outT)
     return true;
 }
 
-} // namespace CollisionUtility
+// ----------------------
+// Transform から衝突形状を作成
+// ----------------------
 
 /// <summary>
-/// Transform から AABB を作成するヘルパー
+/// Transform から AABB を作成する。
 /// </summary>
-namespace CollisionUtility {
 AABB MakeAABBFromTransform(const Transform& t, const Vector3& halfLengths)
 {
-    // Transform から OBB を作成
-    OBB obb = MakeOBBFromTransform(t, halfLengths);
-
-    // OBB の8つのコーナーを計算
-    Vector3 corners[8];
-    // OBB の中心から各軸方向に半長さを加減してコーナーを求める
-    int idx = 0;
-    // sx, sy, sz はそれぞれ -1 と 1 を取ることで、8つのコーナーを生成
-    for (int sx = -1; sx <= 1; sx += 2) {
-        for (int sy = -1; sy <= 1; sy += 2) {
-            for (int sz = -1; sz <= 1; sz += 2) {
-                // OBB の中心から、各軸方向に半長さを加減してコーナーを求める
-                Vector3 corner = obb.center;
-                // 各軸方向に半長さを加減してコーナーを求める
-                corner = Add(corner, Mul(obb.axis[0], obb.halfLength[0] * (float)sx)); // X軸方向に半長さを加減
-                corner = Add(corner, Mul(obb.axis[1], obb.halfLength[1] * (float)sy)); // Y軸方向に半長さを加減
-                corner = Add(corner, Mul(obb.axis[2], obb.halfLength[2] * (float)sz)); // Z軸方向に半長さを加減
-                corners[idx++] = corner; // コーナーを配列に保存
-            }
-        }
-    }
-
-    // 8つのコーナーから AABB を作成
-    Vector3 min = corners[0]; // 最初のコーナーを初期値として最小点を設定
-    Vector3 max = corners[0]; // 最初のコーナーを初期値として最大点を設定
-    // 8つのコーナーをループして、最小点と最大点を更新
-    for (int i = 1; i < 8; ++i) {
-        min.x = std::min(min.x, corners[i].x); // X軸方向の最小点を更新
-        min.y = std::min(min.y, corners[i].y); // Y軸方向の最小点を更新
-        min.z = std::min(min.z, corners[i].z); // Z軸方向の最小点を更新
-        max.x = std::max(max.x, corners[i].x); // X軸方向の最大点を更新
-        max.y = std::max(max.y, corners[i].y); // Y軸方向の最大点を更新
-        max.z = std::max(max.z, corners[i].z); // Z軸方向の最大点を更新
-    }
-
-    // 最小点と最大点から AABB を作成して返す
-    AABB box;
-    box.min = min; // AABB の最小点を設定
-    box.max = max; // AABB の最大点を設定
-    return box; // AABB を返す
+    OBB obb = MakeOBBFromTransform(t, halfLengths); // Transform から作成した OBB
+    return GetOBBAABB(obb);
 }
-} // namespace CollisionUtility
+
+// ----------------------
+// 三角形とメッシュのレイキャスト
+// ----------------------
 
 /// <summary>
-/// レイと三角形の交差判定（Möller–Trumbore アルゴリズム）
+/// レイと三角形の交差判定（Möller–Trumbore アルゴリズム）。
 /// </summary>
-namespace CollisionUtility {
 bool RayIntersectTriangle(const Ray& ray, const Triangle& tri, float* outT, float* outU, float* outV)
 {
     // Möller–Trumbore アルゴリズムの実装
@@ -657,12 +1041,9 @@ RayHitResult RayIntersectMesh(const Ray& ray, const Mesh& mesh)
     return best;
 }
 
-} // namespace CollisionUtility
-
 // ----------------------
 // BVH 実装（簡易、トップダウンの median split）
 // ----------------------
-namespace CollisionUtility {
 
 /// <summary>
 /// AABB を三角形で拡張するヘルパー
@@ -1017,10 +1398,9 @@ ContactManifold CreateManifoldOBB_OBB(const OBB& A, const OBB& B)
     return m;
 }
 
-} // namespace CollisionUtility
-
-// 詳細な当たり判定の実装
-namespace CollisionUtility {
+// ----------------------
+// 詳細な当たり判定
+// ----------------------
 
 /// <summary>
 /// AABB - AABB の詳細な当たり判定を行い、接触点、法線、貫入深度を返す関数
@@ -1589,12 +1969,102 @@ RayHitResult RayIntersectSphere_Detailed(const Ray& ray, const Sphere& s)
     return res;
 }
 
-} // namespace CollisionUtility
+/// <summary>
+/// レイとカプセルの詳細な交差情報を取得する。
+/// </summary>
+RayHitResult RayIntersectCapsule_Detailed(const Ray& ray, const Capsule& capsule)
+{
+    RayHitResult bestHit {}; // 最も近いヒット
+    bestHit.t = std::numeric_limits<float>::infinity();
+    const Vector3 rayDirection = NormalizeVec(ray.dir); // 正規化したレイ方向
+    const Vector3 capsuleSegment = Sub(capsule.end, capsule.start); // カプセル軸線分
+    const float capsuleLength = std::sqrt(LengthSq(capsuleSegment)); // カプセル軸の長さ
+    const float radius = (std::max)(capsule.radius, 0.0f); // 判定に使う半径
+
+    auto updateBestHit = [&](float candidateT, const Vector3& normalCenter) {
+        if (candidateT < 0.0f || candidateT >= bestHit.t) {
+            return;
+        }
+        bestHit.hit = true;
+        bestHit.t = candidateT;
+        bestHit.point = Add(ray.origin, Mul(rayDirection, candidateT));
+        bestHit.normal = NormalizeVec(Sub(bestHit.point, normalCenter));
+    }; // 最近ヒット更新処理
+
+    if (capsuleLength <= 1e-8f) {
+        Sphere sphere { capsule.start, radius }; // 軸が潰れた場合の代替球
+        return RayIntersectSphere_Detailed(ray, sphere);
+    }
+
+    const Vector3 capsuleAxis = Mul(capsuleSegment, 1.0f / capsuleLength); // カプセル軸方向
+    const Vector3 originFromStart = Sub(ray.origin, capsule.start); // 開始点からレイ原点へのベクトル
+    const float originAxisDistance = Dot(originFromStart, capsuleAxis); // 軸方向の原点位置
+    const float rayAxisDirection = Dot(rayDirection, capsuleAxis); // レイ方向の軸成分
+    const Vector3 originRadial = Sub(originFromStart, Mul(capsuleAxis, originAxisDistance)); // 軸に垂直な原点成分
+    const Vector3 rayRadial = Sub(rayDirection, Mul(capsuleAxis, rayAxisDirection)); // 軸に垂直なレイ成分
+    const float a = Dot(rayRadial, rayRadial); // 円柱二次方程式のa
+    const float b = 2.0f * Dot(originRadial, rayRadial); // 円柱二次方程式のb
+    const float c = Dot(originRadial, originRadial) - radius * radius; // 円柱二次方程式のc
+
+    if (a > 1e-8f) {
+        const float discriminant = b * b - 4.0f * a * c; // 円柱交差の判別式
+        if (discriminant >= 0.0f) {
+            const float sqrtDiscriminant = std::sqrt(discriminant); // 判別式の平方根
+            const float invDenominator = 0.5f / a; // 2aの逆数
+            const float candidates[] = {
+                (-b - sqrtDiscriminant) * invDenominator,
+                (-b + sqrtDiscriminant) * invDenominator
+            }; // 胴体側の交差候補
+            for (float candidateT : candidates) {
+                const float axisDistance = originAxisDistance + candidateT * rayAxisDirection; // 軸上の交差位置
+                if (axisDistance >= 0.0f && axisDistance <= capsuleLength) {
+                    const Vector3 normalCenter = Add(capsule.start, Mul(capsuleAxis, axisDistance)); // 法線基準になる軸上点
+                    updateBestHit(candidateT, normalCenter);
+                }
+            }
+        }
+    }
+
+    const Sphere startSphere { capsule.start, radius }; // 開始端球
+    const Sphere endSphere { capsule.end, radius }; // 終了端球
+    float sphereT = 0.0f; // 端球のヒット距離
+    if (RayIntersectSphere(ray, startSphere, &sphereT)) {
+        updateBestHit(sphereT, capsule.start);
+    }
+    if (RayIntersectSphere(ray, endSphere, &sphereT)) {
+        updateBestHit(sphereT, capsule.end);
+    }
+
+    if (!bestHit.hit) {
+        return {};
+    }
+    if (LengthSq(bestHit.normal) <= 1e-12f) {
+        bestHit.normal = Mul(rayDirection, -1.0f);
+    }
+    return bestHit;
+}
 
 /// <summary>
-/// Transform から OBB を作成する関数
+/// レイとカプセルの交差判定。
 /// </summary>
-namespace CollisionUtility {
+bool RayIntersectCapsule(const Ray& ray, const Capsule& capsule, float* outT)
+{
+    const RayHitResult hitResult = RayIntersectCapsule_Detailed(ray, capsule); // 詳細判定の結果
+    if (!hitResult.hit) {
+        return false;
+    }
+    if (outT) {
+        *outT = hitResult.t;
+    }
+    return true;
+}
+// ----------------------
+// Transform から衝突形状を作成
+// ----------------------
+
+/// <summary>
+/// Transform から OBB を作成する。
+/// </summary>
 OBB MakeOBBFromTransform(const Transform& t, const Vector3& halfLengths)
 {
     // OBB を初期化する
@@ -1640,11 +2110,161 @@ OBB MakeOBBFromTransform(const Transform& t, const Vector3& halfLengths)
     obb.axis[2] = NormalizeVec({ r02, r12, r22 }); // OBB の軸[2] に回転行列の第3列を設定（正規化）
 
     // OBB の半長さは、Transform の scale を掛けた halfLengths になる
-    obb.halfLength[0] = halfLengths.x * t.scale.x; // OBB の半長さ[0] に halfLengths.x に Transform の scale.x を掛けた値を設定する
-    obb.halfLength[1] = halfLengths.y * t.scale.y; // OBB の半長さ[1] に halfLengths.y に Transform の scale.y を掛けた値を設定する
-    obb.halfLength[2] = halfLengths.z * t.scale.z; // OBB の半長さ[2] に halfLengths.z に Transform の scale.z を掛けた値を設定する
+    obb.halfLength[0] = std::fabs(halfLengths.x * t.scale.x); // OBB の半長さ[0] に scale を反映した絶対値を設定する
+    obb.halfLength[1] = std::fabs(halfLengths.y * t.scale.y); // OBB の半長さ[1] に scale を反映した絶対値を設定する
+    obb.halfLength[2] = std::fabs(halfLengths.z * t.scale.z); // OBB の半長さ[2] に scale を反映した絶対値を設定する
 
     // OBB を返す
     return obb;
+}
+
+namespace {
+
+/// <summary>
+/// AABBを回転なしのOBBとして扱える形に変換する。
+/// </summary>
+OBB MakeOBBFromAABBShape(const AABB& aabb)
+{
+    OBB obb {}; // AABBを表すOBB
+    const Vector3 halfSize = GetAABBHalfSize(aabb); // AABBの半分サイズ
+    obb.center = GetAABBCenter(aabb);
+    obb.axis[0] = { 1.0f, 0.0f, 0.0f };
+    obb.axis[1] = { 0.0f, 1.0f, 0.0f };
+    obb.axis[2] = { 0.0f, 0.0f, 1.0f };
+    obb.halfLength[0] = halfSize.x;
+    obb.halfLength[1] = halfSize.y;
+    obb.halfLength[2] = halfSize.z;
+    return obb;
+}
+
+} // namespace
+
+/// <summary>
+/// Collider を内包する AABB を取得する。
+/// </summary>
+AABB GetColliderAABB(const Collider& collider)
+{
+    if (collider.type == ColliderType::AABB) {
+        return collider.aabb;
+    }
+    if (collider.type == ColliderType::OBB) {
+        return GetOBBAABB(collider.obb);
+    }
+    if (collider.type == ColliderType::Sphere) {
+        return GetSphereAABB(collider.sphere);
+    }
+    if (collider.type == ColliderType::Capsule) {
+        return GetCapsuleAABB(collider.capsule);
+    }
+
+    AABB meshAabb {}; // メッシュ全体を内包するAABB
+    if (collider.mesh.triangles.empty()) {
+        return meshAabb;
+    }
+
+    const Triangle& firstTriangle = collider.mesh.triangles.front(); // 初期範囲に使う最初の三角形
+    meshAabb.min = firstTriangle.a;
+    meshAabb.max = firstTriangle.a;
+    for (const Triangle& triangle : collider.mesh.triangles) {
+        const Vector3 vertices[] = { triangle.a, triangle.b, triangle.c }; // AABBへ反映する三角形頂点
+        for (const Vector3& vertex : vertices) {
+            meshAabb.min.x = (std::min)(meshAabb.min.x, vertex.x);
+            meshAabb.min.y = (std::min)(meshAabb.min.y, vertex.y);
+            meshAabb.min.z = (std::min)(meshAabb.min.z, vertex.z);
+            meshAabb.max.x = (std::max)(meshAabb.max.x, vertex.x);
+            meshAabb.max.y = (std::max)(meshAabb.max.y, vertex.y);
+            meshAabb.max.z = (std::max)(meshAabb.max.z, vertex.z);
+        }
+    }
+    return meshAabb;
+}
+
+/// <summary>
+/// レイと Collider の最近接交差を取得する。
+/// </summary>
+RayHitResult RayIntersectCollider(const Ray& ray, const Collider& collider, bool useMeshBvh)
+{
+    if (collider.type == ColliderType::AABB) {
+        return RayIntersectAABB_Detailed(ray, collider.aabb);
+    }
+    if (collider.type == ColliderType::OBB) {
+        return RayIntersectOBB_Detailed(ray, collider.obb);
+    }
+    if (collider.type == ColliderType::Sphere) {
+        return RayIntersectSphere_Detailed(ray, collider.sphere);
+    }
+    if (collider.type == ColliderType::Capsule) {
+        return RayIntersectCapsule_Detailed(ray, collider.capsule);
+    }
+    if (collider.type == ColliderType::Mesh) {
+        return useMeshBvh ? RayIntersectMesh_BVH(ray, collider.mesh) : RayIntersectMesh(ray, collider.mesh);
+    }
+
+    return {};
+}
+/// <summary>
+/// 2つのColliderが衝突しているか判定する。
+/// </summary>
+bool IntersectCollider(const Collider& a, const Collider& b)
+{
+    if (!ShouldCollide(a.layer, a.collideMask, b.layer, b.collideMask)) {
+        return false;
+    }
+
+    if (a.type == ColliderType::AABB && b.type == ColliderType::AABB) {
+        return IntersectAABB_AABB(a.aabb, b.aabb);
+    }
+    if (a.type == ColliderType::AABB && b.type == ColliderType::Sphere) {
+        return IntersectAABB_Sphere(a.aabb, b.sphere);
+    }
+    if (a.type == ColliderType::Sphere && b.type == ColliderType::AABB) {
+        return IntersectAABB_Sphere(b.aabb, a.sphere);
+    }
+    if (a.type == ColliderType::Sphere && b.type == ColliderType::Sphere) {
+        return IntersectSphere_Sphere(a.sphere, b.sphere);
+    }
+    if (a.type == ColliderType::OBB && b.type == ColliderType::OBB) {
+        return IntersectOBB_OBB(a.obb, b.obb);
+    }
+    if (a.type == ColliderType::Sphere && b.type == ColliderType::OBB) {
+        return IntersectSphere_OBB(a.sphere, b.obb);
+    }
+    if (a.type == ColliderType::OBB && b.type == ColliderType::Sphere) {
+        return IntersectSphere_OBB(b.sphere, a.obb);
+    }
+    if (a.type == ColliderType::AABB && b.type == ColliderType::OBB) {
+        return IntersectOBB_OBB(MakeOBBFromAABBShape(a.aabb), b.obb);
+    }
+    if (a.type == ColliderType::OBB && b.type == ColliderType::AABB) {
+        return IntersectOBB_OBB(a.obb, MakeOBBFromAABBShape(b.aabb));
+    }
+    if (a.type == ColliderType::Capsule && b.type == ColliderType::Capsule) {
+        return IntersectCapsule_Capsule(a.capsule, b.capsule);
+    }
+    if (a.type == ColliderType::Capsule && b.type == ColliderType::Sphere) {
+        return IntersectCapsule_Sphere(a.capsule, b.sphere);
+    }
+    if (a.type == ColliderType::Sphere && b.type == ColliderType::Capsule) {
+        return IntersectCapsule_Sphere(b.capsule, a.sphere);
+    }
+    if (a.type == ColliderType::Capsule && b.type == ColliderType::AABB) {
+        return IntersectCapsule_AABB(a.capsule, b.aabb);
+    }
+    if (a.type == ColliderType::AABB && b.type == ColliderType::Capsule) {
+        return IntersectCapsule_AABB(b.capsule, a.aabb);
+    }
+    if (a.type == ColliderType::Capsule && b.type == ColliderType::OBB) {
+        return IntersectCapsule_OBB(a.capsule, b.obb);
+    }
+    if (a.type == ColliderType::OBB && b.type == ColliderType::Capsule) {
+        return IntersectCapsule_OBB(b.capsule, a.obb);
+    }
+    if (a.type == ColliderType::Capsule && b.type == ColliderType::Mesh) {
+        return IntersectCapsule_Mesh(a.capsule, b.mesh);
+    }
+    if (a.type == ColliderType::Mesh && b.type == ColliderType::Capsule) {
+        return IntersectCapsule_Mesh(b.capsule, a.mesh);
+    }
+    return false;
 }
 } // namespace CollisionUtility

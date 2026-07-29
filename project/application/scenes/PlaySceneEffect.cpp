@@ -1,12 +1,12 @@
 #include "PlayScene.h"
-#ifdef USE_IMGUI
-#include "ImGuiManager.h"
-#endif
+#include "../../engine/2d/Sprite.h"
 #include "../../engine/3d/Camera.h"
 #include "../../engine/utility/mathUtility.h"
 
 #include <algorithm>
-#include <array>
+#include <cmath>
+#include <memory>
+#include <string>
 
 using namespace MyEngine;
 using namespace Math;
@@ -18,15 +18,28 @@ constexpr float kNdcToUvScale = 0.5f; // NDC座標をUV座標へ変換する倍�
 constexpr float kNdcToUvOffset = 0.5f; // NDC座標をUV座標へ変換するオフセット
 constexpr float kScreenUvMin = 0.0f; // 画面UVの最小値
 constexpr float kScreenUvMax = 1.0f; // 画面UVの最大値
-constexpr const char* kEffectControllerWindowName = "Effect Controller"; // エフェクト操作用ImGuiウィンドウ名
-constexpr const char* kEffectTypeComboLabel = "Effect Type"; // エフェクト種別選択のImGuiラベル
-constexpr const char* kEffectTriggerKeyText = "Trigger Key: R"; // エフェクト開始キーの表示文
-constexpr const char* kPlayEffectButtonLabel = "Play Effect"; // エフェクト再生ボタンの表示文
-constexpr std::array<const char*, 3> kEffectNames = {
-    "Dimensional Shatter",
-    "Time Reversal",
-    "Time Stop",
-}; // ImGuiで選択できるエフェクト名
+constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
+constexpr Vector2 kTemporalSpriteDefaultSize = { 1.0f, 1.0f }; // 時間演出スプライトの初期サイズ
+constexpr Vector4 kHiddenSpriteColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示状態にするスプライト色
+constexpr int kMaximumTemporalAfterimageCount = 8; // 時空破砕で保持できる最大残像数
+constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
+
+
+/// <summary>
+/// 非表示状態の時間演出スプライトを作成する
+/// </summary>
+std::unique_ptr<Sprite> CreateHiddenTemporalSprite(const SceneContext& ctx, const std::string& textureName)
+{
+    auto sprite = std::make_unique<Sprite>(); // 作成する時間演出用スプライト
+    sprite->Initialize(ctx.spriteCommon, textureName, ctx.imguiManager);
+    sprite->SetAnchorPoint(kCenteredSpriteAnchor);
+    sprite->SetSize(kTemporalSpriteDefaultSize);
+    sprite->SetColor(kHiddenSpriteColor);
+    sprite->Update();
+    return sprite;
+}
 
 /// <summary>
 /// ワールド座標を画面UV座標へ変換する
@@ -64,68 +77,7 @@ Vector2 CalculateScreenUvFromWorldPosition(const Camera* camera, const Vector3& 
     screenUv.y = (std::clamp)(screenUv.y, kScreenUvMin, kScreenUvMax);
     return screenUv;
 }
-}
 
-/// <summary>
-/// エフェクト選択と再生操作用のImGuiを描画する。
-/// </summary>
-void PlayScene::DrawEffectControllerImGui()
-{
-#ifdef USE_IMGUI
-    int selectedEffectIndex = static_cast<int>(selectedEffectType_); // ImGuiで編集中のエフェクト番号
-    if (!IsAnyEffectPlaying()
-        && ImGui::Combo(
-            kEffectTypeComboLabel,
-            &selectedEffectIndex,
-            kEffectNames.data(),
-            static_cast<int>(kEffectNames.size()))) {
-        selectedEffectType_ = static_cast<EffectType>(selectedEffectIndex);
-    }
-
-    ImGui::Text(kEffectTriggerKeyText);
-    if (!IsAnyEffectPlaying()) {
-        if (ImGui::Button(kPlayEffectButtonLabel)) {
-            StartSelectedEffect();
-        }
-    } else {
-        ImGui::BeginDisabled();
-        ImGui::Button(kPlayEffectButtonLabel);
-        ImGui::EndDisabled();
-    }
-#endif
-}
-
-/// <summary>
-/// 選択中エフェクトの詳細ImGuiを描画する。
-/// </summary>
-void PlayScene::DrawSelectedEffectImGui()
-{
-#ifdef USE_IMGUI
-    switch (selectedEffectType_) {
-    case EffectType::DimensionalShatter:
-        temporalRiftEffect_.DrawImGui();
-        break;
-    case EffectType::TimeStop:
-        timeStopEffect_.DrawImGui();
-        break;
-    case EffectType::TimeReversal:
-        timeReversalEffect_.DrawImGui();
-        break;
-    }
-#endif
-}
-
-/// <summary>
-/// エフェクト操作用のImGuiを描画する。
-/// </summary>
-void PlayScene::DrawImGui()
-{
-#ifdef USE_IMGUI
-    ImGui::Begin(kEffectControllerWindowName);
-    DrawEffectControllerImGui();
-    DrawSelectedEffectImGui();
-    ImGui::End();
-#endif
 }
 
 /// <summary>
@@ -185,6 +137,7 @@ bool PlayScene::IsTimeStopped() const
 /// </summary>
 void PlayScene::StartTimeReversalEffect()
 {
+    EnsureTimeReversalSprites();
     timeReversalEffect_.Start(postProcess_, timeReversalSprites_.size());
 }
 
@@ -201,6 +154,10 @@ void PlayScene::UpdateTimeReversalEffect(float deltaTime)
 /// </summary>
 void PlayScene::UpdateTimeReversalSprites()
 {
+    if (!timeReversalEffect_.IsPlaying()) {
+        return;
+    }
+
     timeReversalEffect_.UpdateSprites(
         timeReversalSprites_,
         timeReversalAfterimageSprites_,
@@ -225,6 +182,10 @@ void PlayScene::UpdateTimeReversalTransformHistory()
 /// </summary>
 void PlayScene::DrawTimeReversalParticles()
 {
+    if (!timeReversalEffect_.IsPlaying()) {
+        return;
+    }
+
     timeReversalEffect_.DrawParticles(
         ctx_.spriteCommon,
         timeReversalSprites_,
@@ -233,10 +194,52 @@ void PlayScene::DrawTimeReversalParticles()
 }
 
 /// <summary>
+/// 時間演出用スプライトを初期化する
+/// </summary>
+void PlayScene::InitializeTemporalEffectSprites()
+{
+    temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
+    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
+    timeReversalAfterimageSprites_.reserve(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount);
+}
+
+/// <summary>
+/// 時空破砕で使用する残像スプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTemporalRiftSprites()
+{
+    while (temporalAfterimageSprites_.size() < kMaximumTemporalAfterimageCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時空破砕の残像表示に使うスプライト
+        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+}
+
+/// <summary>
+/// 時間逆行で使用するスプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTimeReversalSprites()
+{
+    while (timeReversalSprites_.size() < kMaximumTimeReversalParticleCount) {
+        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の粒子表示に使うスプライト
+        timeReversalSprites_.push_back(std::move(particleSprite));
+    }
+
+    const size_t maximumRewindAfterimageSpriteCount = static_cast<size_t>(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount); // 時間逆行の軌跡表示に必要な残像数
+    while (timeReversalAfterimageSprites_.size() < maximumRewindAfterimageSpriteCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の軌跡表示に使うスプライト
+        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    if (!timeReversalConvergenceSprite_) {
+        timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
+    }
+}
+/// <summary>
 /// 時空破砕エフェクトを開始する
 /// </summary>
 void PlayScene::StartTemporalRiftEffect()
 {
+    EnsureTemporalRiftSprites();
     temporalRiftEffect_.SetScreenUv(CalculateTemporalRiftScreenUv());
     temporalRiftEffect_.Start(postProcess_, objects3d_, temporalRiftEffect_.GetScreenUv());
 }
@@ -278,6 +281,10 @@ void PlayScene::UpdateTemporalAfterimages()
 /// </summary>
 void PlayScene::UpdateAfterimageSprites()
 {
+    if (!temporalRiftEffect_.IsPlaying()) {
+        return;
+    }
+
     temporalRiftEffect_.UpdateAfterimageSprites(
         temporalAfterimageSprites_,
         [this](const Vector3& worldPosition) {
@@ -290,6 +297,10 @@ void PlayScene::UpdateAfterimageSprites()
 /// </summary>
 void PlayScene::DrawTemporalAfterimages()
 {
+    if (!temporalRiftEffect_.IsPlaying()) {
+        return;
+    }
+
     temporalRiftEffect_.DrawAfterimages(ctx_.spriteCommon, temporalAfterimageSprites_);
 }
 

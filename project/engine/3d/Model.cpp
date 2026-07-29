@@ -48,6 +48,48 @@ uint32_t ResolveModelMaterialTextureIndex(TextureManager* textureManager, const 
 }
 
 /// <summary>
+/// モデルの終了処理
+/// </summary>
+Model::~Model()
+{
+    FinalizeGpuResources();
+}
+
+/// <summary>
+/// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+/// </summary>
+void Model::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = dxCommon_; // 遅延解放を管理するDirectX共通処理
+    if (dxCommon) {
+        dxCommon->DeferReleaseResource(resource);
+        return;
+    }
+
+    resource.Reset();
+}
+
+/// <summary>
+/// モデルが保持するGPUリソースを解放予約する。
+/// </summary>
+void Model::FinalizeGpuResources()
+{
+    DeferReleaseResource(vertexResource_);
+    DeferReleaseResource(intermediateResource_);
+    DeferReleaseResource(indexResource_);
+    DeferReleaseResource(vertexInfluenceResource_);
+
+    vertexBufferView_ = {};
+    indexBufferView_ = {};
+    vertexInfluenceBufferView_ = {};
+    materialTextureIndices_.clear();
+}
+
+/// <summary>
 /// Object3d側で明示指定されたテクスチャ番号を取得する。
 /// </summary>
 uint32_t Model::ResolveOwnerTextureOverrideIndex(const Object3d* owner) const
@@ -86,6 +128,38 @@ uint32_t Model::ResolveFallbackTextureIndex() const
     return textureManager->GetSrvIndex(kFallbackModelTexturePath);
 }
 
+/// <summary>
+/// 指定マテリアル番号のテクスチャ番号を取得する。
+/// </summary>
+uint32_t Model::ResolveMaterialTextureIndex(uint32_t materialIndex) const
+{
+    if (materialIndex < materialTextureIndices_.size()) {
+        const uint32_t materialTextureIndex = materialTextureIndices_[materialIndex]; // サブメッシュが参照するマテリアルのSRV番号
+        if (materialTextureIndex != UINT32_MAX) {
+            return materialTextureIndex;
+        }
+    }
+
+    const uint32_t modelTextureIndex = ResolveModelTextureIndex(); // 代表マテリアルのSRV番号
+    if (modelTextureIndex != UINT32_MAX) {
+        return modelTextureIndex;
+    }
+
+    return ResolveFallbackTextureIndex();
+}
+
+/// <summary>
+/// サブメッシュ描画時に使用するテクスチャ番号を決定する。
+/// </summary>
+uint32_t Model::ResolveMeshPartTextureIndex(const Object3d* owner, uint32_t materialIndex) const
+{
+    const uint32_t ownerTextureIndex = ResolveOwnerTextureOverrideIndex(owner); // Object3d側の明示テクスチャSRV番号
+    if (ownerTextureIndex != UINT32_MAX) {
+        return ownerTextureIndex;
+    }
+
+    return ResolveMaterialTextureIndex(materialIndex);
+}
 /// <summary>
 /// 描画時に使用するテクスチャ番号を決定する。
 /// </summary>
@@ -149,10 +223,43 @@ D3D12_INDEX_BUFFER_VIEW Model::ResolveIndexBufferView(const Object3d* owner) con
 }
 
 /// <summary>
+/// サブメッシュ情報があればマテリアル単位でIndex描画を行う。
+/// </summary>
+bool Model::DrawMeshPartsIndexed(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const
+{
+    const std::vector<uint32_t>& indices = ResolveDrawIndices(owner); // 描画に使うIndexデータ
+    const D3D12_INDEX_BUFFER_VIEW indexBufferView = ResolveIndexBufferView(owner); // 描画に使うIndexBufferView
+    if (indices.empty() || indexBufferView.SizeInBytes == 0 || modelData_.meshParts.empty()) {
+        return false;
+    }
+
+    commandList->IASetIndexBuffer(&indexBufferView);
+    for (const Object3d::ModelData::MeshPart& meshPart : modelData_.meshParts) {
+        if (meshPart.indexCount == 0 || meshPart.indexOffset >= indices.size()) {
+            continue;
+        }
+
+        const uint32_t drawIndexCount = (std::min)(meshPart.indexCount, static_cast<uint32_t>(indices.size()) - meshPart.indexOffset); // 範囲外参照を防いだ描画Index数
+        const uint32_t textureIndex = ResolveMeshPartTextureIndex(owner, meshPart.materialIndex); // サブメッシュに使用するSRV番号
+        BindTexture(commandList, textureIndex, logContext);
+        commandList->DrawIndexedInstanced(drawIndexCount, instanceCount, meshPart.indexOffset, 0, 0);
+    }
+
+    return true;
+}
+
+/// <summary>
 /// IndexがあればIndex描画、なければ従来の頂点描画を行う
 /// </summary>
-void Model::DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const
+void Model::DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const
 {
+    if (DrawMeshPartsIndexed(commandList, owner, instanceCount, logContext)) {
+        return;
+    }
+
+    const uint32_t textureIndex = ResolveTextureIndex(owner); // 単一描画で使うSRV番号
+    BindTexture(commandList, textureIndex, logContext);
+
     const std::vector<uint32_t>& indices = ResolveDrawIndices(owner); // 描画に使うIndexデータ
     const D3D12_INDEX_BUFFER_VIEW indexBufferView = ResolveIndexBufferView(owner); // 描画に使うIndexBufferView
     if (!indices.empty() && indexBufferView.SizeInBytes != 0) {
@@ -235,9 +342,9 @@ void Model::Draw(Object3d* owner)
     DirectXCommon* dxCommon = nullptr;
     if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
         dxCommon = owner->GetObject3dCommon()->GetDxCommon();
-    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
-        // フォールバック: モデル初期化時に渡された ModelCommon を使う
-        dxCommon = modelCommon_->GetDxCommon();
+    } else if (dxCommon_) {
+        // フォールバック: モデル初期化時に保持したDirectXCommonを使う
+        dxCommon = dxCommon_;
     }
 
     // DirectXCommon が取得できない場合は描画できない
@@ -319,11 +426,7 @@ void Model::Draw(Object3d* owner)
 
     // 非インスタンス描画パス: 予期せぬディスクリプタテーブルの競合を避けるため、インスタンシングSRV（ルートパラメータ4）はバインドしない。
 
-    // テクスチャSRV設定 (オーナー設定を最優先、無ければモデルの設定)
-    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
-    BindTexture(cmdList, textureIndex, "Model::Draw");
-
-    DrawIndexedOrVertices(cmdList, owner, 1);
+    DrawIndexedOrVertices(cmdList, owner, 1, "Model::Draw");
 }
 /// <summary>
 /// インスタンシング描画
@@ -340,9 +443,9 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     if (owner->GetObject3dCommon() && owner->GetObject3dCommon()->GetDxCommon()) {
         // オーナーの Object3dCommon から DirectXCommon を取得
         dxCommon = owner->GetObject3dCommon()->GetDxCommon();
-    } else if (modelCommon_ && modelCommon_->GetDxCommon()) {
-        // フォールバック: モデル初期化時に渡された ModelCommon から DirectXCommon を取得
-        dxCommon = modelCommon_->GetDxCommon();
+    } else if (dxCommon_) {
+        // フォールバック: モデル初期化時に保持したDirectXCommonを使う
+        dxCommon = dxCommon_;
     }
 
     // DirectXCommon が取得できない場合は描画できない
@@ -403,9 +506,6 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
         cmdList->SetGraphicsRootConstantBufferView(7, plAddrInst);
     }
 
-    const uint32_t textureIndex = ResolveTextureIndex(owner); // 描画に使うSRV番号
-    BindTexture(cmdList, textureIndex, "Model::DrawInstanced");
-
     D3D12_GPU_DESCRIPTOR_HANDLE instSrv = common->GetInstancingSrvGPUHandle();
     // インスタンシング描画パスでは、インスタンシング用SRVはバインドしない（ルートパラメータ4は使用しない）。
     if (instSrv.ptr != 0) {
@@ -413,7 +513,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
     }
 
     // 描画コマンド
-    DrawIndexedOrVertices(cmdList, owner, instanceCount);
+    DrawIndexedOrVertices(cmdList, owner, instanceCount, "Model::DrawInstanced");
 }
 
 /// <summary>
@@ -431,7 +531,14 @@ bool Model::LoadFromFile(const std::string& directoryPath, const std::string& fi
 /// </summary>
 void Model::CreateVertexBuffer()
 {
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DeferReleaseResource(vertexResource_);
+    vertexBufferView_ = {};
+
+    if (!dxCommon_ || modelData_.vertices.empty()) {
+        return;
+    }
+
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t vertexBufferSize = sizeof(Object3d::VertexData) * modelData_.vertices.size(); // 頂点バッファサイズ
     vertexResource_ = dxCommon->CreateBufferResource(vertexBufferSize);
 
@@ -452,14 +559,14 @@ void Model::CreateVertexBuffer()
 /// </summary>
 void Model::CreateIndexBuffer()
 {
-    indexResource_.Reset();
+    DeferReleaseResource(indexResource_);
     indexBufferView_ = {};
 
-    if (!modelCommon_ || !modelCommon_->GetDxCommon() || modelData_.indices.empty()) {
+    if (!dxCommon_ || modelData_.indices.empty()) {
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t indexBufferSize = sizeof(uint32_t) * modelData_.indices.size(); // Indexバッファサイズ
     indexResource_ = dxCommon->CreateBufferResource(indexBufferSize);
 
@@ -478,17 +585,17 @@ void Model::CreateIndexBuffer()
 /// </summary>
 void Model::CreateVertexInfluenceBuffer()
 {
-    vertexInfluenceResource_.Reset();
+    DeferReleaseResource(vertexInfluenceResource_);
     vertexInfluenceBufferView_ = {};
 
-    if (!modelCommon_ || !modelCommon_->GetDxCommon()) {
+    if (!dxCommon_) {
         return;
     }
     if (modelData_.vertexInfluences.empty() || modelData_.vertexInfluences.size() != modelData_.vertices.size()) {
         return;
     }
 
-    DirectXCommon* dxCommon = modelCommon_->GetDxCommon(); // GPUリソース生成元
+    DirectXCommon* dxCommon = dxCommon_; // GPUリソース生成元
     const size_t bufferSize = sizeof(Object3d::VertexInfluence) * modelData_.vertexInfluences.size(); // 影響情報バッファサイズ
     vertexInfluenceResource_ = dxCommon->CreateBufferResource(bufferSize);
 
@@ -503,21 +610,39 @@ void Model::CreateVertexInfluenceBuffer()
     vertexInfluenceBufferView_.StrideInBytes = static_cast<UINT>(sizeof(Object3d::VertexInfluence));
 }
 /// <summary>
+/// モデル内マテリアルごとのテクスチャ番号を初期化する。
+/// </summary>
+void Model::InitializeMaterialTextureIndices(TextureManager* textureManager)
+{
+    materialTextureIndices_.clear();
+    if (!textureManager) {
+        return;
+    }
+
+    materialTextureIndices_.reserve(modelData_.materials.size());
+    for (const Object3d::MaterialData& materialData : modelData_.materials) {
+        const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, materialData); // マテリアルごとのSRV番号
+        materialTextureIndices_.push_back(materialTextureIndex);
+    }
+}
+/// <summary>
 /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する。
 /// </summary>
 void Model::InitializeModelResources()
 {
     auto textureManager = TextureManager::GetInstance(); // テクスチャ管理
     EnsureFallbackModelTextureLoaded(textureManager);
+    textureIndex_ = UINT32_MAX;
 
     CreateVertexBuffer();
     CreateIndexBuffer();
     CreateVertexInfluenceBuffer();
 
-    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデルマテリアルのSRV番号
+    const uint32_t materialTextureIndex = ResolveModelMaterialTextureIndex(textureManager, modelData_.material); // モデル代表マテリアルのSRV番号
     if (materialTextureIndex != UINT32_MAX) {
         textureIndex_ = materialTextureIndex;
     }
+    InitializeMaterialTextureIndices(textureManager);
 }
 
 /// <summary>
@@ -525,7 +650,7 @@ void Model::InitializeModelResources()
 /// </summary>
 void Model::Initialize(ModelCommon* modelCommon)
 {
-    modelCommon_ = modelCommon;
+    dxCommon_ = modelCommon ? modelCommon->GetDxCommon() : nullptr;
     // 前提条件のチェック
     if (modelData_.vertices.empty()) {
         return;

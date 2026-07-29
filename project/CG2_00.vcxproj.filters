@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="ソース ファイル">
@@ -12,6 +12,9 @@
     <Filter Include="リソース ファイル">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="リソース ファイル\levels">
+      <UniqueIdentifier>{36b5d39f-73be-4963-a7c3-bf9f3523c19d}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソース ファイル\engine">
       <UniqueIdentifier>{5c9f1877-d8b6-462d-abf1-95fe603d3f04}</UniqueIdentifier>
@@ -55,11 +58,17 @@
     <Filter Include="externals">
       <UniqueIdentifier>{cd8b06ea-5f21-44e3-989d-07cfa425c03f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="externals\nlohmann">
+      <UniqueIdentifier>{29b56f87-cab2-4a7e-b2a7-68b6bd2da011}</UniqueIdentifier>
+    </Filter>
     <Filter Include="externals\imgui">
       <UniqueIdentifier>{096eeea7-9ae7-4881-99a3-c807d53d6a2a}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\engine\utility">
       <UniqueIdentifier>{740b6bc6-1367-4735-8995-4ca6b50e10be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\engine\level">
+      <UniqueIdentifier>{fd7c63df-7f62-40de-aac6-a3421af27e5b}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソース ファイル\engine\sound">
       <UniqueIdentifier>{2151e101-e2d2-41a6-ba3d-465ccf8a6f44}</UniqueIdentifier>
@@ -67,8 +76,14 @@
     <Filter Include="ヘッダー ファイル\engine\sound">
       <UniqueIdentifier>{8c49e122-dc20-47da-a5e5-b98911af3345}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\engine\debug">
+      <UniqueIdentifier>{35a1bbd7-a1bd-4af5-a728-9eb1e4a41411}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソース ファイル\engine\particle">
       <UniqueIdentifier>{2c8b3318-0eaf-45ea-b3fa-6667e5ce7e75}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\engine\debug">
+      <UniqueIdentifier>{4f7c88b5-0883-4a47-a10e-472425da845e}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\engine\particle">
       <UniqueIdentifier>{87ee9c2f-b0b0-4f4b-8fcd-02b452d83782}</UniqueIdentifier>
@@ -81,6 +96,9 @@
     </Filter>
     <Filter Include="ソース ファイル\engine\utility">
       <UniqueIdentifier>{f3d99883-ad4c-411a-83b1-c61da3991c1a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\engine\level">
+      <UniqueIdentifier>{c1315265-306c-4a37-93d4-d27df4f06dd4}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\application\scenes">
       <UniqueIdentifier>{3b1f8ad4-6d15-4f81-b904-b1da251d5478}</UniqueIdentifier>
@@ -120,6 +138,36 @@
     <ClCompile Include="engine\utility\mathUtility.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
+    <ClCompile Include="engine\utility\Easing.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\CurveUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\FileUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\JsonUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\JsonFileLoader.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\level\LevelLoader.cpp">
+      <Filter>ソース ファイル\engine\level</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\level\LevelWriter.cpp">
+      <Filter>ソース ファイル\engine\level</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\DebugUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\RandomUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\TimeUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
     <ClCompile Include="engine\3d\DebugCamera.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
@@ -130,7 +178,7 @@
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\RenderTarget.cpp">
-      <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
+      <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\Logger.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
@@ -165,6 +213,15 @@
     <ClCompile Include="engine\3d\Object3d.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
+    <ClCompile Include="engine\3d\Object3dDebugGui.cpp">
+      <Filter>ソース ファイル\engine\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\3d\Object3dModelLoader.cpp">
+      <Filter>ソース ファイル\engine\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\3d\Object3dSkeleton.cpp">
+      <Filter>ソース ファイル\engine\3d</Filter>
+    </ClCompile>
     <ClCompile Include="engine\3d\Object3dCommon.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
@@ -180,13 +237,28 @@
     <ClCompile Include="engine\utility\CollisionUtility.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
+    <ClCompile Include="engine\utility\CollisionSystem.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
     <ClCompile Include="engine\sound\Sound.cpp">
       <Filter>ソース ファイル\engine\sound</Filter>
     </ClCompile>
     <ClCompile Include="engine\particle\ParticleEmitter.cpp">
       <Filter>ソース ファイル\engine\particle</Filter>
     </ClCompile>
+    <ClCompile Include="engine\particle\GpuEmitterSettingsUtility.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
     <ClCompile Include="engine\particle\ParticleManager.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerGpuEmitterSettings.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerGpu.cpp">
+      <Filter>ソース ファイル\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\particle\ParticleManagerImGui.cpp">
       <Filter>ソース ファイル\engine\particle</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\ResourceResolver.cpp">
@@ -196,6 +268,18 @@
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\ImGuiManager.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManagerSceneView.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManagerGizmo.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManagerPostProcess.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\ImGuiManagerSections.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\base\Framework.cpp">
@@ -213,8 +297,17 @@
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneParticle.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneLevelEditor.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneEffect.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\effects\EffectParticleUtility.cpp">
+      <Filter>ソース ファイル\application\effects</Filter>
     </ClCompile>
     <ClCompile Include="application\effects\TimeStopEffect.cpp">
       <Filter>ソース ファイル\application\effects</Filter>
@@ -231,11 +324,30 @@
     <ClCompile Include="application\scenes\SceneFactory.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="engine\debug\DebugRenderer.cpp">
+      <Filter>ソース ファイル\engine\debug</Filter>
+    </ClCompile>
     <ClCompile Include="engine\base\PostProcess.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\PostProcessPipeline.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+
+    <ClCompile Include="engine\base\PostProcessRootConstants.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\base\PostProcessSettings.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="resources\shaders\DebugLine.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\DebugLine.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
@@ -252,10 +364,10 @@
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\InitializeParticle.CS.hlsl">
-      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+      <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\UpdateParticle.CS.hlsl">
-      <Filter>繧ｷ繧ｧ繝ｼ繝繝ｼ繝輔ぃ繧､繝ｫ</Filter>
+      <Filter>シェーダーファイル</Filter>
     </FxCompile>
     <FxCompile Include="resources\shaders\GPUParticleUpdate.CS.hlsl">
       <Filter>シェーダーファイル</Filter>
@@ -266,8 +378,41 @@
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl">
       <Filter>シェーダーファイル</Filter>
     </FxCompile>
-  </ItemGroup>
+    <FxCompile Include="resources\shaders\BoxFilter.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\DepthBasedOutline.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Dissolve.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Distortion.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Fullscreen.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\GaussianFilter.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Grayscale.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\LuminanceBasedOutline.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\RadialBlur.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Random.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkinningObject3D.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkyBox.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\SkyBox.VS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>    <FxCompile Include="resources\shaders\Vignette.PS.hlsl">
+      <Filter>シェーダーファイル</Filter>
+    </FxCompile>  </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="externals\nlohmann\json.hpp">
+      <Filter>externals\nlohmann</Filter>
+    </ClInclude>
     <ClInclude Include="externals\imgui\imconfig.h">
       <Filter>externals\imgui</Filter>
     </ClInclude>
@@ -301,6 +446,39 @@
     <ClInclude Include="engine\utility\mathUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
     </ClInclude>
+    <ClInclude Include="engine\utility\Easing.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\CurveUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\FileUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\JsonUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\JsonFileLoader.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelData.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelLoader.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelWriter.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\DebugUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\RandomUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\TimeUtility.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
     <ClInclude Include="engine\base\WinApp.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
@@ -308,7 +486,7 @@
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\RenderTarget.h">
-      <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ\engine\base</Filter>
+      <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\StringUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
@@ -346,6 +524,12 @@
     <ClInclude Include="engine\3d\Object3d.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
+    <ClInclude Include="engine\3d\Object3dTypes.h">
+      <Filter>ヘッダー ファイル\engine\3d</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\3d\Object3dModelLoader.h">
+      <Filter>ヘッダー ファイル\engine\3d</Filter>
+    </ClInclude>
     <ClInclude Include="engine\3d\Object3dCommon.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
@@ -358,16 +542,25 @@
     <ClInclude Include="engine\base\SceneManager.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
+    <ClInclude Include="engine\debug\DebugRenderer.h">
+      <Filter>ヘッダー ファイル\engine\debug</Filter>
+    </ClInclude>
     <ClInclude Include="engine\base\SrvManager.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\CollisionUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
     </ClInclude>
+    <ClInclude Include="engine\utility\CollisionSystem.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
     <ClInclude Include="engine\sound\Sound.h">
       <Filter>ヘッダー ファイル\engine\sound</Filter>
     </ClInclude>
     <ClInclude Include="engine\particle\ParticleEmitter.h">
+      <Filter>ヘッダー ファイル\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\particle\GpuEmitterSettingsUtility.h">
       <Filter>ヘッダー ファイル\engine\particle</Filter>
     </ClInclude>
     <ClInclude Include="engine\particle\ParticleManager.h">
@@ -397,6 +590,9 @@
     <ClInclude Include="application\effects\EffectProgress.h">
       <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
+    <ClInclude Include="application\effects\EffectParticleUtility.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
+    </ClInclude>
     <ClInclude Include="application\effects\TimeStopEffect.h">
       <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
@@ -415,6 +611,15 @@
     <ClInclude Include="engine\base\PostProcess.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
+    <ClInclude Include="engine\base\PostProcessPipeline.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcessRootConstants.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcessSettings.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt">
@@ -422,6 +627,9 @@
     </Text>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\levels\scene.json">
+      <Filter>リソース ファイル\levels</Filter>
+    </None>
     <None Include="resources\shaders\Object3d.hlsli">
       <Filter>シェーダーファイル</Filter>
     </None>

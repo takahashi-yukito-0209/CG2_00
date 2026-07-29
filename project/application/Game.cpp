@@ -19,6 +19,7 @@
 #include "application/scenes/SceneFactory.h"
 #include "engine/base/SceneManager.h"
 #include "engine/base/SrvManager.h"
+#include "engine/debug/DebugRenderer.h"
 #include "engine/sound/Sound.h"
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
@@ -39,7 +40,6 @@
 #include <iomanip>
 #include <list>
 #include <memory>
-#include <random>
 #include <sstream>
 #include <string>
 #include <strsafe.h>
@@ -59,27 +59,27 @@ using namespace MyEngine;
 using namespace Math;
 
 namespace {
-constexpr Vector3 kInitialCameraRotate = { 5.9f, -7.43f, 0.0f }; // 初期カメラの回転角
-constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -18.0f }; // 初期カメラの位置
+constexpr Vector3 kInitialCameraRotate = { 5.9f, -7.43f, 0.0f };
+constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -18.0f };
 constexpr Vector4 kWhiteColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 白色
-constexpr Vector4 kPointLightPosition = { 0.0f, 1.5f, 0.0f, 0.0f }; // 点光源の位置
-constexpr Vector4 kPointLightColor = { 1.0f, 1.0f, 1.0f, 1.5f }; // 点光源の色と輝度
-constexpr float kPointLightRadius = 6.0f; // 点光源の有効半径
-constexpr float kLightDecay = 2.0f; // ライトの減衰率
-constexpr Vector4 kSpotLightPosition = { 2.0f, 1.25f, -3.0f, 0.0f }; // スポットライトの位置
-constexpr Vector4 kSpotLightColor = { 1.0f, 1.0f, 1.0f, 2.0f }; // スポットライトの色と輝度
-constexpr float kSpotLightDistance = 7.0f; // スポットライトの有効距離
-constexpr Vector3 kSpotLightDirection = { -1.0f, -1.0f, 0.0f }; // スポットライトの向き
-constexpr float kPi = 3.14159265358979323846f; // 円周率
-constexpr float kSpotLightAngle = kPi / 3.0f; // スポットライトの照射角
-constexpr float kSpotLightFalloffStartAngle = kPi / 2.0f; // スポットライトの減衰開始角
-constexpr float kInitialDebugCameraWidth = 1280.0f; // デバッグカメラの初期横解像度
-constexpr float kInitialDebugCameraHeight = 720.0f; // デバッグカメラの初期縦解像度
-constexpr float kDefaultCameraRotateSpeed = 0.01f; // 通常カメラのマウス回転速度
-constexpr float kDefaultCameraZoomSpeed = 0.1f; // 通常カメラのホイール移動速度
-constexpr float kFixedDeltaTime = 1.0f / 60.0f; // 固定更新のデルタタイム
-constexpr size_t kLogDateBufferSize = 32; // ログファイル日時文字列のバッファサイズ
-constexpr size_t kDebugCameraLogBufferSize = 128; // デバッグカメラログ用バッファサイズ
+constexpr Vector4 kPointLightPosition = { 0.0f, 1.5f, 0.0f, 0.0f };
+constexpr Vector4 kPointLightColor = { 1.0f, 1.0f, 1.0f, 1.5f };
+constexpr float kPointLightRadius = 6.0f;
+constexpr float kLightDecay = 2.0f;
+constexpr Vector4 kSpotLightPosition = { 2.0f, 1.25f, -3.0f, 0.0f };
+constexpr Vector4 kSpotLightColor = { 1.0f, 1.0f, 1.0f, 2.0f };
+constexpr float kSpotLightDistance = 7.0f;
+constexpr Vector3 kSpotLightDirection = { -1.0f, -1.0f, 0.0f };
+constexpr float kPi = 3.14159265358979323846f;
+constexpr float kSpotLightAngle = kPi / 3.0f;
+constexpr float kSpotLightFalloffStartAngle = kPi / 2.0f;
+constexpr float kInitialDebugCameraWidth = 1280.0f;
+constexpr float kInitialDebugCameraHeight = 720.0f;
+constexpr float kDefaultCameraRotateSpeed = 0.01f;
+constexpr float kDefaultCameraZoomSpeed = 0.05f;
+constexpr float kFixedDeltaTime = 1.0f / 60.0f;
+constexpr size_t kLogDateBufferSize = 32;
+constexpr size_t kDebugCameraLogBufferSize = 128;
 }
 
 Game::Game()
@@ -87,74 +87,54 @@ Game::Game()
 {
 }
 
-// 描画する内容の種類を選択するための列挙型
-enum DrawType {
-    DRAW_MODEL, // モデル描画
-    DRAW_PARTICLE, // パーティクル描画
-    DRAW_SPRITE, // スプライト描画
-    DRAW_BUNNY, // バニー描画
-    DRAW_FENCE, // フェンス描画
-    DRAW_CHECKER, // チェッカー描画
-    DRAW_SPHERE, // 球描画
-    DRAW_SIMPLE_SKIN, // simpleSkinモデル描画
-    DRAW_HUMAN_SNEAK_WALK, // human/sneakWalkモデル描画
-    DRAW_HUMAN_WALK, // human/walkモデル描画
-    DRAW_ALL, // すべて描画
-};
 
-// Game クラスの実装を隠蔽するための Impl 構造体
 struct Game::Impl {
 
-    // 初期化フラグと終了要求フラグ
-    bool initialized = false; // 初期化完了フラグ
-    bool endRequested = false; // 終了要求フラグ
+    bool initialized = false;
+    bool endRequested = false;
 
-    // ここにゲームの状態やリソースを管理するメンバ変数を追加
 
-    // トランスフォーム（スケール、回転、平行移動）をまとめた構造体
     Transform transform = {};
 
-    WinApp winApp; // ウィンドウアプリケーション管理
-    HWND hwnd = nullptr; // ウィンドウハンドル
-    Microsoft::WRL::ComPtr<IDirectInput8> directInput; // DirectInputインターフェース
-    SoundSystem soundSystem; // サウンドシステム
-    std::shared_ptr<SoundClip> soundData1; // サウンドデータの共有ポインタ
+    WinApp winApp;
+    HWND hwnd = nullptr;
+    Microsoft::WRL::ComPtr<IDirectInput8> directInput;
+    SoundSystem soundSystem;
+    std::shared_ptr<SoundClip> soundData1;
 
-    std::unique_ptr<SpriteCommon> spriteCommon; // スプライト共通管理
-    SrvManager srvManager; // シェーダーリソースビュー管理
-    std::unique_ptr<Object3dCommon> object3dCommon; // 3Dオブジェクト共通管理
+    std::unique_ptr<SpriteCommon> spriteCommon;
+    SrvManager srvManager;
+    std::unique_ptr<Object3dCommon> object3dCommon;
 
-    std::unique_ptr<Camera> camera; // カメラ
-    std::vector<std::unique_ptr<Sprite>> sprites; // スプライトのリスト
-    std::vector<std::unique_ptr<Object3d>> objects3d; // 3Dオブジェクトのリスト
-    std::unique_ptr<Object3d> particlePlane; // パーティクル描画用の平面オブジェクト
+    std::unique_ptr<DebugRenderer> debugRenderer; // デバッグ描画管理
+    std::unique_ptr<Camera> camera;
+    std::vector<std::unique_ptr<Sprite>> sprites;
+    std::vector<std::unique_ptr<Object3d>> objects3d;
+    std::unique_ptr<Object3d> particlePlane;
 
-    std::unique_ptr<SceneManager> sceneManager; // シーンマネージャ
+    std::unique_ptr<SceneManager> sceneManager;
 
-    ParticleEmitter pmEmitter; // パーティクルエミッタ (UIの操作用など軽量なまま保持)
+    ParticleEmitter pmEmitter;
 
-    int selectedDrawType = DRAW_PARTICLE; // 描画する内容の種類を選択するための変数
+    DebugCamera debugCamera;
+    bool isDebugCameraControl = true;
+    bool useBillboard = true;
+    bool useDebugCameraForRender = false;
 
-    DebugCamera debugCamera; // デバッグカメラ (global DebugCamera)
-    bool isDebugCameraControl = true; // デバッグカメラ操作フラグ
-    bool useBillboard = true; // ビルボードの使用フラグ
-    bool useDebugCameraForRender = false; // レンダリングにデバッグカメラを使うか
+    ImGuiManager imguiManager;
 
-    ImGuiManager imguiManager; // ImGui管理
-
-    // 保留中のシーン切替要求を格納する（ImGui コールバックから直接 ChangeScene を呼ばないため）
     std::string pendingSceneName;
 };
 
 /// <summary>
-/// Game クラスのデストラクタ
+/// Game クラスのデストラクタ。
 /// </summary>
 Game::~Game()
 {
 }
 
 /// <summary>
-/// クラッシュダンプ出力を設定する
+/// クラッシュダンプ出力を設定する。
 /// </summary>
 void Game::SetupCrashDumpHandler()
 {
@@ -174,57 +154,51 @@ void Game::SetupCrashDumpHandler()
         MiniDumpWriteDump(GetCurrentProcess(), processId, dumpFileHandle, MiniDumpNormal, &minidumpInformation, nullptr, nullptr);
         CloseHandle(dumpFileHandle);
         return EXCEPTION_EXECUTE_HANDLER;
-    }); // クラッシュダンプの出力先を D:\Dumps\ に設定
+    });
 }
 
 /// <summary>
-/// ログファイル出力を設定する
+/// ログファイル出力を設定する。
 /// </summary>
 void Game::SetupLogFile()
 {
-    std::filesystem::create_directory("logs"); // "logs" フォルダが存在しない場合は作成する
-    std::time_t now_c = std::time(nullptr); // 現在の時刻を取得
-    struct tm local_tm; // ローカルタイムに変換するための構造体
-    localtime_s(&local_tm, &now_c); // 現在の時刻をローカルタイムに変換
-    char dateBuf[kLogDateBufferSize]; // 日付と時刻を "YYYYMMDD_HHMMSS" 形式の文字列にフォーマットするためのバッファ
-    std::strftime(dateBuf, sizeof(dateBuf), "%Y%m%d_%H%M%S", &local_tm); // 日付と時刻を "YYYYMMDD_HHMMSS" 形式の文字列にフォーマット
-    std::string dateString(dateBuf); // フォーマットした日付と時刻を std::string に変換
-    std::string logFilePath = std::string("logs/") + dateString + ".log"; // ログファイルのパスを "logs/YYYYMMDD_HHMMSS.log" 形式で作成
-    Logger::SetLogFile(logFilePath); // ログファイルのパスを Logger に設定
-    Logger::SetErrorLogFile(logFilePath); // エラーログファイルのパスも同じログファイルに設定
+    std::filesystem::create_directory("logs");
+    std::time_t now_c = std::time(nullptr);
+    struct tm local_tm;
+    localtime_s(&local_tm, &now_c);
+    char dateBuf[kLogDateBufferSize];
+    std::strftime(dateBuf, sizeof(dateBuf), "%Y%m%d_%H%M%S", &local_tm);
+    std::string dateString(dateBuf);
+    std::string logFilePath = std::string("logs/") + dateString + ".log";
+    Logger::SetLogFile(logFilePath);
+    Logger::SetErrorLogFile(logFilePath);
 }
 
 /// <summary>
-/// ウィンドウと入力を初期化する
+/// ウィンドウと入力を初期化する。
 /// </summary>
 bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
 {
-    impl_->winApp.Initialize(hInstance, nCmdShow, L"LE3C_13_タカハシ_ユキト");
+    impl_->winApp.Initialize(hInstance, nCmdShow, L"CG2_00");
     impl_->hwnd = impl_->winApp.GetHwnd();
 
 #ifdef _DEBUG
 
-    // デバッグレイヤーとGPUベースのバリデーションを有効にする
     Microsoft::WRL::ComPtr<ID3D12Debug1> debugController = nullptr;
-    // D3D12GetDebugInterface を呼び出して ID3D12Debug1 インターフェースを取得し、成功したらデバッグレイヤーとGPUベースのバリデーションを有効にする
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-        debugController->EnableDebugLayer(); // デバッグレイヤーを有効にする
-        // GPUベースのバリデーションはドライバに強い負荷を与えることがあるため無効化する
+        debugController->EnableDebugLayer();
         debugController->SetEnableGPUBasedValidation(FALSE);
     }
 
 #endif
 
-    // DirectInput を初期化
     HRESULT result = DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, reinterpret_cast<void**>(impl_->directInput.GetAddressOf()), nullptr);
-    // DirectInput8Create を呼び出して DirectInput インターフェースを取得し、失敗した場合はエラーログを出力して初期化を終了する
     if (FAILED(result)) {
         Logger::Log("Error: DirectInput8Create failed.\n");
         impl_->winApp.Finalize();
         return false;
     }
 
-    // InputManagerの初期化
     if (!InputManager::GetInstance()->Initialize(impl_->directInput.Get(), impl_->hwnd)) {
         Logger::Log("Error: InputManager::Initialize failed.\n");
         impl_->winApp.Finalize();
@@ -235,15 +209,13 @@ bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
 }
 
 /// <summary>
-/// エンジン共通リソースを初期化する
+/// エンジン共通リソースを初期化する。
 /// </summary>
 bool Game::InitializeEngineResources(HINSTANCE hInstance)
 {
     std::unique_ptr<SpriteCommon> spriteCommonTmp;
-    // 3Dオブジェクト共通管理の一時的なユニークポインタ
     std::unique_ptr<Object3dCommon> object3dCommonTmp;
 
-    // エンジンの初期化処理を呼び出す。失敗した場合はエラーログを出力して初期化を終了する
     if (!Framework::InitializeEngine(hInstance, &impl_->winApp, impl_->hwnd,
             spriteCommonTmp, impl_->srvManager, object3dCommonTmp)) {
         Logger::Log("Error: Framework::InitializeEngine failed\n");
@@ -251,18 +223,17 @@ bool Game::InitializeEngineResources(HINSTANCE hInstance)
         return false;
     }
 
-    // 共通管理オブジェクトを Impl に移動
 
-    // スプライト共通管理を Impl に移動
     impl_->spriteCommon = std::move(spriteCommonTmp);
-    // 3Dオブジェクト共通管理を Impl に移動
     impl_->object3dCommon = std::move(object3dCommonTmp);
+    impl_->debugRenderer = std::make_unique<DebugRenderer>();
+    impl_->debugRenderer->Initialize(DirectXCommon::GetInstance());
 
     return true;
 }
 
 /// <summary>
-/// カメラとライトを初期化する
+/// カメラとライトを初期化する。
 /// </summary>
 void Game::InitializeCameraAndLighting()
 {
@@ -270,53 +241,41 @@ void Game::InitializeCameraAndLighting()
     impl_->camera->SetRotate(kInitialCameraRotate);
     impl_->camera->SetTranslate(kInitialCameraTranslate);
     impl_->camera->Update();
-    // Object3dCommon にデフォルトカメラをセット
     impl_->object3dCommon->SetDefaultCamera(impl_->camera.get());
 
-    // ライトの設定
     Object3d::DirectionalLight* directionalLightData = impl_->object3dCommon->GetDirectionalLightData();
-    // directionalLightData が存在する場合は、ライトの強度、色、方向を設定する
     if (directionalLightData) {
-        // ライトの強度を 1.0f に設定
         directionalLightData->intensity = kWhiteColor.w;
         directionalLightData->color = kWhiteColor;
-        // ライトの方向を下向きに設定
         directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
     }
 
-    // 点光源の設定
     if (impl_->object3dCommon) {
         Object3d::PointLight pl = {};
         pl.position = kPointLightPosition;
-        // 点光源の色を白に設定し、w成分に輝度を指定する（ここでは1.5fで少し強めの光にしている）
         pl.color = kPointLightColor;
-        pl.radius = kPointLightRadius; // 点光源の有効範囲を半径6.0fに設定
-        pl.decay = kLightDecay; // 減衰を2.0fに設定
-        pl.enabled = 1; // 点光源を有効にする
-        // Object3dCommon に点光源を追加する
+        pl.radius = kPointLightRadius;
+        pl.decay = kLightDecay;
+        pl.enabled = 1;
         impl_->object3dCommon->AddPointLight(pl);
     }
 
-    // スポットライトの設定
     if (impl_->object3dCommon) {
         auto sl = impl_->object3dCommon->GetSpotLightData();
         if (sl) {
             sl->position = kSpotLightPosition;
-            // スポットライトの色を白に設定し、w成分に輝度を指定する（ここでは2.0fで少し強めの光にしている）
             sl->color = kSpotLightColor;
-            sl->distance = kSpotLightDistance; // スポットライトの有効範囲を距離7.0fに設定
-            sl->direction = MathUtil::Normalize(kSpotLightDirection); // スポットライトの向きを下斜め左に設定
-            sl->decay = kLightDecay; // 減衰を2.0fに設定
-            sl->cosAngle = cosf(kSpotLightAngle); // スポットライトの照射角を60度に設定（コサイン値で指定）
-            sl->cosFalloffStart = cosf(kSpotLightFalloffStartAngle); // スポットライトの減衰開始角を90度に設定（コサイン値で指定）
-            sl->enabled = 1; // スポットライトを有効にする
+            sl->distance = kSpotLightDistance;
+            sl->direction = MathUtil::Normalize(kSpotLightDirection);
+            sl->decay = kLightDecay;
+            sl->cosAngle = cosf(kSpotLightAngle);
+            sl->cosFalloffStart = cosf(kSpotLightFalloffStartAngle);
+            sl->enabled = 1;
         }
     }
 
-    // デバッグカメラの初期化（ウィンドウ解像度を指定）
     impl_->debugCamera.Initialize(kInitialDebugCameraWidth, kInitialDebugCameraHeight);
 
-    // Object3dCommon にデバッグカメラをセットして、UI側で編集できるようにする
     if (impl_->object3dCommon) {
         impl_->object3dCommon->SetDebugCamera(&impl_->debugCamera);
         impl_->object3dCommon->SetUseDebugCameraForRender(impl_->useDebugCameraForRender);
@@ -325,13 +284,12 @@ void Game::InitializeCameraAndLighting()
 }
 
 /// <summary>
-/// デバッグ機能、ImGui、サウンドを初期化する
+/// デバッグ機能、ImGui、サウンドを初期化する。
 /// </summary>
 void Game::InitializeDebugToolsAndSound()
 {
     impl_->imguiManager.Initialize(impl_->hwnd, &impl_->srvManager);
 
-    // Media FoundationとXAudio2を明示的に初期化する
     if (impl_->soundSystem.Initialize()) {
         impl_->soundData1 = impl_->soundSystem.LoadFromFile("resources/mokugyo.wav");
     } else {
@@ -340,34 +298,29 @@ void Game::InitializeDebugToolsAndSound()
 }
 
 /// <summary>
-/// リサイズ通知を設定する
+/// リサイズ通知を設定する。
 /// </summary>
 void Game::SetupResizeCallbacks()
 {
-    // DirectXCommon のリサイズ通知を受け取り、カメラとシーンへ反映する
     DirectXCommon::GetInstance()->SetOnResizeCallback([this](uint32_t w, uint32_t h) {
-        // カメラのアスペクト比を更新する
         if (impl_->camera) {
-            float aspect = (h != 0) ? static_cast<float>(w) / static_cast<float>(h) : 1.0f; // 画面のアスペクト比
+            float aspect = (h != 0) ? static_cast<float>(w) / static_cast<float>(h) : 1.0f;
             impl_->camera->SetAspectRatio(aspect);
             impl_->camera->Update();
         }
-        // デバッグカメラへ現在の画面サイズを反映する
         impl_->debugCamera.Initialize(static_cast<float>(w), static_cast<float>(h));
-        // 現在のシーンへリサイズを通知する
         if (impl_->sceneManager) {
             impl_->sceneManager->OnWindowResize(w, h);
         }
     });
 
-    // WinApp のリサイズ通知を DirectXCommon 側へ橋渡しする
     impl_->winApp.SetResizeCallback([](uint32_t width, uint32_t height) {
         DirectXCommon::GetInstance()->OnWindowResize(width, height);
     });
 }
 
 /// <summary>
-/// シーン管理を初期化する
+/// シーン管理を初期化する。
 /// </summary>
 void Game::InitializeScene()
 {
@@ -375,38 +328,36 @@ void Game::InitializeScene()
     impl_->sceneManager->Initialize();
     SetupResizeCallbacks();
 
-    SceneContext sctx; // シーンへ渡す共通コンテキスト
+    SceneContext sctx;
     sctx.object3dCommon = impl_->object3dCommon.get();
     sctx.spriteCommon = impl_->spriteCommon.get();
     sctx.camera = impl_->camera.get();
-    sctx.selectedDrawType = static_cast<int>(impl_->selectedDrawType);
     sctx.particleManager = ParticleManager::GetInstance();
     sctx.textureManager = TextureManager::GetInstance();
     sctx.srvManager = &impl_->srvManager;
     sctx.directXCommon = DirectXCommon::GetInstance();
+    sctx.debugRenderer = impl_->debugRenderer.get();
     sctx.imguiManager = &impl_->imguiManager;
     sctx.requestSceneChange = [this](const std::string& sceneName) {
         impl_->pendingSceneName = sceneName;
     };
     impl_->sceneManager->SetContext(sctx);
 
-    auto initial = GameApp::SceneFactory::Create("Title"); // 最初に表示するシーン
+    auto initial = GameApp::SceneFactory::Create("Title");
     if (initial) {
         impl_->sceneManager->ChangeScene(std::move(initial));
     }
 }
 
 /// <summary>
-/// ゲームの初期化処理
+/// ゲームの初期化処理を行う。
 /// </summary>
 bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 {
-    // 基底クラスの初期化を行う
     if (!Framework::Initialize(hInstance, nCmdShow)) {
         return false;
     }
 
-    // 実装データを必要に応じて生成する
     if (!impl_) {
         impl_ = std::make_unique<Impl>();
     }
@@ -425,6 +376,13 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
     InitializeCameraAndLighting();
     InitializeDebugToolsAndSound();
 
+    ParticleManager::GetInstance()->Initialize(
+        DirectXCommon::GetInstance(),
+        impl_->object3dCommon.get(),
+        &impl_->srvManager,
+        TextureManager::GetInstance(),
+        &impl_->imguiManager);
+
     impl_->initialized = true;
     impl_->endRequested = false;
 
@@ -434,44 +392,38 @@ bool Game::Initialize(HINSTANCE hInstance, int nCmdShow)
 }
 
 /// <summary>
-/// ゲームの更新処理
+/// ゲームの更新処理を行う。
 /// </summary>
 void Game::Update()
 {
-    // 基底クラスの更新処理を呼び出す
     Framework::Update();
 
-    // Impl が存在しないか、初期化が完了していない場合は更新処理をスキップする
     if (!impl_ || !impl_->initialized) {
         return;
     }
 
-    // ウィンドウメッセージの処理。終了要求があればフラグを立てて更新処理を終了する
     if (!impl_->winApp.ProcessMessage()) {
         impl_->endRequested = true;
         return;
     }
 
-    // 入力の更新
     InputManager::GetInstance()->Update();
 
-    // デバッグカメラの操作: マウスドラッグとホイールでカメラを操作する。ただし、ImGui のウィンドウやアイテムがアクティブな場合は操作しない
-    // カメラ操作はクリック中だけ受け付ける。
-    bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl; // デバッグカメラ入力を有効にするか
+    bool debugInputEnabled = impl_->object3dCommon ? impl_->object3dCommon->GetEnableDebugCameraInput() : impl_->isDebugCameraControl;
     if (debugInputEnabled) {
-        auto* input = InputManager::GetInstance(); // 入力状態を参照するためのポインタ
-        const long deltaX = input->GetMouseDeltaX(); // マウスのX移動量
-        const long deltaY = input->GetMouseDeltaY(); // マウスのY移動量
-        const long wheelDelta = input->GetMouseDeltaZ(); // ホイール回転量
+        auto* input = InputManager::GetInstance();
+        const long deltaX = input->GetMouseDeltaX();
+        const long deltaY = input->GetMouseDeltaY();
+        const long wheelDelta = input->GetMouseDeltaZ();
 
 #ifdef USE_IMGUI
-        const bool canUseCameraInput = !impl_->imguiManager.IsCapturingInput() || impl_->imguiManager.IsSceneViewHovered(); // Scene View上ではカメラ入力を受け付ける
+        const bool canUseCameraInput = !impl_->imguiManager.IsCapturingInput() || impl_->imguiManager.IsSceneViewHovered();
 #else
-        const bool canUseCameraInput = true; // ImGui未使用時は常にカメラ入力を受け付ける
+        const bool canUseCameraInput = true;
 #endif
-        const bool isLeftDragging = canUseCameraInput && input->IsMouseButtonPressed(0) && (deltaX != 0 || deltaY != 0); // 左クリック中のドラッグか
-        const bool isWheelZoom = canUseCameraInput && wheelDelta != 0; // ホイールによる拡縮操作か
-        const bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender; // 描画に使うカメラ種別
+        const bool isLeftDragging = canUseCameraInput && input->IsMouseButtonPressed(0) && (deltaX != 0 || deltaY != 0);
+        const bool isWheelZoom = canUseCameraInput && wheelDelta != 0;
+        const bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
 
         if (useDebugRender) {
             if (isLeftDragging) {
@@ -482,16 +434,16 @@ void Game::Update()
             }
             impl_->debugCamera.Update();
         } else if (impl_->camera) {
-            bool cameraChanged = false; // 通常カメラを更新する必要があるか
+            bool cameraChanged = false;
             if (isLeftDragging) {
-                Vector3 cameraRotate = impl_->camera->GetRotate(); // 通常カメラの回転角
+                Vector3 cameraRotate = impl_->camera->GetRotate();
                 cameraRotate.y += static_cast<float>(deltaX) * kDefaultCameraRotateSpeed;
                 cameraRotate.x += static_cast<float>(deltaY) * kDefaultCameraRotateSpeed;
                 impl_->camera->SetRotate(cameraRotate);
                 cameraChanged = true;
             }
             if (isWheelZoom) {
-                Vector3 cameraTranslate = impl_->camera->GetTranslate(); // 通常カメラの位置
+                Vector3 cameraTranslate = impl_->camera->GetTranslate();
                 cameraTranslate.z += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
                 impl_->camera->SetTranslate(cameraTranslate);
                 cameraChanged = true;
@@ -502,22 +454,17 @@ void Game::Update()
         }
     }
 
-    // スペースキーが押された瞬間にサウンドを再生する。スペースキーが離された瞬間は再生しないようにする
     if (InputManager::GetInstance()->IsKeyJustPressed(DIK_SPACE) && !InputManager::GetInstance()->IsKeyJustReleased(DIK_SPACE)) {
-        impl_->soundSystem.Play(impl_->soundData1); // サウンドシステムを使用してサウンドデータを再生する
+        impl_->soundSystem.Play(impl_->soundData1);
     }
 
-    // 固定タイムステップで更新（ここでは 1/60 秒固定）
     const float dt = kFixedDeltaTime;
-    // SoundSystem の Poll を呼び出して、サウンドの再生状態の更新やリソースの管理を行う
     impl_->soundSystem.Poll();
 
-    // デバッグカメラのマウス/ホイール入力を ImGui が入力を奪っていない場合にフォワードする
     Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(impl_->transform.scale, impl_->transform.rotate, impl_->transform.translate);
     Matrix4x4 viewMatrix;
     Matrix4x4 projectionMatrix;
 
-    // F1 でレンダリングにデバッグカメラを切り替えられるようにする
     if (InputManager::GetInstance()->IsKeyJustPressed(DIK_F1)) {
         if (impl_->object3dCommon) {
             bool cur = impl_->object3dCommon->GetUseDebugCameraForRender();
@@ -535,7 +482,6 @@ void Game::Update()
 
     bool useDebugForRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
     if (useDebugForRender) {
-        // デバッグカメラを使ってビュー/射影を取得
         impl_->debugCamera.Update();
         viewMatrix = impl_->debugCamera.GetViewMatrix();
         projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
@@ -545,7 +491,6 @@ void Game::Update()
             viewMatrix = impl_->camera->GetViewMatrix();
             projectionMatrix = impl_->camera->GetProjectionMatrix();
         } else {
-            // フォールバックとしてデバッグカメラを使う
             impl_->debugCamera.Update();
             viewMatrix = impl_->debugCamera.GetViewMatrix();
             projectionMatrix = impl_->debugCamera.GetProjectionMatrix();
@@ -554,7 +499,6 @@ void Game::Update()
 
     Matrix4x4 worldViewProjectionMatrix = MathUtil::Multiply(worldMatrix, MathUtil::Multiply(viewMatrix, projectionMatrix));
 
-    // Object3dCommon にカメラのワールド位置をセット
     if (impl_->object3dCommon) {
         auto cam = impl_->object3dCommon->GetCameraData();
         if (cam) {
@@ -567,41 +511,35 @@ void Game::Update()
         }
     }
 
-    // 3Dオブジェクトのリストをループして、各オブジェクトの Update を呼び出す。これにより、オブジェクトのワールド行列やその他の状態が更新される
     for (auto& obj : impl_->objects3d) {
         if (obj) {
             obj->Update(viewMatrix, projectionMatrix);
         }
     }
 
-    // スプライトのリストをループして、各スプライトの Update を呼び出す。これにより、スプライトの位置やその他の状態が更新される
     for (uint32_t i = 0; i < impl_->sprites.size(); i++) {
         if (impl_->sprites[i]) {
             impl_->sprites[i]->Update();
         }
     }
 
-    // シーンの更新
     if (impl_->sceneManager) {
         impl_->sceneManager->Update(dt);
     }
 }
 
 /// <summary>
-/// ゲームの描画処理
+/// ゲームの描画処理を行う。
 /// </summary>
 void Game::Draw()
 {
 
-    // 存在しない場合や初期化が完了していない場合は描画処理をスキップする
     if (!impl_ || !impl_->initialized) {
         return;
     }
 
-    // ImGui の新しいフレームを開始する。これにより、ImGui の内部状態がリセットされ、UIの構築が可能になる
     impl_->imguiManager.NewFrame();
 
-    // 保留中のシーン切替はImGui構築前に反映し、UI表示と描画対象を同じシーンに揃える。
     if (impl_->pendingSceneName.size() > 0) {
         if (impl_->sceneManager && impl_->sceneManager->GetCurrentSceneName() == impl_->pendingSceneName) {
             impl_->pendingSceneName.clear();
@@ -614,14 +552,23 @@ void Game::Draw()
         }
     }
     ImGuiManager::Context ctx;
-    // 描画に必要な情報を ImGuiManager::Context にセットして、UIの構築に使用できるようにする
-    ctx.particleEmitter = &impl_->pmEmitter; // パーティクルエミッタのポインタをセット
-    // Object3dCommon のポインタをセットして、UIで共通の描画設定やライトの情報などにアクセスできるようにする
+    Matrix4x4 sceneViewMatrix = MathUtil::MakeIdentity4x4();
+    Matrix4x4 sceneProjectionMatrix = MathUtil::MakeIdentity4x4();
+    const bool useDebugSceneViewCamera = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
+    if (useDebugSceneViewCamera) {
+        impl_->debugCamera.Update();
+        sceneViewMatrix = impl_->debugCamera.GetViewMatrix();
+        sceneProjectionMatrix = impl_->debugCamera.GetProjectionMatrix();
+    } else if (impl_->camera) {
+        impl_->camera->Update();
+        sceneViewMatrix = impl_->camera->GetViewMatrix();
+        sceneProjectionMatrix = impl_->camera->GetProjectionMatrix();
+    }
+    ctx.sceneViewMatrix = &sceneViewMatrix;
+    ctx.sceneProjectionMatrix = &sceneProjectionMatrix;
+    ctx.particleEmitter = &impl_->pmEmitter;
     ctx.object3dCommon = impl_->object3dCommon.get();
-    // Object3dCommon のポインタをセットして、UIで3Dオブジェクトの共通設定や情報にアクセスできるようにする
     std::vector<Object3d*> objPtrs;
-    // シーンマネージャが存在し、現在のシーンがある場合は、シーンから3Dオブジェクトのポインタを取得してセットする。
-    // そうでない場合は、Impl の objects3d からポインタをセットする
     if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
         impl_->sceneManager->GetCurrent()->FillObject3dPointers(&objPtrs);
     } else {
@@ -631,7 +578,16 @@ void Game::Draw()
         }
     }
     ctx.objects3d = &objPtrs;
-    // SpriteCommon のポインタをセットして、UIでスプライトの共通設定や情報にアクセスできるようにする
+    ctx.notifyObjectTransformEdited = [this](size_t objectIndex) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+            impl_->sceneManager->GetCurrent()->NotifyObjectTransformEdited(objectIndex);
+        }
+    };
+    ctx.drawSceneViewOverlay = [this](const Matrix4x4& viewProjectionMatrix, float imageMinX, float imageMinY, float imageWidth, float imageHeight) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+            impl_->sceneManager->GetCurrent()->DrawSceneViewOverlay(viewProjectionMatrix, imageMinX, imageMinY, imageWidth, imageHeight);
+        }
+    };
     std::vector<Sprite*> spritePtrs;
     if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
         impl_->sceneManager->GetCurrent()->FillSpritePointers(&spritePtrs);
@@ -642,21 +598,24 @@ void Game::Draw()
         }
     }
     ctx.sprites = &spritePtrs;
+    std::vector<ParticleEmitter*> emitterPtrs; // Scene Viewギズモで操作するエミッター一覧
+    if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+        impl_->sceneManager->GetCurrent()->FillParticleEmitterPointers(&emitterPtrs);
+    }
+    if (emitterPtrs.empty()) {
+        emitterPtrs.push_back(&impl_->pmEmitter);
+    }
+    ctx.particleEmitters = &emitterPtrs;
     ctx.spriteCommon = impl_->spriteCommon.get();
-    // ビルボードの使用フラグへのポインタをセットして、UIでビルボードのオンオフができるようにする
     ctx.useBillboard = &impl_->useBillboard;
-    // ParticleManager のポインタをセットして、UIでパーティクルの情報や設定にアクセスできるようにする
     ctx.particleManager = ParticleManager::GetInstance();
-    // デルタタイムをセットして、UIでフレームごとの時間の情報にアクセスできるようにする
     ctx.dt = kFixedDeltaTime;
     ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
-    ctx.selectedDrawType = &impl_->selectedDrawType;
     ctx.requestSceneChange = [this](const char* sceneName) {
         if (sceneName) {
             impl_->pendingSceneName = sceneName;
         }
     };
-    // シーン名を ImGui に渡す
     if (impl_->sceneManager) {
         static std::string sname;
         sname = impl_->sceneManager->GetCurrentSceneName();
@@ -669,19 +628,15 @@ void Game::Draw()
             ctx.sceneViewHeight = DirectXCommon::GetInstance()->GetRenderHeight();
         }
     }
-    // ImGuiManager の BuildUI を呼び出して、UIの構築を行う。これにより、UIが描画される準備が整う
     impl_->imguiManager.BuildUI(ctx);
     if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
         impl_->sceneManager->GetCurrent()->DrawImGui();
     }
 
     DirectXCommon::GetInstance()->PreDraw();
-    // SrvManager の PreDraw を呼び出して、描画に必要なシェーダーリソースビューのセットアップを行う
     impl_->srvManager.PreDraw();
 
-    // シーン側にも現在の描画モードを伝えて、シーン自身が必要な要素だけ描画できるようにする
     if (impl_->sceneManager) {
-        impl_->sceneManager->SetSelectedDrawType(impl_->selectedDrawType);
         if (impl_->sceneManager->GetCurrent()) {
 #ifdef USE_IMGUI
             impl_->sceneManager->GetCurrent()->SetSceneViewOnly(true);
@@ -689,21 +644,21 @@ void Game::Draw()
             impl_->sceneManager->GetCurrent()->SetSceneViewOnly(false);
 #endif
         }
+        if (impl_->debugRenderer) {
+            impl_->debugRenderer->BeginFrame();
+        }
         impl_->sceneManager->Draw();
     }
 
-    // ImGui の描画を行う。DirectXCommon のコマンドリストを渡して、ImGuiManager に描画してもらう
     impl_->imguiManager.Render(DirectXCommon::GetInstance()->GetCommandList());
-    // 描画後の共通処理を呼び出す（コマンドリストの終了やバックバッファの表示など）
     DirectXCommon::GetInstance()->PostDraw();
 }
 
 /// <summary>
-/// ゲームの終了処理
+/// ゲームの終了処理を行う。
 /// </summary>
 void Game::Finalize()
 {
-    // Impl が存在しない場合は終了処理をスキップする
     if (!impl_) {
         return;
     }
@@ -715,88 +670,70 @@ void Game::Finalize()
     impl_->initialized = false;
     impl_->endRequested = true;
 
-    CloseWindow(impl_->hwnd); // ウィンドウを閉じる
-
-    // シーンは描画共通リソースを参照しているため、エンジン基盤より先に破棄する
     if (impl_->sceneManager) {
         impl_->sceneManager->Finalize();
         impl_->sceneManager.reset();
     }
 
-    // アプリケーション側が直接所有する描画リソースを先に破棄する
     impl_->particlePlane.reset();
     impl_->objects3d.clear();
     impl_->sprites.clear();
     impl_->camera.reset();
 
-    // パーティクルは描画オブジェクトやテクスチャを参照するため、共通基盤より先に終了する
     ParticleManager::GetInstance()->Finalize();
 
-    // サウンドデータのリセット
     impl_->soundData1.reset();
     impl_->soundSystem.Finalize();
 
-    // ImGuiManager の終了処理を呼び出す
     impl_->imguiManager.Shutdown();
 
-    // スプライト/3D共通管理は個別描画リソース破棄後、DirectXCommon より前に破棄する
+    impl_->debugRenderer.reset();
+
     impl_->spriteCommon.reset();
+
+    // ModelのGPUリソースを解放予約できるよう、DirectXCommon破棄より先にモデルキャッシュを破棄する
+    ModelManager::GetInstance()->Finalize();
+
     if (impl_->object3dCommon) {
         impl_->object3dCommon->Finalize();
         impl_->object3dCommon.reset();
     }
 
-    // TextureManager の終了処理を呼び出す
     TextureManager::GetInstance()->Finalize();
 
-    // 管理中のオフスクリーンレンダーターゲットをSRV管理の終了前に破棄する
     DirectXCommon::GetInstance()->DestroyAllRenderTargets();
 
-    // SrvManager の終了処理を呼び出す
     impl_->srvManager.Finalize();
 
-    // モデルマネージャの終了処理を呼び出す
-    ModelManager::GetInstance()->Finalize();
-
-    // DirectXCommon の終了処理を呼び出す
     DirectXCommon::GetInstance()->Finalize();
 
-    // リークチェッカーは DirectX のリソース解放後、かつ COM がまだ有効なうちに破棄する
 
-    // InputManager の終了処理を呼び出す
     InputManager::GetInstance()->Finalize();
 
-    // DirectInput のリセット
     impl_->directInput.Reset();
 
-    // WinApp の終了処理を呼び出す
     impl_->winApp.Finalize();
 
-    // 基底クラスの終了処理を呼び出す
     Framework::Finalize();
 }
-
 /// <summary>
-/// ゲームの終了要求があったかどうかを返す
+/// 終了要求が出ているかを返す。
 /// </summary>
-/// <returns></returns>
+/// <returns>終了要求がある場合は true。</returns>
 bool Game::IsEndRequest() const
 {
-    // Impl が存在する場合は endRequested フラグの値を返し、存在しない場合は true を返す（終了要求があったとみなす）
     return impl_ ? impl_->endRequested : true;
 }
 
 /// <summary>
-/// ウィンドウメッセージの処理を行い、終了要求があったかどうかを返す。WM_QUIT が検出された場合は false を返す設計になっている
+/// ウィンドウメッセージを処理し、継続可否を返す。
 /// </summary>
-/// <returns></returns>
+/// <returns>処理を継続できる場合は true。</returns>
 bool Game::PollEvents()
 {
-    // Impl が存在しない場合は false を返す（終了要求があったとみなす）
     if (!impl_) {
         return false;
     }
 
-    // WinApp の ProcessMessage を呼び出して、ウィンドウメッセージの処理を行う。WM_QUIT が検出された場合は false を返す設計になっている
     return impl_->winApp.ProcessMessage();
 }

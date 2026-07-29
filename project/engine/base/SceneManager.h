@@ -45,13 +45,7 @@ public: // メンバ関数
     /// 描画処理。現在のシーンのDrawを呼び出す。
     /// </summary>
     void Draw();
-
-    /// <summary>
-    /// 描画モードをシーンコンテキストに設定する
-    /// </summary>
-    void SetSelectedDrawType(int t);
-
-    /// <summary>
+/// <summary>
     /// ウィンドウリサイズをシーンへ伝播する
     /// </summary>
     void OnWindowResize(uint32_t width, uint32_t height);
@@ -80,6 +74,17 @@ public: // メンバ関数
     /// 現在のシーンの名前を取得する関数。現在のシーンが存在しない場合は空文字列を返す。
     /// </summary>
     std::string GetCurrentSceneName() const;
+
+private: // メンバ関数
+    /// <summary>
+    /// シーン破棄前にGPUコマンドの完了を待機する。
+    /// </summary>
+    void WaitForGpuBeforeSceneFinalize();
+
+    /// <summary>
+    /// シーン間で共有されるParticleManagerの登録状態をクリアする。
+    /// </summary>
+    void ClearSceneSharedParticleState();
 
 private: // メンバ変数
     std::unique_ptr<IScene> current_; // 現在のシーン

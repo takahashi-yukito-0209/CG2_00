@@ -220,18 +220,26 @@ void SkyBox::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_
 /// </summary>
 void SkyBox::Finalize()
 {
-    // 定数バッファのアンマップとリセット
-    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
-        if (constantBuffers_[frameIndex]) {
-            constantBuffers_[frameIndex]->Unmap(0, nullptr);
-            mappedConstantBuffers_[frameIndex] = nullptr;
-            constantBuffers_[frameIndex].Reset();
+    auto releaseResource = [this](Microsoft::WRL::ComPtr<ID3D12Resource>& resource) {
+        if (dxCommon_) {
+            dxCommon_->DeferReleaseResource(resource);
+            return;
         }
+        resource.Reset();
+    }; // GPU参照が終わるまで保持するための解放処理
+
+    // 定数バッファのアンマップと解放予約
+    for (uint32_t frameIndex = 0; frameIndex < DirectXCommon::kFrameCount; ++frameIndex) {
+        if (constantBuffers_[frameIndex] && mappedConstantBuffers_[frameIndex]) {
+            constantBuffers_[frameIndex]->Unmap(0, nullptr);
+        }
+        mappedConstantBuffers_[frameIndex] = nullptr;
+        releaseResource(constantBuffers_[frameIndex]);
     }
 
-    // バッファのリセット
-    vertexBuffer_.Reset();
-    indexBuffer_.Reset();
+    // バッファの解放予約
+    releaseResource(vertexBuffer_);
+    releaseResource(indexBuffer_);
 
     // パイプライン関連リソースのリセット
     pipelineState_.Reset();
@@ -240,6 +248,9 @@ void SkyBox::Finalize()
     vbView_ = {};
     ibView_ = {};
     indexCount_ = 0;
+    srvIndex_ = 0;
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
 }
 
 /// <summary>

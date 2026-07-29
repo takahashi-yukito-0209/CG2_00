@@ -6,10 +6,10 @@
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
 #include <cstddef>
+#include <iosfwd>
 #include <array>
 #include <d3d12.h>
 #include <vector>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -23,7 +23,7 @@ struct PM_CpuParticle {
     Math::Vector3 velocity;
     Math::Vector4 color;
     Math::Vector4 startColor;
-    float lifeTime = 0.55f;
+    float lifeTime = 5.0f;
     float currentTime = 0.0f;
     float spawnTime = 0.0f;
     bool useScaleOverLife = false;
@@ -49,6 +49,9 @@ struct PM_GpuParticleSource {
     Math::Vector3 velocity;
     float padding1 = 0.0f;
     Math::Vector4 color;
+    Math::Vector3 startScale;
+    float padding2 = 0.0f;
+    Math::Vector4 startColor;
 };
 
 // ComputeShaderへ渡すパーティクル変換情報
@@ -61,27 +64,41 @@ struct PM_GpuParticleTransformInfo {
 
 struct PM_GpuEmitterSphere {
     Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // 発生中心座標
-    float radius = 5.0f; // 球状に散らす半径
+    float radius = 1.3f; // 球状に散らす半径
     uint32_t count = 1024; // 1回の射出で発生させる数
-    float frequency = 0.02f; // 射出間隔
+    float frequency = 0.12f; // 射出間隔
     float frequencyTime = 0.0f; // 射出間隔の経過時間
     uint32_t emit = 0; // 射出許可フラグ
-    Math::Vector3 baseScale { 0.10f, 0.10f, 0.10f }; // 最小スケール
-    float randomScale = 0.20f; // ランダムに加算するスケール幅
-    Math::Vector3 velocityScale { 1.2f, 1.2f, 1.2f }; // 速度倍率
-    float lifeTime = 0.55f; // 寿命
+    Math::Vector3 baseScale { 0.08f, 0.08f, 0.08f }; // 最小スケール
+    float randomScale = 0.03f; // ランダムに加算するスケール幅
+    Math::Vector3 velocityScale { 0.08f, 0.10f, 0.08f }; // 速度倍率
+    float lifeTime = 5.0f; // 寿命
     Math::Vector4 colorMin { 0.35f, 0.55f, 0.9f, 1.0f }; // ランダム色の最小値
     Math::Vector4 colorMax { 1.0f, 1.0f, 1.0f, 1.0f }; // ランダム色の最大値
-    uint32_t debugGridMode = 0; // 1024個確認用の格子配置を使うか
+    uint32_t spawnShape = 0; // 発生形状 0:球 1:箱 2:リング 3:コーン
     float padding[3] {}; // ConstantBufferの16byte境界調整
+    Math::Vector3 endScale { 0.02f, 0.02f, 0.02f }; // 寿命終了時のスケール
+    float damping = 0.0f; // 速度の減衰量
+    Math::Vector3 gravity { 0.0f, -0.05f, 0.0f }; // GPU更新で加える重力
+    uint32_t scaleOverLife = 0; // 寿命に応じてスケールを変えるか
+    Math::Vector4 endColor { 1.0f, 1.0f, 1.0f, 0.0f }; // 寿命終了時の色
+    uint32_t colorOverLife = 0; // 寿命に応じて色を変えるか
+    float padding2[3] {}; // ConstantBufferの16byte境界調整
 };
 
 struct PM_GpuPerFrame {
     float time = 0.0f;
     float deltaTime = 0.0f;
-    float padding[2] {};
+    uint32_t scaleOverLife = 0;
+    uint32_t colorOverLife = 0;
+    Math::Vector3 gravity { 0.0f, 0.0f, 0.0f };
+    float damping = 0.0f;
+    Math::Vector3 endScale { 0.0f, 0.0f, 0.0f };
+    float padding0 = 0.0f;
+    Math::Vector4 endColor { 0.0f, 0.0f, 0.0f, 0.0f };
 };
 namespace MyEngine {
+class PostProcess;
 
 /// <summary>
 /// パーティクルマネージャークラス
@@ -106,6 +123,11 @@ public:
     /// パーティクルマネージャーを終了する
     /// </summary>
     void Finalize();
+
+    /// <summary>
+    /// シーンが登録したパーティクル状態と描画参照をクリアする。
+    /// </summary>
+    void ClearSceneParticles();
 
     /// <summary>
     /// 既定の描画Primitiveを設定する
@@ -187,6 +209,37 @@ public:
         float minimumSpeed,
         float maximumSpeed,
         float lifeTime);
+
+    /// <summary>
+    /// GPU Emitterプリセットを名前から読み込む。
+    /// </summary>
+    bool LoadGpuEmitterPreset(const std::string& presetName);
+
+    /// <summary>
+    /// 現在のGPU Emitter設定で次フレームに1回だけ発生させる。
+    /// </summary>
+    void RequestGpuEmitterEmit();
+
+    /// <summary>
+    /// GPU Emitter設定を編集用に取得する。
+    /// </summary>
+    PM_GpuEmitterSphere* GetMutableGpuEmitterState();
+
+    /// <summary>
+    /// GPU Emitter設定を参照用に取得する。
+    /// </summary>
+    const PM_GpuEmitterSphere* GetGpuEmitterState() const;
+
+    /// <summary>
+    /// GPU Emitterプリセットを読み込み、設定内の位置で1回だけ発生させる。
+    /// </summary>
+    bool PlayGpuEmitterPreset(const std::string& presetName);
+
+    /// <summary>
+    /// GPU Emitterプリセットを読み込み、指定位置で1回だけ発生させる。
+    /// </summary>
+    bool PlayGpuEmitterPreset(const std::string& presetName, const Math::Vector3& position);
+
     /// <summary>
     /// パーティクルを更新する
     /// </summary>
@@ -214,11 +267,131 @@ public:
     /// <summary>
     /// ImGuiでパーティクル設定を編集する
     /// </summary>
-    void DrawImGui();
+    void DrawImGui(PostProcess* postProcess = nullptr);
+
 
 private:
     ParticleManager() = default;
 
+    /// <summary>
+    /// 現在のPostProcess設定をGPU Emitter設定へ取り込む。
+    /// </summary>
+    void CaptureGpuEmitterPostProcessSettings(const PostProcess& postProcess);
+
+    /// <summary>
+    /// GPU Emitterに保存しているPostProcess設定を反映する。
+    /// </summary>
+    void ApplyGpuEmitterPostProcessSettings(PostProcess& postProcess) const;
+
+    /// <summary>
+    /// GPU EmitterのGPU側パーティクル状態をリセットする。
+    /// </summary>
+    void ResetGpuEmitterParticles();
+
+    /// <summary>
+    /// GPU Emitterの実行時パーティクル状態をクリアする。
+    /// </summary>
+    void ClearGpuEmitterRuntimeParticleState();
+
+    /// <summary>
+    /// GPU Emitter用テクスチャを描画グループへ反映する。
+    /// </summary>
+    void ApplyGpuEmitterTextureToDrawGroup();
+
+    /// <summary>
+    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// </summary>
+    void UpdateGpuEmitter(float dt);
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterImGui(PostProcess* postProcess);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの基本情報を表示する。
+    /// </summary>
+    void DrawGpuEmitterStatusImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterのeffect情報を編集する。
+    /// </summary>
+    void DrawGpuEmitterEffectImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterに紐づくPostProcess設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterPostProcessImGui(PostProcess* postProcess);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの発生設定を編集する。
+    /// </summary>
+    void DrawGpuEmitterStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの再生フラグを編集する。
+    /// </summary>
+    void DrawGpuEmitterPlaybackStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの発生範囲と発生数を編集する。
+    /// </summary>
+    void DrawGpuEmitterSpawnStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterのスケールと寿命を編集する。
+    /// </summary>
+    void DrawGpuEmitterScaleLifeStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの物理挙動を編集する。
+    /// </summary>
+    void DrawGpuEmitterPhysicsStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの色変化を編集する。
+    /// </summary>
+    void DrawGpuEmitterColorStateImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの保存と読み込みを操作する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定名を編集する。
+    /// </summary>
+    void DrawGpuEmitterSettingsNameImGui();
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの選択欄を表示する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileComboImGui(const std::vector<std::string>& settingsFiles, const std::string& settingsPreview);
+
+    /// <summary>
+    /// ImGuiでGPU Emitter設定ファイルの操作ボタンを表示する。
+    /// </summary>
+    void DrawGpuEmitterSettingsFileButtonsImGui(const std::string& saveSettingsPath, const std::string& selectedSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定を指定パスへ保存して結果メッセージを更新する。
+    /// </summary>
+    void SaveGpuEmitterSettingsFromImGui(const std::string& saveSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定を指定パスから読み込んで結果メッセージを更新する。
+    /// </summary>
+    void LoadGpuEmitterSettingsFromImGui(const std::string& loadSettingsPath);
+
+    /// <summary>
+    /// GPU Emitter設定ファイルを削除して結果メッセージを更新する。
+    /// </summary>
+    void DeleteGpuEmitterSettingsFromImGui(const std::string& selectedSettingsPath);
+
+    /// <summary>
+    /// ImGuiでGPU Emitterの実行操作を表示する。
+    /// </summary>
+    void DrawGpuEmitterControlImGui();
     /// <summary>
     /// GPUパーティクル変換に必要なリソースを作成する。
     /// </summary>
@@ -228,6 +401,16 @@ private:
     /// GPUパーティクル変換に必要なリソースを解放する。
     /// </summary>
     void FinalizeGpuParticleResources();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する。
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
+
+    /// <summary>
+    /// 指定フレームのGPU Particle用リソースを解放予約する。
+    /// </summary>
+    void ReleaseGpuParticleFrameResources(uint32_t frameIndex);
 
     /// <summary>
     /// GPUへ渡すパーティクル入力データを現在のグループ内容から作成する。
@@ -255,9 +438,59 @@ private:
     bool DispatchUpdateGpuParticles();
 
     /// <summary>
-    /// GPU Emitterの経過時間と射出許可を更新する。
+    /// GPU FreeListIndexをReadback用Resourceへコピーする。
     /// </summary>
-    void UpdateGpuEmitter(float dt);
+    void CopyGpuFreeCounterToReadback(uint32_t frameIndex);
+
+    /// <summary>
+    /// Readback済みのFreeListIndexからGPU Particleの生存数推定値を更新する。
+    /// </summary>
+    void UpdateGpuAliveCountEstimate();
+
+    /// <summary>
+    /// GPU Emitter設定をJSONファイルへ保存する。
+    /// </summary>
+    bool SaveGpuEmitterSettings(const std::string& filePath) const;
+
+    /// <summary>
+    /// GPU Emitter設定をJSONファイルから読み込む。
+    /// </summary>
+    bool LoadGpuEmitterSettings(const std::string& filePath);
+    /// <summary>
+    /// GPU Emitter設定をJSON形式で書き出す。
+    /// </summary>
+    void WriteGpuEmitterSettingsJson(std::ostream& file) const;
+
+    /// <summary>
+    /// JSONのeffect/renderカテゴリからGPU Emitterの基本情報を読み込む。
+    /// </summary>
+    void LoadGpuEmitterEffectSettings(const std::string& effectSection, const std::string& renderSection);
+
+    /// <summary>
+    /// JSONのplayback/renderカテゴリからGPU Emitterの再生設定を読み込む。
+    /// </summary>
+    void LoadGpuEmitterPlaybackSettings(const std::string& playbackSection, const std::string& renderSection);
+
+    /// <summary>
+    /// JSONのpostProcessカテゴリからGPU EmitterのPostProcess設定を読み込む。
+    /// </summary>
+    void LoadGpuEmitterPostProcessSettings(const std::string& postProcessSection);
+
+    /// <summary>
+    /// JSONのemitterカテゴリからGPU Emitterの発生設定を読み込む。
+    /// </summary>
+    void LoadGpuEmitterStateSettings(const std::string& emitterSection);
+
+    /// <summary>
+    /// GPU Emitter設定を実行時に扱える範囲へ整える。
+    /// </summary>
+    void NormalizeGpuEmitterStateForRuntime();
+
+    /// <summary>
+    /// 読み込み後のGPU Emitter設定を実行時に扱える範囲へ整える。
+    /// </summary>
+    void NormalizeGpuEmitterStateAfterLoad();
+
     /// <summary>
     /// 保持できるパーティクル数の上限を取得する
     /// </summary>
@@ -285,7 +518,6 @@ private:
     Math::Vector3 fieldMin_ { -1.0f, -1.0f, -1.0f };
     Math::Vector3 fieldMax_ { 1.0f, 1.0f, 1.0f };
     float globalTime_ = 0.0f;
-    std::mt19937 rng_ { std::random_device {}() };
 
     Math::Vector3 spawnPosMin_ { 0.0f, 0.0f, 0.0f };
     Math::Vector3 spawnPosMax_ { 0.0f, 0.0f, 0.0f };
@@ -316,6 +548,8 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuPerFrameResources_;
     std::array<PM_GpuPerFrame*, DirectXCommon::kFrameCount> gpuPerFrameData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeCounterResources_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeCounterReadbackResources_;
+    std::array<int32_t*, DirectXCommon::kFrameCount> gpuFreeCounterReadbackData_ {};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuFreeListResources_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectXCommon::kFrameCount> gpuParticleOutputResources_;
     std::array<uint32_t, DirectXCommon::kFrameCount> gpuParticleSourceSrvIndices_ { UINT32_MAX, UINT32_MAX };
@@ -331,6 +565,30 @@ private:
     PM_GpuEmitterSphere gpuEmitterState_ {};
     PM_GpuPerFrame gpuPerFrameState_ {};
     uint32_t gpuEmitterVisibleCount_ = 0;
+    uint32_t gpuAliveCountEstimate_ = 0; // GPU FreeListIndexから推定した生存Particle数
+    std::string gpuEmitterSettingsName_ = "gpu_particle"; // JSON保存時の設定名
+    std::string gpuEmitterLoadedSettingsName_; // 現在ロード済みの設定名
+    std::string gpuEmitterEffectName_ = "GPU Particle"; // エフェクト表示名
+    std::string gpuEmitterDescription_; // エフェクト説明文
+    std::string gpuEmitterTexturePath_ = "resources/textures/circle.png"; // GPU Particle描画用テクスチャ
+    bool gpuEmitterUsePostProcess_ = false; // JSON保存対象のPostProcessを使用するか
+    bool gpuEmitterPostProcessEnabled_ = true; // 保存済みPostProcessの有効状態
+    uint32_t gpuEmitterPostEffectType_ = 1; // 保存済みPostProcessの種類
+    Math::Vector2 gpuEmitterRadialBlurCenter_ { 0.5f, 0.5f }; // 保存済みRadialBlur中心
+    float gpuEmitterRadialBlurWidth_ = 0.01f; // 保存済みRadialBlur幅
+    uint32_t gpuEmitterRadialBlurSampleCount_ = 10; // 保存済みRadialBlurサンプル数
+    Math::Vector2 gpuEmitterDistortionCenter_ { 0.5f, 0.5f }; // 保存済みDistortion中心
+    float gpuEmitterDistortionStrength_ = 0.02f; // 保存済みDistortion強度
+    float gpuEmitterDistortionRadius_ = 0.35f; // 保存済みDistortion半径
+    float gpuEmitterDistortionWaveCount_ = 3.0f; // 保存済みDistortion波数
+    float gpuEmitterDistortionProgress_ = 0.0f; // 保存済みDistortion進行率
+    float gpuEmitterDissolveThreshold_ = 0.0f; // 保存済みDissolve閾値
+    float gpuEmitterDissolveEdgeWidth_ = 0.03f; // 保存済みDissolve境界幅
+    Math::Vector3 gpuEmitterDissolveEdgeColor_ { 1.0f, 0.4f, 0.3f }; // 保存済みDissolve境界色
+    float gpuEmitterRandomStrength_ = 1.0f; // 保存済みRandom強度
+    float gpuEmitterRandomScale_ = 600.0f; // 保存済みRandomスケール
+    float gpuEmitterRandomSpeed_ = 1.0f; // 保存済みRandom速度
+    std::string gpuEmitterSettingsMessage_; // JSON保存と読み込みの結果表示
     bool gpuEmitterAutoEmit_ = true; // GPU Particleを自動発生させるか
     bool gpuEmitterManualEmitRequested_ = false; // 次の更新で1回だけ発生させるか
     bool gpuParticleUpdateEnabled_ = true; // GPU Particleの寿命と移動を更新するか

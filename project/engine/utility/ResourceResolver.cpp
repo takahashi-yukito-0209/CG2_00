@@ -1,6 +1,7 @@
 #include "ResourceResolver.h"
+#include "FileUtility.h"
+#include "StringUtility.h"
 #include <Windows.h>
-#include <algorithm>
 #include <filesystem>
 #include <unordered_map>
 
@@ -77,8 +78,7 @@ void ResourceResolver::RegisterSearchPath(const std::string& name, const std::st
 {
     // 登録された検索パスのリストに、指定された名前とパスのペアを追加
     g_resolverData.searchPaths.emplace_back(name, path);
-    g_resolverData.resolveCache.clear();
-    g_resolverData.relativeResolveCache.clear();
+    ClearCache();
 }
 
 /// <summary>
@@ -88,6 +88,14 @@ void ResourceResolver::ClearSearchPaths()
 {
     // 登録された検索パスのリストをクリアして、すべての検索パスを削除
     g_resolverData.searchPaths.clear();
+    ClearCache();
+}
+
+/// <summary>
+/// 解決済みリソースパスのキャッシュをクリアする。
+/// </summary>
+void ResourceResolver::ClearCache()
+{
     g_resolverData.resolveCache.clear();
     g_resolverData.relativeResolveCache.clear();
 }
@@ -103,6 +111,7 @@ static const std::vector<std::string>& GetExtList(ResourceResolver::Type type)
         g_resolverData.extMap[ResourceResolver::Type::Model] = { ".obj", ".gltf", ".glb" };
         g_resolverData.extMap[ResourceResolver::Type::Shader] = { ".hlsl", ".fx" };
         g_resolverData.extMap[ResourceResolver::Type::Sound] = { ".wav", ".ogg", ".mp3" };
+        g_resolverData.extMap[ResourceResolver::Type::Json] = { ".json" };
         g_resolverData.extMap[ResourceResolver::Type::Any] = { "" };
     }
 
@@ -122,52 +131,147 @@ static const std::vector<std::string>& GetExtList(ResourceResolver::Type type)
 /// </summary>
 std::string ResourceResolver::Normalize(const std::string& path)
 {
+    return FileUtility::NormalizePath(path);
+}
+
+/// <summary>
+/// 既定のリソース検索パスを必要に応じて登録する。
+/// </summary>
+static void EnsureDefaultSearchPaths()
+{
+    if (!g_resolverData.searchPaths.empty()) {
+        return;
+    }
+
     try {
-        // パスを正規化するために、std::filesystem を使用してパスを処理する
-        fs::path p(path);
-        // パスが存在する場合は、正規化されたパスを返す
-        if (fs::exists(p)) {
-            return fs::canonical(p).string();
-        }
-
-        // パスが存在しない場合は、lexically_normal を使用してパスを正規化し、元の文字列を返す
-        return p.lexically_normal().string();
-
+        g_resolverData.searchPaths.emplace_back("resources", "resources");
+        g_resolverData.searchPaths.emplace_back("resources_textures", "resources/textures");
+        g_resolverData.searchPaths.emplace_back("resources_models", "resources/models");
+        g_resolverData.searchPaths.emplace_back("models", "models");
+        g_resolverData.searchPaths.emplace_back("shaders", "resources/shaders");
+        g_resolverData.searchPaths.emplace_back("effects", "resources/effects");
     } catch (...) {
-        return path;
     }
 }
 
 /// <summary>
-/// 指定された基準ディレクトリに対して相対的に入力パスを解決させる。モデル内部の相対パスに便利
+/// 候補パスが通常ファイルとして存在する場合、利用しやすい表記のパスへ解決する。
 /// </summary>
-static std::string tryCandidate(const fs::path& candidate)
+static std::string TryResolveCandidate(const fs::path& candidate)
 {
     try {
-        // 候補が実行フォルダ内にある場合は、日本語を含む絶対パスへ変換せず相対パスで返す
-        if (fs::exists(candidate) && fs::is_regular_file(candidate)) {
-            if (candidate.is_relative()) {
-                return candidate.lexically_normal().generic_string();
-            }
-
-            std::error_code relativePathError; // 実行フォルダからの相対化エラー
-            const fs::path relativePath = fs::relative(
-                candidate,
-                fs::current_path(),
-                relativePathError); // 実行フォルダを基準にした候補パス
-            if (!relativePathError && !relativePath.empty()) {
-                const std::string relativePathText = relativePath.generic_string(); // 返却する相対パス
-                if (relativePathText != ".." && !relativePathText.starts_with("../")) {
-                    return relativePathText;
-                }
-            }
-
-            return fs::canonical(candidate).string();
+        if (!FileUtility::IsRegularFile(candidate.generic_string())) {
+            return std::string();
         }
+
+        if (candidate.is_relative()) {
+            return candidate.lexically_normal().generic_string();
+        }
+
+        std::error_code relativePathError; // 実行フォルダからの相対化エラー
+        const fs::path relativePath = fs::relative(
+            candidate,
+            fs::current_path(),
+            relativePathError); // 実行フォルダを基準にした候補パス
+        if (!relativePathError && !relativePath.empty()) {
+            const std::string relativePathText = relativePath.generic_string(); // 返却する相対パス
+            if (relativePathText != ".." && !StringUtility::StartsWith(relativePathText, "../")) {
+                return relativePathText;
+            }
+        }
+
+        return FileUtility::NormalizePath(candidate.generic_string());
     } catch (...) {
     }
 
-    // 候補のパスが存在しない場合や、通常のファイルでない場合は、空文字列を返す
+    return std::string();
+}
+
+/// <summary>
+/// 候補パスをそのまま、またはリソース種別に応じた拡張子を補って解決する。
+/// </summary>
+static std::string TryResolveCandidateWithExtensions(const fs::path& candidate, ResourceResolver::Type type)
+{
+    if (candidate.has_extension()) {
+        return TryResolveCandidate(candidate);
+    }
+
+    const std::vector<std::string>& extensions = GetExtList(type); // 種別に対応する拡張子一覧
+    for (const std::string& extension : extensions) {
+        fs::path extendedCandidate = candidate; // 拡張子を補った候補パス
+        extendedCandidate += extension;
+
+        const std::string resolvedPath = TryResolveCandidate(extendedCandidate); // 解決できた候補パス
+        if (!resolvedPath.empty()) {
+            return resolvedPath;
+        }
+    }
+
+    return std::string();
+}
+
+/// <summary>
+/// 再帰検索で比較するファイル名候補を作成する。
+/// </summary>
+static std::vector<fs::path> BuildCandidateFilenames(const fs::path& inputPath, ResourceResolver::Type type)
+{
+    std::vector<fs::path> candidateFilenames; // 再帰検索で比較するファイル名一覧
+
+    if (inputPath.has_extension()) {
+        candidateFilenames.push_back(inputPath.filename());
+        return candidateFilenames;
+    }
+
+    const std::vector<std::string>& extensions = GetExtList(type); // 種別に対応する拡張子一覧
+    for (const std::string& extension : extensions) {
+        fs::path candidateFilename = inputPath; // 拡張子を補完した候補ファイル名
+        candidateFilename += extension;
+        candidateFilenames.push_back(candidateFilename.filename());
+    }
+
+    return candidateFilenames;
+}
+
+/// <summary>
+/// ファイル名だけが指定された場合に、実行フォルダ配下から一致するリソースを探す。
+/// </summary>
+static std::string TryResolveRecursiveByFilename(const fs::path& inputPath, ResourceResolver::Type type)
+{
+    if (inputPath.has_parent_path()) {
+        return std::string();
+    }
+
+    const std::vector<fs::path> candidateFilenames = BuildCandidateFilenames(inputPath, type); // 比較対象のファイル名一覧
+    constexpr size_t kMaxRecursiveCheckCount = 4096; // 再帰検索で確認する通常ファイル数の上限
+    size_t checkedFileCount = 0; // 再帰検索で確認済みの通常ファイル数
+    std::error_code iteratorError; // ディレクトリ走査時のエラー保持
+
+    fs::recursive_directory_iterator iterator(
+        fs::current_path(),
+        fs::directory_options::skip_permission_denied,
+        iteratorError);
+    fs::recursive_directory_iterator end;
+
+    while (!iteratorError && iterator != end && checkedFileCount < kMaxRecursiveCheckCount) {
+        const fs::directory_entry& entry = *iterator; // 現在確認しているディレクトリエントリ
+        std::error_code entryError; // エントリ種別確認時のエラー保持
+        const bool isRegularFile = entry.is_regular_file(entryError); // 通常ファイルかどうか
+        if (!entryError && isRegularFile) {
+            ++checkedFileCount;
+            const fs::path entryFilename = entry.path().filename(); // 比較対象のファイル名
+            for (const fs::path& candidateFilename : candidateFilenames) {
+                if (entryFilename == candidateFilename) {
+                    const std::string resolvedPath = TryResolveCandidate(entry.path()); // 再帰検索で解決した候補
+                    if (!resolvedPath.empty()) {
+                        return resolvedPath;
+                    }
+                }
+            }
+        }
+
+        iterator.increment(iteratorError);
+    }
+
     return std::string();
 }
 
@@ -176,7 +280,6 @@ static std::string tryCandidate(const fs::path& candidate)
 /// </summary>
 std::string ResourceResolver::ResolveRelative(const std::string& inputPath, const std::string& baseDir, Type type)
 {
-
     try {
         if (inputPath.empty()) {
             return std::string();
@@ -193,34 +296,19 @@ std::string ResourceResolver::ResolveRelative(const std::string& inputPath, cons
             return resolvedPath;
         };
 
-        // 入力パスが空の場合は、空文字列を返す
-        fs::path p(inputPath);
-        if (p.is_absolute()) {
-            auto r = tryCandidate(p);
-            if (!r.empty())
-                return cacheResolvedPath(r);
+        const fs::path inputFilePath(inputPath); // 解決対象の入力パス
+        if (inputFilePath.is_absolute()) {
+            const std::string resolvedPath = TryResolveCandidateWithExtensions(inputFilePath, type); // 絶対パスとして解決した結果
+            if (!resolvedPath.empty()) {
+                return cacheResolvedPath(resolvedPath);
+            }
         }
 
-        // 基準ディレクトリに対して相対的に解決を試みる
-        fs::path base(baseDir);
-        fs::path candidate = base / p;
-        // 拡張子がない場合は、リソースの種類に応じた拡張子のリストを試す
-        if (!p.has_extension()) {
-            const auto& exts = GetExtList(type);
-
-            // 候補のパスに対して、リソースの種類に応じた拡張子のリストを試す
-            for (const auto& e : exts) {
-                fs::path c2 = candidate;
-                c2 += e;
-                auto r = tryCandidate(c2);
-                if (!r.empty())
-                    return cacheResolvedPath(r);
-            }
-
-        } else {
-            auto r = tryCandidate(candidate);
-            if (!r.empty())
-                return cacheResolvedPath(r);
+        const fs::path baseDirectory(baseDir); // 相対解決の基準ディレクトリ
+        const fs::path relativeCandidate = baseDirectory / inputFilePath; // 基準ディレクトリから見た候補
+        const std::string resolvedPath = TryResolveCandidateWithExtensions(relativeCandidate, type); // 拡張子補完を含む解決結果
+        if (!resolvedPath.empty()) {
+            return cacheResolvedPath(resolvedPath);
         }
 
     } catch (...) {
@@ -233,17 +321,7 @@ std::string ResourceResolver::ResolveRelative(const std::string& inputPath, cons
 /// </summary>
 std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
 {
-    // 登録された検索パスが空の場合は、デフォルトの検索パスを設定する
-    if (g_resolverData.searchPaths.empty()) {
-        try {
-            g_resolverData.searchPaths.emplace_back("resources", "resources");
-            g_resolverData.searchPaths.emplace_back("resources_textures", "resources/textures");
-            g_resolverData.searchPaths.emplace_back("resources_models", "resources/models");
-            g_resolverData.searchPaths.emplace_back("models", "models");
-            g_resolverData.searchPaths.emplace_back("shaders", "resources/shaders");
-        } catch (...) {
-        }
-    }
+    EnsureDefaultSearchPaths();
 
     try {
         if (inputPath.empty()) {
@@ -261,78 +339,27 @@ std::string ResourceResolver::Resolve(const std::string& inputPath, Type type)
             return resolvedPath;
         };
 
-        fs::path p(inputPath);
+        const fs::path inputFilePath(inputPath); // 解決対象の入力パス
 
-        if (p.is_absolute()) {
-            auto r = tryCandidate(p);
-            if (!r.empty())
-                return cacheResolvedPath(r);
-        }
-
-        if (p.has_parent_path()) {
-
-            auto r = tryCandidate(p);
-            if (!r.empty())
-                return cacheResolvedPath(r);
-        }
-
-        const auto& exts = GetExtList(type);
-        for (const auto& sp : g_resolverData.searchPaths) {
-            fs::path root = sp.second;
-            fs::path candidate = root / p;
-            if (!p.has_extension()) {
-                for (const auto& e : exts) {
-                    fs::path c2 = candidate;
-                    c2 += e;
-                    auto r = tryCandidate(c2);
-                    if (!r.empty())
-                        return cacheResolvedPath(r);
-                }
-            } else {
-                auto r = tryCandidate(candidate);
-                if (!r.empty())
-                    return cacheResolvedPath(r);
+        if (inputFilePath.is_absolute() || inputFilePath.has_parent_path()) {
+            const std::string resolvedPath = TryResolveCandidateWithExtensions(inputFilePath, type); // 入力パスを直接解決した結果
+            if (!resolvedPath.empty()) {
+                return cacheResolvedPath(resolvedPath);
             }
         }
 
-        if (!p.has_parent_path()) {
-            std::vector<fs::path> candidateFilenames; // 再帰探索で比較する候補ファイル名
-            if (!p.has_extension()) {
-                for (const auto& e : exts) {
-                    fs::path candidateFilename = p; // 拡張子を補完した候補ファイル名
-                    candidateFilename += e;
-                    candidateFilenames.push_back(candidateFilename.filename());
-                }
-            } else {
-                candidateFilenames.push_back(p.filename());
+        for (const auto& searchPath : g_resolverData.searchPaths) {
+            const fs::path searchRoot = searchPath.second; // 登録済みの検索ルート
+            const fs::path candidate = searchRoot / inputFilePath; // 検索ルートから見た候補
+            const std::string resolvedPath = TryResolveCandidateWithExtensions(candidate, type); // 拡張子補完を含む解決結果
+            if (!resolvedPath.empty()) {
+                return cacheResolvedPath(resolvedPath);
             }
+        }
 
-            constexpr size_t kMaxRecursiveCheckCount = 4096; // フォールバック探索で確認する通常ファイル数の上限
-            size_t checkedFileCount = 0; // 再帰探索で確認済みの通常ファイル数
-            std::error_code iteratorError; // ディレクトリ走査時のエラー保持
-            fs::recursive_directory_iterator iterator(
-                fs::current_path(),
-                fs::directory_options::skip_permission_denied,
-                iteratorError);
-            fs::recursive_directory_iterator end;
-            while (!iteratorError && iterator != end && checkedFileCount < kMaxRecursiveCheckCount) {
-                const fs::directory_entry& entry = *iterator; // 現在確認しているディレクトリエントリ
-                std::error_code entryError; // エントリ種別確認時のエラー保持
-                const bool isRegularFile = entry.is_regular_file(entryError); // 通常ファイルかどうか
-                if (!entryError && isRegularFile) {
-                    ++checkedFileCount;
-                    const fs::path entryFilename = entry.path().filename(); // 比較対象のファイル名
-                    for (const fs::path& candidateFilename : candidateFilenames) {
-                        if (entryFilename == candidateFilename) {
-                            auto r = tryCandidate(entry.path());
-                            if (!r.empty())
-                                return cacheResolvedPath(r);
-                        }
-                    }
-                }
-
-                iterator.increment(iteratorError);
-            }
+        const std::string recursiveResolvedPath = TryResolveRecursiveByFilename(inputFilePath, type); // ファイル名だけでの再帰検索結果
+        if (!recursiveResolvedPath.empty()) {
+            return cacheResolvedPath(recursiveResolvedPath);
         }
 
     } catch (...) {

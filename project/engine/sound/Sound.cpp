@@ -1,6 +1,8 @@
 #include "Sound.h"
+#include "engine/utility/DebugUtility.h"
 #include "engine/utility/Logger.h"
 #include "engine/utility/ResourceResolver.h"
+#include "engine/utility/StringUtility.h"
 #include <Windows.h>
 #include <atomic>
 #include <cassert>
@@ -35,22 +37,19 @@ bool SoundSystem::Initialize()
     Finalize();
 
     HRESULT hr = MFStartup(MF_VERSION); // Media Foundationの初期化結果
-    if (FAILED(hr)) {
-        Logger::Error("SoundSystem::Initialize: MFStartup failed.\n");
+    if (!MYENGINE_CHECK_HRESULT(hr, "SoundSystem::Initialize: MFStartup failed.")) {
         return false;
     }
     mediaFoundationStarted_ = true;
 
     hr = XAudio2Create(&xaudio2_, 0, XAUDIO2_DEFAULT_PROCESSOR);
-    if (FAILED(hr)) {
-        Logger::Error("SoundSystem::Initialize: XAudio2Create failed.\n");
+    if (!MYENGINE_CHECK_HRESULT(hr, "SoundSystem::Initialize: XAudio2Create failed.")) {
         Finalize();
         return false;
     }
 
     hr = xaudio2_->CreateMasteringVoice(&masteringVoice_);
-    if (FAILED(hr)) {
-        Logger::Error("SoundSystem::Initialize: CreateMasteringVoice failed.\n");
+    if (!MYENGINE_CHECK_HRESULT(hr, "SoundSystem::Initialize: CreateMasteringVoice failed.")) {
         Finalize();
         return false;
     }
@@ -119,16 +118,9 @@ std::shared_ptr<SoundClip> SoundSystem::LoadFromFile(const std::string& path)
         resolvedPath = path;
     }
 
-    auto pos = resolvedPath.find_last_of('.'); // 拡張子区切り位置
-    if (pos != std::string::npos) {
-        std::string ext = resolvedPath.substr(pos + 1); // 小文字化して比較する拡張子
-        for (auto& c : ext) {
-            c = static_cast<char>(tolower(c));
-        }
-
-        if (ext == "wav") {
-            return LoadWav(resolvedPath);
-        }
+    const std::string lowerPath = StringUtility::ToLower(resolvedPath); // 拡張子判定用の小文字化パス
+    if (StringUtility::EndsWith(lowerPath, ".wav")) {
+        return LoadWav(resolvedPath);
     }
 
     std::wstring wpath(resolvedPath.begin(), resolvedPath.end()); // Media Foundationへ渡すワイド文字パス

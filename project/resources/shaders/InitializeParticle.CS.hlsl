@@ -1,4 +1,4 @@
-static const uint kMaxParticles = 1024;
+static const uint kMaxParticles = 16384;
 
 struct Particle
 {
@@ -11,6 +11,9 @@ struct Particle
     float3 velocity;
     float padding1;
     float4 color;
+    float3 startScale;
+    float padding2;
+    float4 startColor;
 };
 
 RWStructuredBuffer<Particle> gParticles : register(u0);

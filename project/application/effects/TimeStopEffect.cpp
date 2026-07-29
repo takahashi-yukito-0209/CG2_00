@@ -1,5 +1,6 @@
 #include "TimeStopEffect.h"
 #include "EffectProgress.h"
+#include "EffectParticleUtility.h"
 
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
@@ -19,9 +20,13 @@ using EffectProgress::kEffectProgressMax;
 using EffectProgress::kEffectProgressMin;
 using EffectProgress::kEffectTimeStart;
 constexpr uint32_t kStartCylinderCount = 1; // 開始時に発生させる円柱エフェクト数
+constexpr const char* kEffectOwnerName = "TimeStopEffect"; // GPUプリセットログに使う演出名
 constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 開始時に発生させる円柱エフェクト名
 constexpr const char* kRingParticleGroupName = "Ring"; // リングエフェクト名
 constexpr const char* kHitParticleGroupName = "Hit"; // 破片エフェクト名
+constexpr const char* kGpuConeRisePresetName = "Cone Rise"; // 停止開始に使うGPUプリセット名
+constexpr const char* kGpuMagicRingPresetName = "Magic Ring"; // 停止成立に使うGPUプリセット名
+constexpr const char* kGpuSparkBurstPresetName = "Spark Burst"; // 時間再開に使うGPUプリセット名
 constexpr float kImGuiShortDurationStep = 0.01f; // 短い時間設定の調整幅
 constexpr float kImGuiStopDurationStep = 0.05f; // 停止時間設定の調整幅
 constexpr float kImGuiMinimumShortDuration = 0.01f; // 短い時間設定の最小値
@@ -122,6 +127,7 @@ void TimeStopEffect::Start(PostProcess& postProcess, const Vector2& effectCenter
     ParticleManager* particleManager = ParticleManager::GetInstance(); // 開始演出を発生させるパーティクル管理
     if (particleManager) {
         particleManager->EmitCylinderEffect(kCylinderParticleGroupName, settings_.effectPosition, kStartCylinderCount);
+        EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuConeRisePresetName, settings_.effectPosition);
     }
 }
 
@@ -157,6 +163,7 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
                     kRingParticleGroupName,
                     settings_.effectPosition,
                     ClampParticleCount(settings_.startRingCount));
+                EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuMagicRingPresetName, settings_.effectPosition);
             }
         }
         break;
@@ -175,6 +182,9 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
                     kHitParticleGroupName,
                     settings_.effectPosition,
                     ClampParticleCount(settings_.releaseFragmentCount));
+                if (!EffectParticleUtility::PlayGpuParticlePreset(kEffectOwnerName, kGpuSparkBurstPresetName, settings_.effectPosition)) {
+                    particleManager->EmitHitEffect(kHitParticleGroupName, settings_.effectPosition, static_cast<uint32_t>((std::max)(settings_.gpuFailureFallbackHitCount, 0)));
+                }
             }
         }
         break;
@@ -217,6 +227,7 @@ void TimeStopEffect::DrawImGui()
         ImGui::SliderInt("Start Ring Count", &settings_.startRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
         ImGui::SliderInt("Release Ring Count", &settings_.releaseRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
         ImGui::SliderInt("Release Fragment Count", &settings_.releaseFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+        ImGui::SliderInt("GPU Failure Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
         ImGui::DragFloat3("Time Stop Position", &settings_.effectPosition.x, kImGuiPositionStep);
     }
 #endif

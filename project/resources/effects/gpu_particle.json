@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "effect": {
+    "effectName": "GPU Particle",
+    "description": ""
+  },
+  "playback": {
+    "autoEmit": 1,
+    "updateParticles": 1,
+    "drawParticles": 1
+  },
+  "render": {
+    "texture": "resources/textures/circle.png",
+    "usePostProcess": 0
+  },
+  "emitter": {
+    "spawnShape": 0,
+    "translate": [0.0000, 0.0000, 0.0000],
+    "radius": 1.3000,
+    "count": 1024,
+    "frequency": 0.1200,
+    "baseScale": [0.0800, 0.0800, 0.0800],
+    "randomScale": 0.0300,
+    "velocityScale": [0.0800, 0.1000, 0.0800],
+    "lifeTime": 5.0000,
+    "colorMin": [0.3500, 0.5500, 0.9000, 1.0000],
+    "colorMax": [1.0000, 1.0000, 1.0000, 1.0000],
+    "scaleOverLife": 0,
+    "endScale": [0.0200, 0.0200, 0.0200],
+    "gravity": [0.0000, -0.0500, 0.0000],
+    "damping": 0.0000,
+    "colorOverLife": 0,
+    "endColor": [1.0000, 1.0000, 1.0000, 0.0000]
+  },
+  "postProcess": {
+    "postProcessEnabled": 1,
+    "postEffectType": 1,
+    "postRadialBlurCenter": [0.5000, 0.5000, 0.0000],
+    "postRadialBlurWidth": 0.0100,
+    "postRadialBlurSampleCount": 10,
+    "postDistortionCenter": [0.5000, 0.5000, 0.0000],
+    "postDistortionStrength": 0.0200,
+    "postDistortionRadius": 0.3500,
+    "postDistortionWaveCount": 3.0000,
+    "postDistortionProgress": 0.0000,
+    "postDissolveThreshold": 0.0000,
+    "postDissolveEdgeWidth": 0.0300,
+    "postDissolveEdgeColor": [1.0000, 0.4000, 0.3000],
+    "postRandomStrength": 1.0000,
+    "postRandomScale": 600.0000,
+    "postRandomSpeed": 1.0000
+  }
+}

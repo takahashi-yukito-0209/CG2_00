@@ -62,6 +62,7 @@ struct TemporalRiftSettings {
     Math::Vector4 crackColor { 0.55f, 0.80f, 1.0f, 1.0f }; // 亀裂の色
     int ringCount = 2; // 破砕時のリング数
     int fragmentCount = 12; // 破砕時の破片数
+    int gpuFailureFallbackFragmentCount = 6; // GPU破砕演出失敗時に補う破片数
     Math::Vector4 innerRingColor { 0.35f, 0.85f, 1.0f, 0.85f }; // 内側リングの色
     Math::Vector4 outerRingColor { 0.65f, 0.35f, 1.0f, 0.70f }; // 外側リングの色
     Math::Vector4 fragmentColor { 0.55f, 0.85f, 1.0f, 1.0f }; // 放射破片の色

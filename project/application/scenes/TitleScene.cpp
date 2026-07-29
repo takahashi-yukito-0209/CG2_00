@@ -1,5 +1,6 @@
 #include "TitleScene.h"
 #include "../../engine/2d/Sprite.h"
+#include "../../engine/2d/SpriteCommon.h"
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
@@ -14,11 +15,6 @@ using namespace MyEngine;
 using namespace Math;
 
 namespace {
-constexpr int kDrawTypeLegacyAll = -1; // 旧形式の全描画指定
-constexpr int kDrawTypeModel = 0; // 3Dモデル描画
-constexpr int kDrawTypeParticle = 1; // パーティクル描画
-constexpr int kDrawTypeSprite = 2; // スプライト描画
-constexpr int kDrawTypeAll = 10; // すべての描画対象
 constexpr const char* kTitleGpuParticleGroupName = "TitleGpuParticle"; // タイトル確認用GPUパーティクルグループ名
 constexpr const char* kTitleGpuParticleTextureName = "circle.png"; // タイトル確認用GPUパーティクルテクスチャ
 constexpr std::array<float, 4> kTitleSceneClearColor = { 0.10f, 0.12f, 0.16f, 1.0f }; // タイトルScene Viewのクリア色
@@ -78,17 +74,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
         sceneRenderTarget_.Initialize(ctx_.directXCommon, ctx_.srvManager, CreateTitleSceneRenderTargetDesc(ctx_.directXCommon));
     }
 
-    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
-        particleManager = ParticleManager::GetInstance();
-    }
-
-    if (particleManager) {
-        particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
-        particleManager->SetParticlePlane(particlePlane_.get());
-        particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
-        particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
-    }
+    RegisterParticleManagerState();
 }
 
 /// <summary>
@@ -98,18 +84,20 @@ void TitleScene::Finalize()
 {
     std::cout << "TitleScene Finalize\n";
 
-    ParticleManager* particleManager = ctx_.particleManager; // タイトルで登録したパーティクル管理
-        if (!particleManager) {
+    ParticleManager* particleManager = ctx_.particleManager; // タイトルで登録したパーティクル状態をクリアする管理
+    if (!particleManager) {
         particleManager = ParticleManager::GetInstance();
     }
     if (particleManager) {
-        particleManager->Finalize();
+        particleManager->ClearSceneParticles();
     }
 
     sceneRenderTarget_.Finalize();
     particlePlane_.reset();
     sprites_.clear();
+    spritePointerView_.clear();
     objects3d_.clear();
+    objectPointerView_.clear();
     ctx_ = {};
 }
 
@@ -119,14 +107,14 @@ void TitleScene::Finalize()
 void TitleScene::Update(float dt)
 {
     ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
+    if (!particleManager) {
         particleManager = ParticleManager::GetInstance();
     }
     if (particleManager) {
         particleManager->Update(dt);
     }
 
-    InputManager* inputManager = InputManager::GetInstance(); // 蜈･蜉帷ｮ｡逅・
+    InputManager* inputManager = InputManager::GetInstance(); // 入力管理
     if (inputManager && inputManager->IsKeyJustPressed(DIK_SPACE)) {
         if (ctx_.requestSceneChange) {
             ctx_.requestSceneChange("Play");
@@ -170,12 +158,10 @@ void TitleScene::Draw()
     DrawWorldObjects();
 
     if (ctx_.spriteCommon) {
-        const int selectedDrawType = ctx_.selectedDrawType; // ImGui縺ｧ驕ｸ謚槭＆繧後※縺・ｋ謠冗判遞ｮ蛻･
-        if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeSprite || selectedDrawType == kDrawTypeAll) {
-            for (auto& sprite : sprites_) {
-                if (sprite) {
-                    sprite->Draw();
-                }
+        ctx_.spriteCommon->SetCommonDrawSetting();
+        for (auto& sprite : sprites_) {
+            if (sprite) {
+                sprite->Draw();
             }
         }
     }
@@ -190,16 +176,7 @@ void TitleScene::Draw()
 /// </summary>
 void TitleScene::DrawWorldObjects()
 {
-    if (!ctx_.object3dCommon) {
-        return;
-    }
-
-    const int selectedDrawType = ctx_.selectedDrawType; // ImGui縺ｧ驕ｸ謚槭＆繧後※縺・ｋ謠冗判遞ｮ蛻･
-    if (selectedDrawType != kDrawTypeLegacyAll && selectedDrawType != kDrawTypeModel && selectedDrawType != kDrawTypeParticle && selectedDrawType != kDrawTypeAll) {
-        return;
-    }
-
-    if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeModel || selectedDrawType == kDrawTypeAll) {
+    if (ctx_.object3dCommon) {
         ctx_.object3dCommon->SetCommonDrawSetting();
         for (auto& object : objects3d_) {
             if (object) {
@@ -208,14 +185,12 @@ void TitleScene::DrawWorldObjects()
         }
     }
 
-    if (selectedDrawType == kDrawTypeLegacyAll || selectedDrawType == kDrawTypeParticle || selectedDrawType == kDrawTypeAll) {
-        ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-        if (!particleManager) {
-            particleManager = ParticleManager::GetInstance();
-        }
-        if (particleManager) {
-            particleManager->Draw();
-        }
+    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
+    if (!particleManager) {
+        particleManager = ParticleManager::GetInstance();
+    }
+    if (particleManager) {
+        particleManager->Draw();
     }
 }
 
@@ -225,6 +200,7 @@ void TitleScene::DrawWorldObjects()
 void TitleScene::OnEnter()
 {
     std::cout << "TitleScene OnEnter\n";
+    RegisterParticleManagerState();
 }
 
 /// <summary>
@@ -236,12 +212,27 @@ void TitleScene::OnExit()
 }
 
 /// <summary>
-/// 描画モードの更新を受け取る
+/// ParticleManagerへタイトルシーン用の描画状態を登録する。
 /// </summary>
-void TitleScene::SetSelectedDrawType(int type)
+void TitleScene::RegisterParticleManagerState()
 {
-    ctx_.selectedDrawType = type;
+    if (!particlePlane_) {
+        return;
+    }
+
+    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
+    if (!particleManager) {
+        particleManager = ParticleManager::GetInstance();
+    }
+
+    if (particleManager) {
+        particleManager->ClearSceneParticles();
+        particleManager->SetParticlePlane(particlePlane_.get());
+        particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
+        particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
+    }
 }
+
 /// <summary>
 /// Scene View用のオフスクリーン描画だけにするか設定する。
 /// </summary>
@@ -272,6 +263,34 @@ void TitleScene::OnWindowResize(uint32_t width, uint32_t height)
 }
 
 /// <summary>
+/// 所有中のスプライトから参照用ビューを作り直す。
+/// </summary>
+void TitleScene::RebuildSpritePointerView()
+{
+    spritePointerView_.clear();
+    spritePointerView_.reserve(sprites_.size());
+    for (auto& sprite : sprites_) {
+        if (sprite) {
+            spritePointerView_.push_back(sprite.get());
+        }
+    }
+}
+
+/// <summary>
+/// 所有中の3Dオブジェクトから参照用ビューを作り直す。
+/// </summary>
+void TitleScene::RebuildObjectPointerView()
+{
+    objectPointerView_.clear();
+    objectPointerView_.reserve(objects3d_.size());
+    for (auto& object : objects3d_) {
+        if (object) {
+            objectPointerView_.push_back(object.get());
+        }
+    }
+}
+
+/// <summary>
 /// シーンが所有する3Dオブジェクトのポインタを収集する
 /// </summary>
 void TitleScene::FillObject3dPointers(std::vector<Object3d*>* out)
@@ -280,12 +299,10 @@ void TitleScene::FillObject3dPointers(std::vector<Object3d*>* out)
         return;
     }
 
-    out->reserve(objects3d_.size());
-    for (auto& object : objects3d_) {
-        if (object) {
-            out->push_back(object.get());
-        }
-    }
+    RebuildObjectPointerView();
+    out->clear();
+    out->reserve(objectPointerView_.size());
+    out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }
 
 /// <summary>
@@ -297,10 +314,8 @@ void TitleScene::FillSpritePointers(std::vector<Sprite*>* out)
         return;
     }
 
-    out->reserve(sprites_.size());
-    for (auto& sprite : sprites_) {
-        if (sprite) {
-            out->push_back(sprite.get());
-        }
-    }
+    RebuildSpritePointerView();
+    out->clear();
+    out->reserve(spritePointerView_.size());
+    out->insert(out->end(), spritePointerView_.begin(), spritePointerView_.end());
 }

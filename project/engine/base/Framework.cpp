@@ -4,6 +4,7 @@
 #include "engine/base/WinApp.h"
 #include "engine/utility/Logger.h"
 #include "engine/utility/ResourceResolver.h"
+#include "engine/utility/TimeUtility.h"
 #include <atomic>
 #include <chrono>
 #include <objbase.h>
@@ -93,7 +94,8 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
     // 目標FPSに基づいてフレーム時間を計算
     const double targetSec = 1.0 / targetFPS_; // フレーム時間の計算に高精度なクロックを使用
     using clock = std::chrono::high_resolution_clock; // 高精度なクロックを使用してフレーム時間を計測
-    auto prev = clock::now(); // 前回フレームの開始時間
+    TimeUtility::FrameTimer frameTimer; // フレーム間の経過時間を計測するタイマー
+    auto frameStart = clock::now(); // 現在フレームの開始時間
     double accumulator = 0.0; // フレーム時間の累積
 
     // メインループ: 終了要求が出るまで続ける
@@ -104,10 +106,9 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
         }
 
         // フレーム時間の計測と累積
-        auto now = clock::now();
-        std::chrono::duration<double> frameTime = now - prev;
-        prev = now;
-        accumulator += frameTime.count();
+        frameTimer.Tick();
+        frameStart = clock::now();
+        accumulator += static_cast<double>(frameTimer.GetDeltaTime());
 
         // フレーム時間が目標を超えている場合、Update を呼び出してゲームロジックを更新する
         bool updatedThisFrame = false;
@@ -133,7 +134,7 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
 
         // フレーム時間が目標を下回っている場合、スリープやスピンで待機してフレームレートを制御する
         auto frameEnd = clock::now();
-        std::chrono::duration<double> elapsed = frameEnd - prev;
+        std::chrono::duration<double> elapsed = frameEnd - frameStart;
         double sleepSec = targetSec - elapsed.count() - accumulator;
         // スリープで待機する時間が十分にある場合はスリープする（ただし、スリープの精度を考慮して少し余裕を持たせる）
         if (sleepSec > 0.002) { // 少なくとも 2ms を超えるならスリープ
@@ -142,7 +143,7 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
         }
 
         // スリープ後もフレーム時間が目標を下回っている場合は、スピンで待機して精度を高める
-        while ((clock::now() - prev).count() / static_cast<double>(clock::period::den) < targetSec - accumulator) {
+        while (std::chrono::duration<double>(clock::now() - frameStart).count() < targetSec - accumulator) {
             // スピンで待機: CPUを占有して正確なフレーム時間を維持する
             std::this_thread::yield();
             if (IsEndRequest()) {

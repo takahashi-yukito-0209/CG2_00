@@ -2,10 +2,13 @@
 #include "../../engine/base/IScene.h"
 #include "../../engine/base/PostProcess.h"
 #include "../../engine/base/RenderTarget.h"
+#include "../../engine/level/LevelData.h"
+#include "../../engine/utility/CollisionSystem.h"
 #include "../effects/TemporalRiftEffect.h"
 #include "../effects/TimeReversalEffect.h"
 #include "../effects/TimeStopEffect.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -77,13 +80,7 @@ public: // メンバ関数
     /// シーン名を取得する
     /// </summary>
     std::string GetName() const override { return "Play"; }
-
-    /// <summary>
-    /// 描画対象の種類を設定する
-    /// </summary>
-    void SetSelectedDrawType(int t) override;
-
-    /// <summary>
+/// <summary>
     /// Scene View用のオフスクリーン描画だけにするか設定する
     /// </summary>
     void SetSceneViewOnly(bool enabled) override;
@@ -104,9 +101,33 @@ public: // メンバ関数
     void FillObject3dPointers(std::vector<MyEngine::Object3d*>* out);
 
     /// <summary>
+    /// Scene ViewのGizmoで3DオブジェクトのTransformが編集されたときに呼び出す。
+    /// </summary>
+    void NotifyObjectTransformEdited(size_t objectIndex) override;
+
+    /// <summary>
+    /// Scene View画像上へLevel Editor用の編集表示を重ねて描画する。
+    /// </summary>
+    void DrawSceneViewOverlay(const Math::Matrix4x4& viewProjectionMatrix, float imageMinX, float imageMinY, float imageWidth, float imageHeight) override;
+
+    /// <summary>
+    /// Level EditorとGizmoで共有する選択中3Dオブジェクト番号を取得する。
+    /// </summary>
+    int GetSelectedSceneObjectIndex() const;
+
+    /// <summary>
+    /// Level EditorからGizmo対象の3Dオブジェクトを選択する。
+    /// </summary>
+    void SelectSceneObjectForEditor(size_t objectIndex);
+    /// <summary>
     /// スプライトのポインタ一覧を取得する
     /// </summary>
     void FillSpritePointers(std::vector<MyEngine::Sprite*>* out);
+
+    /// <summary>
+    /// パーティクルエミッターのポインタ一覧を取得する
+    /// </summary>
+    void FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out) override;
 
 private:
     /// <summary>
@@ -176,6 +197,26 @@ private:
     /// エフェクト選択と再生操作用のImGuiを描画する。
     /// </summary>
     void DrawEffectControllerImGui();
+
+    /// <summary>
+    /// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
+    /// </summary>
+    void DrawSceneObjectEditImGui();
+
+    /// <summary>
+    /// ImGuiでレベルJSONの読み込み状態を表示する。
+    /// </summary>
+    void DrawLevelDataImGui();
+
+    /// <summary>
+    /// ImGuiで衝突判定の状態を表示する。
+    /// </summary>
+    void DrawCollisionDebugImGui();
+
+    /// <summary>
+    /// ImGuiでシーン内スプライトの生成と削除を行う。
+    /// </summary>
+    void DrawSceneSpriteEditImGui();
 
     /// <summary>
     /// 選択中エフェクトの詳細ImGuiを描画する。
@@ -258,9 +299,9 @@ private:
     void FinalizePostProcessTargets();
 
     /// <summary>
-    /// ParticleManagerを解放する。
+    /// シーンで登録したParticleManagerの状態をクリアする。
     /// </summary>
-    void FinalizeParticleManager();
+    void ClearSceneParticles();
 
     /// <summary>
     /// シーンが保持している表示用オブジェクトを解放する。
@@ -286,11 +327,10 @@ private:
     /// シーン内の3Dオブジェクトを更新する。
     /// </summary>
     void UpdateSceneObjects(float deltaTime);
-
     /// <summary>
-    /// 確認用スプライトを更新する。
+    /// シーン内3Dオブジェクトの衝突判定を更新する。
     /// </summary>
-    void UpdateDemoSprites();
+    void UpdateSceneCollisions();
 
     /// <summary>
     /// パーティクル描画用オブジェクトを初期化する
@@ -333,6 +373,16 @@ private:
     void InitializeTemporalEffectSprites();
 
     /// <summary>
+    /// 時空破砕で使用する残像スプライトを必要になった時点で作成する
+    /// </summary>
+    void EnsureTemporalRiftSprites();
+
+    /// <summary>
+    /// 時間逆行で使用するスプライトを必要になった時点で作成する
+    /// </summary>
+    void EnsureTimeReversalSprites();
+
+    /// <summary>
     /// ポストプロセス用レンダーターゲットを初期化する
     /// </summary>
     void InitializePostProcessTargets();
@@ -348,19 +398,125 @@ private:
     void InitializeSkyBox();
 
     /// <summary>
-    /// 確認用スプライトを初期化する。
-    /// </summary>
-    void InitializeDemoSprites();
-
-    /// <summary>
     /// 3Dオブジェクトの初期設定を適用する。
     /// </summary>
     void ApplySceneObjectInitialSettings(MyEngine::Object3d& object3d, const std::string& modelFileName);
 
     /// <summary>
+    /// 指定したモデルファイル名からシーン用3Dオブジェクトを生成する
+    /// </summary>
+    void CreateSceneObject(const std::string& modelFileName);
+
+    /// <summary>
+    /// レベルデータ内のオブジェクト一覧からシーン用3Dオブジェクトを生成する。
+    /// </summary>
+    void CreateSceneObjectsFromLevelData(const std::vector<MyEngine::LevelObjectData>& objectDataList);
+
+    /// <summary>
+    /// レベルデータ内の1オブジェクトからシーン用3Dオブジェクトを生成する。
+    /// </summary>
+    void CreateSceneObjectFromLevelData(const MyEngine::LevelObjectData& objectData);
+
+    /// <summary>
+    /// 既存のシーン用3DオブジェクトへレベルデータのTransformとColliderを反映する。
+    /// </summary>
+    bool ApplyLevelDataToExistingSceneObjects(const std::vector<MyEngine::LevelObjectData>& objectDataList, size_t& objectIndex);
+
+    /// <summary>
+    /// 現在のシーン用3DオブジェクトのTransformをレベルデータへ書き戻す。
+    /// </summary>
+    bool SyncSceneObjectsToLevelData();
+
+    /// <summary>
+    /// 現在のレベルデータで参照しているモデルを事前読み込みする。
+    /// </summary>
+    bool PreloadLevelModels();
+
+    /// <summary>
+    /// 指定したシーン用3DオブジェクトをLevelDataのルートへ追加する。
+    /// </summary>
+    bool AppendSceneObjectToLevelData(size_t objectIndex);
+
+    /// <summary>
+    /// 指定したシーン用3Dオブジェクトに対応するLevelData内MESHを削除する。
+    /// </summary>
+    bool RemoveSceneObjectFromLevelData(size_t objectIndex);
+
+    /// <summary>
+    /// 既存のシーン用3Dオブジェクトをレベルデータ階層へ順番に書き戻す。
+    /// </summary>
+    bool SyncSceneObjectsToLevelDataRecursive(std::vector<MyEngine::LevelObjectData>& objectDataList, size_t& objectIndex, const Math::Transform& parentTransform);
+
+    /// <summary>
+    /// 指定した番号のシーン用3Dオブジェクトを削除する
+    /// </summary>
+    void DeleteSceneObject(size_t objectIndex);
+
+    /// <summary>
+    /// 指定したテクスチャ名からシーン用スプライトを生成する。
+    /// </summary>
+    void CreateSceneSprite(const std::string& textureName);
+
+    /// <summary>
+    /// 指定した番号のシーン用スプライトを削除する。
+    /// </summary>
+    void DeleteSceneSprite(size_t spriteIndex);
+
+    /// <summary>
     /// シーンで使用する3Dオブジェクトを初期化する。
     /// </summary>
     void InitializeSceneObjects();
+
+    /// <summary>
+    /// 現在の3DオブジェクトをクリアしてレベルJSONから作り直す。
+    /// </summary>
+    bool ReloadLevelSceneObjects();
+
+    /// <summary>
+    /// 現在保持しているレベルデータをシーン用3Dオブジェクトへ反映する。
+    /// </summary>
+    bool ApplyLevelDataToScene();
+
+    /// <summary>
+    /// 現在保持しているレベルデータの集計情報を更新する。
+    /// </summary>
+    void RefreshLevelDataSummary();
+
+    /// <summary>
+    /// 現在のレベルデータをJSONスナップショットとして保存する。
+    /// </summary>
+    bool SaveLevelSnapshot();
+
+    /// <summary>
+    /// レベルJSONの読み込み状態を記録する。
+    /// </summary>
+    void SetLevelLoadStatus(bool succeeded, const std::string& message);
+
+    /// <summary>
+    /// レベルJSONの保存状態を記録する。
+    /// </summary>
+    void SetLevelSaveStatus(bool succeeded, const std::string& message);
+
+    /// <summary>
+    /// LevelDataが未保存状態になったことを記録する。
+    /// </summary>
+    void MarkLevelDataDirty(const std::string& message, bool appliedToScene);
+
+    /// <summary>
+    /// MESH順の番号からLevelData内のオブジェクトを取得する。
+    /// </summary>
+    MyEngine::LevelObjectData* FindLevelMeshObjectByIndex(size_t objectIndex);
+
+    /// <summary>
+    /// MESH順の番号からLevelData内のオブジェクトを再帰的に取得する。
+    /// </summary>
+    MyEngine::LevelObjectData* FindLevelMeshObjectByIndexRecursive(std::vector<MyEngine::LevelObjectData>& objectDataList, size_t targetMeshIndex, size_t& currentMeshIndex);
+
+    /// <summary>
+    /// LevelDataの選択コライダーを対応するObject3dへ反映する。
+    /// </summary>
+    void ApplyLevelColliderEditToSceneObject(size_t objectIndex, const MyEngine::LevelObjectData& objectData);
+
 
     /// <summary>
     /// ポストプロセス描画が利用できるか判定する
@@ -435,31 +591,40 @@ private:
     /// シーン内の3D要素を描画する
     /// </summary>
     void DrawSceneContent();
+    /// <summary>
+    /// 登録済みの3Dオブジェクトを描画する。
+    /// </summary>
+    void DrawSceneObjects();
 
     /// <summary>
-    /// 指定した番号の3Dオブジェクトを描画する。
+    /// 所有中の3Dオブジェクトから参照用ビューを作り直す。
     /// </summary>
-    void DrawObject3dAtIndex(size_t objectIndex);
+    void RebuildObjectPointerView();
 
     /// <summary>
-    /// すべての3Dオブジェクトを描画する。
+    /// 所有中のスプライトから参照用ビューを作り直す。
     /// </summary>
-    void DrawAllObjects3d();
+    void RebuildSpritePointerView();
 
     /// <summary>
-    /// 選択中の描画種別に対応する3Dオブジェクトを描画する。
+    /// 所有中のパーティクルエミッターから参照用ビューを作り直す。
     /// </summary>
-    void DrawSelectedObjects3d(int selectedDrawType);
+    void RebuildParticleEmitterPointerView();
 
     /// <summary>
-    /// パーティクルを描画する必要があるか判定する。
+    /// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
     /// </summary>
-    bool ShouldDrawParticles(int selectedDrawType) const;
+    uint32_t IssueObjectId();
 
     /// <summary>
-    /// 必要な場合だけパーティクルを描画する。
+    /// 次に生成するスプライトへ割り当てるIDを取得する。
     /// </summary>
-    void DrawParticlesIfNeeded(int selectedDrawType);
+    uint32_t IssueSpriteId();
+
+    /// <summary>
+    /// 次に生成するパーティクルエミッターへ割り当てるIDを取得する。
+    /// </summary>
+    uint32_t IssueParticleEmitterId();
 
     /// <summary>
     /// 3D空間とパーティクルを描画する
@@ -467,20 +632,50 @@ private:
     void DrawWorldAndParticles();
 
     /// <summary>
+    /// 蓄積した 3D デバッグラインを現在の描画先へ描画する。
+    /// </summary>
+    void DrawDebugLines3D();
+
+    /// <summary>
     /// ポストプロセスの影響を受けないスプライトを描画する
     /// </summary>
     void DrawSprites();
 
+    /// <summary>
+    /// 蓄積した 2D デバッグラインを現在の描画先へ描画する。
+    /// </summary>
+    void DrawDebugLines2D();
+
 private: // メンバー変数
     MyEngine::SceneContext ctx_;
+    MyEngine::LevelData levelData_; // Blenderから読み込んだレベルデータ
+    std::string levelDataFileName_; // 読み込み対象のレベルJSONファイル名
+    std::string levelSaveFileName_; // 書き出し対象のレベルJSONファイル名
+    bool levelLoadSucceeded_ = false; // 直近のレベルJSON読み込みが成功したか
+    std::string levelLoadMessage_; // 直近のレベルJSON読み込み状態メッセージ
+    bool levelSaveSucceeded_ = false; // 直近のレベルJSON保存が成功したか
+    std::string levelSaveMessage_; // 直近のレベルJSON保存状態メッセージ
+    bool levelDirty_ = false; // LevelDataに未保存の編集があるか
+    bool levelAppliedToScene_ = false; // 現在のLevelDataがシーンへ反映済みか
+    size_t levelTotalObjectCount_ = 0; // レベルJSONに含まれる総オブジェクト数
+    size_t levelMeshObjectCount_ = 0; // レベルJSONから生成対象になったMesh数
+    size_t levelColliderObjectCount_ = 0; // レベルJSONに含まれる有効コライダー数
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
+    std::vector<MyEngine::Sprite*> spritePointerView_; // ImGuiなど外部参照用のスプライト一覧
+    uint32_t nextSpriteId_ = 1; // 次に生成するスプライトへ割り当てるID
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_;
+    std::vector<MyEngine::Object3d*> objectPointerView_; // ImGuiなど外部参照用の3Dオブジェクト一覧
+    uint32_t nextObjectId_ = 1; // 次に生成する3Dオブジェクトへ割り当てるID
+    MyEngine::CollisionSystem collisionSystem_; // シーン内3Dオブジェクトの衝突判定管理
+    size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;
     ParticleEmitter pmEmitter_;
     ParticleEmitter ringEmitter_;
     ParticleEmitter cylinderEmitter_;
+    std::vector<ParticleEmitter*> particleEmitterPointerView_; // ImGuiなど外部参照用のパーティクルエミッター一覧
+    uint32_t nextParticleEmitterId_ = 1; // 次に生成するパーティクルエミッターへ割り当てるID
     std::unique_ptr<MyEngine::SkyBox> skybox_;
     std::vector<std::unique_ptr<MyEngine::Sprite>> temporalAfterimageSprites_; // Transform履歴を表示する残像スプライト
     std::vector<std::unique_ptr<MyEngine::Sprite>> timeReversalSprites_; // 時間逆行用パーティクルの表示スプライト

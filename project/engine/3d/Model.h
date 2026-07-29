@@ -8,8 +8,10 @@
 namespace MyEngine {
 
 // 前方宣言
+class DirectXCommon;
 class ModelCommon;
 class Object3d;
+class TextureManager;
 
 /// <summary>
 /// モデルクラス
@@ -17,7 +19,7 @@ class Object3d;
 class Model {
 public: // メンバ関数
     Model() = default; // デフォルトコンストラクタ
-    ~Model() = default; // デストラクタ
+    ~Model(); // デストラクタ
 
     /// <summary>
     /// モデルファイルを読み込み、頂点データとマテリアル情報を初期化する
@@ -62,6 +64,16 @@ private: // メンバ変数
     uint32_t ResolveFallbackTextureIndex() const;
 
     /// <summary>
+    /// 指定マテリアル番号のテクスチャ番号を取得する
+    /// </summary>
+    uint32_t ResolveMaterialTextureIndex(uint32_t materialIndex) const;
+
+    /// <summary>
+    /// サブメッシュ描画時に使用するテクスチャ番号を決定する
+    /// </summary>
+    uint32_t ResolveMeshPartTextureIndex(const Object3d* owner, uint32_t materialIndex) const;
+
+    /// <summary>
     /// 描画時に使用するテクスチャ番号を決定する
     /// </summary>
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
@@ -87,14 +99,29 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW ResolveIndexBufferView(const Object3d* owner) const;
 
     /// <summary>
+    /// サブメッシュ情報があればマテリアル単位でIndex描画を行う
+    /// </summary>
+    bool DrawMeshPartsIndexed(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const;
+
+    /// <summary>
     /// IndexがあればIndex描画、なければ従来の頂点描画を行う
     /// </summary>
-    void DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const;
+    void DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const;
 
     /// <summary>
     /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する
     /// </summary>
     void InitializeModelResources();
+
+    /// <summary>
+    /// モデルが保持するGPUリソースを解放予約する
+    /// </summary>
+    void FinalizeGpuResources();
+
+    /// <summary>
+    /// GPU参照が終わるまでD3D12リソースの解放を遅延する
+    /// </summary>
+    void DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
 
     /// <summary>
     /// モデルの頂点データから頂点バッファを作成する
@@ -112,6 +139,11 @@ private: // メンバ変数
     void CreateVertexInfluenceBuffer();
 
     /// <summary>
+    /// モデル内マテリアルごとのテクスチャ番号を初期化する
+    /// </summary>
+    void InitializeMaterialTextureIndices(TextureManager* textureManager);
+
+    /// <summary>
     /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
     /// </summary>
     bool BindOwnerMaterialResource(ID3D12GraphicsCommandList* commandList, const Object3d* owner, const char* logContext) const;
@@ -122,8 +154,8 @@ private: // メンバ変数
     bool BindTexture(ID3D12GraphicsCommandList* commandList, uint32_t textureIndex, const char* logContext) const;
 
 
-    // モデル共通情報へのポインタ
-    ModelCommon* modelCommon_ = nullptr;
+    // GPUリソース生成と遅延解放に使うDirectX共通処理
+    DirectXCommon* dxCommon_ = nullptr;
 
     // 読み込んだモデルの構造データ
     Object3d::ModelData modelData_;
@@ -148,6 +180,9 @@ private: // メンバ変数
 
     // モデルファイル由来の既定テクスチャSRV番号
     uint32_t textureIndex_ = UINT32_MAX;
+
+    // モデル内マテリアルごとのテクスチャSRV番号
+    std::vector<uint32_t> materialTextureIndices_;
 };
 
 } // namespace MyEngine

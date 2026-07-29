@@ -1,64 +1,35 @@
 #include "PlayScene.h"
-#ifdef USE_IMGUI
 #include "ImGuiManager.h"
-#endif
 #include "../../engine/2d/Sprite.h"
 #include "../../engine/2d/SpriteCommon.h"
 #include "../../engine/2d/TextureManager.h"
 #include "../../engine/3d/Camera.h"
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
-#include "../../engine/3d/PrimitiveFactory.h"
 #include "../../engine/3d/SkyBox.h"
 #include "../../engine/base/DirectXCommon.h"
-#include "../../engine/base/SrvManager.h"
-#include "../../engine/base/WinApp.h"
 #include "../../engine/io/InputManager.h"
-#include "../../engine/particle/ParticleManager.h"
+#include "../../engine/level/LevelLoader.h"
+#include "../../engine/level/LevelWriter.h"
 #include "../../engine/utility/mathUtility.h"
+#include "../../engine/utility/Logger.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <utility>
 
 using namespace MyEngine;
 using namespace Math;
 
 namespace {
-constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
-constexpr Vector2 kTemporalSpriteDefaultSize = { 1.0f, 1.0f }; // 時間演出スプライトの初期サイズ
-constexpr Vector4 kHiddenSpriteColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示状態にするスプライト色
-constexpr int kMaximumTemporalAfterimageCount = 8; // 時空破砕で保持できる最大残像数
-constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
-constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
-constexpr std::array<float, 4> kSceneRenderTargetClearColor = { 0.53f, 0.71f, 0.82f, 1.0f }; // シーン描画RTのクリア色
-constexpr std::array<float, 4> kTransparentRenderTargetClearColor = { 0.0f, 0.0f, 0.0f, 1.0f }; // 中間RTと最終RTのクリア色
-constexpr bool kUseDepthBuffer = true; // RenderTargetに深度バッファを作成する
-constexpr bool kNoDepthBuffer = false; // RenderTargetに深度バッファを作成しない
-constexpr bool kCreateDepthSrv = true; // 深度SRVを作成する
-constexpr bool kNoDepthSrv = false; // 深度SRVを作成しない
-constexpr float kParticleRingOuterRadius = 1.0f; // パーティクルリングの外径
-constexpr float kParticleRingInnerRadius = 0.2f; // パーティクルリングの内径
-constexpr float kParticleCylinderTopRadius = 1.0f; // パーティクル円柱の上面半径
-constexpr float kParticleCylinderBottomRadius = 1.0f; // パーティクル円柱の下面半径
-constexpr float kParticleCylinderHeight = 1.0f; // パーティクル円柱の高さ
-constexpr uint32_t kParticleCylinderDivide = 32; // パーティクル円柱の分割数
-constexpr bool kUseAlphaCutoutSampler = true; // アルファ抜き用サンプラーを使用する
-constexpr bool kNoAlphaCutoutSampler = false; // アルファ抜き用サンプラーを使用しない
-constexpr Vector3 kEmitterDefaultPosition = { 0.0f, 0.0f, 0.0f }; // エミッターの初期位置
-constexpr int kHitEmitterParticleCount = 8; // ヒット演出で発生させる粒子数
-constexpr int kSingleEffectEmitterCount = 1; // 単発演出で発生させる粒子数
-constexpr float kEmitterDefaultFrequency = 1.0f; // エミッターの初期発生間隔
 constexpr float kStoppedDeltaTime = 0.0f; // ヒットストップや時間停止中に使用する停止時間
 constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終了したとみなす残り時間
-constexpr uint32_t kDemoSpriteCount = 5; // 作成する確認用スプライト数
-constexpr uint32_t kDemoSpriteTextureSwitchInterval = 2; // 同じ確認用テクスチャを連続で使う枚数
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
-constexpr size_t kTerrainObjectIndex = 5; // terrainモデルの登録番号
-constexpr Vector3 kTerrainInitialScale = { 5.0f, 5.0f, 5.0f }; // terrainモデルの初期スケール
 constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
 constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
+constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
 constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
@@ -66,32 +37,58 @@ constexpr const char* kSimpleSkinModelFileName = "simpleSkin/simpleSkin.gltf"; /
 constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // Skinning確認用sneakWalkモデル
 constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
+constexpr const char* kDefaultLevelDataFileName = "levels/scene.json"; // 起動時に読み込むレベルJSON
+constexpr const char* kDefaultLevelSaveFileName = "levels/scene_snapshot.json"; // ImGuiから書き出すレベルJSON
 
-constexpr std::array<const char*, 10> kSceneModelFileNames = {
+struct SceneModelLoadDesc {
+    const char* fileName; // モデルファイル名
+    bool loadOnStartup; // PlayScene遷移直後に読み込むか
+};
+
+constexpr std::array<SceneModelLoadDesc, 1> kSceneModelLoadDescs = {
+    SceneModelLoadDesc { "sphere/sphere.gltf", true },
+}; // シーンで扱うモデルと起動時ロード設定
+constexpr std::array<const char*, 12> kSceneObjectCreateModelNames = {
     "plane/plane.gltf",
     "bunny/bunny.obj",
     "teapot/teapot.obj",
     "fence/fence.obj",
     "sphere/sphere.gltf",
     "terrain/terrain.obj",
+    "multiMesh/multiMesh.obj",
+    "multiMaterial/multiMaterial.obj",
     kAnimatedCubeModelFileName,
     kSimpleSkinModelFileName,
     kHumanSneakWalkModelFileName,
     kHumanWalkModelFileName,
-}; // シーンで生成するモデルファイル名
-
+}; // ImGuiから生成できる3Dモデル名
+constexpr std::array<const char*, 12> kSceneObjectCreateModelDisplayNames = {
+    "plane.gltf",
+    "bunny.obj",
+    "teapot.obj",
+    "fence.obj",
+    "sphere.gltf",
+    "terrain.obj",
+    "multiMesh.obj",
+    "multiMaterial.obj",
+    "AnimatedCube.gltf",
+    "simpleSkin.gltf",
+    "sneakWalk.gltf",
+    "walk.gltf",
+}; // ImGuiに表示する3Dモデル名
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
 constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
 constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
 constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
-constexpr std::array<const char*, 2> kDemoSpriteTextureNames = {
+constexpr std::array<const char*, 5> kSceneSpriteCreateTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
-}; // 確認用スプライトに使用するテクスチャ名
-
-constexpr const char* kDissolveMaskTextureName = "noise0.png"; // Dissolveに使用するノイズマスク名
+    kCircleTextureName,
+    kCircleFlashTextureName,
+    kGradationLineTextureName,
+}; // ImGuiから生成できるスプライト用テクスチャ名
 constexpr std::array<const char*, 5> kSceneTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
@@ -100,116 +97,17 @@ constexpr std::array<const char*, 5> kSceneTextureNames = {
     kEnvironmentMapTextureName,
 }; // シーン初期化時に読み込むテクスチャ名
 
-constexpr const char* kCircleParticleGroupName = "Circle"; // 円形パーティクルグループ名
-constexpr const char* kCheckerParticleGroupName = "Checker"; // チェッカーパーティクルグループ名
-constexpr const char* kBallParticleGroupName = "Ball"; // ボールパーティクルグループ名
-constexpr const char* kHitParticleGroupName = "Hit"; // ヒット演出パーティクルグループ名
-constexpr const char* kRingParticleGroupName = "Ring"; // リング演出パーティクルグループ名
-constexpr const char* kCylinderParticleGroupName = "Cylinder"; // 円柱演出パーティクルグループ名
-
 /// <summary>
-/// パーティクルエミッターで使用する演出種別
+/// パス文字列から表示用のファイル名部分だけを取得する。
 /// </summary>
-enum class ParticleEmitterEffectType {
-    Hit,
-    Ring,
-    Cylinder,
-};
-
-/// <summary>
-/// パーティクルエミッターの共通設定を適用する
-/// </summary>
-void ConfigureParticleEmitter(
-    ParticleEmitter& emitter,
-    const char* groupName,
-    int particleCount,
-    ParticleEmitterEffectType effectType)
+std::string GetDisplayFileName(const std::string& path)
 {
-    emitter.groupName = groupName;
-    emitter.transform.translate = kEmitterDefaultPosition;
-    emitter.count = particleCount;
-    emitter.frequency = kEmitterDefaultFrequency;
-    emitter.useHitEffect = false;
-    emitter.useRingEffect = false;
-    emitter.useCylinderEffect = false;
-
-    switch (effectType) {
-    case ParticleEmitterEffectType::Hit:
-        emitter.useHitEffect = true;
-        break;
-    case ParticleEmitterEffectType::Ring:
-        emitter.useRingEffect = true;
-        break;
-    case ParticleEmitterEffectType::Cylinder:
-        emitter.useCylinderEffect = true;
-        break;
+    const size_t separatorPosition = path.find_last_of("/\\"); // 最後に見つかったパス区切り位置
+    if (separatorPosition == std::string::npos) {
+        return path;
     }
 
-    emitter.Emit();
-}
-
-/// <summary>
-/// ポストプロセス用のRenderTarget設定を作成する
-/// </summary>
-RenderTargetDesc CreatePostProcessRenderTargetDesc(
-    DXGI_FORMAT format,
-    bool useDepth,
-    bool createDepthSrv,
-    const std::array<float, 4>& clearColor)
-{
-    RenderTargetDesc desc {}; // 作成するRenderTarget設定
-    desc.width = WinApp::kWindowWidth;
-    desc.height = WinApp::kWindowHeight;
-    desc.format = format;
-    desc.useDepth = useDepth;
-    desc.createColorSrv = true;
-    desc.createDepthSrv = createDepthSrv;
-    desc.resizeWithWindow = true;
-    desc.clearColor = clearColor;
-    return desc;
-}
-
-/// <summary>
-/// 非表示状態の時間演出スプライトを作成する
-/// </summary>
-std::unique_ptr<Sprite> CreateHiddenTemporalSprite(const SceneContext& ctx, const std::string& textureName)
-{
-    auto sprite = std::make_unique<Sprite>(); // 作成する時間演出用スプライト
-    sprite->Initialize(ctx.spriteCommon, textureName, ctx.imguiManager);
-    sprite->SetAnchorPoint(kCenteredSpriteAnchor);
-    sprite->SetSize(kTemporalSpriteDefaultSize);
-    sprite->SetColor(kHiddenSpriteColor);
-    sprite->Update();
-    return sprite;
-}
-
-/// <summary>
-/// パーティクル描画用の3Dオブジェクトを作成する
-/// </summary>
-std::unique_ptr<Object3d> CreateParticleDrawObject(
-    const SceneContext& ctx,
-    const std::vector<Object3d::VertexData>& meshVertices,
-    const char* textureName,
-    bool useAlphaCutoutSampler)
-{
-    auto object3d = std::make_unique<Object3d>(); // 作成するパーティクル描画用オブジェクト
-    object3d->Initialize(ctx.object3dCommon, ctx.imguiManager);
-    object3d->SetMesh(meshVertices);
-    object3d->SetTexture(textureName);
-    object3d->SetEnableLighting(false);
-    object3d->SetUseAlphaCutoutSampler(useAlphaCutoutSampler);
-    return object3d;
-}
-
-/// <summary>
-/// 確認用スプライト番号から使用するテクスチャ名を取得する
-/// </summary>
-const char* GetDemoSpriteTextureName(uint32_t spriteIndex)
-{
-    const size_t textureIndex = (std::min)(
-        static_cast<size_t>(spriteIndex / kDemoSpriteTextureSwitchInterval),
-        kDemoSpriteTextureNames.size() - 1); // 使用する確認用テクスチャ番号
-    return kDemoSpriteTextureNames[textureIndex];
+    return path.substr(separatorPosition + 1);
 }
 
 /// <summary>
@@ -264,6 +162,191 @@ bool IsSkinningPreviewModelFile(const std::string& modelFileName)
         || modelFileName == kHumanSneakWalkModelFileName
         || modelFileName == kHumanWalkModelFileName;
 }
+
+/// <summary>
+/// レベルデータのコライダー情報をObject3dへ適用する。
+/// </summary>
+void ApplyLevelColliderToObject(const LevelObjectData& objectData, Object3d& object3d)
+{
+    if (!objectData.collider.enabled) {
+        return;
+    }
+
+    if (objectData.collider.type == "SPHERE") {
+        object3d.SetSphereCollider(objectData.collider.center, objectData.collider.size);
+        return;
+    }
+    if (objectData.collider.type == "CAPSULE") {
+        object3d.SetCapsuleCollider(objectData.collider.center, objectData.collider.size);
+        return;
+    }
+
+    object3d.SetBoxCollider(objectData.collider.center, objectData.collider.size);
+}
+
+/// <summary>
+/// レベルデータ内のオブジェクトが生成対象のMeshか判定する。
+/// </summary>
+bool IsLevelMeshObject(const LevelObjectData& objectData)
+{
+    return objectData.type == "MESH" && !objectData.fileName.empty();
+}
+
+/// <summary>
+/// レベルJSONの集計情報。
+/// </summary>
+struct LevelDataSummary {
+    size_t totalObjectCount = 0; // 子階層を含めた総オブジェクト数
+    size_t meshObjectCount = 0; // モデル生成対象のMesh数
+    size_t colliderObjectCount = 0; // 有効コライダーを持つオブジェクト数
+};
+
+/// <summary>
+/// レベルオブジェクト階層の集計情報を加算する。
+/// </summary>
+void AccumulateLevelDataSummary(const std::vector<LevelObjectData>& objectDataList, LevelDataSummary& summary)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        summary.totalObjectCount++;
+        if (IsLevelMeshObject(objectData)) {
+            summary.meshObjectCount++;
+        }
+        if (objectData.collider.enabled) {
+            summary.colliderObjectCount++;
+        }
+        AccumulateLevelDataSummary(objectData.children, summary);
+    }
+}
+
+/// <summary>
+/// レベルデータ全体の集計情報を作成する。
+/// </summary>
+LevelDataSummary BuildLevelDataSummary(const LevelData& levelData)
+{
+    LevelDataSummary summary {}; // 集計結果
+    AccumulateLevelDataSummary(levelData.objects, summary);
+    return summary;
+}
+
+/// <summary>
+/// Transformの単位値を作成する。
+/// </summary>
+Math::Transform CreateIdentityTransformForSceneSync()
+{
+    return {
+        { 1.0f, 1.0f, 1.0f },
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f }
+    };
+}
+
+/// <summary>
+/// 除算が不安定になる親スケールを避けてローカルスケールを計算する。
+/// </summary>
+float DivideScaleComponent(float worldScale, float parentScale)
+{
+    constexpr float kMinimumParentScale = 0.0001f; // 親スケールを除算できる最小値
+    if (std::abs(parentScale) < kMinimumParentScale) {
+        return worldScale;
+    }
+
+    return worldScale / parentScale;
+}
+
+/// <summary>
+/// ワールドTransformを親基準のローカルTransformへ変換する。
+/// </summary>
+Math::Transform BuildLocalTransformFromWorld(const Math::Transform& worldTransform, const Math::Transform& parentTransform)
+{
+    const Math::Matrix4x4 parentMatrix = MathUtil::MakeAffineMatrix(parentTransform.scale, parentTransform.rotate, parentTransform.translate); // 親のワールド行列
+    const Math::Matrix4x4 inverseParentMatrix = MathUtil::Inverse(parentMatrix); // 親の逆ワールド行列
+
+    Math::Transform localTransform {}; // 算出した親基準のローカルTransform
+    localTransform.scale = {
+        DivideScaleComponent(worldTransform.scale.x, parentTransform.scale.x),
+        DivideScaleComponent(worldTransform.scale.y, parentTransform.scale.y),
+        DivideScaleComponent(worldTransform.scale.z, parentTransform.scale.z)
+    };
+    localTransform.rotate = {
+        worldTransform.rotate.x - parentTransform.rotate.x,
+        worldTransform.rotate.y - parentTransform.rotate.y,
+        worldTransform.rotate.z - parentTransform.rotate.z
+    };
+    localTransform.translate = MathUtil::Transform(worldTransform.translate, inverseParentMatrix);
+    return localTransform;
+}
+
+/// <summary>
+/// Object3dからLevelDataへ保存するMESHオブジェクト情報を作成する。
+/// </summary>
+LevelObjectData BuildLevelObjectDataFromSceneObject(const Object3d& object3d, size_t objectIndex)
+{
+    Math::Transform worldTransform { // Object3dが保持する現在のワールドTransform
+        object3d.GetScale(),
+        object3d.GetRotate(),
+        object3d.GetTranslate()
+    };
+
+    LevelObjectData objectData {}; // LevelDataへ追加するオブジェクト情報
+    objectData.type = "MESH";
+    objectData.name = "Object_" + std::to_string(objectIndex);
+    objectData.fileName = object3d.GetDebugName();
+    objectData.localTransform = worldTransform;
+    objectData.transform = worldTransform;
+    return objectData;
+}
+
+/// <summary>
+/// LevelData階層から指定番号のMESHオブジェクトを削除する。
+/// </summary>
+bool RemoveLevelMeshObjectByIndex(std::vector<LevelObjectData>& objectDataList, size_t targetMeshIndex, size_t& currentMeshIndex)
+{
+    for (auto objectIterator = objectDataList.begin(); objectIterator != objectDataList.end(); ++objectIterator) {
+        if (IsLevelMeshObject(*objectIterator)) {
+            if (currentMeshIndex == targetMeshIndex) {
+                objectDataList.erase(objectIterator);
+                return true;
+            }
+            ++currentMeshIndex;
+        }
+
+        if (RemoveLevelMeshObjectByIndex(objectIterator->children, targetMeshIndex, currentMeshIndex)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// <summary>
+/// レベルデータ階層から参照モデルファイル名を重複なしで集める。
+/// </summary>
+void CollectUniqueLevelModelFiles(const std::vector<LevelObjectData>& objectDataList, std::vector<std::string>& modelFileNames)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        if (IsLevelMeshObject(objectData) && std::find(modelFileNames.begin(), modelFileNames.end(), objectData.fileName) == modelFileNames.end()) {
+            modelFileNames.push_back(objectData.fileName);
+        }
+
+        CollectUniqueLevelModelFiles(objectData.children, modelFileNames);
+    }
+}
+
+/// <summary>
+/// 指定したテクスチャをPlayScene遷移直後に読み込むか判定する。
+/// </summary>
+bool ShouldLoadTextureOnStartup(const char* textureName)
+{
+    if (!textureName) {
+        return false;
+    }
+
+    if (!kLoadEnvironmentMapOnStartup && std::string(textureName) == kEnvironmentMapTextureName) {
+        return false;
+    }
+
+    return true;
+}
 }
 
 /// <summary>
@@ -277,203 +360,109 @@ PlayScene::PlayScene() { }
 PlayScene::~PlayScene() { }
 
 /// <summary>
-/// パーティクル描画用オブジェクトを初期化する
+/// 指定したテクスチャ名からシーン用スプライトを生成する。
 /// </summary>
-void PlayScene::InitializeParticleObjects()
+void PlayScene::CreateSceneSprite(const std::string& textureName)
 {
-    const std::vector<Object3d::VertexData> planeMesh = PrimitiveFactory::CreatePlane(); // 平面パーティクル用メッシュ
-    particlePlane_ = CreateParticleDrawObject(
-        ctx_,
-        planeMesh,
-        kCircleTextureName,
-        kNoAlphaCutoutSampler);
-
-    const std::vector<Object3d::VertexData> ringMesh = PrimitiveFactory::CreateRing(
-        kParticleRingOuterRadius,
-        kParticleRingInnerRadius); // リングパーティクル用メッシュ
-    particleRing_ = CreateParticleDrawObject(
-        ctx_,
-        ringMesh,
-        kGradationLineTextureName,
-        kUseAlphaCutoutSampler);
-
-    const std::vector<Object3d::VertexData> cylinderMesh = PrimitiveFactory::CreateCylinder(
-        kParticleCylinderTopRadius,
-        kParticleCylinderBottomRadius,
-        kParticleCylinderHeight,
-        kParticleCylinderDivide); // 円柱パーティクル用メッシュ
-    particleCylinder_ = CreateParticleDrawObject(
-        ctx_,
-        cylinderMesh,
-        kGradationLineTextureName,
-        kUseAlphaCutoutSampler);
-}
-
-/// <summary>
-/// ParticleManagerに使用するグループと描画オブジェクトを登録する。
-/// </summary>
-void PlayScene::InitializeParticleManager()
-{
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を管理するインスタンス
-    if (!particleManager) {
-        return;
-    }
-
-    particleManager->Initialize(ctx_.directXCommon, ctx_.object3dCommon, ctx_.srvManager, ctx_.textureManager, ctx_.imguiManager);
-    particleManager->SetParticlePlane(particlePlane_.get());
-    particleManager->CreateParticleGroup(kCircleParticleGroupName, kCircleTextureName);
-    particleManager->CreateParticleGroup(kCheckerParticleGroupName, kUvCheckerTextureName);
-    particleManager->CreateParticleGroup(kBallParticleGroupName, kMonsterBallTextureName);
-    particleManager->CreateParticleGroup(kHitParticleGroupName, kCircleFlashTextureName);
-    particleManager->CreateParticleGroup(kRingParticleGroupName, kGradationLineTextureName);
-    particleManager->CreateParticleGroup(kCylinderParticleGroupName, kGradationLineTextureName);
-    particleManager->SetParticleObject(kHitParticleGroupName, particlePlane_.get());
-    particleManager->SetParticleObject(kRingParticleGroupName, particleRing_.get());
-    particleManager->SetParticleObject(kCylinderParticleGroupName, particleCylinder_.get());
-    particleManager->SetGroupBillboard(kCylinderParticleGroupName, false);
-}
-
-/// <summary>
-/// ヒット演出用エミッターを初期化する。
-/// </summary>
-void PlayScene::InitializeHitParticleEmitter()
-{
-    ConfigureParticleEmitter(
-        pmEmitter_,
-        kHitParticleGroupName,
-        kHitEmitterParticleCount,
-        ParticleEmitterEffectType::Hit);
-}
-
-/// <summary>
-/// リング演出用エミッターを初期化する。
-/// </summary>
-void PlayScene::InitializeRingParticleEmitter()
-{
-    ConfigureParticleEmitter(
-        ringEmitter_,
-        kRingParticleGroupName,
-        kSingleEffectEmitterCount,
-        ParticleEmitterEffectType::Ring);
-}
-
-/// <summary>
-/// 円柱演出用エミッターを初期化する。
-/// </summary>
-void PlayScene::InitializeCylinderParticleEmitter()
-{
-    ConfigureParticleEmitter(
-        cylinderEmitter_,
-        kCylinderParticleGroupName,
-        kSingleEffectEmitterCount,
-        ParticleEmitterEffectType::Cylinder);
-}
-
-/// <summary>
-/// パーティクルエミッターを初期化する。
-/// </summary>
-void PlayScene::InitializeParticleEmitters()
-{
-    InitializeHitParticleEmitter();
-    InitializeRingParticleEmitter();
-    InitializeCylinderParticleEmitter();
-}
-
-/// <summary>
-/// パーティクル管理とエミッターを初期化する。
-/// </summary>
-void PlayScene::InitializeParticleEffects()
-{
-    InitializeParticleManager();
-    InitializeParticleEmitters();
-}
-
-/// <summary>
-/// 時間演出用スプライトを初期化する
-/// </summary>
-void PlayScene::InitializeTemporalEffectSprites()
-{
-    temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
-    for (int afterimageIndex = 0; afterimageIndex < kMaximumTemporalAfterimageCount; ++afterimageIndex) {
-        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
-        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
-    }
-
-    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
-    for (int particleIndex = 0; particleIndex < kMaximumTimeReversalParticleCount; ++particleIndex) {
-        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行用の粒子スプライト
-        timeReversalSprites_.push_back(std::move(particleSprite));
-    }
-
-    const int maximumRewindAfterimageSpriteCount = kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount; // 確保する残像スプライト総数
-    timeReversalAfterimageSprites_.reserve(maximumRewindAfterimageSpriteCount);
-    for (int afterimageIndex = 0;
-        afterimageIndex < maximumRewindAfterimageSpriteCount;
-        ++afterimageIndex) {
-        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間演出用の残像スプライト
-        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
-    }
-
-    timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
-}
-
-/// <summary>
-/// ポストプロセス用レンダーターゲットを初期化する
-/// </summary>
-void PlayScene::InitializePostProcessTargets()
-{
-    DirectXCommon* directXCommon = ctx_.directXCommon; // 初期化に使用するDirectX基盤
-    if (!directXCommon) {
-        return;
-    }
-
-    const DXGI_FORMAT renderTargetFormat = directXCommon->GetSwapChainFormat(); // 各RTで使用するカラーフォーマット
-    const RenderTargetDesc sceneRenderTargetDesc = CreatePostProcessRenderTargetDesc(
-        renderTargetFormat,
-        kUseDepthBuffer,
-        kCreateDepthSrv,
-        kSceneRenderTargetClearColor); // シーン描画用RT設定
-    sceneRenderTarget_.Initialize(directXCommon, sceneRenderTargetDesc);
-
-    const RenderTargetDesc intermediateTargetDesc = CreatePostProcessRenderTargetDesc(
-        renderTargetFormat,
-        kNoDepthBuffer,
-        kNoDepthSrv,
-        kTransparentRenderTargetClearColor); // ポストプロセス中間RT設定
-    postProcessIntermediateTarget_.Initialize(directXCommon, intermediateTargetDesc);
-
-    const RenderTargetDesc finalRenderTargetDesc = CreatePostProcessRenderTargetDesc(
-        renderTargetFormat,
-        kNoDepthBuffer,
-        kNoDepthSrv,
-        kTransparentRenderTargetClearColor); // Scene View表示用RT設定
-    finalRenderTarget_.Initialize(directXCommon, finalRenderTargetDesc);
-
     if (ctx_.textureManager) {
-        ctx_.textureManager->LoadTexture(kDissolveMaskTextureName);
-        dissolveMaskSrvIndex_ = ctx_.textureManager->GetSrvIndex(kDissolveMaskTextureName);
+        ctx_.textureManager->LoadTexture(textureName);
     }
 
-    postProcess_.Initialize(directXCommon);
-    postProcess_.SetEffectType(PostEffectType::Copy);
+    auto sprite = std::make_unique<Sprite>(); // 生成するスプライト
+    sprite->SetSpriteId(IssueSpriteId());
+    sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
+    sprite->Update();
+    sprites_.push_back(std::move(sprite));
+    RebuildSpritePointerView();
 }
 
 /// <summary>
-/// 確認用スプライトを初期化する。
+/// 指定した番号のシーン用スプライトを削除する。
 /// </summary>
-void PlayScene::InitializeDemoSprites()
+void PlayScene::DeleteSceneSprite(size_t spriteIndex)
 {
-    for (uint32_t spriteIndex = 0; spriteIndex < kDemoSpriteCount; ++spriteIndex) {
-        auto sprite = std::make_unique<Sprite>(); // 作成中の確認用スプライト
-        const char* textureName = GetDemoSpriteTextureName(spriteIndex); // 使用する確認用テクスチャ名
-        sprite->Initialize(ctx_.spriteCommon, textureName, ctx_.imguiManager);
-        sprites_.push_back(std::move(sprite));
+    if (sprites_.size() <= spriteIndex) {
+        return;
     }
+
+    if (ctx_.imguiManager) {
+        const size_t remainingSpriteCount = sprites_.size() - 1; // 削除後に残るスプライト数
+        ctx_.imguiManager->NotifySpriteDeleted(spriteIndex, remainingSpriteCount);
+    }
+
+    sprites_.erase(sprites_.begin() + spriteIndex);
+    RebuildSpritePointerView();
 }
 
 /// <summary>
-/// 3Dオブジェクトの初期設定を適用する。
+/// ImGuiでシーン内スプライトの生成と削除を行う。
 /// </summary>
+void PlayScene::DrawSceneSpriteEditImGui()
+{
+#ifdef USE_IMGUI
+    static int selectedCreateTextureIndex = 0; // 生成に使用するテクスチャ番号
+    static int selectedDeleteSpriteIndex = 0; // 削除対象のスプライト番号
+
+    ImGui::SeparatorText("Create");
+    const char* textureNames[kSceneSpriteCreateTextureNames.size()] = {}; // Combo表示用のテクスチャ名一覧
+    for (size_t textureIndex = 0; textureIndex < kSceneSpriteCreateTextureNames.size(); ++textureIndex) {
+        textureNames[textureIndex] = kSceneSpriteCreateTextureNames[textureIndex];
+    }
+
+    ImGui::Combo(
+        "Texture",
+        &selectedCreateTextureIndex,
+        textureNames,
+        static_cast<int>(kSceneSpriteCreateTextureNames.size()));
+    selectedCreateTextureIndex = (std::clamp)(
+        selectedCreateTextureIndex,
+        0,
+        static_cast<int>(kSceneSpriteCreateTextureNames.size()) - 1);
+    if (ImGui::Button("Create Sprite")) {
+        const std::string textureName = kSceneSpriteCreateTextureNames[static_cast<size_t>(selectedCreateTextureIndex)]; // 生成するスプライトのテクスチャ名
+        CreateSceneSprite(textureName);
+        selectedDeleteSpriteIndex = static_cast<int>(sprites_.size()) - 1;
+    }
+
+    ImGui::SeparatorText("Delete");
+    if (!sprites_.empty()) {
+        const int spriteCount = static_cast<int>(sprites_.size()); // 削除対象として選択できるスプライト数
+        selectedDeleteSpriteIndex = (std::clamp)(selectedDeleteSpriteIndex, 0, spriteCount - 1);
+
+        std::string preview = "Sprite " + std::to_string(selectedDeleteSpriteIndex); // Comboの現在表示名
+        Sprite* previewSprite = sprites_[static_cast<size_t>(selectedDeleteSpriteIndex)].get(); // 現在選択中のスプライト
+        if (previewSprite && !previewSprite->GetTextureFilePath().empty()) {
+            preview += " : " + GetDisplayFileName(previewSprite->GetTextureFilePath());
+        }
+
+        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
+            for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
+                Sprite* sprite = sprites_[static_cast<size_t>(spriteIndex)].get(); // 表示名を作る対象のスプライト
+                std::string label = "Sprite " + std::to_string(spriteIndex); // Comboに表示するスプライト名
+                if (sprite && !sprite->GetTextureFilePath().empty()) {
+                    label += " : " + GetDisplayFileName(sprite->GetTextureFilePath());
+                }
+
+                const bool isSelected = selectedDeleteSpriteIndex == spriteIndex; // 現在選択中かどうか
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedDeleteSpriteIndex = spriteIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::Button("Delete Sprite")) {
+            DeleteSceneSprite(static_cast<size_t>(selectedDeleteSpriteIndex));
+            selectedDeleteSpriteIndex = (std::min)(selectedDeleteSpriteIndex, static_cast<int>(sprites_.size()) - 1);
+        }
+    } else {
+        ImGui::Text("No sprites.");
+    }
+#endif
+}
 void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::string& modelFileName)
 {
     const bool isFenceModel = IsFenceModelFile(modelFileName); // アルファ抜き用サンプラーが必要なモデルか
@@ -493,24 +482,510 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetTranslate(kSkinningPreviewTranslate);
     }
 }
+
+/// <summary>
+/// 指定したモデルファイル名からシーン用3Dオブジェクトを生成する
+/// </summary>
+void PlayScene::CreateSceneObject(const std::string& modelFileName)
+{
+    auto object3d = std::make_unique<Object3d>(); // 生成する3Dオブジェクト
+    object3d->SetObjectId(IssueObjectId());
+    object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+    object3d->SetModel(modelFileName);
+    if (IsAnimationModelFile(modelFileName)) {
+        object3d->SetAnimation(modelFileName);
+    }
+    ApplySceneObjectInitialSettings(*object3d, modelFileName);
+    objects3d_.push_back(std::move(object3d));
+    RebuildObjectPointerView();
+    if (levelData_.objects.empty()) {
+        for (size_t sceneObjectIndex = 0; sceneObjectIndex < objects3d_.size(); ++sceneObjectIndex) {
+            AppendSceneObjectToLevelData(sceneObjectIndex);
+        }
+    } else {
+        AppendSceneObjectToLevelData(objects3d_.size() - 1);
+    }
+}
+
+/// <summary>
+/// 指定した番号のシーン用3Dオブジェクトを削除する
+/// </summary>
+void PlayScene::DeleteSceneObject(size_t objectIndex)
+{
+    if (objects3d_.size() <= objectIndex) {
+        return;
+    }
+
+    if (ctx_.imguiManager) {
+        const size_t remainingObjectCount = objects3d_.size() - 1; // 削除後に残る3Dオブジェクト数
+        ctx_.imguiManager->NotifyObjectDeleted(objectIndex, remainingObjectCount);
+    }
+
+    RemoveSceneObjectFromLevelData(objectIndex);
+    objects3d_.erase(objects3d_.begin() + objectIndex);
+    RebuildObjectPointerView();
+}
+
+/// <summary>
+/// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
+/// </summary>
+void PlayScene::DrawSceneObjectEditImGui()
+{
+#ifdef USE_IMGUI
+    static int selectedCreateModelIndex = 0; // 生成に使用するモデル番号
+    static int selectedDeleteObjectIndex = 0; // 削除対象のオブジェクト番号
+
+    ImGui::SeparatorText("Create");
+    const char* modelNames[kSceneObjectCreateModelDisplayNames.size()] = {}; // Combo表示用のモデル名一覧
+    for (size_t modelIndex = 0; modelIndex < kSceneObjectCreateModelDisplayNames.size(); ++modelIndex) {
+        modelNames[modelIndex] = kSceneObjectCreateModelDisplayNames[modelIndex];
+    }
+
+    ImGui::Combo(
+        "Model",
+        &selectedCreateModelIndex,
+        modelNames,
+        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()));
+    selectedCreateModelIndex = (std::clamp)(
+        selectedCreateModelIndex,
+        0,
+        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()) - 1);
+    if (ImGui::Button("Create Object")) {
+        const std::string modelFileName = kSceneObjectCreateModelNames[static_cast<size_t>(selectedCreateModelIndex)]; // 生成するモデルファイル名
+        CreateSceneObject(modelFileName);
+        selectedDeleteObjectIndex = static_cast<int>(objects3d_.size()) - 1;
+    }
+
+    ImGui::SeparatorText("Delete");
+    if (!objects3d_.empty()) {
+        const int objectCount = static_cast<int>(objects3d_.size()); // 削除対象として選択できるオブジェクト数
+        selectedDeleteObjectIndex = (std::clamp)(selectedDeleteObjectIndex, 0, objectCount - 1);
+
+        std::string preview = "Object " + std::to_string(selectedDeleteObjectIndex); // Comboの現在表示名
+        Object3d* previewObject = objects3d_[static_cast<size_t>(selectedDeleteObjectIndex)].get(); // 現在選択中のオブジェクト
+        if (previewObject && !previewObject->GetDebugName().empty()) {
+            preview += " : " + GetDisplayFileName(previewObject->GetDebugName());
+        }
+
+        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
+            for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
+                Object3d* object = objects3d_[static_cast<size_t>(objectIndex)].get(); // 表示名を作る対象のオブジェクト
+                std::string label = "Object " + std::to_string(objectIndex); // Comboに表示するオブジェクト名
+                if (object && !object->GetDebugName().empty()) {
+                    label += " : " + GetDisplayFileName(object->GetDebugName());
+                }
+
+                const bool isSelected = selectedDeleteObjectIndex == objectIndex; // 現在選択中かどうか
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    selectedDeleteObjectIndex = objectIndex;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::Button("Delete Object")) {
+            DeleteSceneObject(static_cast<size_t>(selectedDeleteObjectIndex));
+            selectedDeleteObjectIndex = (std::min)(selectedDeleteObjectIndex, static_cast<int>(objects3d_.size()) - 1);
+        }
+    } else {
+        ImGui::Text("No objects.");
+    }
+
+    DrawCollisionDebugImGui();
+#endif
+}
+
+/// <summary>
+/// ImGuiで衝突判定の状態を表示する。
+/// </summary>
+void PlayScene::DrawCollisionDebugImGui()
+{
+#ifdef USE_IMGUI
+    ImGui::SeparatorText("Collision");
+    ImGui::Text("Collider Count: %zu", collisionSystem_.GetColliderCount());
+    ImGui::Text("Broad Phase: %s", collisionSystem_.GetSpatialHashEnabled() ? "Spatial Hash" : "Brute Force");
+    ImGui::Text("Cell Size: %.2f", collisionSystem_.GetSpatialHashCellSize());
+    ImGui::Text("Candidate Pair Count: %zu", collisionSystem_.GetLastCandidatePairCount());
+    ImGui::Text("Hit Pair Count: %zu", lastCollisionPairCount_);
+
+    const std::vector<CollisionSystem::CollisionPair>& collisionPairs = collisionSystem_.GetCollisionPairs(); // 表示対象の衝突ペア一覧
+    for (size_t pairIndex = 0; pairIndex < collisionPairs.size(); ++pairIndex) {
+        const CollisionSystem::CollisionPair& pair = collisionPairs[pairIndex]; // 表示中の衝突ペア
+        ImGui::Text("Pair %zu: Object %u <-> Object %u", pairIndex, pair.objectIdA, pair.objectIdB);
+    }
+#endif
+}
+
+/// <summary>
+/// レベルデータ内のオブジェクト一覧からシーン用3Dオブジェクトを生成する。
+/// </summary>
+void PlayScene::CreateSceneObjectsFromLevelData(const std::vector<LevelObjectData>& objectDataList)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        CreateSceneObjectFromLevelData(objectData);
+    }
+}
+
+/// <summary>
+/// レベルデータ内の1オブジェクトからシーン用3Dオブジェクトを生成する。
+/// </summary>
+void PlayScene::CreateSceneObjectFromLevelData(const LevelObjectData& objectData)
+{
+    if (IsLevelMeshObject(objectData)) {
+        auto object3d = std::make_unique<Object3d>(); // レベル配置から生成する3Dオブジェクト
+        object3d->SetObjectId(IssueObjectId());
+        object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
+        object3d->SetModel(objectData.fileName);
+        if (IsAnimationModelFile(objectData.fileName)) {
+            object3d->SetAnimation(objectData.fileName);
+        }
+        ApplySceneObjectInitialSettings(*object3d, objectData.fileName);
+        object3d->SetScale(objectData.transform.scale);
+        object3d->SetRotate(objectData.transform.rotate);
+        object3d->SetTranslate(objectData.transform.translate);
+        ApplyLevelColliderToObject(objectData, *object3d);
+        objects3d_.push_back(std::move(object3d));
+    }
+
+    if (!objectData.children.empty()) {
+        CreateSceneObjectsFromLevelData(objectData.children);
+    }
+}
+
+/// <summary>
+/// 既存のシーン用3DオブジェクトへレベルデータのTransformとColliderを反映する。
+/// </summary>
+bool PlayScene::ApplyLevelDataToExistingSceneObjects(const std::vector<LevelObjectData>& objectDataList, size_t& objectIndex)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        if (IsLevelMeshObject(objectData)) {
+            if (objectIndex >= objects3d_.size() || !objects3d_[objectIndex]) {
+                return false;
+            }
+
+            Object3d& object3d = *objects3d_[objectIndex]; // レベルデータを反映する既存3Dオブジェクト
+            if (object3d.GetDebugName() != objectData.fileName) {
+                return false;
+            }
+
+            object3d.SetScale(objectData.transform.scale);
+            object3d.SetRotate(objectData.transform.rotate);
+            object3d.SetTranslate(objectData.transform.translate);
+            object3d.ClearCollider();
+            ApplyLevelColliderToObject(objectData, object3d);
+            ++objectIndex;
+        }
+
+        if (!objectData.children.empty() && !ApplyLevelDataToExistingSceneObjects(objectData.children, objectIndex)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/// <summary>
+/// 現在のシーン用3DオブジェクトのTransformをレベルデータへ書き戻す。
+/// </summary>
+bool PlayScene::SyncSceneObjectsToLevelData()
+{
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    RefreshLevelDataSummary();
+
+    if (levelMeshObjectCount_ > objects3d_.size()) {
+        SetLevelLoadStatus(false, "Level mesh count is larger than scene object count.");
+        return false;
+    }
+
+    size_t objectIndex = 0; // 書き戻し中の3Dオブジェクト番号
+    const bool syncSucceeded = SyncSceneObjectsToLevelDataRecursive(levelData_.objects, objectIndex, CreateIdentityTransformForSceneSync()); // 階層全体の書き戻し結果
+    if (!syncSucceeded) {
+        SetLevelLoadStatus(false, "Scene object sync failed.");
+        return false;
+    }
+    while (objectIndex < objects3d_.size()) {
+        if (!AppendSceneObjectToLevelData(objectIndex)) {
+            SetLevelLoadStatus(false, "Scene object append failed.");
+            return false;
+        }
+        ++objectIndex;
+    }
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    RefreshLevelDataSummary();
+    SetLevelLoadStatus(true, "Synced scene objects to level data.");
+    return true;
+}
+
+/// <summary>
+/// 現在のレベルデータで参照しているモデルを事前読み込みする。
+/// </summary>
+bool PlayScene::PreloadLevelModels()
+{
+    std::vector<std::string> modelFileNames; // 事前読み込み対象のモデルファイル名一覧
+    CollectUniqueLevelModelFiles(levelData_.objects, modelFileNames);
+    if (modelFileNames.empty()) {
+        SetLevelLoadStatus(false, "No mesh model files to preload.");
+        return false;
+    }
+
+    size_t loadedModelCount = 0; // 読み込みに成功したモデル数
+    for (const std::string& modelFileName : modelFileNames) {
+        const Object3d::ModelData modelData = Object3d::LoadModelFile("resources/models", modelFileName); // Assimp解析キャッシュへ載せるモデルデータ
+        if (!modelData.vertices.empty()) {
+            ++loadedModelCount;
+        }
+    }
+
+    SetLevelLoadStatus(loadedModelCount == modelFileNames.size(), "Preloaded " + std::to_string(loadedModelCount) + "/" + std::to_string(modelFileNames.size()) + " level models.");
+    return loadedModelCount == modelFileNames.size();
+}
+
+/// <summary>
+/// 指定したシーン用3DオブジェクトをLevelDataのルートへ追加する。
+/// </summary>
+bool PlayScene::AppendSceneObjectToLevelData(size_t objectIndex)
+{
+    if (objectIndex >= objects3d_.size() || !objects3d_[objectIndex]) {
+        return false;
+    }
+
+    if (levelData_.name.empty()) {
+        levelData_.name = "scene";
+    }
+
+    levelData_.objects.push_back(BuildLevelObjectDataFromSceneObject(*objects3d_[objectIndex], objectIndex));
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    RefreshLevelDataSummary();
+    MarkLevelDataDirty("Scene object added to level data. Save hierarchy snapshot.", true);
+    return true;
+}
+
+/// <summary>
+/// 指定したシーン用3Dオブジェクトに対応するLevelData内MESHを削除する。
+/// </summary>
+bool PlayScene::RemoveSceneObjectFromLevelData(size_t objectIndex)
+{
+    if (levelData_.objects.empty()) {
+        return false;
+    }
+
+    size_t currentMeshIndex = 0; // 探索中のMESH番号
+    const bool removed = RemoveLevelMeshObjectByIndex(levelData_.objects, objectIndex, currentMeshIndex); // LevelData側の削除結果
+    if (!removed) {
+        return false;
+    }
+
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    RefreshLevelDataSummary();
+    MarkLevelDataDirty("Scene object removed from level data. Save hierarchy snapshot.", true);
+    return true;
+}
+
+/// <summary>
+/// 既存のシーン用3Dオブジェクトをレベルデータ階層へ順番に書き戻す。
+/// </summary>
+bool PlayScene::SyncSceneObjectsToLevelDataRecursive(std::vector<LevelObjectData>& objectDataList, size_t& objectIndex, const Math::Transform& parentTransform)
+{
+    for (LevelObjectData& objectData : objectDataList) {
+        Math::Transform currentParentTransform = objectData.transform; // 子階層のローカル化に使う親Transform
+
+        if (IsLevelMeshObject(objectData)) {
+            if (objectIndex >= objects3d_.size() || !objects3d_[objectIndex]) {
+                return false;
+            }
+
+            Object3d& object3d = *objects3d_[objectIndex]; // 書き戻し元の既存3Dオブジェクト
+            if (object3d.GetDebugName() != objectData.fileName) {
+                return false;
+            }
+
+            Math::Transform worldTransform { // Object3dが保持している現在のワールドTransform
+                object3d.GetScale(),
+                object3d.GetRotate(),
+                object3d.GetTranslate()
+            };
+            objectData.transform = worldTransform;
+            objectData.localTransform = BuildLocalTransformFromWorld(worldTransform, parentTransform);
+            currentParentTransform = worldTransform;
+            ++objectIndex;
+        }
+
+        if (!objectData.children.empty() && !SyncSceneObjectsToLevelDataRecursive(objectData.children, objectIndex, currentParentTransform)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/// <summary>
+/// レベルJSONの読み込み状態を記録する。
+/// </summary>
+void PlayScene::SetLevelLoadStatus(bool succeeded, const std::string& message)
+{
+    levelLoadSucceeded_ = succeeded;
+    levelLoadMessage_ = message;
+}
+
+/// <summary>
+/// レベルJSONの保存状態を記録する。
+/// </summary>
+void PlayScene::SetLevelSaveStatus(bool succeeded, const std::string& message)
+{
+    levelSaveSucceeded_ = succeeded;
+    levelSaveMessage_ = message;
+    if (succeeded) {
+        levelDirty_ = false;
+    }
+}
+
+/// <summary>
+/// LevelDataが未保存状態になったことを記録する。
+/// </summary>
+void PlayScene::MarkLevelDataDirty(const std::string& message, bool appliedToScene)
+{
+    levelDirty_ = true;
+    levelAppliedToScene_ = appliedToScene;
+    SetLevelSaveStatus(false, message);
+}
+
+/// <summary>
+/// 現在のレベルデータをJSONスナップショットとして保存する。
+/// </summary>
+bool PlayScene::SaveLevelSnapshot()
+{
+    if (levelSaveFileName_.empty()) {
+        levelSaveFileName_ = kDefaultLevelSaveFileName;
+    }
+
+    if (levelData_.objects.empty()) {
+        SetLevelSaveStatus(false, "No level objects to save.");
+        return false;
+    }
+
+    levelData_.schemaVersion = kCurrentLevelSchemaVersion;
+
+    std::string saveMessage; // レベルJSON保存結果の詳細
+    const bool saveSucceeded = LevelWriter::SaveHierarchySnapshot(levelSaveFileName_, levelData_, &saveMessage); // レベルJSON保存結果
+    SetLevelSaveStatus(saveSucceeded, saveMessage.empty() ? (saveSucceeded ? "Saved hierarchy snapshot." : "Save failed.") : saveMessage);
+    return saveSucceeded;
+}
+
+/// <summary>
+/// 現在保持しているレベルデータの集計情報を更新する。
+/// </summary>
+void PlayScene::RefreshLevelDataSummary()
+{
+    const LevelDataSummary summary = BuildLevelDataSummary(levelData_); // 現在のレベルデータ集計
+    levelTotalObjectCount_ = summary.totalObjectCount;
+    levelMeshObjectCount_ = summary.meshObjectCount;
+    levelColliderObjectCount_ = summary.colliderObjectCount;
+}
+
+/// <summary>
+/// 現在保持しているレベルデータをシーン用3Dオブジェクトへ反映する。
+/// </summary>
+bool PlayScene::ApplyLevelDataToScene()
+{
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    RefreshLevelDataSummary();
+
+    if (levelData_.objects.empty() || levelMeshObjectCount_ == 0) {
+        objects3d_.clear();
+        objectPointerView_.clear();
+        nextObjectId_ = 1;
+        collisionSystem_.Clear();
+        lastCollisionPairCount_ = 0;
+        levelAppliedToScene_ = false;
+        SetLevelLoadStatus(false, "Level data has no mesh objects.");
+        RebuildObjectPointerView();
+        return false;
+    }
+
+    if (objects3d_.size() == levelMeshObjectCount_) {
+        size_t objectIndex = 0; // 反映中の既存3Dオブジェクト番号
+        if (ApplyLevelDataToExistingSceneObjects(levelData_.objects, objectIndex) && objectIndex == objects3d_.size()) {
+            collisionSystem_.Clear();
+            lastCollisionPairCount_ = 0;
+            RebuildObjectPointerView();
+            levelAppliedToScene_ = true;
+            SetLevelLoadStatus(true, "Applied level data.");
+            return true;
+        }
+    }
+
+    objects3d_.clear();
+    objectPointerView_.clear();
+    nextObjectId_ = 1;
+    collisionSystem_.Clear();
+    lastCollisionPairCount_ = 0;
+    objects3d_.reserve(levelMeshObjectCount_);
+    CreateSceneObjectsFromLevelData(levelData_.objects);
+    RebuildObjectPointerView();
+    levelAppliedToScene_ = true;
+    SetLevelLoadStatus(true, "Applied level data.");
+    return true;
+}
+
+/// <summary>
+/// 現在の3DオブジェクトをクリアしてレベルJSONから作り直す。
+/// </summary>
+bool PlayScene::ReloadLevelSceneObjects()
+{
+    if (levelDataFileName_.empty()) {
+        levelDataFileName_ = kDefaultLevelDataFileName;
+    }
+
+    objects3d_.clear();
+    objectPointerView_.clear();
+    nextObjectId_ = 1;
+    collisionSystem_.Clear();
+    lastCollisionPairCount_ = 0;
+
+    LevelData loadedLevelData; // 読み込み先の一時レベルデータ
+    std::string loadMessage; // レベルJSON読み込み結果の詳細
+    const bool loadSucceeded = LevelLoader::Load(levelDataFileName_, loadedLevelData, &loadMessage); // レベルJSON読み込み結果
+    if (!loadSucceeded) {
+        levelData_ = {};
+        levelTotalObjectCount_ = 0;
+        levelMeshObjectCount_ = 0;
+        levelColliderObjectCount_ = 0;
+        SetLevelLoadStatus(false, loadMessage.empty() ? "Load failed." : loadMessage);
+        RebuildObjectPointerView();
+        return false;
+    }
+
+    levelData_ = std::move(loadedLevelData);
+    levelDirty_ = false;
+    const bool applySucceeded = ApplyLevelDataToScene(); // 読み込んだレベルデータのシーン反映結果
+    SetLevelLoadStatus(applySucceeded, applySucceeded ? (loadMessage.empty() ? "Loaded." : loadMessage) : "Loaded, but no mesh objects.");
+    return applySucceeded;
+}
+
 /// <summary>
 /// シーンで使用する3Dオブジェクトを初期化する。
 /// </summary>
 void PlayScene::InitializeSceneObjects()
 {
-    for (const char* modelFileName : kSceneModelFileNames) {
+    levelDataFileName_ = kDefaultLevelDataFileName;
+    levelSaveFileName_ = kDefaultLevelSaveFileName;
+    if (ReloadLevelSceneObjects()) {
+        return;
+    }
+
+    objects3d_.reserve(kSceneModelLoadDescs.size());
+    for (const SceneModelLoadDesc& modelDesc : kSceneModelLoadDescs) {
         auto object3d = std::make_unique<Object3d>(); // 作成中の3Dオブジェクト
+        object3d->SetObjectId(IssueObjectId());
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        object3d->SetModel(modelFileName);
-        if (IsAnimationModelFile(modelFileName)) {
-            object3d->SetAnimation(modelFileName);
-        }
-        ApplySceneObjectInitialSettings(*object3d, modelFileName);
+        object3d->SetModel(modelDesc.fileName);
+        ApplySceneObjectInitialSettings(*object3d, modelDesc.fileName);
         objects3d_.push_back(std::move(object3d));
     }
-    if (objects3d_.size() > kTerrainObjectIndex && objects3d_[kTerrainObjectIndex]) {
-        objects3d_[kTerrainObjectIndex]->SetScale(kTerrainInitialScale);
-    }
+    RebuildObjectPointerView();
 }
 
 /// <summary>
@@ -523,6 +998,9 @@ void PlayScene::LoadSceneTextures()
     }
 
     for (const char* textureName : kSceneTextureNames) {
+        if (!ShouldLoadTextureOnStartup(textureName)) {
+            continue;
+        }
         ctx_.textureManager->LoadTexture(textureName);
     }
 }
@@ -532,6 +1010,10 @@ void PlayScene::LoadSceneTextures()
 /// </summary>
 void PlayScene::InitializeSkyBox()
 {
+    if (!kLoadEnvironmentMapOnStartup) {
+        return;
+    }
+
     if (!ctx_.textureManager || !ctx_.srvManager || !ctx_.directXCommon) {
         return;
     }
@@ -553,7 +1035,6 @@ void PlayScene::Initialize(const SceneContext& ctx)
 
     LoadSceneTextures();
     InitializeSkyBox();
-    InitializeDemoSprites();
     InitializeSceneObjects();
     InitializeParticleObjects();
     InitializeParticleEffects();
@@ -562,54 +1043,34 @@ void PlayScene::Initialize(const SceneContext& ctx)
 }
 
 /// <summary>
-/// ポストプロセス用リソースを解放する。
-/// </summary>
-void PlayScene::FinalizePostProcessTargets()
-{
-    sceneRenderTarget_.Finalize();
-    postProcessIntermediateTarget_.Finalize();
-    finalRenderTarget_.Finalize();
-    dissolveMaskSrvIndex_ = UINT32_MAX;
-    postProcess_.Finalize();
-}
-
-/// <summary>
-/// ParticleManagerを解放する。
-/// </summary>
-void PlayScene::FinalizeParticleManager()
-{
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // 解放対象のパーティクル管理
-    if (particleManager) {
-        particleManager->Finalize();
-    }
-}
-
-/// <summary>
 /// シーンが保持している表示用オブジェクトを解放する。
 /// </summary>
 void PlayScene::ReleaseSceneObjects()
 {
     sprites_.clear();
+    spritePointerView_.clear();
+    nextSpriteId_ = 1;
     objects3d_.clear();
+    objectPointerView_.clear();
+    nextObjectId_ = 1;
+    collisionSystem_.Clear();
+    lastCollisionPairCount_ = 0;
+    levelData_ = {};
+    levelLoadSucceeded_ = false;
+    levelLoadMessage_.clear();
+    levelSaveSucceeded_ = false;
+    levelSaveMessage_.clear();
+    levelDirty_ = false;
+    levelAppliedToScene_ = false;
+    levelTotalObjectCount_ = 0;
+    levelMeshObjectCount_ = 0;
+    levelColliderObjectCount_ = 0;
+    particleEmitterPointerView_.clear();
+    nextParticleEmitterId_ = 1;
     temporalAfterimageSprites_.clear();
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
     timeReversalConvergenceSprite_.reset();
-}
-
-/// <summary>
-/// パーティクル描画用オブジェクトを解放する。
-/// </summary>
-void PlayScene::ReleaseParticleObjects()
-{
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画オブジェクトの参照元
-    if (particleManager) {
-        particleManager->SetParticlePlane(nullptr);
-    }
-
-    particlePlane_.reset();
-    particleRing_.reset();
-    particleCylinder_.reset();
 }
 
 /// <summary>
@@ -632,7 +1093,7 @@ void PlayScene::Finalize()
     StopCameraShake();
 
     FinalizePostProcessTargets();
-    FinalizeParticleManager();
+    ClearSceneParticles();
     ReleaseSceneObjects();
     timeReversalEffect_.ResetState();
     ReleaseParticleObjects();
@@ -715,27 +1176,10 @@ void PlayScene::Update(float dt)
 
     UpdateParticleSystems(dt);
     UpdateSceneObjects(dt);
-    UpdateDemoSprites();
+    UpdateSceneCollisions();
 
     UpdateAfterimageSprites();
     UpdateTimeReversalSprites();
-}
-
-/// <summary>
-/// パーティクルエミッターとParticleManagerを更新する。
-/// </summary>
-void PlayScene::UpdateParticleSystems(float deltaTime)
-{
-    const bool hasActiveHitStop = HasActiveHitStop(temporalRiftEffect_.GetHitStopRemainingTime()); // ヒットストップ中か
-    const float particleDeltaTime = (hasActiveHitStop || IsTimeStopped()) ? kStoppedDeltaTime : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
-    pmEmitter_.Update(particleDeltaTime);
-    ringEmitter_.Update(particleDeltaTime);
-    cylinderEmitter_.Update(particleDeltaTime);
-
-    ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を更新する管理クラス
-    if (particleManager) {
-        particleManager->Update(particleDeltaTime);
-    }
 }
 
 /// <summary>
@@ -758,16 +1202,24 @@ void PlayScene::UpdateSceneObjects(float deltaTime)
 }
 
 /// <summary>
-/// 確認用スプライトを更新する。
+/// シーン内3Dオブジェクトの衝突判定を更新する。
 /// </summary>
-void PlayScene::UpdateDemoSprites()
+void PlayScene::UpdateSceneCollisions()
 {
-    for (auto& sprite : sprites_) { // 更新対象の確認用スプライト
-        if (sprite) {
-            sprite->Update();
+    collisionSystem_.Clear();
+
+    for (const auto& object3d : objects3d_) {
+        if (!object3d || !object3d->HasCollider()) {
+            continue;
         }
+
+        collisionSystem_.RegisterCollider(object3d->GetObjectId(), &object3d->GetCollider(), object3d.get());
     }
+
+    collisionSystem_.Update();
+    lastCollisionPairCount_ = collisionSystem_.GetCollisionPairs().size();
 }
+
 /// <summary>
 /// 描画処理を行う
 /// </summary>
@@ -778,13 +1230,19 @@ void PlayScene::Draw()
     }
 
     DrawSceneContent();
+    DrawDebugLines3D();
     DrawSprites();
+    DrawDebugLines2D();
 }
 
 /// <summary>
 /// シーンに入るときの処理
 /// </summary>
-void PlayScene::OnEnter() { std::cout << "PlayScene OnEnter\n"; }
+void PlayScene::OnEnter()
+{
+    std::cout << "PlayScene OnEnter\n";
+    InitializeParticleManager();
+}
 
 /// <summary>
 /// シーンから出るときの処理
@@ -792,38 +1250,73 @@ void PlayScene::OnEnter() { std::cout << "PlayScene OnEnter\n"; }
 void PlayScene::OnExit() { std::cout << "PlayScene OnExit\n"; }
 
 /// <summary>
-/// 描画モードの更新を受け取る
+/// 所有中のスプライトから参照用ビューを作り直す。
 /// </summary>
-void PlayScene::SetSelectedDrawType(int t)
+void PlayScene::RebuildSpritePointerView()
 {
-    ctx_.selectedDrawType = t;
+    spritePointerView_.clear();
+    spritePointerView_.reserve(sprites_.size());
+    for (auto& sprite : sprites_) {
+        if (sprite) {
+            spritePointerView_.push_back(sprite.get());
+        }
+    }
 }
 
 /// <summary>
-/// Scene View用のオフスクリーン描画だけにするか設定する
+/// 所有中の3Dオブジェクトから参照用ビューを作り直す。
 /// </summary>
-void PlayScene::SetSceneViewOnly(bool enabled)
+void PlayScene::RebuildObjectPointerView()
 {
-    sceneViewOnly_ = enabled;
-}
-
-uint32_t PlayScene::GetSceneViewSrvIndex() const
-{
-    if (finalRenderTarget_.HasColorSrv()) {
-        return finalRenderTarget_.GetColorSrvIndex();
+    objectPointerView_.clear();
+    objectPointerView_.reserve(objects3d_.size());
+    for (auto& object : objects3d_) {
+        if (object) {
+            objectPointerView_.push_back(object.get());
+        }
     }
-    if (sceneRenderTarget_.HasColorSrv()) {
-        return sceneRenderTarget_.GetColorSrvIndex();
-    }
-    return UINT32_MAX;
 }
 
 /// <summary>
-/// シーンが使用しているポストプロセスを取得する
+/// 所有中のパーティクルエミッターから参照用ビューを作り直す。
 /// </summary>
-PostProcess* PlayScene::GetPostProcess()
+void PlayScene::RebuildParticleEmitterPointerView()
 {
-    return &postProcess_;
+    particleEmitterPointerView_.clear();
+    particleEmitterPointerView_.reserve(3);
+    particleEmitterPointerView_.push_back(&pmEmitter_);
+    particleEmitterPointerView_.push_back(&ringEmitter_);
+    particleEmitterPointerView_.push_back(&cylinderEmitter_);
+}
+
+/// <summary>
+/// 次に生成するスプライトへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueSpriteId()
+{
+    const uint32_t issuedSpriteId = nextSpriteId_; // 今回割り当てるスプライトID
+    nextSpriteId_++;
+    return issuedSpriteId;
+}
+
+/// <summary>
+/// 次に生成する3Dオブジェクトへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueObjectId()
+{
+    const uint32_t issuedObjectId = nextObjectId_; // 今回割り当てる3DオブジェクトID
+    nextObjectId_++;
+    return issuedObjectId;
+}
+
+/// <summary>
+/// 次に生成するパーティクルエミッターへ割り当てるIDを取得する。
+/// </summary>
+uint32_t PlayScene::IssueParticleEmitterId()
+{
+    const uint32_t issuedEmitterId = nextParticleEmitterId_; // 今回割り当てるパーティクルエミッターID
+    nextParticleEmitterId_++;
+    return issuedEmitterId;
 }
 
 /// <summary>
@@ -831,13 +1324,124 @@ PostProcess* PlayScene::GetPostProcess()
 /// </summary>
 void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 {
-    if (!out)
+    if (!out) {
         return;
-    out->clear();
-    out->reserve(objects3d_.size());
-    for (auto& o : objects3d_) {
-        out->push_back(o.get());
     }
+
+    RebuildObjectPointerView();
+    out->clear();
+    out->reserve(objectPointerView_.size());
+    out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
+}
+
+/// <summary>
+/// Level EditorとGizmoで共有する選択中3Dオブジェクト番号を取得する。
+/// </summary>
+int PlayScene::GetSelectedSceneObjectIndex() const
+{
+    return ctx_.imguiManager ? ctx_.imguiManager->GetSelectedObjectIndex() : -1;
+}
+
+/// <summary>
+/// Level EditorからGizmo対象の3Dオブジェクトを選択する。
+/// </summary>
+void PlayScene::SelectSceneObjectForEditor(size_t objectIndex)
+{
+    if (!ctx_.imguiManager || objectIndex >= objects3d_.size()) {
+        return;
+    }
+
+    ctx_.imguiManager->SetSelectedObjectIndex(static_cast<int>(objectIndex));
+}
+
+/// <summary>
+/// MESH順の番号からLevelData内のオブジェクトを再帰的に取得する。
+/// </summary>
+LevelObjectData* PlayScene::FindLevelMeshObjectByIndexRecursive(std::vector<LevelObjectData>& objectDataList, size_t targetMeshIndex, size_t& currentMeshIndex)
+{
+    for (LevelObjectData& objectData : objectDataList) {
+        if (IsLevelMeshObject(objectData)) {
+            if (currentMeshIndex == targetMeshIndex) {
+                return &objectData;
+            }
+            ++currentMeshIndex;
+        }
+
+        if (!objectData.children.empty()) {
+            LevelObjectData* childObjectData = FindLevelMeshObjectByIndexRecursive(objectData.children, targetMeshIndex, currentMeshIndex); // 子階層で見つかったMESH
+            if (childObjectData) {
+                return childObjectData;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+/// <summary>
+/// MESH順の番号からLevelData内のオブジェクトを取得する。
+/// </summary>
+LevelObjectData* PlayScene::FindLevelMeshObjectByIndex(size_t objectIndex)
+{
+    size_t currentMeshIndex = 0; // 探索中のMESH番号
+    return FindLevelMeshObjectByIndexRecursive(levelData_.objects, objectIndex, currentMeshIndex);
+}
+
+/// <summary>
+/// LevelDataの選択コライダーを対応するObject3dへ反映する。
+/// </summary>
+void PlayScene::ApplyLevelColliderEditToSceneObject(size_t objectIndex, const LevelObjectData& objectData)
+{
+    if (objectIndex >= objects3d_.size() || !objects3d_[objectIndex]) {
+        return;
+    }
+
+    Object3d& object3d = *objects3d_[objectIndex]; // コライダー反映先の3Dオブジェクト
+    if (!objectData.collider.enabled) {
+        object3d.ClearCollider();
+        return;
+    }
+
+    if (objectData.collider.type == "SPHERE") {
+        object3d.SetSphereCollider(objectData.collider.center, objectData.collider.size);
+        return;
+    }
+    if (objectData.collider.type == "CAPSULE") {
+        object3d.SetCapsuleCollider(objectData.collider.center, objectData.collider.size);
+        return;
+    }
+
+    object3d.SetBoxCollider(objectData.collider.center, objectData.collider.size);
+}
+
+/// <summary>
+/// Scene ViewのGizmoで編集された3DオブジェクトのTransformをLevelDataへ書き戻す。
+/// </summary>
+void PlayScene::NotifyObjectTransformEdited(size_t objectIndex)
+{
+    if (levelData_.objects.empty() || objectIndex >= objects3d_.size()) {
+        return;
+    }
+
+    const bool syncSucceeded = SyncSceneObjectsToLevelData(); // Gizmo編集後のTransform書き戻し結果
+    if (syncSucceeded) {
+        MarkLevelDataDirty("Scene View gizmo synced to level data. Save hierarchy snapshot.", true);
+    }
+}
+
+/// <summary>
+/// シーンが所有するパーティクルエミッターポインタ群を ImGui に渡すために埋めるフック
+/// </summary>
+void PlayScene::FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out)
+{
+    if (!out) {
+        return;
+    }
+
+    RebuildParticleEmitterPointerView();
+    out->clear();
+    out->reserve(particleEmitterPointerView_.size());
+    out->insert(out->end(), particleEmitterPointerView_.begin(), particleEmitterPointerView_.end());
 }
 
 /// <summary>
@@ -845,11 +1449,12 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
 /// </summary>
 void PlayScene::FillSpritePointers(std::vector<Sprite*>* out)
 {
-    if (!out)
+    if (!out) {
         return;
-    out->clear();
-    out->reserve(sprites_.size());
-    for (auto& s : sprites_) {
-        out->push_back(s.get());
     }
+
+    RebuildSpritePointerView();
+    out->clear();
+    out->reserve(spritePointerView_.size());
+    out->insert(out->end(), spritePointerView_.begin(), spritePointerView_.end());
 }

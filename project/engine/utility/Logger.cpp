@@ -1,4 +1,5 @@
 #include "Logger.h"
+#include "FileUtility.h"
 #include <Windows.h>
 #include <chrono>
 #include <ctime>
@@ -8,162 +9,138 @@
 
 namespace Logger {
 
-// 現在の最小出力レベル
-static Level s_minLevel = Level::Info;
-// ミューテックス
-static std::mutex s_mutex;
-// ログファイルストリーム
-static std::ofstream s_logFile;
-// 異常系ログファイルストリーム（Warn/Error）
-static std::ofstream s_errorLogFile;
+static Level s_minLevel = Level::Info; // 現在の最小出力ログレベル
+static std::mutex s_mutex; // ログ出力を保護するミューテックス
+static std::ofstream s_logFile; // 通常ログファイルストリーム
+static std::ofstream s_errorLogFile; // Warn/Error 専用ログファイルストリーム
+static std::string s_logFilePath; // 通常ログファイルのパス
+static std::string s_errorLogFilePath; // Warn/Error 専用ログファイルのパス
 
 /// <summary>
-/// ログレベルを文字列に変換するユーティリティ関数
+/// ログファイルを開く。空文字の場合はファイル出力を無効にする。
 /// </summary>
-static const char* LevelToString(Level l)
+static bool OpenLogFile(std::ofstream& stream, std::string& currentPath, const std::string& filePath)
 {
-    // レベルを文字列に変換
-    switch (l) {
-    case Level::Debug:
-        return "DEBUG"; // NOLINT(clang-diagnostic-switch-enum)
-    case Level::Info:
-        return "INFO"; // NOLINT(clang-diagnostic-switch-enum)
-    case Level::Warn:
-        return "WARN"; // NOLINT(clang-diagnostic-switch-enum)
-    case Level::Error:
-        return "ERROR"; // NOLINT(clang-diagnostic-switch-enum)
+    if (stream.is_open()) {
+        stream.close();
     }
-    // 安全策: すべての経路で文字列を返す
-    return "UNKNOWN";
+
+    currentPath.clear();
+    if (filePath.empty()) {
+        return true;
+    }
+
+    const std::string parentDirectory = FileUtility::GetParentDirectory(filePath); // ログファイルの親ディレクトリ
+    if (!parentDirectory.empty() && !FileUtility::CreateDirectoryIfNeeded(parentDirectory)) {
+        return false;
+    }
+
+    stream.open(filePath.c_str(), std::ios::out | std::ios::app);
+    if (!stream.is_open()) {
+        return false;
+    }
+
+    currentPath = FileUtility::NormalizePath(filePath);
+    return true;
 }
 
 /// <summary>
-/// 現在のタイムスタンプを文字列で取得するユーティリティ関数
+/// 現在時刻のタイムスタンプ文字列を取得する。
 /// </summary>
 static std::string GetTimestamp()
 {
-    // 現在時刻を取得
     using namespace std::chrono;
-    auto now = system_clock::now();
 
-    // 文字列に変換
-    std::time_t t = system_clock::to_time_t(now);
-    std::tm tm {};
-    localtime_s(&tm, &t);
+    const auto now = system_clock::now(); // 現在時刻
+    const std::time_t time = system_clock::to_time_t(now); // time_t 形式の現在時刻
+    std::tm localTime {}; // ローカル時刻
+    localtime_s(&localTime, &time);
 
-    // 文字列フォーマット
-    char buf[64];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+    char dateTimeText[64] = {}; // 秒までの時刻文字列
+    std::strftime(dateTimeText, sizeof(dateTimeText), "%Y-%m-%d %H:%M:%S", &localTime);
 
-    // ミリ秒を追加
-    auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
-    char out[80];
-    sprintf_s(out, "%s.%03d", buf, static_cast<int>(ms.count()));
+    const auto millisecond = duration_cast<milliseconds>(now.time_since_epoch()) % 1000; // ミリ秒
+    char output[80] = {}; // ミリ秒付きタイムスタンプ
+    sprintf_s(output, "%s.%03d", dateTimeText, static_cast<int>(millisecond.count()));
 
-    // 文字列を返す
-    return std::string(out);
+    return std::string(output);
 }
 
 /// <summary>
-/// ログファイルを設定する（空文字でファイル出力を無効化）
+/// 出力用のログ文字列を作成する。
 /// </summary>
-bool SetLogFile(const std::string& filePath)
+static std::string FormatLog(Level level, const std::string& message)
 {
-    // ミューテックスで保護
-    std::lock_guard<std::mutex> lk(s_mutex);
-
-    // 既に開いているファイルがあれば閉じる
-    if (s_logFile.is_open()) {
-        s_logFile.close();
-    }
-
-    // 空文字ならファイル出力を無効化
-    if (filePath.empty()) {
-        return true;
-    }
-
-    // ファイルを開く
-    s_logFile.open(filePath.c_str(), std::ios::out | std::ios::app);
-
-    // 開けたかどうかを返す
-    return s_logFile.is_open();
+    std::ostringstream stream; // ログ整形用ストリーム
+    stream << "[" << GetTimestamp() << "] [" << ToString(level) << "] " << message;
+    return stream.str();
 }
 
-/// <summary>
-/// 異常系（Warn/Error）専用のログファイルを設定する（空文字で無効化）
-/// </summary>
-bool SetErrorLogFile(const std::string& filePath)
+const char* ToString(Level level)
 {
-    // ミューテックスで保護
-    std::lock_guard<std::mutex> lk(s_mutex);
-
-    // 既に開いているファイルがあれば閉じる
-    if (s_errorLogFile.is_open()) {
-        s_errorLogFile.close();
+    switch (level) {
+    case Level::Debug:
+        return "DEBUG";
+    case Level::Info:
+        return "INFO";
+    case Level::Warn:
+        return "WARN";
+    case Level::Error:
+        return "ERROR";
     }
 
-    // 空文字ならファイル出力を無効化
-    if (filePath.empty()) {
-        return true;
-    }
-
-    // ファイルを開く
-    s_errorLogFile.open(filePath.c_str(), std::ios::out | std::ios::app);
-
-    // 開けたかどうかを返す
-    return s_errorLogFile.is_open();
+    return "UNKNOWN";
 }
 
-/// <summary>
-/// レベルを設定する
-/// </summary>
 void SetLevel(Level level)
 {
-    // ミューテックスで保護
-    std::lock_guard<std::mutex> lk(s_mutex);
-    // レベルを設定
+    std::lock_guard<std::mutex> lock(s_mutex); // ログ設定を保護するロック
     s_minLevel = level;
 }
 
-/// <summary>
-/// レベル付きログ出力
-/// </summary>
+bool SetLogFile(const std::string& filePath)
+{
+    std::lock_guard<std::mutex> lock(s_mutex); // ログ設定を保護するロック
+    return OpenLogFile(s_logFile, s_logFilePath, filePath);
+}
+
+bool SetErrorLogFile(const std::string& filePath)
+{
+    std::lock_guard<std::mutex> lock(s_mutex); // ログ設定を保護するロック
+    return OpenLogFile(s_errorLogFile, s_errorLogFilePath, filePath);
+}
+
 void Log(Level level, const std::string& message)
 {
-    // レベルによるフィルタリング
     if (level < s_minLevel) {
         return;
     }
 
-    // タイムスタンプ取得と整形
-    std::string ts = GetTimestamp();
-    // 出力フォーマット整形
-    std::ostringstream oss;
-    // 形式: [timestamp] [LEVEL] message
-    oss << "[" << ts << "] [" << LevelToString(level) << "] " << message;
-    // 出力文字列
-    std::string out = oss.str();
+    const std::string output = FormatLog(level, message); // 出力するログ文字列
 
-    // ミューテックスで保護して出力
-    {
-        std::lock_guard<std::mutex> lk(s_mutex);
-        OutputDebugStringA((out + "\n").c_str());
-        // ファイル出力は異常系（Warn/Error）のみ
-        if (level == Level::Warn || level == Level::Error) {
-            if (s_errorLogFile.is_open()) {
-                s_errorLogFile << out << std::endl;
-                s_errorLogFile.flush();
-            } else if (s_logFile.is_open()) {
-                s_logFile << out << std::endl;
-                s_logFile.flush();
-            }
-        }
+    std::lock_guard<std::mutex> lock(s_mutex); // ログ出力を保護するロック
+    OutputDebugStringA((output + "\n").c_str());
+
+    if (s_logFile.is_open()) {
+        s_logFile << output << std::endl;
+        s_logFile.flush();
+    }
+
+    const bool isErrorLevel = level == Level::Warn || level == Level::Error; // 異常系ログかどうか
+    const bool isSameFile = !s_logFilePath.empty() && s_logFilePath == s_errorLogFilePath; // 通常ログと専用ログが同一か
+    if (isErrorLevel && s_errorLogFile.is_open() && !isSameFile) {
+        s_errorLogFile << output << std::endl;
+        s_errorLogFile.flush();
     }
 }
 
-/// <summary>
-/// 互換性のための既存API
-/// </summary>
+void LogWithLocation(Level level, const std::string& message, const char* file, int line, const char* function)
+{
+    std::ostringstream stream; // 発生場所付きログの整形用ストリーム
+    stream << message << " (" << file << ":" << line << " " << function << ")";
+    Log(level, stream.str());
+}
+
 void Log(const std::string& message)
 {
     Log(Level::Info, message);

@@ -15,7 +15,8 @@ public: // メンバ関数
         Texture,
         Model,
         Shader,
-        Sound
+        Sound,
+        Json
     };
 
     /// <summary>
@@ -32,6 +33,11 @@ public: // メンバ関数
     /// 登録された検索パスをすべてクリア
     /// </summary>
     static void ClearSearchPaths();
+
+    /// <summary>
+    /// 解決済みリソースパスのキャッシュをクリアする。
+    /// </summary>
+    static void ClearCache();
 
     /// <summary>
     /// 入力パスを既存のファイルシステムパスに解決させる。見つからない場合は空文字列を返す

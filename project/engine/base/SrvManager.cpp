@@ -4,6 +4,7 @@
 
 #include "engine/utility/Logger.h"
 #include <cassert>
+#include <limits>
 
 using namespace MyEngine;
 
@@ -11,6 +12,7 @@ namespace {
 constexpr uint32_t kReservedSrvIndexForImGui = 0; // ImGui用に予約するSRVインデックス
 constexpr uint32_t kFirstUsableSrvIndex = 1; // 通常割り当てを開始するSRVインデックス
 } // namespace
+
 /// <summary>
 /// 初期化処理
 /// </summary>
@@ -40,6 +42,7 @@ void SrvManager::Finalize()
     descriptorSize_ = 0;
     useIndex_ = kReservedSrvIndexForImGui;
     freeList_.clear();
+    pendingFreeList_.clear();
     allocatedSet_.clear();
 }
 
@@ -56,14 +59,15 @@ void SrvManager::PreDraw()
 }
 
 /// <summary>
-/// SRV確保（次インデックスを返す）
+/// SRVを確保し、使用するインデックスを返す。
 /// </summary>
 uint32_t SrvManager::Allocate()
 {
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提とする
-    assert(CanAllocate()); // 上限未満であることを前提とする
+    ProcessPendingFrees();
+    assert(!freeList_.empty() || useIndex_ < DirectXCommon::kMaxSRVCount); // 上限未満であることを前提とする
     // フリーリストに解放済みインデックスがあれば再利用
-    uint32_t index = kReservedSrvIndexForImGui;
+    uint32_t index = kReservedSrvIndexForImGui; // 確保したSRVインデックス
     if (!freeList_.empty()) {
         index = freeList_.back();
         freeList_.pop_back();
@@ -79,7 +83,7 @@ uint32_t SrvManager::Allocate()
 }
 
 /// <summary>
-/// SRV解放（インデックスを指定して解放、再利用可能にする）
+/// SRVを解放予約し、GPU参照が終わってから再利用可能にする。
 /// </summary>
 void SrvManager::Free(uint32_t index)
 {
@@ -101,16 +105,41 @@ void SrvManager::Free(uint32_t index)
 
     // 解放処理
     allocatedSet_.erase(it);
-    freeList_.push_back(index);
+    const uint64_t releaseFenceValue = dxCommon_ ? dxCommon_->GetFenceValueForResourceRelease() : 0; // 再利用可能になるFence値
+    pendingFreeList_.push_back({ index, releaseFenceValue });
 }
 
 /// <summary>
-/// 上限未満ならtrue
+/// SRVを追加で確保できるかを返す。
 /// </summary>
-bool SrvManager::CanAllocate() const
+bool SrvManager::CanAllocate()
 {
+    ProcessPendingFrees();
     // DirectXCommonの最大数に依存
     return !freeList_.empty() || useIndex_ < DirectXCommon::kMaxSRVCount;
+}
+
+/// <summary>
+/// GPU完了済みのSRV解放予約をフリーリストへ戻す。
+/// </summary>
+void SrvManager::ProcessPendingFrees()
+{
+    if (pendingFreeList_.empty()) {
+        return;
+    }
+
+    const uint64_t completedFenceValue = dxCommon_ ? dxCommon_->GetCompletedFenceValue() : (std::numeric_limits<uint64_t>::max)(); // GPU完了済みFence値
+    for (size_t index = 0; index < pendingFreeList_.size();) { // 解放予約リストの確認位置
+        const PendingFreeSrv& pendingFree = pendingFreeList_[index]; // 確認対象の解放予約
+        if (pendingFree.fenceValue > completedFenceValue) {
+            index++;
+            continue;
+        }
+
+        freeList_.push_back(pendingFree.index);
+        pendingFreeList_[index] = pendingFreeList_.back();
+        pendingFreeList_.pop_back();
+    }
 }
 
 /// <summary>
@@ -148,9 +177,6 @@ void SrvManager::SetGraphicsRootDescriptorTable(UINT rootParameterIndex, uint32_
 }
 
 /// <summary>
-/// ImGui初期化処理
-/// </summary>
-/// <summary>
 /// ComputeShaderのルートパラメータにディスクリプタテーブルを設定する。
 /// </summary>
 void SrvManager::SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t srvIndex)
@@ -158,6 +184,10 @@ void SrvManager::SetComputeRootDescriptorTable(UINT rootParameterIndex, uint32_t
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提にする
     dxCommon_->GetCommandList()->SetComputeRootDescriptorTable(rootParameterIndex, GetGPUDescriptorHandle(srvIndex));
 }
+
+/// <summary>
+/// ImGui初期化処理
+/// </summary>
 void SrvManager::InitImGui()
 {
     assert(dxCommon_); // DirectXCommonが初期化されていることを前提とする
