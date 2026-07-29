@@ -327,6 +327,10 @@
     <ClCompile Include="engine\base\PostProcessPipeline.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
+
+    <ClCompile Include="engine\base\PostProcessRootConstants.cpp">
+      <Filter>ソース ファイル\engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="engine\base\PostProcessSettings.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
@@ -602,6 +606,9 @@
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\PostProcessPipeline.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\base\PostProcessRootConstants.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="engine\base\PostProcessSettings.h">

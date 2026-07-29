@@ -44,8 +44,9 @@ void PlayScene::ApplyTemporalPostProcessChain(uint32_t& postProcessSourceSrvInde
         return;
     }
 
+    const uint32_t sceneColorSrvIndex = sceneRenderTarget_.GetColorSrvIndex(); // 時間演出1pass目の入力SRV
     postProcessIntermediateTarget_.Begin(true);
-    postProcess_.DrawTexture(sceneRenderTarget_, PostEffectType::Distortion);
+    postProcess_.DrawTexture(sceneColorSrvIndex, PostEffectType::Distortion);
     postProcessIntermediateTarget_.End();
 
     postProcessSourceSrvIndex = postProcessIntermediateTarget_.GetColorSrvIndex();
@@ -91,13 +92,15 @@ void PlayScene::DrawFinalPostProcessPass(uint32_t postProcessSourceSrvIndex, Pos
     if (useGaussianFilter) {
         postProcess_.DrawGaussianPass(postProcessSourceSrvIndex, kGaussianSecondPassIndex);
     } else if (finalEffectType == PostEffectType::DepthOutline && sceneRenderTarget_.HasDepthSrv() && ctx_.camera) {
-        postProcess_.DrawDepthOutline(postProcessSourceSrvIndex, sceneRenderTarget_, ctx_.camera->GetProjectionMatrix());
+        const uint32_t sceneDepthSrvIndex = sceneRenderTarget_.GetDepthSrvIndex(); // Depth Outlineで参照する深度SRV
+        postProcess_.DrawDepthOutline(postProcessSourceSrvIndex, sceneDepthSrvIndex, ctx_.camera->GetProjectionMatrix());
     } else if (finalEffectType == PostEffectType::Dissolve && dissolveMaskSrvIndex_ != UINT32_MAX) {
         postProcess_.DrawDissolveTexture(postProcessSourceSrvIndex, dissolveMaskSrvIndex_);
     } else {
         postProcess_.DrawTexture(postProcessSourceSrvIndex, finalEffectType);
     }
 }
+
 /// <summary>
 /// 最終描画に必要なポストプロセス状態を作成する
 /// </summary>

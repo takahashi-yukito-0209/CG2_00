@@ -2,14 +2,12 @@
 
 #include <MathTypes.h>
 #include "PostProcessSettings.h"
-#include <array>
 #include <cstdint>
 #include <memory>
 
 namespace MyEngine {
 
 class DirectXCommon;
-class RenderTarget;
 class PostProcessPipeline;
 
 /// <summary>
@@ -89,19 +87,9 @@ public:
     void DrawTexture(uint32_t srvIndex, PostEffectType effectType);
 
     /// <summary>
-    /// RenderTargetのカラーSRVを指定したポストエフェクトで描画する
-    /// </summary>
-    void DrawTexture(const RenderTarget& sourceRenderTarget, PostEffectType effectType);
-
-    /// <summary>
     /// 現在選択されているポストエフェクトでテクスチャを描画する
     /// </summary>
     void DrawTexture(uint32_t srvIndex);
-
-    /// <summary>
-    /// RenderTargetのカラーSRVを現在のポストエフェクトで描画する
-    /// </summary>
-    void DrawTexture(const RenderTarget& sourceRenderTarget);
 
     /// <summary>
     /// 描画に必要なリソースが揃っているか確認する
@@ -192,24 +180,6 @@ public:
     void DrawGaussianPass(uint32_t srvIndex, uint32_t direction);
 
     /// <summary>
-    /// RenderTargetのカラーSRVからGaussian Filterの1方向分を描画する
-    /// </summary>
-    void DrawGaussianPass(const RenderTarget& sourceRenderTarget, uint32_t direction);
-
-    /// <summary>
-    /// 中間レンダーターゲットを使用して分離型Gaussian Filterを描画する
-    /// </summary>
-    void DrawGaussianTexture(
-        uint32_t sourceSrvIndex,
-        int intermediateRenderTargetHandle,
-        uint32_t intermediateSrvIndex);
-
-    /// <summary>
-    /// RenderTargetを中間描画先として分離型Gaussian Filterを描画する
-    /// </summary>
-    void DrawGaussianTexture(uint32_t sourceSrvIndex, RenderTarget& intermediateRenderTarget);
-
-    /// <summary>
     /// Outlineの強度を設定する
     /// </summary>
     void SetOutlineStrength(float strength);
@@ -255,14 +225,6 @@ public:
     void DrawDepthOutline(
         uint32_t colorSrvIndex,
         uint32_t depthSrvIndex,
-        const Math::Matrix4x4& projectionMatrix);
-
-    /// <summary>
-    /// RenderTargetの深度SRVを使用してOutlineを描画する
-    /// </summary>
-    void DrawDepthOutline(
-        uint32_t colorSrvIndex,
-        const RenderTarget& depthSourceRenderTarget,
         const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
@@ -398,13 +360,6 @@ public:
         uint32_t maskSrvIndex);
 
     /// <summary>
-    /// RenderTargetのカラーSRVとノイズマスクを使用してDissolveを描画する
-    /// </summary>
-    void DrawDissolveTexture(
-        const RenderTarget& sourceRenderTarget,
-        uint32_t maskSrvIndex);
-
-    /// <summary>
     /// 時間経過を使用するポストエフェクトを更新する
     /// </summary>
     void Update(float deltaTime);
@@ -448,29 +403,6 @@ public:
     /// 最後に描画へ使用したSRVインデックスを取得する
     /// </summary>
     uint32_t GetLastSrvIndex() const { return lastSrvIndex_; }
-
-private:
-    using RootConstantData = std::array<uint32_t, 20>; // ポストエフェクト用ルート定数データ
-
-    /// <summary>
-    /// 通常の1passポストエフェクト用ルート定数を作成する
-    /// </summary>
-    RootConstantData BuildTextureRootConstants(PostEffectType effectType) const;
-
-    /// <summary>
-    /// Gaussian Filter用ルート定数を作成する
-    /// </summary>
-    RootConstantData BuildGaussianRootConstants(uint32_t direction) const;
-
-    /// <summary>
-    /// Dissolve用ルート定数を作成する
-    /// </summary>
-    RootConstantData BuildDissolveRootConstants() const;
-
-    /// <summary>
-    /// Depth Outline用ルート定数を作成する
-    /// </summary>
-    RootConstantData BuildDepthOutlineRootConstants(const Math::Matrix4x4& projectionMatrix) const;
 
 private:
     DirectXCommon* dxCommon_ = nullptr; // DirectX共通基盤

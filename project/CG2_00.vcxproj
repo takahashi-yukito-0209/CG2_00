@@ -171,6 +171,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\base\Framework.cpp" />
     <ClCompile Include="engine\base\PostProcess.cpp" />
     <ClCompile Include="engine\base\PostProcessPipeline.cpp" />
+    <ClCompile Include="engine\base\PostProcessRootConstants.cpp" />
     <ClCompile Include="engine\base\PostProcessSettings.cpp" />
     <ClCompile Include="engine\base\SceneManager.cpp" />
     <ClCompile Include="engine\base\SrvManager.cpp" />
@@ -396,6 +397,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\IScene.h" />
     <ClInclude Include="engine\base\PostProcess.h" />
     <ClInclude Include="engine\base\PostProcessPipeline.h" />
+    <ClInclude Include="engine\base\PostProcessRootConstants.h" />
     <ClInclude Include="engine\base\PostProcessSettings.h" />
     <ClInclude Include="engine\base\SceneManager.h" />
     <ClInclude Include="engine\base\SrvManager.h" />
