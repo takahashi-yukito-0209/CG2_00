@@ -239,6 +239,16 @@ private:
     void HandleEffectStartInput();
 
     /// <summary>
+    /// ポストエフェクト切り替え入力を処理する。
+    /// </summary>
+    void HandlePostProcessShortcutInput();
+
+    /// <summary>
+    /// キー入力で選択されたポストエフェクトを適用する。
+    /// </summary>
+    void ApplyPostProcessShortcut(MyEngine::PostEffectType effectType);
+
+    /// <summary>
     /// 時間演出とポストプロセスの状態を更新する。
     /// </summary>
     void UpdateTemporalEffects(float deltaTime);
@@ -647,6 +657,8 @@ private:
     void DrawDebugLines2D();
 
 private: // メンバー変数
+    static constexpr bool kUsePostEffectPreviewScene = true; // ポストエフェクト確認用に関係ない演出描画を止める
+
     MyEngine::SceneContext ctx_;
     MyEngine::LevelData levelData_; // Blenderから読み込んだレベルデータ
     std::string levelDataFileName_; // 読み込み対象のレベルJSONファイル名
