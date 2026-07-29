@@ -1,6 +1,7 @@
 #include "Object3dModelLoader.h"
 
 #include "Logger.h"
+#include "../utility/ResourceResolver.h"
 #include "mathUtility.h"
 #include <algorithm>
 #include <assimp/Importer.hpp>
@@ -86,6 +87,27 @@ void LogResolvedModelTexturePath(const Object3d::ModelData& modelData)
 }
 
 /// <summary>
+/// MTLなどに記述されたテクスチャ参照をリソースパスへ解決する。
+/// </summary>
+std::string ResolveMaterialTextureReferencePath(const std::string& textureFilename, const std::string& modelDirectory)
+{
+    if (textureFilename.empty()) {
+        return {};
+    }
+
+    const std::string relativeResolvedPath = ResourceResolver::ResolveRelative(textureFilename, modelDirectory, ResourceResolver::Type::Texture); // モデルフォルダ基準で解決したテクスチャパス
+    if (!relativeResolvedPath.empty()) {
+        return relativeResolvedPath;
+    }
+
+    const std::string resourceResolvedPath = ResourceResolver::Resolve(textureFilename, ResourceResolver::Type::Texture); // resources配下から解決したテクスチャパス
+    if (!resourceResolvedPath.empty()) {
+        return resourceResolvedPath;
+    }
+
+    return {};
+}
+/// <summary>
 /// 読み込み済みモデルデータを必要に応じてキャッシュへ保存して返す
 /// </summary>
 Object3d::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const Object3d::ModelData& modelData)
@@ -118,7 +140,6 @@ const aiScene* ReadAssimpScene(Assimp::Importer& importer, const std::string& fu
 /// </summary>
 std::string FindDiffuseTexturePathFromMaterials(const aiScene* scene, const std::string& modelDirectory)
 {
-    std::string textureFilePath; // マテリアルから最後に見つかったテクスチャパス
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial* material = scene->mMaterials[materialIndex]; // Assimp のマテリアル
         if (material->GetTextureCount(aiTextureType_DIFFUSE) == 0) {
@@ -127,10 +148,13 @@ std::string FindDiffuseTexturePathFromMaterials(const aiScene* scene, const std:
 
         aiString assimpTexturePath; // Assimp が返す diffuse テクスチャパス
         material->GetTexture(aiTextureType_DIFFUSE, 0, &assimpTexturePath);
-        textureFilePath = modelDirectory + "/" + assimpTexturePath.C_Str();
+        const std::string textureFilePath = ResolveMaterialTextureReferencePath(assimpTexturePath.C_Str(), modelDirectory); // 実在リソースへ解決したテクスチャパス
+        if (!textureFilePath.empty()) {
+            return textureFilePath;
+        }
     }
 
-    return textureFilePath;
+    return {};
 }
 
 /// <summary>
@@ -202,6 +226,55 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
     Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     return kDefaultObjectTexturePath;
 }
+/// <summary>
+/// AssimpマテリアルからObject3d用マテリアル情報を作成する。
+/// </summary>
+Object3d::MaterialData BuildMaterialDataFromAssimpMaterial(const aiMaterial* material, const std::string& modelDirectory)
+{
+    Object3d::MaterialData materialData {}; // 変換後のマテリアル情報
+    if (!material || material->GetTextureCount(aiTextureType_DIFFUSE) == 0) {
+        materialData.textureFilePath = kDefaultObjectTexturePath;
+        return materialData;
+    }
+
+    aiString assimpTexturePath; // Assimpが返すdiffuseテクスチャパス
+    material->GetTexture(aiTextureType_DIFFUSE, 0, &assimpTexturePath);
+    const std::string textureFilePath = ResolveMaterialTextureReferencePath(assimpTexturePath.C_Str(), modelDirectory); // 実在リソースへ解決したテクスチャパス
+    materialData.textureFilePath = textureFilePath.empty() ? kDefaultObjectTexturePath : textureFilePath;
+    return materialData;
+}
+
+/// <summary>
+/// Assimpシーン内の全マテリアルをModelDataへ読み込む。
+/// </summary>
+void ReadMaterialListToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+{
+    const std::string modelDirectory = modelPath.parent_path().string(); // モデルファイルの配置ディレクトリ
+    modelData.materials.clear();
+    modelData.materials.reserve(scene ? scene->mNumMaterials : 0);
+
+    if (scene) {
+        for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+            aiMaterial* material = scene->mMaterials[materialIndex]; // 変換対象のAssimpマテリアル
+            modelData.materials.push_back(BuildMaterialDataFromAssimpMaterial(material, modelDirectory));
+        }
+    }
+
+    const std::string fallbackTexturePath = ResolveModelTextureFilePath(scene, modelPath); // 個別マテリアルにテクスチャが無い場合の代替パス
+    if (modelData.materials.empty()) {
+        Object3d::MaterialData fallbackMaterial {}; // マテリアルが無いモデル用の既定マテリアル
+        fallbackMaterial.textureFilePath = fallbackTexturePath;
+        modelData.materials.push_back(fallbackMaterial);
+    }
+
+    for (Object3d::MaterialData& materialData : modelData.materials) {
+        if (materialData.textureFilePath.empty()) {
+            materialData.textureFilePath = fallbackTexturePath;
+        }
+    }
+
+    modelData.material = modelData.materials.front();
+}
 
 /// <summary>
 /// Assimp のモデルファイル読み込み失敗を警告ログへ出力する。
@@ -258,7 +331,12 @@ void ApplyMaterialTemplateLine(const std::string& line, const std::string& direc
 
     std::string textureFilename; // MTL に記述されたテクスチャファイル名
     lineStream >> textureFilename;
-    materialData.textureFilePath = directoryPath + "/" + textureFilename;
+    const std::string resolvedTexturePath = ResolveMaterialTextureReferencePath(textureFilename, directoryPath); // 実在リソースへ解決したテクスチャパス
+    if (resolvedTexturePath.empty()) {
+        return;
+    }
+
+    materialData.textureFilePath = resolvedTexturePath;
     LogMaterialTemplateTexturePath(materialData.textureFilePath);
 }
 
@@ -463,6 +541,22 @@ void AppendFaceIndicesToModelData(const aiFace& face, uint32_t vertexBaseIndex, 
 }
 
 /// <summary>
+/// AssimpメッシュのIndex範囲をサブメッシュ情報として追加する。
+/// </summary>
+void AppendMeshPartToModelData(const aiMesh* mesh, const aiScene* scene, uint32_t indexOffset, uint32_t indexCount, Object3d::ModelData& modelData)
+{
+    if (indexCount == 0) {
+        return;
+    }
+
+    Object3d::ModelData::MeshPart meshPart {}; // 追加するサブメッシュ情報
+    meshPart.indexOffset = indexOffset;
+    meshPart.indexCount = indexCount;
+    meshPart.materialIndex = mesh && mesh->mMaterialIndex < scene->mNumMaterials ? mesh->mMaterialIndex : 0;
+    modelData.meshParts.push_back(meshPart);
+}
+
+/// <summary>
 /// Assimp の全メッシュを Object3d 用の頂点データとIndexデータへ変換する。
 /// </summary>
 void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3d::ModelData& modelData)
@@ -476,6 +570,7 @@ void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_ma
 
         const bool hasTextureCoords = mesh->HasTextureCoords(0); // テクスチャ座標を持っているか
         const uint32_t vertexBaseIndex = static_cast<uint32_t>(modelData.vertices.size()); // このメッシュの先頭頂点番号
+        const uint32_t indexOffset = static_cast<uint32_t>(modelData.indices.size()); // このメッシュの先頭Index番号
         const std::vector<Object3d::VertexInfluence> meshVertexInfluences = BuildMeshVertexInfluences(mesh, nodeIndexMap, modelData); // メッシュ元頂点ごとのSkinning影響
         AppendMeshSourceVerticesToModelData(mesh, hasTextureCoords, meshVertexInfluences, modelData);
 
@@ -487,6 +582,9 @@ void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_ma
 
             AppendFaceIndicesToModelData(face, vertexBaseIndex, modelData);
         }
+
+        const uint32_t indexCount = static_cast<uint32_t>(modelData.indices.size()) - indexOffset; // このメッシュが追加したIndex数
+        AppendMeshPartToModelData(mesh, scene, indexOffset, indexCount, modelData);
     }
 }
 /// <summary>
@@ -598,11 +696,11 @@ static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& m
 }
 
 /// <summary>
-/// Assimp シーンから解決したテクスチャパスをモデルデータのマテリアルへ設定する。
+/// Assimpシーンからマテリアル一覧をモデルデータへ設定する。
 /// </summary>
 void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
 {
-    modelData.material.textureFilePath = ResolveModelTextureFilePath(scene, modelPath);
+    ReadMaterialListToModelData(scene, modelPath, modelData);
 }
 
 /// <summary>

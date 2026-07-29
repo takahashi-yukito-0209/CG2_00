@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../utility/MathTypes.h"
+
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -87,6 +90,16 @@ public:
     /// シーンが保持する 3D オブジェクトのポインタを取得する。
     /// </summary>
     virtual void FillObject3dPointers(std::vector<class Object3d*>* out) { }
+
+    /// <summary>
+    /// Scene ViewのGizmoで3DオブジェクトのTransformが編集されたことを通知する。
+    /// </summary>
+    virtual void NotifyObjectTransformEdited(size_t /*objectIndex*/) { }
+
+    /// <summary>
+    /// Scene View画像上へシーン固有の編集表示を重ねて描画する。
+    /// </summary>
+    virtual void DrawSceneViewOverlay(const Math::Matrix4x4& /*viewProjectionMatrix*/, float /*imageMinX*/, float /*imageMinY*/, float /*imageWidth*/, float /*imageHeight*/) { }
 
     /// <summary>
     /// シーンが保持するスプライトのポインタを取得する。

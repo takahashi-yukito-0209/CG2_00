@@ -1,5 +1,6 @@
 #pragma once
 #include "Logger.h"
+#include "CollisionUtility.h"
 #include "Object3dTypes.h"
 #include <MathTypes.h>
 #include <array>
@@ -247,6 +248,41 @@ public: // メンバ関数
     /// </summary>
     uint32_t GetObjectId() const { return objectId_; }
 
+    /// <summary>
+    /// BOXコライダーを設定する。
+    /// </summary>
+    void SetBoxCollider(const Math::Vector3& center, const Math::Vector3& size);
+
+    /// <summary>
+    /// SPHEREコライダーを設定する。
+    /// </summary>
+    void SetSphereCollider(const Math::Vector3& center, const Math::Vector3& size);
+
+    /// <summary>
+    /// CAPSULEコライダーを設定する。
+    /// </summary>
+    void SetCapsuleCollider(const Math::Vector3& center, const Math::Vector3& size);
+
+    /// <summary>
+    /// コライダーを削除する。
+    /// </summary>
+    void ClearCollider();
+
+    /// <summary>
+    /// コライダーの所属レイヤーと衝突対象マスクを設定する。
+    /// </summary>
+    void SetColliderLayerMask(CollisionUtility::LayerMask layer, CollisionUtility::LayerMask collideMask);
+
+    /// <summary>
+    /// コライダーを保持しているか取得する。
+    /// </summary>
+    bool HasCollider() const { return hasCollider_; }
+
+    /// <summary>
+    /// 現在のTransformを反映したコライダーを取得する。
+    /// </summary>
+    const CollisionUtility::Collider& GetCollider() const { return collider_; }
+
 private: // メンバ変数
     Object3dCommon* object3dCommon_ = nullptr; // 共通情報へのポインタ
 
@@ -316,6 +352,10 @@ private: // メンバ変数
     Model* model_ = nullptr;
     uint32_t objectId_ = 0; // シーン内で安定して識別するためのID
     std::string debugName_ = "No Model"; // ImGuiで識別するための表示名
+    bool hasCollider_ = false; // コライダーを保持しているか
+    CollisionUtility::Collider collider_ {}; // 現在のTransformを反映したコライダー
+    Math::Vector3 colliderLocalCenter_ { 0.0f, 0.0f, 0.0f }; // コライダーのローカル中心座標
+    Math::Vector3 colliderSize_ { 1.0f, 1.0f, 1.0f }; // コライダーのローカルサイズ
     // モデル用にこのObject3dが所有するModelCommon
     std::unique_ptr<ModelCommon> modelCommon_;
 
@@ -629,6 +669,11 @@ private: // 内部関数
     /// 現在のフレームで使用する座標変換行列をGPUバッファへ転送する
     /// </summary>
     void UploadTransformationMatrixFrameResource(uint32_t frameIndex);
+
+    /// <summary>
+    /// 現在のTransformからコライダー形状を更新する。
+    /// </summary>
+    void RefreshColliderShape();
 };
 
 } // namespace MyEngine

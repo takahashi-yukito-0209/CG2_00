@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="リソース ファイル\levels">
+      <UniqueIdentifier>{36b5d39f-73be-4963-a7c3-bf9f3523c19d}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソース ファイル\engine">
       <UniqueIdentifier>{5c9f1877-d8b6-462d-abf1-95fe603d3f04}</UniqueIdentifier>
     </Filter>
@@ -55,11 +58,17 @@
     <Filter Include="externals">
       <UniqueIdentifier>{cd8b06ea-5f21-44e3-989d-07cfa425c03f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="externals\nlohmann">
+      <UniqueIdentifier>{29b56f87-cab2-4a7e-b2a7-68b6bd2da011}</UniqueIdentifier>
+    </Filter>
     <Filter Include="externals\imgui">
       <UniqueIdentifier>{096eeea7-9ae7-4881-99a3-c807d53d6a2a}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\engine\utility">
       <UniqueIdentifier>{740b6bc6-1367-4735-8995-4ca6b50e10be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\engine\level">
+      <UniqueIdentifier>{fd7c63df-7f62-40de-aac6-a3421af27e5b}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソース ファイル\engine\sound">
       <UniqueIdentifier>{2151e101-e2d2-41a6-ba3d-465ccf8a6f44}</UniqueIdentifier>
@@ -87,6 +96,9 @@
     </Filter>
     <Filter Include="ソース ファイル\engine\utility">
       <UniqueIdentifier>{f3d99883-ad4c-411a-83b1-c61da3991c1a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\engine\level">
+      <UniqueIdentifier>{c1315265-306c-4a37-93d4-d27df4f06dd4}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダー ファイル\application\scenes">
       <UniqueIdentifier>{3b1f8ad4-6d15-4f81-b904-b1da251d5478}</UniqueIdentifier>
@@ -137,6 +149,15 @@
     </ClCompile>
     <ClCompile Include="engine\utility\JsonUtility.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\JsonFileLoader.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\level\LevelLoader.cpp">
+      <Filter>ソース ファイル\engine\level</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\level\LevelWriter.cpp">
+      <Filter>ソース ファイル\engine\level</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\DebugUtility.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
@@ -214,6 +235,9 @@
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
     <ClCompile Include="engine\utility\CollisionUtility.cpp">
+      <Filter>ソース ファイル\engine\utility</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\utility\CollisionSystem.cpp">
       <Filter>ソース ファイル\engine\utility</Filter>
     </ClCompile>
     <ClCompile Include="engine\sound\Sound.cpp">
@@ -376,6 +400,9 @@
       <Filter>シェーダーファイル</Filter>
     </FxCompile>  </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="externals\nlohmann\json.hpp">
+      <Filter>externals\nlohmann</Filter>
+    </ClInclude>
     <ClInclude Include="externals\imgui\imconfig.h">
       <Filter>externals\imgui</Filter>
     </ClInclude>
@@ -420,6 +447,18 @@
     </ClInclude>
     <ClInclude Include="engine\utility\JsonUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\utility\JsonFileLoader.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelData.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelLoader.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\level\LevelWriter.h">
+      <Filter>ヘッダー ファイル\engine\level</Filter>
     </ClInclude>
     <ClInclude Include="engine\utility\DebugUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
@@ -502,6 +541,9 @@
     <ClInclude Include="engine\utility\CollisionUtility.h">
       <Filter>ヘッダー ファイル\engine\utility</Filter>
     </ClInclude>
+    <ClInclude Include="engine\utility\CollisionSystem.h">
+      <Filter>ヘッダー ファイル\engine\utility</Filter>
+    </ClInclude>
     <ClInclude Include="engine\sound\Sound.h">
       <Filter>ヘッダー ファイル\engine\sound</Filter>
     </ClInclude>
@@ -572,6 +614,9 @@
     </Text>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\levels\scene.json">
+      <Filter>リソース ファイル\levels</Filter>
+    </None>
     <None Include="resources\shaders\Object3d.hlsli">
       <Filter>シェーダーファイル</Filter>
     </None>

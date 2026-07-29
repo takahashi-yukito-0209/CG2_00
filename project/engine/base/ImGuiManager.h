@@ -57,6 +57,7 @@ public: // メンバ関数
         std::vector<ParticleEmitter*>* particleEmitters = nullptr; // 表示・編集対象のパーティクルエミッター一覧
         Object3dCommon* object3dCommon = nullptr; // 3Dオブジェクト共通設定
         std::vector<Object3d*>* objects3d = nullptr; // 表示・編集対象の3Dオブジェクト一覧
+        std::function<void(size_t)> notifyObjectTransformEdited; // 3DオブジェクトのGizmo編集通知
         std::vector<class Sprite*>* sprites = nullptr; // 表示・編集対象のスプライト一覧
         class SpriteCommon* spriteCommon = nullptr; // スプライト共通設定
         bool* useBillboard = nullptr; // ビルボード描画の有効フラグ
@@ -72,6 +73,7 @@ public: // メンバ関数
         float sceneViewHeight = 0.0f; // Scene Viewに表示する画像の縦幅
         const Math::Matrix4x4* sceneViewMatrix = nullptr; // Scene View描画に使うビュー行列
         const Math::Matrix4x4* sceneProjectionMatrix = nullptr; // Scene View描画に使う射影行列
+        std::function<void(const Math::Matrix4x4&, float, float, float, float)> drawSceneViewOverlay; // Scene固有のScene View重ね描き
     };
 
     /// <summary>
@@ -94,6 +96,25 @@ public: // メンバ関数
     /// </summary>
     bool IsSceneViewHovered() const { return sceneViewHovered_; }
 
+    /// <summary>
+    /// ImGuiで選択中の3Dオブジェクト番号を取得する。
+    /// </summary>
+    int GetSelectedObjectIndex() const { return selectedObjectIndex_; }
+
+    /// <summary>
+    /// Scene Viewギズモの対象種別を取得する。
+    /// </summary>
+    int GetGizmoTargetMode() const { return gizmoTargetMode_; }
+
+    /// <summary>
+    /// Scene Viewギズモの操作モードを取得する。
+    /// </summary>
+    int GetGizmoOperationMode() const { return gizmoOperationMode_; }
+
+    /// <summary>
+    /// ImGuiで選択中の3Dオブジェクト番号を設定する。
+    /// </summary>
+    void SetSelectedObjectIndex(int objectIndex);
     /// <summary>
     /// 3Dオブジェクト削除後の選択状態を補正する。
     /// </summary>

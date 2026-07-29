@@ -14,10 +14,10 @@
     "usePostProcess": 0
   },
   "emitter": {
-    "spawnShape": 0,
-    "translate": [0.0000, 0.0000, 0.0000],
+    "spawnShape": 1,
+    "translate": [0.0000, 1.0000, 0.0000],
     "radius": 0.4500,
-    "count": 96,
+    "count": 1089,
     "frequency": 0.0300,
     "baseScale": [0.0700, 0.0700, 0.0700],
     "randomScale": 0.0450,

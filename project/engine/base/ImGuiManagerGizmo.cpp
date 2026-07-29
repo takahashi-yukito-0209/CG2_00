@@ -850,6 +850,9 @@ void ImGuiManager::DrawTranslationGizmo(Context& ctx, const ImVec2& imageMin, co
         DrawGpuParticleEmitterGizmo(ctx, viewProjectionMatrix, imageMin, imageSize);
         return;
     }
+    if (gizmoTargetMode_ == 4) {
+        return; // Level ColliderはScene固有Overlay側で描画と編集を行う
+    }
 
     if (!ctx.objects3d || ctx.objects3d->empty()) {
         return;
@@ -986,6 +989,9 @@ void ImGuiManager::DrawTranslationGizmo(Context& ctx, const ImVec2& imageMin, co
 
         if (changed) {
             selectedObject->SetTranslate(translate);
+            if (ctx.notifyObjectTransformEdited) {
+                ctx.notifyObjectTransformEdited(static_cast<size_t>(resolvedObjectIndex));
+            }
         }
         return;
     }
@@ -1077,6 +1083,9 @@ void ImGuiManager::DrawTranslationGizmo(Context& ctx, const ImVec2& imageMin, co
                     rotate.z += rotateAmount;
                 }
                 selectedObject->SetRotate(rotate);
+                if (ctx.notifyObjectTransformEdited) {
+                    ctx.notifyObjectTransformEdited(static_cast<size_t>(resolvedObjectIndex));
+                }
             }
         }
         return;
@@ -1161,6 +1170,9 @@ void ImGuiManager::DrawTranslationGizmo(Context& ctx, const ImVec2& imageMin, co
 
         if (changed) {
             selectedObject->SetScale(scale);
+            if (ctx.notifyObjectTransformEdited) {
+                ctx.notifyObjectTransformEdited(static_cast<size_t>(resolvedObjectIndex));
+            }
         }
         return;
     }

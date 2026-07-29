@@ -119,11 +119,19 @@ struct ModelData {
         std::vector<Node> children; // 子ノードの一覧
     };
 
+    struct MeshPart {
+        uint32_t indexOffset = 0; // IndexBuffer内でこのパーツが始まる位置
+        uint32_t indexCount = 0; // このパーツが描画に使用するIndex数
+        uint32_t materialIndex = 0; // materials内で参照するマテリアル番号
+    };
+
     std::vector<VertexData> vertices; // 展開済み頂点データ
     std::vector<uint32_t> indices; // Index描画で参照する頂点番号
+    std::vector<MeshPart> meshParts; // サブメッシュごとの描画範囲とマテリアル参照
+    std::vector<MaterialData> materials; // モデルに含まれる複数マテリアル情報
     std::vector<VertexInfluence> vertexInfluences; // 展開済み頂点ごとのSkinning影響情報
     std::unordered_map<std::string, JointWeightData> skinClusterData; // Joint名ごとの逆BindPose情報
-    MaterialData material; // モデルに紐づくマテリアル情報
+    MaterialData material; // 旧描画経路と単一マテリアル用の代表マテリアル情報
     Node rootNode; // Assimpのノードツリー
 };
 

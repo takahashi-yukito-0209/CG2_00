@@ -1,0 +1,41 @@
+{
+    "name": "scene",
+    "objects": [
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    14.194235801696777,
+                    7.438362121582031,
+                    10.619488716125488
+                ],
+                "type": "BOX"
+            },
+            "file_name": "sphere/sphere.gltf",
+            "name": "Sphere",
+            "transform": {
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            "type": "MESH"
+        }
+    ]
+}

@@ -94,6 +94,109 @@ void Object3d::InitializeTransformState()
 }
 
 /// <summary>
+/// BOXコライダーを設定する。
+/// </summary>
+void Object3d::SetBoxCollider(const Math::Vector3& center, const Math::Vector3& size)
+{
+    hasCollider_ = true;
+    collider_.type = CollisionUtility::ColliderType::OBB;
+    colliderLocalCenter_ = center;
+    colliderSize_ = size;
+    RefreshColliderShape();
+}
+
+/// <summary>
+/// SPHEREコライダーを設定する。
+/// </summary>
+void Object3d::SetSphereCollider(const Math::Vector3& center, const Math::Vector3& size)
+{
+    hasCollider_ = true;
+    collider_.type = CollisionUtility::ColliderType::Sphere;
+    colliderLocalCenter_ = center;
+    colliderSize_ = size;
+    RefreshColliderShape();
+}
+
+/// <summary>
+/// CAPSULEコライダーを設定する。
+/// </summary>
+void Object3d::SetCapsuleCollider(const Math::Vector3& center, const Math::Vector3& size)
+{
+    hasCollider_ = true;
+    collider_.type = CollisionUtility::ColliderType::Capsule;
+    colliderLocalCenter_ = center;
+    colliderSize_ = size;
+    RefreshColliderShape();
+}
+/// <summary>
+/// コライダーを削除する。
+/// </summary>
+void Object3d::ClearCollider()
+{
+    hasCollider_ = false;
+    collider_ = {};
+    colliderLocalCenter_ = { 0.0f, 0.0f, 0.0f };
+    colliderSize_ = { 1.0f, 1.0f, 1.0f };
+}
+
+/// <summary>
+/// コライダーの所属レイヤーと衝突対象マスクを設定する。
+/// </summary>
+void Object3d::SetColliderLayerMask(CollisionUtility::LayerMask layer, CollisionUtility::LayerMask collideMask)
+{
+    collider_.layer = layer;
+    collider_.collideMask = collideMask;
+}
+
+/// <summary>
+/// 現在のTransformからコライダー形状を更新する。
+/// </summary>
+void Object3d::RefreshColliderShape()
+{
+    if (!hasCollider_) {
+        return;
+    }
+
+    const Math::Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate); // Object3dのワールド行列
+    const Math::Vector3 worldCenter = MathUtil::Transform(colliderLocalCenter_, worldMatrix); // コライダー中心のワールド座標
+    if (collider_.type == CollisionUtility::ColliderType::Sphere) {
+        const float diameterX = std::fabs(colliderSize_.x * transform_.scale.x); // X方向のワールド直径
+        const float diameterY = std::fabs(colliderSize_.y * transform_.scale.y); // Y方向のワールド直径
+        const float diameterZ = std::fabs(colliderSize_.z * transform_.scale.z); // Z方向のワールド直径
+        const float diameter = (std::max)((std::max)(diameterX, diameterY), diameterZ); // 球として扱う最大直径
+        collider_.sphere.center = worldCenter;
+        collider_.sphere.radius = (std::max)(diameter * 0.5f, 0.001f);
+        collider_.aabb = CollisionUtility::GetSphereAABB(collider_.sphere);
+        return;
+    }
+
+    if (collider_.type == CollisionUtility::ColliderType::Capsule) {
+        const float diameterX = std::fabs(colliderSize_.x * transform_.scale.x); // X方向のワールド直径
+        const float diameterZ = std::fabs(colliderSize_.z * transform_.scale.z); // Z方向のワールド直径
+        const float radius = (std::max)((std::max)(diameterX, diameterZ) * 0.5f, 0.001f); // カプセル半径
+        const float totalHeight = (std::max)(std::fabs(colliderSize_.y * transform_.scale.y), radius * 2.0f); // カプセル全高
+        const float segmentHalfLength = (std::max)(totalHeight * 0.5f - radius, 0.0f); // 球端を除いた軸の半分長さ
+        const Math::Matrix4x4 rotateMatrix = MathUtil::MakeAffineMatrix({ 1.0f, 1.0f, 1.0f }, transform_.rotate, { 0.0f, 0.0f, 0.0f }); // 回転だけを反映する行列
+        const Math::Vector3 capsuleAxis = MathUtil::SafeNormalize(MathUtil::Transform({ 0.0f, 1.0f, 0.0f }, rotateMatrix), { 0.0f, 1.0f, 0.0f }); // カプセル軸のワールド方向
+        collider_.capsule.start = worldCenter - capsuleAxis * segmentHalfLength;
+        collider_.capsule.end = worldCenter + capsuleAxis * segmentHalfLength;
+        collider_.capsule.radius = radius;
+        collider_.aabb = CollisionUtility::GetCapsuleAABB(collider_.capsule);
+        return;
+    }
+    const Math::Vector3 halfLengths = {
+        colliderSize_.x * 0.5f,
+        colliderSize_.y * 0.5f,
+        colliderSize_.z * 0.5f
+    }; // コライダーのローカル半サイズ
+    Math::Transform colliderTransform = transform_; // コライダー計算用Transform
+    colliderTransform.translate = worldCenter;
+
+    collider_.obb = CollisionUtility::MakeOBBFromTransform(colliderTransform, halfLengths);
+    collider_.aabb = CollisionUtility::GetOBBAABB(collider_.obb);
+}
+
+/// <summary>
 /// 使用するテクスチャを指定し、マテリアル情報へ反映する。
 /// </summary>
 void Object3d::SetTexture(const std::string& filePath)
@@ -108,7 +211,6 @@ void Object3d::SetTexture(const std::string& filePath)
         debugName_ = std::string("Custom Mesh : ") + filePath; // カスタムメッシュを識別する表示名
     }
 }
-
 
 /// <summary>
 /// ファイルパスを指定してモデルを取得・設定する
@@ -420,7 +522,6 @@ void Object3d::AssignTexture()
     Logger::Debug("Object3d::AssignTexture: no fallback texture available, leaving textureIndex invalid\n");
 }
 
-
 /// <summary>
 /// テクスチャパスを解決し、未ロードならロードしてSRV番号を取得する
 /// </summary>
@@ -663,6 +764,7 @@ void Object3d::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
     // WVP行列計算
     // ワールド行列
     Matrix4x4 baseWorld = MathUtil::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate); // Object3d自身のワールド行列
+    RefreshColliderShape();
     Matrix4x4 world = animationEnabled_ ? MathUtil::Multiply(animationLocalMatrix_, baseWorld) : baseWorld; // アニメーションを合成したワールド行列
     // 逆転置行列（正規行列用にスケール影響除去）
     Matrix4x4 worldInv = MathUtil::Inverse(world);
@@ -874,6 +976,7 @@ void Object3d::UpdateAnimation(float deltaTime)
     animationTime_ = std::fmod(animationTime_, animation_.duration);
     ApplyAnimationAtCurrentTime();
 }
+
 /// <summary>
 /// 現在のフレーム用GPUバッファへCPU側の状態を転送する
 /// </summary>

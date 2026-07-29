@@ -578,6 +578,16 @@ void Game::Draw()
         }
     }
     ctx.objects3d = &objPtrs;
+    ctx.notifyObjectTransformEdited = [this](size_t objectIndex) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+            impl_->sceneManager->GetCurrent()->NotifyObjectTransformEdited(objectIndex);
+        }
+    };
+    ctx.drawSceneViewOverlay = [this](const Matrix4x4& viewProjectionMatrix, float imageMinX, float imageMinY, float imageWidth, float imageHeight) {
+        if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
+            impl_->sceneManager->GetCurrent()->DrawSceneViewOverlay(viewProjectionMatrix, imageMinX, imageMinY, imageWidth, imageHeight);
+        }
+    };
     std::vector<Sprite*> spritePtrs;
     if (impl_->sceneManager && impl_->sceneManager->GetCurrent()) {
         impl_->sceneManager->GetCurrent()->FillSpritePointers(&spritePtrs);

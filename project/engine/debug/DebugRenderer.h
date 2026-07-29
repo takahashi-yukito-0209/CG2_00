@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DirectXCommon.h"
+#include "CollisionUtility.h"
 #include "MathTypes.h"
 #include <array>
 #include <cstdint>
@@ -52,6 +53,11 @@ public:
     /// AABB のワイヤーフレームを追加する。
     /// </summary>
     void DrawAABB(const Math::Vector3& min, const Math::Vector3& max, const Math::Vector4& color);
+
+    /// <summary>
+    /// OBB のワイヤーフレームを追加する。
+    /// </summary>
+    void DrawOBB(const CollisionUtility::OBB& obb, const Math::Vector4& color);
 
     /// <summary>
     /// 2D 矩形のワイヤーフレームを追加する。

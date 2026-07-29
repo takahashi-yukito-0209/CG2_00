@@ -27,6 +27,13 @@ std::string GetDisplayFileName(const std::string& path)
 }
 
 /// <summary>
+/// Vector3の各成分が同じ値か確認する。
+/// </summary>
+bool IsSameVector3(const Math::Vector3& lhs, const Math::Vector3& rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+/// <summary>
 /// 3DオブジェクトのImGui表示名を作成する。
 /// </summary>
 std::string BuildObjectDisplayLabel(const Object3d* object, int objectIndex)
@@ -107,19 +114,20 @@ void ImGuiManager::DrawSceneSection(Context& ctx)
             "Object3D",
             "Sprite2D",
             "Emitter",
-            "GPU Emitter"
+            "GPU Emitter",
+            "Level Collider"
         }; // 選択可能なギズモ対象
         gizmoTargetMode_ = (std::clamp)(gizmoTargetMode_, 0, static_cast<int>(IM_ARRAYSIZE(targetLabels)) - 1);
         ImGui::Combo("Gizmo Target", &gizmoTargetMode_, targetLabels, IM_ARRAYSIZE(targetLabels));
 
-        if (gizmoTargetMode_ == 3) {
-            const char* gpuOperationLabels[] = {
+        if (gizmoTargetMode_ == 3 || gizmoTargetMode_ == 4) {
+            const char* limitedOperationLabels[] = {
                 "Move",
                 "Scale"
-            }; // GPU Emitterで選択可能なギズモ操作
-            int gpuOperationIndex = gizmoOperationMode_ == 2 ? 1 : 0; // GPU Emitter用の操作番号
-            if (ImGui::Combo("Gizmo Operation", &gpuOperationIndex, gpuOperationLabels, IM_ARRAYSIZE(gpuOperationLabels))) {
-                gizmoOperationMode_ = gpuOperationIndex == 0 ? 0 : 2;
+            }; // 移動と拡縮に対応する対象のギズモ操作
+            int limitedOperationIndex = gizmoOperationMode_ == 2 ? 1 : 0; // 表示用の操作番号
+            if (ImGui::Combo("Gizmo Operation", &limitedOperationIndex, limitedOperationLabels, IM_ARRAYSIZE(limitedOperationLabels))) {
+                gizmoOperationMode_ = limitedOperationIndex == 0 ? 0 : 2;
             }
             if (gizmoOperationMode_ != 2) {
                 gizmoOperationMode_ = 0;
@@ -257,8 +265,15 @@ void ImGuiManager::DrawObjectSection(Context& ctx)
 
         Object3d* selectedObject = (*ctx.objects3d)[selectedObjectIndex_]; // 編集対象の3Dオブジェクト
         if (selectedObject) {
+            const Math::Vector3 beforeScale = selectedObject->GetScale(); // 編集前のスケール
+            const Math::Vector3 beforeRotate = selectedObject->GetRotate(); // 編集前の回転
+            const Math::Vector3 beforeTranslate = selectedObject->GetTranslate(); // 編集前の座標
             ImGui::Separator();
             selectedObject->DrawImGui(selectedObjectIndex_);
+            const bool transformEdited = !IsSameVector3(beforeScale, selectedObject->GetScale()) || !IsSameVector3(beforeRotate, selectedObject->GetRotate()) || !IsSameVector3(beforeTranslate, selectedObject->GetTranslate()); // Transformが編集されたか
+            if (transformEdited && ctx.notifyObjectTransformEdited) {
+                ctx.notifyObjectTransformEdited(static_cast<size_t>(selectedObjectIndex_));
+            }
         }
     }
 #else

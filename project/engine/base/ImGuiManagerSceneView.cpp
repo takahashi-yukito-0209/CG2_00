@@ -2,6 +2,7 @@
 
 #ifdef USE_IMGUI
 #include "engine/base/SrvManager.h"
+#include "engine/utility/mathUtility.h"
 #include <algorithm>
 #include <d3d12.h>
 #endif
@@ -57,6 +58,10 @@ void ImGuiManager::DrawSceneViewWindow(Context& ctx)
     const ImVec2 imageMin = ImGui::GetItemRectMin(); // Scene View画像の左上座標
     sceneViewHovered_ = ImGui::IsItemHovered(); // Scene View画像上ならカメラ操作を許可する
     DrawTranslationGizmo(ctx, imageMin, imageSize);
+    if (ctx.drawSceneViewOverlay && ctx.sceneViewMatrix && ctx.sceneProjectionMatrix) {
+        const Math::Matrix4x4 viewProjectionMatrix = MathUtil::Multiply(*ctx.sceneViewMatrix, *ctx.sceneProjectionMatrix); // Scene固有オーバーレイ用のビュー射影行列
+        ctx.drawSceneViewOverlay(viewProjectionMatrix, imageMin.x, imageMin.y, imageSize.x, imageSize.y);
+    }
 
     ImGui::End();
 #else

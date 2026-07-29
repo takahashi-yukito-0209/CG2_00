@@ -201,6 +201,15 @@ void ImGuiManager::Render(ID3D12GraphicsCommandList* commandList)
 }
 
 /// <summary>
+/// ImGuiで選択中の3Dオブジェクト番号を設定する。
+/// </summary>
+void ImGuiManager::SetSelectedObjectIndex(int objectIndex)
+{
+    activeGizmoOperationMode_ = -1;
+    activeGizmoAxisIndex_ = -1;
+    selectedObjectIndex_ = (std::max)(objectIndex, 0);
+}
+/// <summary>
 /// 3Dオブジェクト削除後の選択状態を補正する。
 /// </summary>
 void ImGuiManager::NotifyObjectDeleted(size_t deletedObjectIndex, size_t remainingObjectCount)
@@ -281,6 +290,10 @@ void ImGuiManager::BuildUI(Context& /*ctx*/) { }
 
 void ImGuiManager::Render(ID3D12GraphicsCommandList* /*commandList*/) { }
 
+/// <summary>
+/// ImGui無効時の3Dオブジェクト選択番号設定を受け取る。
+/// </summary>
+void ImGuiManager::SetSelectedObjectIndex(int /*objectIndex*/) { }
 /// <summary>
 /// ImGui無効時の3Dオブジェクト削除通知を受け取る。
 /// </summary>

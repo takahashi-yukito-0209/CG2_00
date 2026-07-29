@@ -11,6 +11,7 @@ namespace MyEngine {
 class DirectXCommon;
 class ModelCommon;
 class Object3d;
+class TextureManager;
 
 /// <summary>
 /// モデルクラス
@@ -63,6 +64,16 @@ private: // メンバ変数
     uint32_t ResolveFallbackTextureIndex() const;
 
     /// <summary>
+    /// 指定マテリアル番号のテクスチャ番号を取得する
+    /// </summary>
+    uint32_t ResolveMaterialTextureIndex(uint32_t materialIndex) const;
+
+    /// <summary>
+    /// サブメッシュ描画時に使用するテクスチャ番号を決定する
+    /// </summary>
+    uint32_t ResolveMeshPartTextureIndex(const Object3d* owner, uint32_t materialIndex) const;
+
+    /// <summary>
     /// 描画時に使用するテクスチャ番号を決定する
     /// </summary>
     uint32_t ResolveTextureIndex(const Object3d* owner) const;
@@ -88,9 +99,14 @@ private: // メンバ変数
     D3D12_INDEX_BUFFER_VIEW ResolveIndexBufferView(const Object3d* owner) const;
 
     /// <summary>
+    /// サブメッシュ情報があればマテリアル単位でIndex描画を行う
+    /// </summary>
+    bool DrawMeshPartsIndexed(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const;
+
+    /// <summary>
     /// IndexがあればIndex描画、なければ従来の頂点描画を行う
     /// </summary>
-    void DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount) const;
+    void DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const Object3d* owner, uint32_t instanceCount, const char* logContext) const;
 
     /// <summary>
     /// モデル描画で使うGPUリソースとテクスチャ状態を初期化する
@@ -121,6 +137,11 @@ private: // メンバ変数
     /// Skinning用の頂点影響バッファを作成する
     /// </summary>
     void CreateVertexInfluenceBuffer();
+
+    /// <summary>
+    /// モデル内マテリアルごとのテクスチャ番号を初期化する
+    /// </summary>
+    void InitializeMaterialTextureIndices(TextureManager* textureManager);
 
     /// <summary>
     /// オーナーのマテリアルCBVを描画用ルートパラメータへ設定する
@@ -159,6 +180,9 @@ private: // メンバ変数
 
     // モデルファイル由来の既定テクスチャSRV番号
     uint32_t textureIndex_ = UINT32_MAX;
+
+    // モデル内マテリアルごとのテクスチャSRV番号
+    std::vector<uint32_t> materialTextureIndices_;
 };
 
 } // namespace MyEngine

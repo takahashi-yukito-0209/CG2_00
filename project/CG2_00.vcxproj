@@ -183,10 +183,14 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\particle\ParticleManagerImGui.cpp" />
     <ClCompile Include="engine\sound\Sound.cpp" />
     <ClCompile Include="engine\utility\CollisionUtility.cpp" />
+    <ClCompile Include="engine\utility\CollisionSystem.cpp" />
     <ClCompile Include="engine\utility\Easing.cpp" />
     <ClCompile Include="engine\utility\CurveUtility.cpp" />
     <ClCompile Include="engine\utility\FileUtility.cpp" />
     <ClCompile Include="engine\utility\JsonUtility.cpp" />
+    <ClCompile Include="engine\utility\JsonFileLoader.cpp" />
+    <ClCompile Include="engine\level\LevelLoader.cpp" />
+    <ClCompile Include="engine\level\LevelWriter.cpp" />
     <ClCompile Include="engine\utility\DebugUtility.cpp" />
     <ClCompile Include="engine\utility\RandomUtility.cpp" />
     <ClCompile Include="engine\utility\TimeUtility.cpp" />
@@ -402,14 +406,20 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\RenderState.h" />
     <ClInclude Include="engine\sound\Sound.h" />
     <ClInclude Include="engine\utility\CollisionUtility.h" />
+    <ClInclude Include="engine\utility\CollisionSystem.h" />
     <ClInclude Include="engine\utility\Easing.h" />
     <ClInclude Include="engine\utility\CurveUtility.h" />
     <ClInclude Include="engine\utility\FileUtility.h" />
     <ClInclude Include="engine\utility\JsonUtility.h" />
+    <ClInclude Include="engine\utility\JsonFileLoader.h" />
+    <ClInclude Include="engine\level\LevelData.h" />
+    <ClInclude Include="engine\level\LevelLoader.h" />
+    <ClInclude Include="engine\level\LevelWriter.h" />
     <ClInclude Include="engine\utility\DebugUtility.h" />
     <ClInclude Include="engine\utility\RandomUtility.h" />
     <ClInclude Include="engine\utility\TimeUtility.h" />
     <ClInclude Include="engine\utility\ResourceResolver.h" />
+    <ClInclude Include="externals\nlohmann\json.hpp" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
@@ -452,6 +462,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\Fullscreen.hlsli" />
+    <None Include="resources\levels\scene.json" />
     <None Include="resources\shaders\Object3d.hlsli" />
     <None Include="resources\shaders\Particle.hlsli" />
   </ItemGroup>

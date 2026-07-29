@@ -10,6 +10,7 @@
 #include "../../engine/utility/mathUtility.h"
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 using namespace MyEngine;
 
@@ -26,12 +27,26 @@ constexpr Math::Vector4 kCylinderEmitterDebugRangeColor = { 1.0f, 0.85f, 0.15f, 
 constexpr Math::Vector4 kCylinderEmitterDebugGridColor = { 1.0f, 0.7f, 0.1f, 0.65f }; // Cylinderエミッター範囲グリッドの色
 constexpr Math::Vector4 kGpuEmitterDebugRangeColor = { 0.75f, 0.35f, 1.0f, 1.0f }; // GPU Emitter範囲表示の色
 constexpr Math::Vector4 kGpuEmitterDebugGridColor = { 0.6f, 0.25f, 1.0f, 0.65f }; // GPU Emitter補助線の色
+constexpr Math::Vector4 kLevelColliderDebugColor = { 0.2f, 1.0f, 0.95f, 1.0f }; // レベルコライダーの表示色
+constexpr Math::Vector4 kLevelColliderHitDebugColor = { 1.0f, 0.25f, 0.2f, 1.0f }; // 衝突中コライダーの表示色
 constexpr uint32_t kGpuSpawnShapeSphere = 0; // GPU Emitterの球形状番号
 constexpr uint32_t kGpuSpawnShapeBox = 1; // GPU Emitterの箱形状番号
 constexpr uint32_t kGpuSpawnShapeRing = 2; // GPU Emitterのリング形状番号
 constexpr uint32_t kGpuSpawnShapeCone = 3; // GPU Emitterのコーン形状番号
 constexpr int kGpuEmitterCircleSegmentCount = 48; // GPU Emitter円形ワイヤーの分割数
+constexpr int kLevelColliderCircleSegmentCount = 48; // レベルコライダー円形ワイヤーの分割数
 
+/// <summary>
+/// Vector3同士の外積を取得する。
+/// </summary>
+Math::Vector3 CrossVector3(const Math::Vector3& a, const Math::Vector3& b)
+{
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
 /// <summary>
 /// ローカル座標をエミッターのSRTでワールド座標へ変換する。
 /// </summary>
@@ -40,6 +55,7 @@ Math::Vector3 TransformEmitterDebugPoint(const ParticleEmitter& emitter, const M
     const Math::Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(emitter.transform.scale, emitter.transform.rotate, emitter.transform.translate); // エミッターのSRT行列
     return MathUtil::Transform(localPosition, worldMatrix);
 }
+
 /// <summary>
 /// GPU Emitterのローカル座標をワールド座標へ変換する。
 /// </summary>
@@ -219,6 +235,193 @@ void DrawEmitterDebugGrid(DebugRenderer& debugRenderer, const ParticleEmitter& e
     debugRenderer.DrawLine3D(TransformEmitterDebugPoint(emitter, { 0.0f, -markerLength, 0.0f }), TransformEmitterDebugPoint(emitter, { 0.0f, markerLength, 0.0f }), { 0.2f, 1.0f, 0.2f, 1.0f });
     debugRenderer.DrawLine3D(TransformEmitterDebugPoint(emitter, { 0.0f, 0.0f, -markerLength }), TransformEmitterDebugPoint(emitter, { 0.0f, 0.0f, markerLength }), { 0.2f, 0.45f, 1.0f, 1.0f });
 }
+
+/// <summary>
+/// ワールド座標の指定2軸平面へ円形ワイヤーを追加する。
+/// </summary>
+void DrawWorldCircleRing(DebugRenderer& debugRenderer, const Math::Vector3& center, const Math::Vector3& axisA, float radiusA, const Math::Vector3& axisB, float radiusB, const Math::Vector4& color)
+{
+    const float safeRadiusA = (std::max)(std::fabs(radiusA), 0.001f); // 1つ目の軸方向の半径
+    const float safeRadiusB = (std::max)(std::fabs(radiusB), 0.001f); // 2つ目の軸方向の半径
+    Math::Vector3 previousPoint = center + axisA * safeRadiusA; // 直前の円周点
+
+    for (int segmentIndex = 1; segmentIndex <= kLevelColliderCircleSegmentCount; ++segmentIndex) {
+        const float rate = static_cast<float>(segmentIndex) / static_cast<float>(kLevelColliderCircleSegmentCount); // 円周上の割合
+        const float angle = rate * 6.28318530718f; // 円周角
+        const float cosValue = std::cos(angle); // 円周上の1軸目成分
+        const float sinValue = std::sin(angle); // 円周上の2軸目成分
+        const Math::Vector3 currentPoint = center + axisA * (cosValue * safeRadiusA) + axisB * (sinValue * safeRadiusB); // 現在の円周点
+        debugRenderer.DrawLine3D(previousPoint, currentPoint, color);
+        previousPoint = currentPoint;
+    }
+}
+
+/// <summary>
+/// ワールド座標の球ワイヤーを追加する。
+/// </summary>
+void DrawWorldSphere(DebugRenderer& debugRenderer, const Math::Vector3& center, float radius, const Math::Vector4& color)
+{
+    DrawWorldCircleRing(debugRenderer, center, { 1.0f, 0.0f, 0.0f }, radius, { 0.0f, 1.0f, 0.0f }, radius, color);
+    DrawWorldCircleRing(debugRenderer, center, { 1.0f, 0.0f, 0.0f }, radius, { 0.0f, 0.0f, 1.0f }, radius, color);
+    DrawWorldCircleRing(debugRenderer, center, { 0.0f, 1.0f, 0.0f }, radius, { 0.0f, 0.0f, 1.0f }, radius, color);
+}
+
+/// <summary>
+/// ワールド座標のカプセルワイヤーを追加する。
+/// </summary>
+void DrawWorldCapsule(DebugRenderer& debugRenderer, const CollisionUtility::Capsule& capsule, const Math::Vector4& color)
+{
+    const float radius = (std::max)(capsule.radius, 0.001f); // カプセル半径
+    const Math::Vector3 segment = capsule.end - capsule.start; // カプセル軸線分
+    const float segmentLength = std::sqrt(segment.x * segment.x + segment.y * segment.y + segment.z * segment.z); // 軸線分の長さ
+    const Math::Vector3 axis = MathUtil::SafeNormalize(segment, { 0.0f, 1.0f, 0.0f }); // カプセル軸方向
+    const Math::Vector3 referenceAxis = std::fabs(axis.y) < 0.9f ? Math::Vector3 { 0.0f, 1.0f, 0.0f } : Math::Vector3 { 1.0f, 0.0f, 0.0f }; // 断面軸を作る参照軸
+    const Math::Vector3 sideAxis = MathUtil::SafeNormalize(CrossVector3(axis, referenceAxis), { 1.0f, 0.0f, 0.0f }); // 断面の横軸
+    const Math::Vector3 upAxis = MathUtil::SafeNormalize(CrossVector3(sideAxis, axis), { 0.0f, 0.0f, 1.0f }); // 断面の縦軸
+    const Math::Vector3 center = (capsule.start + capsule.end) * 0.5f; // カプセル中心
+    const float axisRadius = segmentLength * 0.5f + radius; // 端球を含む軸方向半径
+
+    DrawWorldCircleRing(debugRenderer, capsule.start, sideAxis, radius, upAxis, radius, color);
+    DrawWorldCircleRing(debugRenderer, capsule.end, sideAxis, radius, upAxis, radius, color);
+    DrawWorldCircleRing(debugRenderer, center, sideAxis, radius, axis, axisRadius, color);
+    DrawWorldCircleRing(debugRenderer, center, upAxis, radius, axis, axisRadius, color);
+
+    debugRenderer.DrawLine3D(capsule.start + sideAxis * radius, capsule.end + sideAxis * radius, color);
+    debugRenderer.DrawLine3D(capsule.start - sideAxis * radius, capsule.end - sideAxis * radius, color);
+    debugRenderer.DrawLine3D(capsule.start + upAxis * radius, capsule.end + upAxis * radius, color);
+    debugRenderer.DrawLine3D(capsule.start - upAxis * radius, capsule.end - upAxis * radius, color);
+}
+
+/// <summary>
+/// Object3dが保持しているコライダーをデバッグ描画へ追加する。
+/// </summary>
+void DrawSceneObjectCollider(DebugRenderer& debugRenderer, const Object3d& object3d, bool isColliding)
+{
+    if (!object3d.HasCollider()) {
+        return;
+    }
+
+    const CollisionUtility::Collider& collider = object3d.GetCollider(); // 描画対象のコライダー
+    const Math::Vector4& colliderColor = isColliding ? kLevelColliderHitDebugColor : kLevelColliderDebugColor; // 衝突状態に応じた表示色
+    if (collider.type == CollisionUtility::ColliderType::OBB) {
+        debugRenderer.DrawOBB(collider.obb, colliderColor);
+    } else if (collider.type == CollisionUtility::ColliderType::AABB) {
+        debugRenderer.DrawAABB(collider.aabb.min, collider.aabb.max, colliderColor);
+    } else if (collider.type == CollisionUtility::ColliderType::Sphere) {
+        DrawWorldSphere(debugRenderer, collider.sphere.center, collider.sphere.radius, colliderColor);
+    } else if (collider.type == CollisionUtility::ColliderType::Capsule) {
+        DrawWorldCapsule(debugRenderer, collider.capsule, colliderColor);
+    }
+}
+
+/// <summary>
+/// LevelObjectDataのローカル座標をワールド座標へ変換する。
+/// </summary>
+Math::Vector3 TransformLevelColliderPoint(const LevelObjectData& objectData, const Math::Vector3& localPosition)
+{
+    const Math::Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(objectData.transform.scale, objectData.transform.rotate, objectData.transform.translate); // LevelObjectのワールド行列
+    return MathUtil::Transform(localPosition, worldMatrix);
+}
+
+/// <summary>
+/// LevelObjectDataのBOXコライダーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelColliderBox(DebugRenderer& debugRenderer, const LevelObjectData& objectData, const Math::Vector4& color)
+{
+    const Math::Matrix4x4 worldMatrix = MathUtil::MakeAffineMatrix(objectData.transform.scale, objectData.transform.rotate, objectData.transform.translate); // LevelObjectのワールド行列
+    const Math::Vector3 worldCenter = MathUtil::Transform(objectData.collider.center, worldMatrix); // コライダー中心のワールド座標
+    const Math::Vector3 halfLengths = {
+        objectData.collider.size.x * 0.5f,
+        objectData.collider.size.y * 0.5f,
+        objectData.collider.size.z * 0.5f
+    }; // コライダーの半サイズ
+    Math::Transform colliderTransform = objectData.transform; // コライダー形状へ反映するTransform
+    colliderTransform.translate = worldCenter;
+
+    const CollisionUtility::OBB colliderObb = CollisionUtility::MakeOBBFromTransform(colliderTransform, halfLengths); // 表示用OBB
+    debugRenderer.DrawOBB(colliderObb, color);
+}
+
+/// <summary>
+/// LevelObjectDataのSPHEREコライダー半径をワールド基準で計算する。
+/// </summary>
+float CalculateLevelColliderSphereRadius(const LevelObjectData& objectData)
+{
+    const float diameterX = std::fabs(objectData.collider.size.x * objectData.transform.scale.x); // X方向のワールド直径
+    const float diameterY = std::fabs(objectData.collider.size.y * objectData.transform.scale.y); // Y方向のワールド直径
+    const float diameterZ = std::fabs(objectData.collider.size.z * objectData.transform.scale.z); // Z方向のワールド直径
+    const float diameter = (std::max)((std::max)(diameterX, diameterY), diameterZ); // 球として扱う最大直径
+    return (std::max)(diameter * 0.5f, 0.001f);
+}
+
+/// <summary>
+/// LevelObjectDataのSPHEREコライダーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelColliderSphere(DebugRenderer& debugRenderer, const LevelObjectData& objectData, const Math::Vector4& color)
+{
+    const Math::Vector3 worldCenter = TransformLevelColliderPoint(objectData, objectData.collider.center); // コライダー中心のワールド座標
+    const float radius = CalculateLevelColliderSphereRadius(objectData); // 実体判定と同じ球半径
+    DrawWorldSphere(debugRenderer, worldCenter, radius, color);
+}
+
+/// <summary>
+/// LevelObjectDataのCAPSULEコライダーをワールド基準へ変換する。
+/// </summary>
+CollisionUtility::Capsule BuildLevelColliderCapsule(const LevelObjectData& objectData)
+{
+    const Math::Vector3 worldCenter = TransformLevelColliderPoint(objectData, objectData.collider.center); // コライダー中心のワールド座標
+    const float diameterX = std::fabs(objectData.collider.size.x * objectData.transform.scale.x); // X方向のワールド直径
+    const float diameterZ = std::fabs(objectData.collider.size.z * objectData.transform.scale.z); // Z方向のワールド直径
+    const float radius = (std::max)((std::max)(diameterX, diameterZ) * 0.5f, 0.001f); // カプセル半径
+    const float totalHeight = (std::max)(std::fabs(objectData.collider.size.y * objectData.transform.scale.y), radius * 2.0f); // カプセル全高
+    const float segmentHalfLength = (std::max)(totalHeight * 0.5f - radius, 0.0f); // 球端を除いた軸の半分長さ
+    const Math::Matrix4x4 rotateMatrix = MathUtil::MakeAffineMatrix({ 1.0f, 1.0f, 1.0f }, objectData.transform.rotate, { 0.0f, 0.0f, 0.0f }); // 回転だけを反映する行列
+    const Math::Vector3 capsuleAxis = MathUtil::SafeNormalize(MathUtil::Transform({ 0.0f, 1.0f, 0.0f }, rotateMatrix), { 0.0f, 1.0f, 0.0f }); // カプセル軸のワールド方向
+    CollisionUtility::Capsule capsule {}; // 表示に使うカプセル
+    capsule.start = worldCenter - capsuleAxis * segmentHalfLength;
+    capsule.end = worldCenter + capsuleAxis * segmentHalfLength;
+    capsule.radius = radius;
+    return capsule;
+}
+
+/// <summary>
+/// LevelObjectDataのCAPSULEコライダーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelColliderCapsule(DebugRenderer& debugRenderer, const LevelObjectData& objectData, const Math::Vector4& color)
+{
+    const CollisionUtility::Capsule capsule = BuildLevelColliderCapsule(objectData); // 実体判定と同じカプセル
+    DrawWorldCapsule(debugRenderer, capsule, color);
+}
+
+/// <summary>
+/// LevelObjectDataのコライダーを種別に合わせてデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelObjectCollider(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
+{
+    if (objectData.collider.enabled) {
+        if (objectData.collider.type == "SPHERE") {
+            DrawLevelColliderSphere(debugRenderer, objectData, kLevelColliderDebugColor);
+        } else if (objectData.collider.type == "CAPSULE") {
+            DrawLevelColliderCapsule(debugRenderer, objectData, kLevelColliderDebugColor);
+        } else {
+            DrawLevelColliderBox(debugRenderer, objectData, kLevelColliderDebugColor);
+        }
+    }
+
+    for (const LevelObjectData& childObjectData : objectData.children) {
+        DrawLevelObjectCollider(debugRenderer, childObjectData);
+    }
+}
+
+/// <summary>
+/// LevelData階層内のコライダーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelObjectColliders(DebugRenderer& debugRenderer, const std::vector<LevelObjectData>& objectDataList)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        DrawLevelObjectCollider(debugRenderer, objectData);
+    }
+}
 }
 
 /// <summary>
@@ -258,6 +461,15 @@ void PlayScene::DrawWorldAndParticles()
 
     if (ctx_.debugRenderer) {
         ctx_.debugRenderer->DrawGrid(kDebugGridCenter, kDebugGridHalfLineCount, kDebugGridSpacing, kDebugGridColor);
+        if (!levelData_.objects.empty()) {
+            DrawLevelObjectColliders(*ctx_.debugRenderer, levelData_.objects);
+        } else {
+            for (const auto& object3d : objects3d_) {
+                if (object3d) {
+                    DrawSceneObjectCollider(*ctx_.debugRenderer, *object3d, collisionSystem_.HasCollision(object3d->GetObjectId()));
+                }
+            }
+        }
         DrawEmitterDebugGrid(*ctx_.debugRenderer, pmEmitter_, kHitEmitterDebugRangeColor, kHitEmitterDebugGridColor);
         DrawEmitterDebugGrid(*ctx_.debugRenderer, ringEmitter_, kRingEmitterDebugRangeColor, kRingEmitterDebugGridColor);
         DrawEmitterDebugGrid(*ctx_.debugRenderer, cylinderEmitter_, kCylinderEmitterDebugRangeColor, kCylinderEmitterDebugGridColor);

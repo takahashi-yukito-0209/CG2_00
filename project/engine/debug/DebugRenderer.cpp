@@ -190,6 +190,32 @@ void DebugRenderer::DrawAABB(const Math::Vector3& min, const Math::Vector3& max,
 }
 
 /// <summary>
+/// OBB のワイヤーフレームを追加する。
+/// </summary>
+void DebugRenderer::DrawOBB(const CollisionUtility::OBB& obb, const Math::Vector4& color)
+{
+    const Math::Vector3 corners[] = { // OBB のワールド八隅
+        obb.center + obb.axis[0] * -obb.halfLength[0] + obb.axis[1] * -obb.halfLength[1] + obb.axis[2] * -obb.halfLength[2],
+        obb.center + obb.axis[0] * obb.halfLength[0] + obb.axis[1] * -obb.halfLength[1] + obb.axis[2] * -obb.halfLength[2],
+        obb.center + obb.axis[0] * obb.halfLength[0] + obb.axis[1] * -obb.halfLength[1] + obb.axis[2] * obb.halfLength[2],
+        obb.center + obb.axis[0] * -obb.halfLength[0] + obb.axis[1] * -obb.halfLength[1] + obb.axis[2] * obb.halfLength[2],
+        obb.center + obb.axis[0] * -obb.halfLength[0] + obb.axis[1] * obb.halfLength[1] + obb.axis[2] * -obb.halfLength[2],
+        obb.center + obb.axis[0] * obb.halfLength[0] + obb.axis[1] * obb.halfLength[1] + obb.axis[2] * -obb.halfLength[2],
+        obb.center + obb.axis[0] * obb.halfLength[0] + obb.axis[1] * obb.halfLength[1] + obb.axis[2] * obb.halfLength[2],
+        obb.center + obb.axis[0] * -obb.halfLength[0] + obb.axis[1] * obb.halfLength[1] + obb.axis[2] * obb.halfLength[2],
+    };
+    const int edges[][2] = { // OBB の辺
+        { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
+        { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
+        { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 },
+    };
+
+    for (const auto& edge : edges) {
+        DrawLine3D(corners[edge[0]], corners[edge[1]], color);
+    }
+}
+
+/// <summary>
 /// 2D 矩形のワイヤーフレームを追加する。
 /// </summary>
 void DebugRenderer::DrawRect2D(const Math::Vector2& leftTop, const Math::Vector2& size, const Math::Vector4& color)
