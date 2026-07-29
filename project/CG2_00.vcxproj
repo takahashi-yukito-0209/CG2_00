@@ -246,6 +246,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\scenes\PlayScene.cpp" />
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp" />
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp" />
+    <ClCompile Include="application\scenes\PlaySceneParticle.cpp" />
     <ClCompile Include="application\scenes\PlaySceneEffect.cpp" />
     <ClCompile Include="application\effects\EffectParticleUtility.cpp" />
     <ClCompile Include="application\effects\TimeStopEffect.cpp" />

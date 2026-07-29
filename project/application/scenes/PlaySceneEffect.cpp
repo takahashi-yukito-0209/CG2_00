@@ -1,4 +1,5 @@
 #include "PlayScene.h"
+#include "../../engine/2d/Sprite.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -16,8 +17,10 @@
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace MyEngine;
@@ -45,6 +48,14 @@ constexpr std::array<const char*, 3> kEffectNames = {
     "Time Stop",
 }; // ImGuiで選択できるエフェクト名
 
+constexpr Vector2 kCenteredSpriteAnchor = { 0.5f, 0.5f }; // 中心基準で表示するスプライトのアンカー
+constexpr Vector2 kTemporalSpriteDefaultSize = { 1.0f, 1.0f }; // 時間演出スプライトの初期サイズ
+constexpr Vector4 kHiddenSpriteColor = { 0.0f, 0.0f, 0.0f, 0.0f }; // 非表示状態にするスプライト色
+constexpr int kMaximumTemporalAfterimageCount = 8; // 時空破砕で保持できる最大残像数
+constexpr int kMaximumTimeReversalParticleCount = 128; // 時間逆流で保持できる最大粒子数
+constexpr int kMaximumTimeReversalAfterimageCount = 3; // 1粒子ごとに保持する最大残像数
+constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
+
 
 struct ModelLocalBounds {
     Vector3 center; // モデルローカル空間の境界中心
@@ -53,6 +64,19 @@ struct ModelLocalBounds {
 
 std::unordered_map<std::string, ModelLocalBounds> g_modelLocalBoundsCache; // モデル境界計算のキャッシュ
 
+/// <summary>
+/// 非表示状態の時間演出スプライトを作成する
+/// </summary>
+std::unique_ptr<Sprite> CreateHiddenTemporalSprite(const SceneContext& ctx, const std::string& textureName)
+{
+    auto sprite = std::make_unique<Sprite>(); // 作成する時間演出用スプライト
+    sprite->Initialize(ctx.spriteCommon, textureName, ctx.imguiManager);
+    sprite->SetAnchorPoint(kCenteredSpriteAnchor);
+    sprite->SetSize(kTemporalSpriteDefaultSize);
+    sprite->SetColor(kHiddenSpriteColor);
+    sprite->Update();
+    return sprite;
+}
 /// <summary>
 /// LevelDataの編集履歴を上限つきで追加する。
 /// </summary>
@@ -2101,6 +2125,47 @@ void PlayScene::DrawTimeReversalParticles()
         timeReversalConvergenceSprite_.get());
 }
 
+/// <summary>
+/// 時間演出用スプライトを初期化する
+/// </summary>
+void PlayScene::InitializeTemporalEffectSprites()
+{
+    temporalAfterimageSprites_.reserve(kMaximumTemporalAfterimageCount);
+    timeReversalSprites_.reserve(kMaximumTimeReversalParticleCount);
+    timeReversalAfterimageSprites_.reserve(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount);
+}
+
+/// <summary>
+/// 時空破砕で使用する残像スプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTemporalRiftSprites()
+{
+    while (temporalAfterimageSprites_.size() < kMaximumTemporalAfterimageCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時空破砕の残像表示に使うスプライト
+        temporalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+}
+
+/// <summary>
+/// 時間逆行で使用するスプライトを必要になった時点で作成する。
+/// </summary>
+void PlayScene::EnsureTimeReversalSprites()
+{
+    while (timeReversalSprites_.size() < kMaximumTimeReversalParticleCount) {
+        auto particleSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の粒子表示に使うスプライト
+        timeReversalSprites_.push_back(std::move(particleSprite));
+    }
+
+    const size_t maximumRewindAfterimageSpriteCount = static_cast<size_t>(kMaximumTimeReversalParticleCount * kMaximumTimeReversalAfterimageCount); // 時間逆行の軌跡表示に必要な残像数
+    while (timeReversalAfterimageSprites_.size() < maximumRewindAfterimageSpriteCount) {
+        auto afterimageSprite = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName); // 時間逆行の軌跡表示に使うスプライト
+        timeReversalAfterimageSprites_.push_back(std::move(afterimageSprite));
+    }
+
+    if (!timeReversalConvergenceSprite_) {
+        timeReversalConvergenceSprite_ = CreateHiddenTemporalSprite(ctx_, kCircleFlashTextureName);
+    }
+}
 /// <summary>
 /// 時空破砕エフェクトを開始する
 /// </summary>

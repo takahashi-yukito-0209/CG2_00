@@ -74,16 +74,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
         sceneRenderTarget_.Initialize(ctx_.directXCommon, ctx_.srvManager, CreateTitleSceneRenderTargetDesc(ctx_.directXCommon));
     }
 
-    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
-    if (!particleManager) {
-        particleManager = ParticleManager::GetInstance();
-    }
-
-    if (particleManager) {
-        particleManager->SetParticlePlane(particlePlane_.get());
-        particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
-        particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
-    }
+    RegisterParticleManagerState();
 }
 
 /// <summary>
@@ -209,6 +200,7 @@ void TitleScene::DrawWorldObjects()
 void TitleScene::OnEnter()
 {
     std::cout << "TitleScene OnEnter\n";
+    RegisterParticleManagerState();
 }
 
 /// <summary>
@@ -218,6 +210,29 @@ void TitleScene::OnExit()
 {
     std::cout << "TitleScene OnExit\n";
 }
+
+/// <summary>
+/// ParticleManagerへタイトルシーン用の描画状態を登録する。
+/// </summary>
+void TitleScene::RegisterParticleManagerState()
+{
+    if (!particlePlane_) {
+        return;
+    }
+
+    ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル確認に使う管理クラス
+    if (!particleManager) {
+        particleManager = ParticleManager::GetInstance();
+    }
+
+    if (particleManager) {
+        particleManager->ClearSceneParticles();
+        particleManager->SetParticlePlane(particlePlane_.get());
+        particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
+        particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
+    }
+}
+
 /// <summary>
 /// Scene View用のオフスクリーン描画だけにするか設定する。
 /// </summary>

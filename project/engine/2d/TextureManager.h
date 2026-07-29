@@ -127,6 +127,11 @@ private: // 内部構造体: テクスチャデータ
         Microsoft::WRL::ComPtr<ID3D12Resource> IntermediateResource; // 中間リソース
     };
 
+    /// <summary>
+    /// テクスチャデータが保持するSRVとD3D12リソースを解放予約する
+    /// </summary>
+    void ReleaseTextureData(TextureData& textureData);
+
     // 参照先
     DirectXCommon* dxCommon_ = nullptr; // DirectXCommonへの参照（リソース生成やコマンドリストへのアクセスに使用）
     SrvManager* srvManager_ = nullptr; // SrvManagerへの参照（SRVヒープへのSRV登録に使用）

@@ -206,6 +206,13 @@ DirectXCommon::FrameSyncMode DirectXCommon::GetFrameSyncMode() const
 /// </summary>
 void DirectXCommon::Finalize()
 {
+    if (hasPendingTextureUploads_ && commandQueue_ && fence_ && fenceEvent_) {
+        FlushTextureUploads();
+    } else if (hasPendingTextureUploads_) {
+        textureUploadCommandList_.Reset();
+        textureUploadAllocator_.Reset();
+        hasPendingTextureUploads_ = false;
+    }
 
     // GPU上のコマンドが完了するのを待ってからリソースを破棄する
     // これによりドライバ側のバックグラウンドスレッドが終了するまで待機し
@@ -1552,10 +1559,8 @@ void DirectXCommon::CreateDepthBuffer()
 /// </summary>
 void DirectXCommon::ResizeDepthStencil(uint32_t width, uint32_t height)
 {
-    // 既存の深度リソースを破棄
-    if (depthStencilResource_) {
-        depthStencilResource_.Reset();
-    }
+    // 既存の深度リソースをGPU完了後に解放する
+    DeferReleaseResource(depthStencilResource_);
 
     // 新しいサイズでリソースを作成
     D3D12_RESOURCE_DESC resourceDesc {};

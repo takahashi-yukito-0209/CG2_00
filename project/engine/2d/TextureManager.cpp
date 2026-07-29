@@ -28,8 +28,31 @@ TextureManager* TextureManager::GetInstance()
 /// </summary>
 void TextureManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 {
-    dxCommon_ = dxCommon;
-    srvManager_ = srvManager;
+    dxCommon_ = dxCommon; // テクスチャリソースの生成と遅延解放に使用するDirectX基盤
+    srvManager_ = srvManager; // テクスチャSRVの確保と解放に使用するSRV管理
+}
+
+/// <summary>
+/// テクスチャデータが保持するSRVとD3D12リソースを解放予約する
+/// </summary>
+void TextureManager::ReleaseTextureData(TextureData& textureData)
+{
+    if (srvManager_ && textureData.srvIndex != UINT32_MAX) {
+        srvManager_->Free(textureData.srvIndex);
+    }
+    textureData.srvIndex = UINT32_MAX;
+
+    if (dxCommon_) {
+        dxCommon_->DeferReleaseResource(textureData.Resource);
+        dxCommon_->DeferReleaseResource(textureData.IntermediateResource);
+    } else {
+        textureData.Resource.Reset();
+        textureData.IntermediateResource.Reset();
+    }
+
+    textureData.srvHandleCPU = {}; // 解放後に参照しないCPUハンドル
+    textureData.srvHandleGPU = {}; // 解放後に参照しないGPUハンドル
+    textureData.metadata = {}; // 解放後に参照しないメタデータ
 }
 
 /// <summary>
@@ -37,22 +60,13 @@ void TextureManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager)
 /// </summary>
 void TextureManager::Finalize()
 {
-    if (srvManager_) {
-        for (auto& kv : textureDatas) {
-            TextureData& textureData = kv.second; // 解放対象のテクスチャデータ
-            if (textureData.srvIndex != UINT32_MAX) {
-                srvManager_->Free(textureData.srvIndex);
-                textureData.srvIndex = UINT32_MAX;
-            }
-        }
+    if (dxCommon_) {
+        dxCommon_->FlushTextureUploads();
     }
 
-    if (dxCommon_) {
-        for (auto& kv : textureDatas) {
-            TextureData& textureData = kv.second; // 遅延解放へ渡すテクスチャデータ
-            dxCommon_->DeferReleaseResource(textureData.Resource);
-            dxCommon_->DeferReleaseResource(textureData.IntermediateResource);
-        }
+    for (auto& kv : textureDatas) {
+        TextureData& textureData = kv.second; // 解放対象のテクスチャデータ
+        ReleaseTextureData(textureData);
     }
 
     textureDatas.clear();
@@ -145,10 +159,15 @@ void TextureManager::LoadTexture(const std::string& filePath)
         return;
     }
 
-    TextureData& textureData = textureDatas[storePath];
+    TextureData textureData {}; // 登録前のテクスチャデータ
     textureData.srvIndex = nextIndex;
     textureData.metadata = mipImages.GetMetadata();
     textureData.Resource = DirectXCommon::GetInstance()->CreateTextureResource(textureData.metadata);
+    if (!textureData.Resource) {
+        Logger::Error("ERROR LoadTexture: Failed to create texture resource.\n");
+        ReleaseTextureData(textureData);
+        return;
+    }
 
     if (srvManager_) {
         textureData.srvHandleCPU = srvManager_->GetCPUDescriptorHandle(textureData.srvIndex);
@@ -194,6 +213,11 @@ void TextureManager::LoadTexture(const std::string& filePath)
     textureData.IntermediateResource = DirectXCommon::GetInstance()->UploadTextureData(
         textureData.Resource,
         mipImages);
+    if (!textureData.IntermediateResource) {
+        Logger::Error("ERROR LoadTexture: Failed to upload texture data.\n");
+        ReleaseTextureData(textureData);
+        return;
+    }
 
     DirectXCommon::GetInstance()->GetDevice()->CreateShaderResourceView(
         textureData.Resource.Get(),
@@ -220,6 +244,8 @@ void TextureManager::LoadTexture(const std::string& filePath)
         sprintf_s(buf, "DEBUG LoadTexture: Loaded new texture: %s (SRV Index: %u)\n", storePath.c_str(), textureData.srvIndex);
         Logger::Debug(buf);
     }
+
+    textureDatas.emplace(storePath, std::move(textureData));
 }
 
 /// <summary>
@@ -231,9 +257,13 @@ void TextureManager::ReleaseIntermediateResources()
         dxCommon_->FlushTextureUploads();
     }
 
-    // すべての中間リソースを解放する
     for (auto& kv : textureDatas) {
-        kv.second.IntermediateResource.Reset();
+        TextureData& textureData = kv.second; // 解放対象の中間リソースを持つテクスチャデータ
+        if (dxCommon_) {
+            dxCommon_->DeferReleaseResource(textureData.IntermediateResource);
+        } else {
+            textureData.IntermediateResource.Reset();
+        }
     }
 }
 

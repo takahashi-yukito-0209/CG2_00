@@ -100,6 +100,11 @@ private:
     /// </summary>
     void RebuildSpritePointerView();
 
+    /// <summary>
+    /// ParticleManagerへタイトルシーン用の描画状態を登録する。
+    /// </summary>
+    void RegisterParticleManagerState();
+
 private:
     MyEngine::SceneContext ctx_; // シーンへ渡された共通コンテキスト
     std::vector<std::unique_ptr<MyEngine::Object3d>> objects3d_; // タイトル表示用3Dオブジェクト

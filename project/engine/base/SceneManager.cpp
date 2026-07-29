@@ -1,5 +1,6 @@
 #include "SceneManager.h"
 #include "DirectXCommon.h"
+#include "../particle/ParticleManager.h"
 #include "../utility/Logger.h"
 #include <utility>
 #include <cstddef>
@@ -72,6 +73,7 @@ void SceneManager::Finalize()
         }
     }
     stack_.clear();
+    ClearSceneSharedParticleState();
 }
 
 /// <summary>
@@ -122,6 +124,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene)
         current_->OnExit();
         current_->Finalize();
     }
+    ClearSceneSharedParticleState();
     // 新しいシーンをセットする
     current_ = std::move(newScene);
 
@@ -148,6 +151,7 @@ void SceneManager::PushScene(std::unique_ptr<IScene> newScene)
         current_->OnExit();
         stack_.push_back(std::move(current_));
     }
+    ClearSceneSharedParticleState();
 
     // 新しいシーンをセットして初期化・入場処理を行う
     current_ = std::move(newScene);
@@ -174,6 +178,7 @@ void SceneManager::PopScene()
         current_->Finalize();
         current_.reset();
     }
+    ClearSceneSharedParticleState();
 
     // 初期化済みのシーンをスタックから復帰させる
     current_ = std::move(stack_.back());
@@ -216,6 +221,20 @@ void SceneManager::WaitForGpuBeforeSceneFinalize()
     }
 
     directXCommon->WaitForCommandExecution();
+}
+
+/// <summary>
+/// シーン間で共有されるParticleManagerの登録状態をクリアする。
+/// </summary>
+void SceneManager::ClearSceneSharedParticleState()
+{
+    ParticleManager* particleManager = ctx_.particleManager; // シーン共有のパーティクル登録状態を持つ管理
+    if (!particleManager) {
+        particleManager = ParticleManager::GetInstance();
+    }
+    if (particleManager) {
+        particleManager->ClearSceneParticles();
+    }
 }
 
 } // namespace MyEngine
