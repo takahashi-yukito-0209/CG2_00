@@ -455,11 +455,11 @@ void PlayScene::DrawWorldAndParticles()
     }
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス
-    if (particleManager) {
+    if (!kUsePostEffectPreviewScene && particleManager) {
         particleManager->Draw();
     }
 
-    if (ctx_.debugRenderer) {
+    if (!kUsePostEffectPreviewScene && ctx_.debugRenderer) {
         ctx_.debugRenderer->DrawGrid(kDebugGridCenter, kDebugGridHalfLineCount, kDebugGridSpacing, kDebugGridColor);
         if (!levelData_.objects.empty()) {
             DrawLevelObjectColliders(*ctx_.debugRenderer, levelData_.objects);
@@ -484,7 +484,7 @@ void PlayScene::DrawWorldAndParticles()
 /// </summary>
 void PlayScene::DrawSprites()
 {
-    if (!ctx_.spriteCommon) {
+    if (kUsePostEffectPreviewScene || !ctx_.spriteCommon) {
         return;
     }
 

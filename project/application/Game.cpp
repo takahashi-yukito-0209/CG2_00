@@ -59,6 +59,7 @@ using namespace MyEngine;
 using namespace Math;
 
 namespace {
+constexpr const char* kInitialSceneName = "Play"; // 起動時に最初に表示するシーン名
 constexpr Vector3 kInitialCameraRotate = { 5.9f, -7.43f, 0.0f };
 constexpr Vector3 kInitialCameraTranslate = { 0.0f, 1.0f, -18.0f };
 constexpr Vector4 kWhiteColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 白色
@@ -343,7 +344,7 @@ void Game::InitializeScene()
     };
     impl_->sceneManager->SetContext(sctx);
 
-    auto initial = GameApp::SceneFactory::Create("Title");
+    auto initial = GameApp::SceneFactory::Create(kInitialSceneName);
     if (initial) {
         impl_->sceneManager->ChangeScene(std::move(initial));
     }

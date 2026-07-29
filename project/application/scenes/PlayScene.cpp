@@ -25,6 +25,7 @@ using namespace Math;
 namespace {
 constexpr float kStoppedDeltaTime = 0.0f; // ヒットストップや時間停止中に使用する停止時間
 constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終了したとみなす残り時間
+constexpr float kKeyboardDissolveThreshold = 0.45f; // キー切り替え時に見えやすいDissolve閾値
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
 constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
@@ -45,9 +46,27 @@ struct SceneModelLoadDesc {
     bool loadOnStartup; // PlayScene遷移直後に読み込むか
 };
 
+struct PostProcessShortcutDesc {
+    uint8_t key; // 切り替えに使用するDirectInputキー
+    PostEffectType effectType; // キーに対応するポストエフェクト種別
+};
+
 constexpr std::array<SceneModelLoadDesc, 1> kSceneModelLoadDescs = {
     SceneModelLoadDesc { "sphere/sphere.gltf", true },
 }; // シーンで扱うモデルと起動時ロード設定
+constexpr std::array<PostProcessShortcutDesc, 11> kPostProcessShortcutDescs = {
+    PostProcessShortcutDesc { DIK_0, PostEffectType::Copy },
+    PostProcessShortcutDesc { DIK_1, PostEffectType::Grayscale },
+    PostProcessShortcutDesc { DIK_2, PostEffectType::Vignette },
+    PostProcessShortcutDesc { DIK_3, PostEffectType::BoxFilter },
+    PostProcessShortcutDesc { DIK_4, PostEffectType::GaussianFilter },
+    PostProcessShortcutDesc { DIK_5, PostEffectType::LuminanceOutline },
+    PostProcessShortcutDesc { DIK_6, PostEffectType::DepthOutline },
+    PostProcessShortcutDesc { DIK_7, PostEffectType::RadialBlur },
+    PostProcessShortcutDesc { DIK_8, PostEffectType::Dissolve },
+    PostProcessShortcutDesc { DIK_9, PostEffectType::Random },
+    PostProcessShortcutDesc { DIK_Q, PostEffectType::Distortion },
+}; // Releaseでも使えるポストエフェクト切り替えキー
 constexpr std::array<const char*, 12> kSceneObjectCreateModelNames = {
     "plane/plane.gltf",
     "bunny/bunny.obj",
@@ -1036,9 +1055,11 @@ void PlayScene::Initialize(const SceneContext& ctx)
     LoadSceneTextures();
     InitializeSkyBox();
     InitializeSceneObjects();
-    InitializeParticleObjects();
-    InitializeParticleEffects();
-    InitializeTemporalEffectSprites();
+    if (!kUsePostEffectPreviewScene) {
+        InitializeParticleObjects();
+        InitializeParticleEffects();
+        InitializeTemporalEffectSprites();
+    }
     InitializePostProcessTargets();
 }
 
@@ -1117,6 +1138,44 @@ void PlayScene::HandleEffectStartInput()
 }
 
 /// <summary>
+/// ポストエフェクト切り替え入力を処理する。
+/// </summary>
+void PlayScene::HandlePostProcessShortcutInput()
+{
+    InputManager* inputManager = InputManager::GetInstance(); // ポストエフェクト切り替え入力を取得する入力管理
+    if (!inputManager) {
+        return;
+    }
+
+    for (const PostProcessShortcutDesc& shortcutDesc : kPostProcessShortcutDescs) {
+        if (!inputManager->IsKeyJustPressed(shortcutDesc.key)) {
+            continue;
+        }
+
+        ApplyPostProcessShortcut(shortcutDesc.effectType);
+        return;
+    }
+}
+
+/// <summary>
+/// キー入力で選択されたポストエフェクトを適用する。
+/// </summary>
+void PlayScene::ApplyPostProcessShortcut(PostEffectType effectType)
+{
+    if (!IsValidPostEffectType(effectType)) {
+        return;
+    }
+
+    postProcess_.SetEnabled(true);
+    postProcess_.SetEffectType(effectType);
+    if (effectType == PostEffectType::Dissolve) {
+        postProcess_.SetDissolveThreshold(kKeyboardDissolveThreshold);
+    }
+
+    Logger::Log(std::string("Post effect changed: ") + GetPostEffectTypeName(effectType) + "\n");
+}
+
+/// <summary>
 /// 時間演出とポストプロセスの状態を更新する。
 /// </summary>
 void PlayScene::UpdateTemporalEffects(float deltaTime)
@@ -1166,20 +1225,31 @@ void PlayScene::UpdatePostEffectCenters()
 /// </summary>
 void PlayScene::Update(float dt)
 {
-    HandleEffectStartInput();
-    UpdateTemporalEffects(dt);
+    if (!kUsePostEffectPreviewScene) {
+        HandleEffectStartInput();
+    }
+    HandlePostProcessShortcutInput();
+    if (kUsePostEffectPreviewScene) {
+        postProcess_.Update(dt);
+    } else {
+        UpdateTemporalEffects(dt);
+    }
 
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
-    UpdatePostEffectCenters();
+    if (!kUsePostEffectPreviewScene) {
+        UpdatePostEffectCenters();
+        UpdateParticleSystems(dt);
+    }
 
-    UpdateParticleSystems(dt);
     UpdateSceneObjects(dt);
     UpdateSceneCollisions();
 
-    UpdateAfterimageSprites();
-    UpdateTimeReversalSprites();
+    if (!kUsePostEffectPreviewScene) {
+        UpdateAfterimageSprites();
+        UpdateTimeReversalSprites();
+    }
 }
 
 /// <summary>
@@ -1241,7 +1311,9 @@ void PlayScene::Draw()
 void PlayScene::OnEnter()
 {
     std::cout << "PlayScene OnEnter\n";
-    InitializeParticleManager();
+    if (!kUsePostEffectPreviewScene) {
+        InitializeParticleManager();
+    }
 }
 
 /// <summary>
