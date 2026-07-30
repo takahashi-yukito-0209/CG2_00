@@ -1574,6 +1574,11 @@ void PlayScene::DrawImGui()
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("Evaluation")) {
+            DrawEvaluationControlImGui();
+            ImGui::EndTabItem();
+        }
+
         ImGui::EndTabBar();
     }
 

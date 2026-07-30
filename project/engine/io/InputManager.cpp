@@ -1,15 +1,34 @@
 #include "InputManager.h"
 #include "engine/utility/DebugUtility.h"
 #include "Logger.h"
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "xinput.lib")
 
 using namespace MyEngine;
 
 namespace {
 constexpr uint8_t kInputPressedMask = 0x80; // DirectInputの押下状態を示すビット
+
+/// <summary>
+/// XInputのスティック入力をデッドゾーン込みで正規化する
+/// </summary>
+float NormalizeGamePadStickAxis(SHORT rawValue, SHORT deadZone)
+{
+    const int absoluteValue = std::abs(static_cast<int>(rawValue)); // 符号を除いた入力値
+    if (absoluteValue <= deadZone) {
+        return 0.0f;
+    }
+
+    const int direction = rawValue < 0 ? -1 : 1; // 入力方向
+    const float effectiveValue = static_cast<float>(absoluteValue - deadZone); // デッドゾーンを除いた入力量
+    const float effectiveRange = static_cast<float>(32767 - deadZone); // 正規化に使う有効範囲
+    return static_cast<float>(direction) * std::clamp(effectiveValue / effectiveRange, 0.0f, 1.0f);
+}
 } // namespace
 
 /// <summary>
@@ -32,6 +51,10 @@ bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
     std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態を初期化
     std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を初期化
     std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を初期化
+    std::memset(gamePadStates_, 0, sizeof(gamePadStates_)); // 現在のゲームパッド状態を初期化
+    std::memset(preGamePadStates_, 0, sizeof(preGamePadStates_)); // 前フレームのゲームパッド状態を初期化
+    std::memset(gamePadConnected_, 0, sizeof(gamePadConnected_)); // 現在の接続状態を初期化
+    std::memset(preGamePadConnected_, 0, sizeof(preGamePadConnected_)); // 前フレームの接続状態を初期化
 
     if (!directInput || !hwnd) {
         Logger::Error("InputManager::Initialize failed. directInput or hwnd is null.\n");
@@ -92,21 +115,28 @@ bool InputManager::Initialize(IDirectInput8* directInput, HWND hwnd)
 /// </summary>
 void InputManager::Finalize()
 {
-    // ComPtr を使用しているため、Reset() を呼ぶだけでリソースが解放される
     if (keyboard_) {
         keyboard_->Unacquire(); // 入力停止
         keyboard_.Reset(); // デバイスを解放
     }
 
-    // マウスデバイスも同様に解放
     if (mouse_) {
         mouse_->Unacquire(); // 入力停止
         mouse_.Reset(); // デバイスを解放
     }
+
+    std::memset(keys_, 0, KEY_COUNT); // 現在のキー状態を破棄
+    std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態を破棄
+    std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を破棄
+    std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を破棄
+    std::memset(gamePadStates_, 0, sizeof(gamePadStates_)); // 現在のゲームパッド状態を破棄
+    std::memset(preGamePadStates_, 0, sizeof(preGamePadStates_)); // 前フレームのゲームパッド状態を破棄
+    std::memset(gamePadConnected_, 0, sizeof(gamePadConnected_)); // 現在の接続状態を破棄
+    std::memset(preGamePadConnected_, 0, sizeof(preGamePadConnected_)); // 前フレームの接続状態を破棄
 }
 
 /// <summary>
-/// 毎フレーム呼び出して、キーボード・マウス状態を更新
+/// 毎フレーム呼び出して、キーボード・マウス・ゲームパッド状態を更新する
 /// </summary>
 void InputManager::Update()
 {
@@ -115,25 +145,26 @@ void InputManager::Update()
         std::memset(preKeys_, 0, KEY_COUNT); // 前フレームのキー状態を初期化
         std::memset(&mouseState_, 0, sizeof(mouseState_)); // 現在のマウス状態を初期化
         std::memset(&preMouseState_, 0, sizeof(preMouseState_)); // 前フレームのマウス状態を初期化
-        return;
+    } else {
+        std::memcpy(preKeys_, keys_, KEY_COUNT); // 現在のキー状態を前フレームの状態にコピー
+        if (FAILED(keyboard_->GetDeviceState(KEY_COUNT, keys_))) {
+            keyboard_->Acquire(); // 再取得
+            std::memset(keys_, 0, KEY_COUNT); // 取得に失敗した場合はキー状態をすべて離された状態にする
+        }
+
+        preMouseState_ = mouseState_; // 現在のマウス状態を前フレームの状態にコピー
+        if (FAILED(mouse_->GetDeviceState(sizeof(mouseState_), &mouseState_))) {
+            mouse_->Acquire(); // 再取得
+            std::memset(&mouseState_, 0, sizeof(mouseState_)); // 取得に失敗した場合はマウス状態をすべて初期化する
+        }
     }
 
-    // --- キーボードの状態更新 ---
-    // 前フレームのキー状態を保存
-    std::memcpy(preKeys_, keys_, KEY_COUNT); // 現在のキー状態を前フレームの状態にコピー
-    // デバイスから現在のキー状態を取得
-    if (FAILED(keyboard_->GetDeviceState(KEY_COUNT, keys_))) {
-        keyboard_->Acquire(); // 再取得
-        std::memset(keys_, 0, KEY_COUNT); // 取得に失敗した場合はキー状態をすべて離された状態にする
-    }
-
-    // --- マウスの状態更新 ---
-    // 前フレームのマウス状態を保存
-    preMouseState_ = mouseState_; // 現在のマウス状態を前フレームの状態にコピー
-    // デバイスから現在のマウス状態を取得
-    if (FAILED(mouse_->GetDeviceState(sizeof(mouseState_), &mouseState_))) {
-        mouse_->Acquire(); // 再取得
-        std::memset(&mouseState_, 0, sizeof(mouseState_)); // 取得に失敗した場合はマウス状態をすべて初期化（移動なし、ボタン離された状態）にする
+    for (uint32_t padIndex = 0; padIndex < GAMEPAD_COUNT; ++padIndex) {
+        preGamePadStates_[padIndex] = gamePadStates_[padIndex]; // 現在のパッド状態を前フレームに保存
+        preGamePadConnected_[padIndex] = gamePadConnected_[padIndex]; // 現在の接続状態を前フレームに保存
+        std::memset(&gamePadStates_[padIndex], 0, sizeof(XINPUT_STATE)); // 今フレームの取得先を初期化
+        const DWORD result = XInputGetState(static_cast<DWORD>(padIndex), &gamePadStates_[padIndex]); // XInputから現在状態を取得
+        gamePadConnected_[padIndex] = result == ERROR_SUCCESS;
     }
 }
 
@@ -142,7 +173,6 @@ void InputManager::Update()
 /// </summary>
 bool InputManager::IsKeyPressed(uint8_t key) const
 {
-    // キーが押されている場合、押下状態ビットがセットされる
     return keys_[key] & kInputPressedMask;
 }
 
@@ -151,7 +181,6 @@ bool InputManager::IsKeyPressed(uint8_t key) const
 /// </summary>
 bool InputManager::IsKeyReleased(uint8_t key) const
 {
-    // キーが離されている場合、押下状態ビットがセットされない
     return !(keys_[key] & kInputPressedMask);
 }
 
@@ -160,7 +189,6 @@ bool InputManager::IsKeyReleased(uint8_t key) const
 /// </summary>
 bool InputManager::IsKeyJustPressed(uint8_t key) const
 {
-    // 前フレームでは押されていなくて、現在は押されている場合に true を返す
     return !(preKeys_[key] & kInputPressedMask)
         && (keys_[key] & kInputPressedMask);
 }
@@ -170,14 +198,9 @@ bool InputManager::IsKeyJustPressed(uint8_t key) const
 /// </summary>
 bool InputManager::IsKeyJustReleased(uint8_t key) const
 {
-    // 前フレームでは押されていて、現在は離されている場合に true を返す
     return (preKeys_[key] & kInputPressedMask)
         && !(keys_[key] & kInputPressedMask);
 }
-
-// ------------------------
-// マウス入力関連
-// ------------------------
 
 /// <summary>
 /// マウスボタン番号が有効範囲内か確認する
@@ -189,11 +212,10 @@ bool InputManager::IsValidMouseButton(int button) const
 }
 
 /// <summary>
-/// 指定ボタン（0～7）が押されているか
+/// 指定ボタンが押されているか
 /// </summary>
 bool InputManager::IsMouseButtonPressed(int button) const
 {
-    // 指定されたボタンの状態をチェック。押下状態ビットがセットされている場合は押されている
     return IsValidMouseButton(button) && (mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
@@ -202,7 +224,6 @@ bool InputManager::IsMouseButtonPressed(int button) const
 /// </summary>
 bool InputManager::IsMouseButtonReleased(int button) const
 {
-    // 指定されたボタンの状態をチェック。押下状態ビットがセットされていない場合は離されている
     return !IsValidMouseButton(button) || !(mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
@@ -211,7 +232,6 @@ bool InputManager::IsMouseButtonReleased(int button) const
 /// </summary>
 bool InputManager::IsMouseButtonJustPressed(int button) const
 {
-    // 前フレームの状態と現在の状態を比較して、前フレームでは押されていなくて、現在は押されている場合に true を返す
     return IsValidMouseButton(button)
         && !(preMouseState_.rgbButtons[button] & kInputPressedMask)
         && (mouseState_.rgbButtons[button] & kInputPressedMask);
@@ -222,35 +242,93 @@ bool InputManager::IsMouseButtonJustPressed(int button) const
 /// </summary>
 bool InputManager::IsMouseButtonJustReleased(int button) const
 {
-    // 前フレームの状態と現在の状態を比較して、前フレームでは押されていて、現在は離されている場合に true を返す
     return IsValidMouseButton(button)
         && (preMouseState_.rgbButtons[button] & kInputPressedMask)
         && !(mouseState_.rgbButtons[button] & kInputPressedMask);
 }
 
 /// <summary>
-/// マウスのX軸移動量（フレーム間差分）
+/// マウスのX軸移動量を取得する
 /// </summary>
 long InputManager::GetMouseDeltaX() const
 {
-    // マウスのX軸移動量は、DIMOUSESTATE2構造体のlXメンバに格納されている
     return mouseState_.lX;
 }
 
 /// <summary>
-/// マウスのY軸移動量（フレーム間差分）
+/// マウスのY軸移動量を取得する
 /// </summary>
 long InputManager::GetMouseDeltaY() const
 {
-    // マウスのY軸移動量は、DIMOUSESTATE2構造体のlYメンバに格納されている
     return mouseState_.lY;
 }
 
 /// <summary>
-/// ホイールの回転量（Z軸）
+/// ホイールの回転量を取得する
 /// </summary>
 long InputManager::GetMouseDeltaZ() const
 {
-    // ホイールの回転量は、DIMOUSESTATE2構造体のlZメンバに格納されている
     return mouseState_.lZ;
+}
+
+/// <summary>
+/// ゲームパッド番号が有効範囲内か確認する
+/// </summary>
+bool InputManager::IsValidGamePadIndex(uint32_t padIndex) const
+{
+    return padIndex < GAMEPAD_COUNT;
+}
+
+/// <summary>
+/// 指定したゲームパッドが接続されているか取得する
+/// </summary>
+bool InputManager::IsGamePadConnected(uint32_t padIndex) const
+{
+    return IsValidGamePadIndex(padIndex) && gamePadConnected_[padIndex];
+}
+
+/// <summary>
+/// 指定したゲームパッドボタンが押されているか取得する
+/// </summary>
+bool InputManager::IsGamePadButtonPressed(WORD button, uint32_t padIndex) const
+{
+    return IsGamePadConnected(padIndex) && (gamePadStates_[padIndex].Gamepad.wButtons & button);
+}
+
+/// <summary>
+/// 指定したゲームパッドボタンが押された瞬間か取得する
+/// </summary>
+bool InputManager::IsGamePadButtonJustPressed(WORD button, uint32_t padIndex) const
+{
+    if (!IsGamePadConnected(padIndex)) {
+        return false;
+    }
+
+    const bool wasPressed = preGamePadConnected_[padIndex] && (preGamePadStates_[padIndex].Gamepad.wButtons & button); // 前フレームの押下状態
+    const bool isPressed = gamePadStates_[padIndex].Gamepad.wButtons & button; // 現在の押下状態
+    return !wasPressed && isPressed;
+}
+
+/// <summary>
+/// 左スティックのX軸入力を取得する
+/// </summary>
+float InputManager::GetGamePadLeftStickX(uint32_t padIndex) const
+{
+    if (!IsGamePadConnected(padIndex)) {
+        return 0.0f;
+    }
+
+    return NormalizeGamePadStickAxis(gamePadStates_[padIndex].Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+}
+
+/// <summary>
+/// 左スティックのY軸入力を取得する
+/// </summary>
+float InputManager::GetGamePadLeftStickY(uint32_t padIndex) const
+{
+    if (!IsGamePadConnected(padIndex)) {
+        return 0.0f;
+    }
+
+    return NormalizeGamePadStickAxis(gamePadStates_[padIndex].Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 }

@@ -154,9 +154,34 @@ public: // メンバ関数
     bool SetAnimation(const std::string& filePath);
 
     /// <summary>
+    /// アニメーションを保持しているか取得する
+    /// </summary>
+    bool HasAnimation() const { return hasAnimation_; }
+
+    /// <summary>
     /// アニメーション再生の有効状態を設定する
     /// </summary>
-    void SetAnimationEnabled(bool enabled) { animationEnabled_ = enabled; }
+    void SetAnimationEnabled(bool enabled) { animationEnabled_ = hasAnimation_ && enabled; }
+
+    /// <summary>
+    /// アニメーション再生が有効か取得する
+    /// </summary>
+    bool GetAnimationEnabled() const { return animationEnabled_; }
+
+    /// <summary>
+    /// アニメーション再生速度を設定する
+    /// </summary>
+    void SetAnimationPlaybackSpeed(float playbackSpeed);
+
+    /// <summary>
+    /// アニメーション再生速度を取得する
+    /// </summary>
+    float GetAnimationPlaybackSpeed() const { return animationPlaybackSpeed_; }
+
+    /// <summary>
+    /// アニメーションを先頭へ戻す
+    /// </summary>
+    void ResetAnimation();
 
     /// <summary>
     /// アニメーション再生状態を更新する
