@@ -4,57 +4,35 @@
     "objects": [
         {
             "type": "MESH",
-            "name": "Preview_Terrain",
-            "file_name": "terrain/terrain.obj",
+            "name": "Check_MultiMesh",
+            "file_name": "multiMesh/multiMesh.obj",
             "transform": {
                 "translation": [
+                    -5.5,
                     0.0,
-                    -1.0,
-                    3.0
+                    1.8
                 ],
                 "rotation": [
                     0.0,
-                    0.0,
+                    25.0,
                     0.0
                 ],
                 "scaling": [
-                    1.0,
-                    1.0,
-                    1.0
+                    1.2,
+                    1.2,
+                    1.2
                 ]
             }
         },
         {
             "type": "MESH",
-            "name": "Preview_Sphere_Front",
-            "file_name": "sphere/sphere.gltf",
+            "name": "Check_MultiMaterial",
+            "file_name": "multiMaterial/multiMaterial.obj",
             "transform": {
                 "translation": [
-                    -3.2,
-                    0.2,
-                    0.0
-                ],
-                "rotation": [
+                    5.2,
                     0.0,
-                    0.0,
-                    0.0
-                ],
-                "scaling": [
-                    1.3,
-                    1.3,
-                    1.3
-                ]
-            }
-        },
-        {
-            "type": "MESH",
-            "name": "Preview_Teapot_Center",
-            "file_name": "teapot/teapot.obj",
-            "transform": {
-                "translation": [
-                    0.0,
-                    -0.4,
-                    2.2
+                    1.8
                 ],
                 "rotation": [
                     0.0,
@@ -62,75 +40,75 @@
                     0.0
                 ],
                 "scaling": [
-                    2.0,
-                    2.0,
-                    2.0
-                ]
-            }
-        },
-        {
-            "type": "MESH",
-            "name": "Preview_Bunny_Right",
-            "file_name": "bunny/bunny.obj",
-            "transform": {
-                "translation": [
-                    3.0,
-                    -1.0,
-                    3.8
-                ],
-                "rotation": [
-                    0.0,
-                    30.0,
-                    0.0
-                ],
-                "scaling": [
-                    1.6,
-                    1.6,
-                    1.6
-                ]
-            }
-        },
-        {
-            "type": "MESH",
-            "name": "Preview_Cube_BackLeft",
-            "file_name": "cube/Cube.obj",
-            "transform": {
-                "translation": [
-                    -4.2,
-                    0.2,
-                    5.5
-                ],
-                "rotation": [
-                    12.0,
-                    -35.0,
-                    0.0
-                ],
-                "scaling": [
-                    1.4,
-                    1.4,
-                    1.4
-                ]
-            }
-        },
-        {
-            "type": "MESH",
-            "name": "Preview_Fence_Back",
-            "file_name": "fence/fence.obj",
-            "transform": {
-                "translation": [
-                    1.0,
-                    0.0,
-                    6.5
-                ],
-                "rotation": [
-                    0.0,
-                    55.0,
-                    0.0
-                ],
-                "scaling": [
                     1.2,
                     1.2,
                     1.2
+                ]
+            }
+        },
+        {
+            "type": "MESH",
+            "name": "Check_SimpleSkin",
+            "file_name": "simpleSkin/simpleSkin.gltf",
+            "transform": {
+                "translation": [
+                    -2.2,
+                    0.0,
+                    -1.8
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scaling": [
+                    3.0,
+                    3.0,
+                    3.0
+                ]
+            }
+        },
+        {
+            "type": "MESH",
+            "name": "Check_WalkAnimation",
+            "file_name": "human/walk.gltf",
+            "transform": {
+                "translation": [
+                    1.4,
+                    0.0,
+                    -1.8
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scaling": [
+                    3.0,
+                    3.0,
+                    3.0
+                ]
+            }
+        },
+        {
+            "type": "MESH",
+            "name": "Check_SneakWalkAnimation",
+            "file_name": "human/sneakWalk.gltf",
+            "transform": {
+                "translation": [
+                    4.5,
+                    0.0,
+                    -1.8
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scaling": [
+                    3.0,
+                    3.0,
+                    3.0
                 ]
             }
         }

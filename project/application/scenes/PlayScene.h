@@ -244,6 +244,46 @@ private:
     void HandlePostProcessShortcutInput();
 
     /// <summary>
+    /// 評価確認用のアニメーション操作入力を処理する。
+    /// </summary>
+    void HandleEvaluationAnimationInput();
+
+    /// <summary>
+    /// 評価確認用のSkinningモデル移動入力を処理する。
+    /// </summary>
+    void HandleSkinningModelControlInput(float deltaTime);
+
+    /// <summary>
+    /// 評価確認用に操作するSkinningモデルを取得する。
+    /// </summary>
+    MyEngine::Object3d* FindEvaluationSkinningControlObject() const;
+
+    /// <summary>
+    /// シーン内アニメーションの再生有効状態をまとめて設定する。
+    /// </summary>
+    void SetSceneAnimationEnabled(bool enabled);
+
+    /// <summary>
+    /// シーン内アニメーションの再生有効状態を切り替える。
+    /// </summary>
+    void ToggleSceneAnimationEnabled();
+
+    /// <summary>
+    /// シーン内アニメーションの再生速度をまとめて変更する。
+    /// </summary>
+    void AdjustSceneAnimationPlaybackSpeed(float speedDelta);
+
+    /// <summary>
+    /// シーン内アニメーションを先頭へ戻す。
+    /// </summary>
+    void ResetSceneAnimations();
+
+    /// <summary>
+    /// 評価確認用操作のImGuiを描画する。
+    /// </summary>
+    void DrawEvaluationControlImGui();
+
+    /// <summary>
     /// キー入力で選択されたポストエフェクトを適用する。
     /// </summary>
     void ApplyPostProcessShortcut(MyEngine::PostEffectType effectType);

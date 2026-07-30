@@ -964,6 +964,26 @@ bool Object3d::SetAnimation(const std::string& filePath)
 }
 
 /// <summary>
+/// アニメーション再生速度を設定する
+/// </summary>
+void Object3d::SetAnimationPlaybackSpeed(float playbackSpeed)
+{
+    animationPlaybackSpeed_ = std::clamp(playbackSpeed, 0.0f, 10.0f);
+}
+
+/// <summary>
+/// アニメーションを先頭へ戻す
+/// </summary>
+void Object3d::ResetAnimation()
+{
+    if (!hasAnimation_) {
+        return;
+    }
+
+    animationTime_ = 0.0f;
+    ApplyAnimationAtCurrentTime();
+}
+/// <summary>
 /// アニメーション再生状態を更新する
 /// </summary>
 void Object3d::UpdateAnimation(float deltaTime)
