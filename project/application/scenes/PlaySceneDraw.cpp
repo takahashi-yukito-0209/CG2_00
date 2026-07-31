@@ -29,6 +29,9 @@ constexpr Math::Vector4 kGpuEmitterDebugRangeColor = { 0.75f, 0.35f, 1.0f, 1.0f 
 constexpr Math::Vector4 kGpuEmitterDebugGridColor = { 0.6f, 0.25f, 1.0f, 0.65f }; // GPU Emitter補助線の色
 constexpr Math::Vector4 kLevelColliderDebugColor = { 0.2f, 1.0f, 0.95f, 1.0f }; // レベルコライダーの表示色
 constexpr Math::Vector4 kLevelColliderHitDebugColor = { 1.0f, 0.25f, 0.2f, 1.0f }; // 衝突中コライダーの表示色
+constexpr Math::Vector4 kLevelSpawnPointDebugColor = { 0.2f, 1.0f, 0.35f, 1.0f }; // スポーン地点の表示色
+constexpr Math::Vector4 kLevelEventTriggerDebugColor = { 1.0f, 0.85f, 0.2f, 1.0f }; // イベントトリガーの表示色
+constexpr Math::Vector4 kLevelCameraStartDebugColor = { 0.35f, 0.6f, 1.0f, 1.0f }; // 開始カメラの表示色
 constexpr uint32_t kGpuSpawnShapeSphere = 0; // GPU Emitterの球形状番号
 constexpr uint32_t kGpuSpawnShapeBox = 1; // GPU Emitterの箱形状番号
 constexpr uint32_t kGpuSpawnShapeRing = 2; // GPU Emitterのリング形状番号
@@ -47,6 +50,7 @@ Math::Vector3 CrossVector3(const Math::Vector3& a, const Math::Vector3& b)
         a.x * b.y - a.y * b.x
     };
 }
+
 /// <summary>
 /// ローカル座標をエミッターのSRTでワールド座標へ変換する。
 /// </summary>
@@ -394,10 +398,73 @@ void DrawLevelColliderCapsule(DebugRenderer& debugRenderer, const LevelObjectDat
 }
 
 /// <summary>
+/// LevelObjectDataのスポーン地点マーカーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelSpawnPointMarker(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
+{
+    constexpr float kMarkerLength = 0.45f; // スポーン地点マーカーの長さ
+    const Math::Vector3 center = objectData.transform.translate; // スポーン地点のワールド座標
+    debugRenderer.DrawLine3D(center + Math::Vector3 { -kMarkerLength, 0.0f, 0.0f }, center + Math::Vector3 { kMarkerLength, 0.0f, 0.0f }, kLevelSpawnPointDebugColor);
+    debugRenderer.DrawLine3D(center + Math::Vector3 { 0.0f, -kMarkerLength, 0.0f }, center + Math::Vector3 { 0.0f, kMarkerLength, 0.0f }, kLevelSpawnPointDebugColor);
+    debugRenderer.DrawLine3D(center + Math::Vector3 { 0.0f, 0.0f, -kMarkerLength }, center + Math::Vector3 { 0.0f, 0.0f, kMarkerLength }, kLevelSpawnPointDebugColor);
+}
+
+/// <summary>
+/// LevelObjectDataのイベントトリガー範囲をデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelEventTrigger(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
+{
+    Math::Transform triggerTransform = objectData.transform; // イベントトリガー表示に使うTransform
+    const Math::Vector3 halfLengths = {
+        objectData.eventTrigger.size.x * 0.5f,
+        objectData.eventTrigger.size.y * 0.5f,
+        objectData.eventTrigger.size.z * 0.5f
+    }; // イベントトリガーの半サイズ
+    const CollisionUtility::OBB triggerObb = CollisionUtility::MakeOBBFromTransform(triggerTransform, halfLengths); // 表示用OBB
+    debugRenderer.DrawOBB(triggerObb, kLevelEventTriggerDebugColor);
+}
+
+/// <summary>
+/// LevelObjectDataの開始カメラマーカーをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelCameraStartMarker(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
+{
+    constexpr float kForwardLength = 0.8f; // カメラ前方向マーカーの長さ
+    constexpr float kSideLength = 0.3f; // カメラ横方向マーカーの長さ
+    const Math::Matrix4x4 rotateMatrix = MathUtil::MakeAffineMatrix({ 1.0f, 1.0f, 1.0f }, objectData.transform.rotate, { 0.0f, 0.0f, 0.0f }); // カメラ回転行列
+    const Math::Vector3 center = objectData.transform.translate; // 開始カメラのワールド座標
+    const Math::Vector3 forward = MathUtil::SafeNormalize(MathUtil::Transform({ 0.0f, 0.0f, 1.0f }, rotateMatrix), { 0.0f, 0.0f, 1.0f }); // カメラ前方向
+    debugRenderer.DrawLine3D(center, center + forward * kForwardLength, kLevelCameraStartDebugColor);
+    debugRenderer.DrawLine3D(center + Math::Vector3 { -kSideLength, 0.0f, 0.0f }, center + Math::Vector3 { kSideLength, 0.0f, 0.0f }, kLevelCameraStartDebugColor);
+    debugRenderer.DrawLine3D(center + Math::Vector3 { 0.0f, -kSideLength, 0.0f }, center + Math::Vector3 { 0.0f, kSideLength, 0.0f }, kLevelCameraStartDebugColor);
+}
+
+/// <summary>
+/// LevelObjectDataのゲーム用メタ情報をデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelObjectMetadata(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
+{
+    if (objectData.spawnPoint) {
+        DrawLevelSpawnPointMarker(debugRenderer, objectData);
+    }
+    if (objectData.eventTrigger.enabled) {
+        DrawLevelEventTrigger(debugRenderer, objectData);
+    }
+    if (objectData.cameraStart) {
+        DrawLevelCameraStartMarker(debugRenderer, objectData);
+    }
+}
+
+/// <summary>
 /// LevelObjectDataのコライダーを種別に合わせてデバッグ描画へ追加する。
 /// </summary>
 void DrawLevelObjectCollider(DebugRenderer& debugRenderer, const LevelObjectData& objectData)
 {
+    if (!objectData.enabled) {
+        return;
+    }
+
+    DrawLevelObjectMetadata(debugRenderer, objectData);
     if (objectData.collider.enabled) {
         if (objectData.collider.type == "SPHERE") {
             DrawLevelColliderSphere(debugRenderer, objectData, kLevelColliderDebugColor);
@@ -420,6 +487,22 @@ void DrawLevelObjectColliders(DebugRenderer& debugRenderer, const std::vector<Le
 {
     for (const LevelObjectData& objectData : objectDataList) {
         DrawLevelObjectCollider(debugRenderer, objectData);
+    }
+}
+
+/// <summary>
+/// LevelData階層内のゲーム用メタ情報だけをデバッグ描画へ追加する。
+/// </summary>
+void DrawLevelObjectMetadataMarkers(DebugRenderer& debugRenderer, const std::vector<LevelObjectData>& objectDataList)
+{
+    for (const LevelObjectData& objectData : objectDataList) {
+        if (!objectData.enabled) {
+            continue;
+        }
+        DrawLevelObjectMetadata(debugRenderer, objectData);
+        if (!objectData.children.empty()) {
+            DrawLevelObjectMetadataMarkers(debugRenderer, objectData.children);
+        }
     }
 }
 }
@@ -459,22 +542,25 @@ void PlayScene::DrawWorldAndParticles()
         particleManager->Draw();
     }
 
-    if (!kUsePostEffectPreviewScene && ctx_.debugRenderer) {
-        ctx_.debugRenderer->DrawGrid(kDebugGridCenter, kDebugGridHalfLineCount, kDebugGridSpacing, kDebugGridColor);
+    if (ctx_.debugRenderer) {
+        if (!kUsePostEffectPreviewScene) {
+            ctx_.debugRenderer->DrawGrid(kDebugGridCenter, kDebugGridHalfLineCount, kDebugGridSpacing, kDebugGridColor);
+        }
         if (!levelData_.objects.empty()) {
-            DrawLevelObjectColliders(*ctx_.debugRenderer, levelData_.objects);
-        } else {
-            for (const auto& object3d : objects3d_) {
-                if (object3d) {
-                    DrawSceneObjectCollider(*ctx_.debugRenderer, *object3d, collisionSystem_.HasCollision(object3d->GetObjectId()));
-                }
+            DrawLevelObjectMetadataMarkers(*ctx_.debugRenderer, levelData_.objects);
+        }
+        for (const auto& object3d : objects3d_) {
+            if (object3d) {
+                DrawSceneObjectCollider(*ctx_.debugRenderer, *object3d, collisionSystem_.HasCollision(object3d->GetObjectId()));
             }
         }
-        DrawEmitterDebugGrid(*ctx_.debugRenderer, pmEmitter_, kHitEmitterDebugRangeColor, kHitEmitterDebugGridColor);
-        DrawEmitterDebugGrid(*ctx_.debugRenderer, ringEmitter_, kRingEmitterDebugRangeColor, kRingEmitterDebugGridColor);
-        DrawEmitterDebugGrid(*ctx_.debugRenderer, cylinderEmitter_, kCylinderEmitterDebugRangeColor, kCylinderEmitterDebugGridColor);
-        if (particleManager && particleManager->GetGpuEmitterState()) {
-            DrawGpuEmitterDebugRange(*ctx_.debugRenderer, *particleManager->GetGpuEmitterState());
+        if (!kUsePostEffectPreviewScene) {
+            DrawEmitterDebugGrid(*ctx_.debugRenderer, pmEmitter_, kHitEmitterDebugRangeColor, kHitEmitterDebugGridColor);
+            DrawEmitterDebugGrid(*ctx_.debugRenderer, ringEmitter_, kRingEmitterDebugRangeColor, kRingEmitterDebugGridColor);
+            DrawEmitterDebugGrid(*ctx_.debugRenderer, cylinderEmitter_, kCylinderEmitterDebugRangeColor, kCylinderEmitterDebugGridColor);
+            if (particleManager && particleManager->GetGpuEmitterState()) {
+                DrawGpuEmitterDebugRange(*ctx_.debugRenderer, *particleManager->GetGpuEmitterState());
+            }
         }
     }
 }
