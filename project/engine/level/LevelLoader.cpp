@@ -77,6 +77,24 @@ bool ReadIntMember(const JsonDocument& object, const char* name, int& value)
 }
 
 /// <summary>
+/// JSONメンバーからbool値を取得する。
+/// </summary>
+bool ReadBoolMember(const JsonDocument& object, const char* name, bool& value)
+{
+    if (!object.is_object()) {
+        return false;
+    }
+
+    const auto member = object.find(name); // 読み取るJSONメンバー
+    if (member == object.end() || !member->is_boolean()) {
+        return false;
+    }
+
+    value = member->get<bool>();
+    return true;
+}
+
+/// <summary>
 /// JSON上のコライダー種別をエンジンで扱える種別へ正規化する。
 /// </summary>
 std::string NormalizeLevelColliderType(const std::string& colliderType)
@@ -322,6 +340,42 @@ bool ReadTransform(const JsonDocument& object, const std::string& objectPath, Ma
 }
 
 /// <summary>
+/// JSONのevent_triggerオブジェクトからイベントトリガー情報を読み込む。
+/// </summary>
+bool ReadEventTrigger(const JsonDocument& object, const std::string& objectPath, LevelEventTriggerData& eventTrigger, std::string* errorMessage)
+{
+    eventTrigger = {};
+    if (!object.is_object()) {
+        return true;
+    }
+
+    const auto triggerObject = object.find("event_trigger"); // event_triggerメンバー
+    const std::string triggerPath = BuildMemberPath(objectPath, "event_trigger"); // エラー表示用パス
+    if (triggerObject == object.end()) {
+        return true;
+    }
+    if (!triggerObject->is_object()) {
+        SetLoadError(errorMessage, triggerPath + " must be object.");
+        return false;
+    }
+
+    eventTrigger.enabled = true;
+    ReadBoolMember(*triggerObject, "enabled", eventTrigger.enabled);
+    ReadStringMember(*triggerObject, "event_name", eventTrigger.eventName);
+
+    const auto sizeMember = triggerObject->find("size"); // sizeメンバー
+    if (sizeMember != triggerObject->end()) {
+        if (!ReadVector3Value(*sizeMember, eventTrigger.size)) {
+            SetLoadError(errorMessage, BuildMemberPath(triggerPath, "size") + " must be array of 3 numbers.");
+            return false;
+        }
+        eventTrigger.size = SanitizeLevelColliderSize("BOX", eventTrigger.size);
+    }
+
+    return true;
+}
+
+/// <summary>
 /// JSONのcolliderオブジェクトからコライダー情報を読み込む。
 /// </summary>
 bool ReadCollider(const JsonDocument& object, const std::string& objectPath, LevelColliderData& collider, std::string* errorMessage)
@@ -387,15 +441,24 @@ bool ReadObjectData(const JsonDocument& object, const std::string& objectPath, L
         return false;
     }
 
+    ReadBoolMember(object, "enabled", objectData.enabled);
+    bool disabled = false; // 互換用の無効フラグ
+    if (ReadBoolMember(object, "disabled", disabled) && disabled) {
+        objectData.enabled = false;
+    }
     ReadStringMember(object, "name", objectData.name);
     ReadStringMember(object, "file_name", objectData.fileName);
     ReadStringMember(object, "prefab_source", objectData.prefabSource);
+    ReadStringMember(object, "tag", objectData.tag);
+    ReadBoolMember(object, "spawn_point", objectData.spawnPoint);
+    ReadBoolMember(object, "camera_start", objectData.cameraStart);
     if (!ReadTransform(object, objectPath, objectData.localTransform, errorMessage)) {
         return false;
     }
 
     objectData.transform = objectData.localTransform;
-    if (!ReadCollider(object, objectPath, objectData.collider, errorMessage)) {
+    if (!ReadCollider(object, objectPath, objectData.collider, errorMessage)
+        || !ReadEventTrigger(object, objectPath, objectData.eventTrigger, errorMessage)) {
         return false;
     }
 

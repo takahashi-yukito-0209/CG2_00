@@ -1,116 +1,317 @@
 {
-    "schema_version": 3,
     "name": "scene",
     "objects": [
         {
-            "type": "MESH",
-            "name": "Check_MultiMesh",
-            "file_name": "multiMesh/multiMesh.obj",
-            "transform": {
-                "translation": [
-                    -5.5,
+            "collider": {
+                "center": [
+                    -0.0,
                     0.0,
-                    1.8
+                    0.0
                 ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": true,
+            "file_name": "block/block.obj",
+            "name": "Block_Floor",
+            "tag": "Ground",
+            "transform": {
                 "rotation": [
                     0.0,
+                    65.31718444824219,
+                    -0.0
+                ],
+                "scaling": [
+                    7.260000228881836,
+                    0.25,
+                    8.0
+                ],
+                "translation": [
+                    -3.0,
+                    1.232763648033142,
+                    0.0
+                ]
+            },
+            "type": "MESH"
+        },
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": true,
+            "file_name": "block/block.obj",
+            "name": "Block_Left",
+            "tag": "Wall",
+            "transform": {
+                "rotation": [
+                    -6.77240514755249,
+                    -25.783082962036133,
+                    -0.0
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    -1.6810414791107178,
+                    1.0741358995437622,
+                    -0.6724148392677307
+                ]
+            },
+            "type": "MESH"
+        },
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": true,
+            "file_name": "block/block.obj",
+            "name": "Block_Right",
+            "tag": "Wall",
+            "transform": {
+                "rotation": [
+                    0.0,
+                    -20.0,
+                    -0.0
+                ],
+                "scaling": [
+                    1.399999976158142,
+                    1.399999976158142,
+                    1.399999976158142
+                ],
+                "translation": [
+                    2.799999952316284,
+                    0.800000011920929,
+                    -1.5
+                ]
+            },
+            "type": "MESH"
+        },
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": true,
+            "file_name": "block/block.obj",
+            "name": "Block_Tall",
+            "tag": "Landmark",
+            "transform": {
+                "rotation": [
+                    0.0,
+                    45.0,
+                    -0.0
+                ],
+                "scaling": [
+                    1.0,
+                    3.0,
+                    1.0
+                ],
+                "translation": [
+                    -0.0,
+                    1.5,
+                    2.200000047683716
+                ]
+            },
+            "type": "MESH"
+        },
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": true,
+            "file_name": "block/block.obj",
+            "name": "Block_Ramp_View",
+            "tag": "Ramp",
+            "transform": {
+                "rotation": [
                     25.0,
-                    0.0
+                    35.0,
+                    -0.0
                 ],
                 "scaling": [
-                    1.2,
-                    1.2,
-                    1.2
+                    1.7999999523162842,
+                    0.5,
+                    1.2000000476837158
+                ],
+                "translation": [
+                    -0.800000011920929,
+                    1.161857008934021,
+                    -3.0
                 ]
-            }
+            },
+            "type": "MESH"
         },
         {
-            "type": "MESH",
-            "name": "Check_MultiMaterial",
-            "file_name": "multiMaterial/multiMaterial.obj",
+            "enabled": true,
+            "file_name": "",
+            "name": "Spawn_Player",
+            "spawn_point": true,
+            "tag": "PlayerSpawn",
             "transform": {
-                "translation": [
-                    5.2,
-                    0.0,
-                    1.8
-                ],
-                "rotation": [
-                    0.0,
-                    -25.0,
-                    0.0
-                ],
-                "scaling": [
-                    1.2,
-                    1.2,
-                    1.2
-                ]
-            }
-        },
-        {
-            "type": "MESH",
-            "name": "Check_SimpleSkin",
-            "file_name": "simpleSkin/simpleSkin.gltf",
-            "transform": {
-                "translation": [
-                    -2.2,
-                    0.0,
-                    -1.8
-                ],
                 "rotation": [
                     0.0,
                     0.0,
                     0.0
                 ],
                 "scaling": [
-                    3.0,
-                    3.0,
-                    3.0
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    0.5,
+                    -4.0
                 ]
-            }
+            },
+            "type": "EMPTY"
         },
         {
-            "type": "MESH",
-            "name": "Check_WalkAnimation",
-            "file_name": "human/walk.gltf",
+            "enabled": true,
+            "event_trigger": {
+                "enabled": true,
+                "event_name": "DemoTrigger",
+                "size": [
+                    2.0,
+                    1.0,
+                    2.0
+                ]
+            },
+            "file_name": "",
+            "name": "Trigger_Demo",
+            "tag": "DemoTrigger",
             "transform": {
-                "translation": [
-                    1.4,
-                    0.0,
-                    -1.8
-                ],
                 "rotation": [
                     0.0,
                     0.0,
                     0.0
                 ],
                 "scaling": [
-                    3.0,
-                    3.0,
-                    3.0
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    0.5,
+                    -1.0
                 ]
-            }
+            },
+            "type": "EMPTY"
         },
         {
-            "type": "MESH",
-            "name": "Check_SneakWalkAnimation",
-            "file_name": "human/sneakWalk.gltf",
+            "camera_start": true,
+            "enabled": true,
+            "file_name": "",
+            "name": "Camera_Start",
+            "tag": "StartCamera",
             "transform": {
-                "translation": [
-                    4.5,
-                    0.0,
-                    -1.8
+                "rotation": [
+                    -38.8580207824707,
+                    -269.2900695800781,
+                    -0.0
                 ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    -0.0,
+                    3.0,
+                    -21.0
+                ]
+            },
+            "type": "EMPTY"
+        },
+        {
+            "collider": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "enabled": true,
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "type": "BOX"
+            },
+            "enabled": false,
+            "file_name": "block/block.obj",
+            "name": "Disabled_Block_Sample",
+            "tag": "DisabledSample",
+            "transform": {
                 "rotation": [
                     0.0,
                     0.0,
                     0.0
                 ],
                 "scaling": [
-                    3.0,
-                    3.0,
-                    3.0
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    0.800000011920929,
+                    4.0
                 ]
-            }
+            },
+            "type": "MESH"
         }
-    ]
+    ],
+    "schema_version": 4
 }

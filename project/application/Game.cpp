@@ -78,6 +78,8 @@ constexpr float kInitialDebugCameraWidth = 1280.0f;
 constexpr float kInitialDebugCameraHeight = 720.0f;
 constexpr float kDefaultCameraRotateSpeed = 0.01f;
 constexpr float kDefaultCameraZoomSpeed = 0.05f;
+constexpr int kMouseButtonLeft = 0; // 左マウスボタン番号
+constexpr int kMouseButtonMiddle = 2; // 中マウスボタン番号
 constexpr float kFixedDeltaTime = 1.0f / 60.0f;
 constexpr size_t kLogDateBufferSize = 32;
 constexpr size_t kDebugCameraLogBufferSize = 128;
@@ -422,16 +424,23 @@ void Game::Update()
 #else
         const bool canUseCameraInput = true;
 #endif
-        const bool isLeftDragging = canUseCameraInput && input->IsMouseButtonPressed(0) && (deltaX != 0 || deltaY != 0);
-        const bool isWheelZoom = canUseCameraInput && wheelDelta != 0;
+        const bool isLeftDragging = canUseCameraInput && input->IsMouseButtonPressed(kMouseButtonLeft) && (deltaX != 0 || deltaY != 0);
+        const bool isWheelMoving = canUseCameraInput && wheelDelta != 0; // ホイールによるカメラ移動があるか
+        const bool isMiddleButtonPressed = input->IsMouseButtonPressed(kMouseButtonMiddle); // 中ボタン押し込み中か
         const bool useDebugRender = impl_->object3dCommon ? impl_->object3dCommon->GetUseDebugCameraForRender() : impl_->useDebugCameraForRender;
 
         if (useDebugRender) {
             if (isLeftDragging) {
                 impl_->debugCamera.OnMouseDrag(static_cast<float>(deltaX), static_cast<float>(deltaY));
             }
-            if (isWheelZoom) {
-                impl_->debugCamera.OnMouseWheel(static_cast<float>(wheelDelta));
+            if (isWheelMoving) {
+                if (isMiddleButtonPressed) {
+                    Vector3 cameraTranslate = impl_->debugCamera.GetTranslation(); // デバッグカメラの現在位置
+                    cameraTranslate.y += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
+                    impl_->debugCamera.SetTranslation(cameraTranslate);
+                } else {
+                    impl_->debugCamera.OnMouseWheel(static_cast<float>(wheelDelta));
+                }
             }
             impl_->debugCamera.Update();
         } else if (impl_->camera) {
@@ -443,9 +452,13 @@ void Game::Update()
                 impl_->camera->SetRotate(cameraRotate);
                 cameraChanged = true;
             }
-            if (isWheelZoom) {
-                Vector3 cameraTranslate = impl_->camera->GetTranslate();
-                cameraTranslate.z += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
+            if (isWheelMoving) {
+                Vector3 cameraTranslate = impl_->camera->GetTranslate(); // 通常カメラの現在位置
+                if (isMiddleButtonPressed) {
+                    cameraTranslate.y += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
+                } else {
+                    cameraTranslate.z += static_cast<float>(wheelDelta) * kDefaultCameraZoomSpeed;
+                }
                 impl_->camera->SetTranslate(cameraTranslate);
                 cameraChanged = true;
             }

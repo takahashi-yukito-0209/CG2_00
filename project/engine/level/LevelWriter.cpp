@@ -202,20 +202,45 @@ JsonDocument WriteCollider(const LevelColliderData& collider)
 }
 
 /// <summary>
+/// イベントトリガー情報をBlenderレベルJSON形式へ変換する。
+/// </summary>
+JsonDocument WriteEventTrigger(const LevelEventTriggerData& eventTrigger)
+{
+    JsonDocument triggerObject = JsonDocument::object(); // event_triggerメンバーへ書き込むJSONオブジェクト
+    triggerObject["enabled"] = eventTrigger.enabled;
+    triggerObject["event_name"] = eventTrigger.eventName;
+    triggerObject["size"] = WriteVector3(SanitizeLevelColliderSize("BOX", eventTrigger.size));
+    return triggerObject;
+}
+
+/// <summary>
 /// レベルオブジェクト1件を親子階層つきのBlenderレベルJSON形式へ変換する。
 /// </summary>
 JsonDocument WriteObject(const LevelObjectData& objectData)
 {
     JsonDocument object = JsonDocument::object(); // オブジェクト1件分のJSON
+    object["enabled"] = objectData.enabled;
     object["type"] = objectData.type;
     object["name"] = objectData.name;
     object["file_name"] = objectData.fileName;
     if (!objectData.prefabSource.empty()) {
         object["prefab_source"] = objectData.prefabSource;
     }
+    if (!objectData.tag.empty()) {
+        object["tag"] = objectData.tag;
+    }
+    if (objectData.spawnPoint) {
+        object["spawn_point"] = objectData.spawnPoint;
+    }
+    if (objectData.cameraStart) {
+        object["camera_start"] = objectData.cameraStart;
+    }
     object["transform"] = WriteTransform(objectData.localTransform);
     if (objectData.collider.enabled) {
         object["collider"] = WriteCollider(objectData.collider);
+    }
+    if (objectData.eventTrigger.enabled) {
+        object["event_trigger"] = WriteEventTrigger(objectData.eventTrigger);
     }
     if (!objectData.children.empty()) {
         JsonDocument children = JsonDocument::array(); // 子オブジェクトを書き込むJSON配列

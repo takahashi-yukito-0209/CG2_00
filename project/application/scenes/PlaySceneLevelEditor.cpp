@@ -261,6 +261,10 @@ void AccumulateLevelValidationSummary(const std::vector<LevelObjectData>& object
             ++summary.invalidTypeCount;
         }
 
+        if (!objectData.enabled) {
+            continue;
+        }
+
         if (objectData.type == "MESH") {
             if (objectData.fileName.empty()) {
                 ++summary.missingModelFileNameCount;
@@ -985,8 +989,24 @@ bool DrawLevelObjectDetail(LevelObjectData& objectData)
 
     if (ImGui::CollapsingHeader("Basic", ImGuiTreeNodeFlags_DefaultOpen)) {
         const std::vector<std::string> objectTypeChoices(kLevelObjectTypeNames.begin(), kLevelObjectTypeNames.end()); // type選択候補
+        bool objectEnabled = objectData.enabled; // ImGuiで編集中のオブジェクト有効フラグ
+        if (ImGui::Checkbox("Enabled", &objectEnabled)) {
+            objectData.enabled = objectEnabled;
+            edited = true;
+        }
         edited |= EditStringCombo("Type", objectData.type, objectTypeChoices);
         edited |= EditStringText("Name", objectData.name);
+        edited |= EditStringText("Tag", objectData.tag);
+        bool spawnPoint = objectData.spawnPoint; // ImGuiで編集中のスポーン地点フラグ
+        if (ImGui::Checkbox("Spawn Point", &spawnPoint)) {
+            objectData.spawnPoint = spawnPoint;
+            edited = true;
+        }
+        bool cameraStart = objectData.cameraStart; // ImGuiで編集中の開始カメラフラグ
+        if (ImGui::Checkbox("Camera Start", &cameraStart)) {
+            objectData.cameraStart = cameraStart;
+            edited = true;
+        }
         edited |= EditStringText("Prefab Source", objectData.prefabSource);
         if (!objectData.prefabSource.empty()) {
             ImGui::SameLine();
@@ -1013,6 +1033,21 @@ bool DrawLevelObjectDetail(LevelObjectData& objectData)
         edited |= EditVector3Value("Translate", objectData.localTransform.translate);
         edited |= EditRotationDegrees("Rotate Deg", objectData.localTransform.rotate);
         edited |= EditVector3Value("Scale", objectData.localTransform.scale);
+    }
+
+    if (ImGui::CollapsingHeader("Event Trigger")) {
+        bool triggerEnabled = objectData.eventTrigger.enabled; // ImGuiで編集中のイベントトリガー有効フラグ
+        if (ImGui::Checkbox("Trigger Enabled", &triggerEnabled)) {
+            objectData.eventTrigger.enabled = triggerEnabled;
+            edited = true;
+        }
+        if (objectData.eventTrigger.enabled) {
+            edited |= EditStringText("Event Name", objectData.eventTrigger.eventName);
+            edited |= EditVector3Value("Trigger Size", objectData.eventTrigger.size);
+            objectData.eventTrigger.size.x = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.x);
+            objectData.eventTrigger.size.y = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.y);
+            objectData.eventTrigger.size.z = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.z);
+        }
     }
 
     if (ImGui::CollapsingHeader("Collider")) {
@@ -1063,7 +1098,7 @@ bool DrawLevelObjectTree(PlayScene& scene, std::vector<LevelObjectData>& objectD
             nodeFlags |= ImGuiTreeNodeFlags_Leaf;
         }
 
-        const bool isMeshObject = objectData.type == "MESH" && !objectData.fileName.empty(); // Gizmo選択と対応するMESHか
+        const bool isMeshObject = objectData.enabled && objectData.type == "MESH" && !objectData.fileName.empty(); // Gizmo選択と対応するMESHか
         const size_t currentMeshObjectIndex = meshObjectIndex; // このオブジェクトに対応するObject3D番号
         if (isMeshObject) {
             ++meshObjectIndex;
@@ -1197,13 +1232,16 @@ void PlayScene::DrawLevelDataImGui()
 {
 #ifdef USE_IMGUI
     static std::array<char, 256> levelPathBuffer {}; // 編集中の読み込みレベルJSONファイル名
-    static std::array<char, 256> levelSavePathBuffer {}; // 編集中の保存レベルJSONファイル名
     static std::array<char, 256> levelPrefabPathBuffer {}; // 編集中のPrefab JSONファイル名
     static std::string bufferedLevelPath; // 読み込みバッファへ反映済みのファイル名
-    static std::string bufferedLevelSavePath; // 保存バッファへ反映済みのファイル名
     static std::string bufferedLevelPrefabPath; // Prefabバッファへ反映済みのファイル名
     static std::string levelPrefabFileName = "levels/prefabs/selected_prefab.json"; // Prefab保存と挿入に使うJSONファイル名
-    static bool autoApplyEditedLevel = false; // LevelData編集時に即シーンへ反映するか
+    static bool autoApplyEditedLevel = true; // LevelData編集時に即シーンへ反映するか
+    static bool autoSaveEditedLevel = true; // LevelData編集後にJSONへ自動保存するか
+    static bool pendingLevelAutoSave = false; // 編集完了後に自動保存を実行するか
+    static bool autoReloadLevelWhenChanged = false; // レベルJSONの更新時に自動再読込するか
+    static bool autoReloadHasTimestamp = false; // 自動再読込用の更新日時を保持済みか
+    static fs::file_time_type autoReloadLastWriteTime {}; // 自動再読込で最後に確認した更新日時
     static std::vector<LevelData> levelUndoHistory; // LevelData編集のUndo履歴
     static std::vector<LevelData> levelRedoHistory; // LevelData編集のRedo履歴
     static bool pendingLevelEditHistory = false; // 編集終了待ちのUndo履歴があるか
@@ -1212,7 +1250,7 @@ void PlayScene::DrawLevelDataImGui()
     static std::vector<std::string> selectedLevelObjectPaths; // 複数選択中のLevelObjectパス
     static std::vector<LevelObjectData> levelObjectClipboard; // コピーしたLevelObject群
     SyncTextBuffer(levelDataFileName_, levelPathBuffer, bufferedLevelPath);
-    SyncTextBuffer(levelSaveFileName_, levelSavePathBuffer, bufferedLevelSavePath);
+    levelSaveFileName_ = levelDataFileName_;
     SyncTextBuffer(levelPrefabFileName, levelPrefabPathBuffer, bufferedLevelPrefabPath);
 
     auto executeReloadLevel = [&]() {
@@ -1220,14 +1258,17 @@ void PlayScene::DrawLevelDataImGui()
             levelUndoHistory.clear();
             levelRedoHistory.clear();
             pendingLevelEditHistory = false;
+            pendingLevelAutoSave = false;
+            autoReloadHasTimestamp = false;
         }
     }; // レベル再読み込み処理
     auto executeSaveLevel = [&]() {
+        levelSaveFileName_ = levelDataFileName_;
         SaveLevelSnapshot();
     }; // レベル保存処理
     auto executeSaveAndReloadLevel = [&]() {
+        levelSaveFileName_ = levelDataFileName_;
         if (SaveLevelSnapshot()) {
-            levelDataFileName_ = LevelWriter::ResolveWritableLevelPath(levelSaveFileName_);
             bufferedLevelPath.clear();
             executeReloadLevel();
         }
@@ -1235,8 +1276,9 @@ void PlayScene::DrawLevelDataImGui()
 
     if (ImGui::CollapsingHeader("Load", ImGuiTreeNodeFlags_DefaultOpen)) {
         DrawLevelLoadFileSelector(levelDataFileName_, levelPathBuffer, bufferedLevelPath);
-        if (ImGui::InputText("Load File", levelPathBuffer.data(), levelPathBuffer.size())) {
+        if (ImGui::InputText("Load / Save File", levelPathBuffer.data(), levelPathBuffer.size())) {
             levelDataFileName_ = levelPathBuffer.data();
+            levelSaveFileName_ = levelDataFileName_;
             bufferedLevelPath = levelDataFileName_;
         }
         if (ImGui::Button("Reload")) {
@@ -1246,15 +1288,36 @@ void PlayScene::DrawLevelDataImGui()
                 executeReloadLevel();
             }
         }
+        ImGui::SameLine();
+        ImGui::Checkbox("Auto Reload On File Change", &autoReloadLevelWhenChanged);
+        if (autoReloadLevelWhenChanged) {
+            const std::string resolvedLoadFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 自動再読込で監視する実ファイルパス
+            std::error_code fileTimeError; // 更新日時取得のエラー受け取り
+            const fs::path loadFilePath(resolvedLoadFilePath); // 更新日時を確認するレベルJSONパス
+            const fs::file_time_type currentWriteTime = fs::last_write_time(loadFilePath, fileTimeError); // 現在の更新日時
+            if (fileTimeError) {
+                autoReloadHasTimestamp = false;
+            } else if (!autoReloadHasTimestamp) {
+                autoReloadLastWriteTime = currentWriteTime;
+                autoReloadHasTimestamp = true;
+            } else if (currentWriteTime != autoReloadLastWriteTime) {
+                autoReloadLastWriteTime = currentWriteTime;
+                if (levelDirty_) {
+                    SetLevelLoadStatus(false, "Auto reload skipped because level has unsaved edits.");
+                } else {
+                    executeReloadLevel();
+                }
+            }
+        } else {
+            autoReloadHasTimestamp = false;
+        }
     }
 
     if (ImGui::CollapsingHeader("Save", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::InputText("Save File", levelSavePathBuffer.data(), levelSavePathBuffer.size())) {
-            levelSaveFileName_ = levelSavePathBuffer.data();
-            bufferedLevelSavePath = levelSaveFileName_;
-        }
-        const std::string resolvedSaveFilePath = LevelWriter::ResolveWritableLevelPath(levelSaveFileName_); // 実際に書き込むレベルJSONパス
-        ImGui::TextWrapped("Resolved Save File: %s", resolvedSaveFilePath.empty() ? "-" : resolvedSaveFilePath.c_str());
+        levelSaveFileName_ = levelDataFileName_;
+        const std::string resolvedSaveFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 読み書き共通のレベルJSONパス
+        ImGui::TextWrapped("Load / Save File: %s", levelDataFileName_.empty() ? "-" : levelDataFileName_.c_str());
+        ImGui::TextWrapped("Resolved File: %s", resolvedSaveFilePath.empty() ? "-" : resolvedSaveFilePath.c_str());
         if (ImGui::Button("Save Snapshot")) {
             if (!levelAppliedToScene_) {
                 pendingLevelSaveAction = 1;
@@ -1264,10 +1327,6 @@ void PlayScene::DrawLevelDataImGui()
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Use Save As Load")) {
-            levelDataFileName_ = resolvedSaveFilePath;
-            bufferedLevelPath.clear();
-        }
         if (ImGui::Button("Save And Reload")) {
             if (!levelAppliedToScene_) {
                 pendingLevelSaveAction = 2;
@@ -1359,17 +1418,22 @@ void PlayScene::DrawLevelDataImGui()
     }
     if (ImGui::CollapsingHeader("Scene Apply", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Auto Apply Edited Level", &autoApplyEditedLevel);
+        ImGui::SameLine();
+        ImGui::Checkbox("Auto Save Edited Level", &autoSaveEditedLevel);
         if (ImGui::Button("Sync Scene To Level")) {
             PushLevelEditHistory(levelUndoHistory, levelData_);
             levelRedoHistory.clear();
             pendingLevelEditHistory = false;
             if (SyncSceneObjectsToLevelData()) {
+                pendingLevelAutoSave = autoSaveEditedLevel;
                 MarkLevelDataDirty("Scene objects synced to level data. Save hierarchy snapshot.", true);
             }
         }
         ImGui::SameLine();
         if (ImGui::Button("Apply Edited Level")) {
-            ApplyLevelDataToScene();
+            if (ApplyLevelDataToScene()) {
+                pendingLevelAutoSave = autoSaveEditedLevel;
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Preload Level Models")) {
@@ -1378,6 +1442,7 @@ void PlayScene::DrawLevelDataImGui()
         if (ImGui::Button("Undo Level Edit")) {
             if (RestoreLevelEditHistory(levelUndoHistory, levelRedoHistory, levelData_)) {
                 RefreshLevelDataSummary();
+                pendingLevelAutoSave = autoSaveEditedLevel;
                 if (autoApplyEditedLevel) {
                     ApplyLevelDataToScene();
                 }
@@ -1388,6 +1453,7 @@ void PlayScene::DrawLevelDataImGui()
         if (ImGui::Button("Redo Level Edit")) {
             if (RestoreLevelEditHistory(levelRedoHistory, levelUndoHistory, levelData_)) {
                 RefreshLevelDataSummary();
+                pendingLevelAutoSave = autoSaveEditedLevel;
                 if (autoApplyEditedLevel) {
                     ApplyLevelDataToScene();
                 }
@@ -1406,6 +1472,10 @@ void PlayScene::DrawLevelDataImGui()
         ImGui::Text("Total Objects: %zu", levelTotalObjectCount_);
         ImGui::Text("Mesh Objects: %zu", levelMeshObjectCount_);
         ImGui::Text("Colliders: %zu", levelColliderObjectCount_);
+        ImGui::Text("Disabled: %zu", levelDisabledObjectCount_);
+        ImGui::Text("Spawn Points: %zu", levelSpawnPointCount_);
+        ImGui::Text("Event Triggers: %zu", levelEventTriggerCount_);
+        ImGui::Text("Camera Starts: %zu", levelCameraStartCount_);
         ImGui::Text("Dirty: %s", levelDirty_ ? "Unsaved" : "Saved");
         ImGui::Text("Apply State: %s", levelAppliedToScene_ ? "Applied" : "Not Applied");
         const LevelValidationSummary validationSummary = BuildLevelValidationSummary(levelData_); // LevelDataの検証結果
@@ -1505,6 +1575,7 @@ void PlayScene::DrawLevelDataImGui()
                     pendingLevelEditHistory = true;
                 }
                 RefreshLevelDataSummary();
+                pendingLevelAutoSave = autoSaveEditedLevel;
                 if (autoApplyEditedLevel) {
                     ApplyLevelDataToScene();
                     MarkLevelDataDirty("Level data edited and applied. Save hierarchy snapshot.", true);
@@ -1520,6 +1591,12 @@ void PlayScene::DrawLevelDataImGui()
         PushLevelEditHistory(levelUndoHistory, pendingLevelEditSnapshot);
         levelRedoHistory.clear();
         pendingLevelEditHistory = false;
+    }
+    if (pendingLevelAutoSave && !pendingLevelEditHistory && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+        if (SaveLevelSnapshot()) {
+            autoReloadHasTimestamp = false;
+        }
+        pendingLevelAutoSave = false;
     }
 #endif
 }

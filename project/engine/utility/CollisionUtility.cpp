@@ -1,4 +1,5 @@
 #include "CollisionUtility.h"
+#include "mathUtility.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -2067,54 +2068,17 @@ bool RayIntersectCapsule(const Ray& ray, const Capsule& capsule, float* outT)
 /// </summary>
 OBB MakeOBBFromTransform(const Transform& t, const Vector3& halfLengths)
 {
-    // OBB を初期化する
-    OBB obb {};
-
-    // OBB の中心は、Transform の translate になる
+    OBB obb {}; // 作成するOBB
     obb.center = t.translate;
 
-    // Transform の回転をオイラー角から回転行列に変換する
-    float cx = std::cos(t.rotate.x), sx = std::sin(t.rotate.x); // X軸回転のコサインとサインを計算する
-    float cy = std::cos(t.rotate.y), sy = std::sin(t.rotate.y); // Y軸回転のコサインとサインを計算する
-    float cz = std::cos(t.rotate.z), sz = std::sin(t.rotate.z); // Z軸回転のコサインとサインを計算する
+    const Matrix4x4 rotateMatrix = MathUtil::MakeAffineMatrix({ 1.0f, 1.0f, 1.0f }, t.rotate, { 0.0f, 0.0f, 0.0f }); // 描画Transformと同じ回転行列
+    obb.axis[0] = NormalizeVec({ rotateMatrix.m[0][0], rotateMatrix.m[0][1], rotateMatrix.m[0][2] });
+    obb.axis[1] = NormalizeVec({ rotateMatrix.m[1][0], rotateMatrix.m[1][1], rotateMatrix.m[1][2] });
+    obb.axis[2] = NormalizeVec({ rotateMatrix.m[2][0], rotateMatrix.m[2][1], rotateMatrix.m[2][2] });
 
-    // 回転行列は、Z軸回転、Y軸回転、X軸回転の順で掛け合わせる（右手系の回転順序）
-    // 回転行列の要素を計算する
-    // 回転行列の要素は、以下のように計算される
-    // Rz * Ry * Rx の順で回転行列を掛け合わせると、以下のような要素になる
-
-    // 回転行列の (0,0) 要素を計算する
-    float r00 = cy * cz;
-    // 回転行列の (0,1) 要素を計算する
-    float r01 = cy * sz;
-    // 回転行列の (0,2) 要素を計算する
-    float r02 = -sy;
-
-    // 回転行列の (1,0) 要素を計算する
-    float r10 = sx * sy * cz - cx * sz;
-    // 回転行列の (1,1) 要素を計算する
-    float r11 = sx * sy * sz + cx * cz;
-    // 回転行列の (1,2) 要素を計算する
-    float r12 = sx * cy;
-
-    // 回転行列の (2,0) 要素を計算する
-    float r20 = cx * sy * cz + sx * sz;
-    // 回転行列の (2,1) 要素を計算する
-    float r21 = cx * sy * sz - sx * cz;
-    // 回転行列の (2,2) 要素を計算する
-    float r22 = cx * cy;
-
-    // 回転行列の要素を OBB の軸に設定する
-    obb.axis[0] = NormalizeVec({ r00, r10, r20 }); // OBB の軸[0] に回転行列の第1列を設定（正規化）
-    obb.axis[1] = NormalizeVec({ r01, r11, r21 }); // OBB の軸[1] に回転行列の第2列を設定（正規化）
-    obb.axis[2] = NormalizeVec({ r02, r12, r22 }); // OBB の軸[2] に回転行列の第3列を設定（正規化）
-
-    // OBB の半長さは、Transform の scale を掛けた halfLengths になる
-    obb.halfLength[0] = std::fabs(halfLengths.x * t.scale.x); // OBB の半長さ[0] に scale を反映した絶対値を設定する
-    obb.halfLength[1] = std::fabs(halfLengths.y * t.scale.y); // OBB の半長さ[1] に scale を反映した絶対値を設定する
-    obb.halfLength[2] = std::fabs(halfLengths.z * t.scale.z); // OBB の半長さ[2] に scale を反映した絶対値を設定する
-
-    // OBB を返す
+    obb.halfLength[0] = std::fabs(halfLengths.x * t.scale.x);
+    obb.halfLength[1] = std::fabs(halfLengths.y * t.scale.y);
+    obb.halfLength[2] = std::fabs(halfLengths.z * t.scale.z);
     return obb;
 }
 
