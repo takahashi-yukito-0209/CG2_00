@@ -11,6 +11,7 @@
 #include "../../engine/io/InputManager.h"
 #include "../../engine/level/LevelLoader.h"
 #include "../../engine/level/LevelWriter.h"
+#include "../../engine/utility/ResourceResolver.h"
 #include "../../engine/utility/mathUtility.h"
 #include "../../engine/utility/Logger.h"
 #include <algorithm>
@@ -39,7 +40,7 @@ constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // 
 constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
 constexpr const char* kDefaultLevelDataFileName = "levels/scene.json"; // 起動時に読み込むレベルJSON
-constexpr const char* kDefaultLevelSaveFileName = "levels/scene_snapshot.json"; // ImGuiから書き出すレベルJSON
+constexpr const char* kDefaultLevelSaveFileName = "levels/scene.json"; // ImGuiから書き出すレベルJSON
 constexpr uint8_t kEvaluationAnimationToggleKey = DIK_P; // アニメーション再生切り替えキー
 constexpr uint8_t kEvaluationAnimationSpeedDownKey = DIK_U; // アニメーション速度低下キー
 constexpr uint8_t kEvaluationAnimationSpeedUpKey = DIK_I; // アニメーション速度上昇キー
@@ -62,7 +63,7 @@ struct PostProcessShortcutDesc {
 };
 
 constexpr std::array<SceneModelLoadDesc, 1> kSceneModelLoadDescs = {
-    SceneModelLoadDesc { "sphere/sphere.gltf", true },
+    SceneModelLoadDesc { "block/block.obj", true },
 }; // シーンで扱うモデルと起動時ロード設定
 constexpr std::array<PostProcessShortcutDesc, 11> kPostProcessShortcutDescs = {
     PostProcessShortcutDesc { DIK_0, PostEffectType::Copy },
@@ -77,7 +78,35 @@ constexpr std::array<PostProcessShortcutDesc, 11> kPostProcessShortcutDescs = {
     PostProcessShortcutDesc { DIK_9, PostEffectType::Random },
     PostProcessShortcutDesc { DIK_Q, PostEffectType::Distortion },
 }; // Releaseでも使えるポストエフェクト切り替えキー
-constexpr std::array<const char*, 12> kSceneObjectCreateModelNames = {
+
+/// <summary>
+/// レベルJSONの読み書きに使う実ファイルパスを取得する。
+/// </summary>
+std::string ResolveEditableLevelFilePath(const std::string& filePath)
+{
+    const std::string targetFilePath = filePath.empty() ? kDefaultLevelDataFileName : filePath; // 解決対象のレベルJSON指定
+    return LevelWriter::ResolveWritableLevelPath(targetFilePath);
+}
+
+/// <summary>
+/// ImGui操作中にゲーム側ショートカットを止める必要があるか判定する。
+/// </summary>
+bool ShouldBlockGameShortcutInput()
+{
+#ifdef USE_IMGUI
+    if (!ImGui::GetCurrentContext()) {
+        return false;
+    }
+
+    const ImGuiIO& imguiIo = ImGui::GetIO(); // ImGuiの入力取得状態
+    return imguiIo.WantCaptureKeyboard || ImGui::IsAnyItemActive();
+#else
+    return false;
+#endif
+}
+
+constexpr std::array<const char*, 13> kSceneObjectCreateModelNames = {
+    "block/block.obj",
     "plane/plane.gltf",
     "bunny/bunny.obj",
     "teapot/teapot.obj",
@@ -91,7 +120,8 @@ constexpr std::array<const char*, 12> kSceneObjectCreateModelNames = {
     kHumanSneakWalkModelFileName,
     kHumanWalkModelFileName,
 }; // ImGuiから生成できる3Dモデル名
-constexpr std::array<const char*, 12> kSceneObjectCreateModelDisplayNames = {
+constexpr std::array<const char*, 13> kSceneObjectCreateModelDisplayNames = {
+    "block.obj",
     "plane.gltf",
     "bunny.obj",
     "teapot.obj",
@@ -241,11 +271,46 @@ void ApplyLevelColliderToObject(const LevelObjectData& objectData, Object3d& obj
 }
 
 /// <summary>
+/// レベルデータ内のオブジェクトが有効か判定する。
+/// </summary>
+bool IsLevelObjectEnabled(const LevelObjectData& objectData)
+{
+    return objectData.enabled;
+}
+
+/// <summary>
 /// レベルデータ内のオブジェクトが生成対象のMeshか判定する。
 /// </summary>
 bool IsLevelMeshObject(const LevelObjectData& objectData)
 {
-    return objectData.type == "MESH" && !objectData.fileName.empty();
+    return IsLevelObjectEnabled(objectData) && objectData.type == "MESH" && !objectData.fileName.empty();
+}
+
+/// <summary>
+/// レベルデータ内の開始カメラ指定を実カメラへ反映する。
+/// </summary>
+bool ApplyFirstLevelCameraStartToCamera(const std::vector<LevelObjectData>& objectDataList, Camera* camera)
+{
+    if (!camera) {
+        return false;
+    }
+
+    for (const LevelObjectData& objectData : objectDataList) {
+        if (!IsLevelObjectEnabled(objectData)) {
+            continue;
+        }
+        if (objectData.cameraStart) {
+            camera->SetRotate(objectData.transform.rotate);
+            camera->SetTranslate(objectData.transform.translate);
+            camera->Update();
+            return true;
+        }
+        if (!objectData.children.empty() && ApplyFirstLevelCameraStartToCamera(objectData.children, camera)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// <summary>
@@ -255,6 +320,10 @@ struct LevelDataSummary {
     size_t totalObjectCount = 0; // 子階層を含めた総オブジェクト数
     size_t meshObjectCount = 0; // モデル生成対象のMesh数
     size_t colliderObjectCount = 0; // 有効コライダーを持つオブジェクト数
+    size_t disabledObjectCount = 0; // 無効化されているオブジェクト数
+    size_t spawnPointCount = 0; // スポーン地点として設定された数
+    size_t eventTriggerCount = 0; // イベントトリガーとして設定された数
+    size_t cameraStartCount = 0; // 開始カメラとして設定された数
 };
 
 /// <summary>
@@ -264,11 +333,25 @@ void AccumulateLevelDataSummary(const std::vector<LevelObjectData>& objectDataLi
 {
     for (const LevelObjectData& objectData : objectDataList) {
         summary.totalObjectCount++;
+        if (!IsLevelObjectEnabled(objectData)) {
+            summary.disabledObjectCount++;
+            AccumulateLevelDataSummary(objectData.children, summary);
+            continue;
+        }
         if (IsLevelMeshObject(objectData)) {
             summary.meshObjectCount++;
         }
         if (objectData.collider.enabled) {
             summary.colliderObjectCount++;
+        }
+        if (objectData.spawnPoint) {
+            summary.spawnPointCount++;
+        }
+        if (objectData.eventTrigger.enabled) {
+            summary.eventTriggerCount++;
+        }
+        if (objectData.cameraStart) {
+            summary.cameraStartCount++;
         }
         AccumulateLevelDataSummary(objectData.children, summary);
     }
@@ -333,6 +416,47 @@ Math::Transform BuildLocalTransformFromWorld(const Math::Transform& worldTransfo
 }
 
 /// <summary>
+/// 現在のカメラTransformを最初の開始カメラLevelObjectへ書き戻す。
+/// </summary>
+bool SyncFirstLevelCameraStartFromCameraRecursive(std::vector<LevelObjectData>& objectDataList, const Camera* camera, const Math::Transform& parentTransform)
+{
+    if (!camera) {
+        return false;
+    }
+
+    for (LevelObjectData& objectData : objectDataList) {
+        if (!IsLevelObjectEnabled(objectData)) {
+            continue;
+        }
+
+        Math::Transform currentParentTransform = objectData.transform; // 子階層のローカル化に使う親Transform
+        if (objectData.cameraStart) {
+            Math::Transform cameraWorldTransform { // 保存する現在カメラのワールドTransform
+                objectData.transform.scale,
+                camera->GetRotate(),
+                camera->GetTranslate()
+            };
+            objectData.transform = cameraWorldTransform;
+            objectData.localTransform = BuildLocalTransformFromWorld(cameraWorldTransform, parentTransform);
+            return true;
+        }
+
+        if (!objectData.children.empty() && SyncFirstLevelCameraStartFromCameraRecursive(objectData.children, camera, currentParentTransform)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// <summary>
+/// 現在のカメラTransformを開始カメラLevelObjectへ書き戻す。
+/// </summary>
+bool SyncFirstLevelCameraStartFromCamera(std::vector<LevelObjectData>& objectDataList, const Camera* camera)
+{
+    return SyncFirstLevelCameraStartFromCameraRecursive(objectDataList, camera, CreateIdentityTransformForSceneSync());
+}
+/// <summary>
 /// Object3dからLevelDataへ保存するMESHオブジェクト情報を作成する。
 /// </summary>
 LevelObjectData BuildLevelObjectDataFromSceneObject(const Object3d& object3d, size_t objectIndex)
@@ -380,6 +504,9 @@ bool RemoveLevelMeshObjectByIndex(std::vector<LevelObjectData>& objectDataList, 
 void CollectUniqueLevelModelFiles(const std::vector<LevelObjectData>& objectDataList, std::vector<std::string>& modelFileNames)
 {
     for (const LevelObjectData& objectData : objectDataList) {
+        if (!IsLevelObjectEnabled(objectData)) {
+            continue;
+        }
         if (IsLevelMeshObject(objectData) && std::find(modelFileNames.begin(), modelFileNames.end(), objectData.fileName) == modelFileNames.end()) {
             modelFileNames.push_back(objectData.fileName);
         }
@@ -690,6 +817,10 @@ void PlayScene::CreateSceneObjectsFromLevelData(const std::vector<LevelObjectDat
 /// </summary>
 void PlayScene::CreateSceneObjectFromLevelData(const LevelObjectData& objectData)
 {
+    if (!IsLevelObjectEnabled(objectData)) {
+        return;
+    }
+
     if (IsLevelMeshObject(objectData)) {
         auto object3d = std::make_unique<Object3d>(); // レベル配置から生成する3Dオブジェクト
         object3d->SetObjectId(IssueObjectId());
@@ -717,6 +848,9 @@ void PlayScene::CreateSceneObjectFromLevelData(const LevelObjectData& objectData
 bool PlayScene::ApplyLevelDataToExistingSceneObjects(const std::vector<LevelObjectData>& objectDataList, size_t& objectIndex)
 {
     for (const LevelObjectData& objectData : objectDataList) {
+        if (!IsLevelObjectEnabled(objectData)) {
+            continue;
+        }
         if (IsLevelMeshObject(objectData)) {
             if (objectIndex >= objects3d_.size() || !objects3d_[objectIndex]) {
                 return false;
@@ -846,6 +980,10 @@ bool PlayScene::RemoveSceneObjectFromLevelData(size_t objectIndex)
 bool PlayScene::SyncSceneObjectsToLevelDataRecursive(std::vector<LevelObjectData>& objectDataList, size_t& objectIndex, const Math::Transform& parentTransform)
 {
     for (LevelObjectData& objectData : objectDataList) {
+        if (!IsLevelObjectEnabled(objectData)) {
+            continue;
+        }
+
         Math::Transform currentParentTransform = objectData.transform; // 子階層のローカル化に使う親Transform
 
         if (IsLevelMeshObject(objectData)) {
@@ -913,19 +1051,29 @@ void PlayScene::MarkLevelDataDirty(const std::string& message, bool appliedToSce
 /// </summary>
 bool PlayScene::SaveLevelSnapshot()
 {
-    if (levelSaveFileName_.empty()) {
-        levelSaveFileName_ = kDefaultLevelSaveFileName;
-    }
+    levelDataFileName_ = ResolveEditableLevelFilePath(levelDataFileName_);
+    levelSaveFileName_ = levelDataFileName_;
 
     if (levelData_.objects.empty()) {
         SetLevelSaveStatus(false, "No level objects to save.");
         return false;
     }
 
+    if (levelAppliedToScene_) {
+        if (!SyncSceneObjectsToLevelData()) {
+            SetLevelSaveStatus(false, "Scene object sync failed before save.");
+            return false;
+        }
+        SyncFirstLevelCameraStartFromCamera(levelData_.objects, ctx_.camera);
+        LevelLoader::ResolveWorldTransforms(levelData_);
+    }
+
     levelData_.schemaVersion = kCurrentLevelSchemaVersion;
 
     std::string saveMessage; // レベルJSON保存結果の詳細
-    const bool saveSucceeded = LevelWriter::SaveHierarchySnapshot(levelSaveFileName_, levelData_, &saveMessage); // レベルJSON保存結果
+    ResourceResolver::ClearCache();
+    const bool saveSucceeded = LevelWriter::SaveHierarchySnapshot(levelDataFileName_, levelData_, &saveMessage); // レベルJSON保存結果
+    ResourceResolver::ClearCache();
     SetLevelSaveStatus(saveSucceeded, saveMessage.empty() ? (saveSucceeded ? "Saved hierarchy snapshot." : "Save failed.") : saveMessage);
     return saveSucceeded;
 }
@@ -939,14 +1087,21 @@ void PlayScene::RefreshLevelDataSummary()
     levelTotalObjectCount_ = summary.totalObjectCount;
     levelMeshObjectCount_ = summary.meshObjectCount;
     levelColliderObjectCount_ = summary.colliderObjectCount;
+    levelDisabledObjectCount_ = summary.disabledObjectCount;
+    levelSpawnPointCount_ = summary.spawnPointCount;
+    levelEventTriggerCount_ = summary.eventTriggerCount;
+    levelCameraStartCount_ = summary.cameraStartCount;
 }
 
 /// <summary>
 /// 現在保持しているレベルデータをシーン用3Dオブジェクトへ反映する。
 /// </summary>
-bool PlayScene::ApplyLevelDataToScene()
+bool PlayScene::ApplyLevelDataToScene(bool applyCameraStart)
 {
     LevelLoader::ResolveWorldTransforms(levelData_);
+    if (applyCameraStart) {
+        ApplyFirstLevelCameraStartToCamera(levelData_.objects, ctx_.camera);
+    }
     RefreshLevelDataSummary();
 
     if (levelData_.objects.empty() || levelMeshObjectCount_ == 0) {
@@ -991,9 +1146,9 @@ bool PlayScene::ApplyLevelDataToScene()
 /// </summary>
 bool PlayScene::ReloadLevelSceneObjects()
 {
-    if (levelDataFileName_.empty()) {
-        levelDataFileName_ = kDefaultLevelDataFileName;
-    }
+    levelDataFileName_ = ResolveEditableLevelFilePath(levelDataFileName_);
+    levelSaveFileName_ = levelDataFileName_;
+    ResourceResolver::ClearCache();
 
     objects3d_.clear();
     objectPointerView_.clear();
@@ -1009,6 +1164,10 @@ bool PlayScene::ReloadLevelSceneObjects()
         levelTotalObjectCount_ = 0;
         levelMeshObjectCount_ = 0;
         levelColliderObjectCount_ = 0;
+        levelDisabledObjectCount_ = 0;
+        levelSpawnPointCount_ = 0;
+        levelEventTriggerCount_ = 0;
+        levelCameraStartCount_ = 0;
         SetLevelLoadStatus(false, loadMessage.empty() ? "Load failed." : loadMessage);
         RebuildObjectPointerView();
         return false;
@@ -1016,7 +1175,7 @@ bool PlayScene::ReloadLevelSceneObjects()
 
     levelData_ = std::move(loadedLevelData);
     levelDirty_ = false;
-    const bool applySucceeded = ApplyLevelDataToScene(); // 読み込んだレベルデータのシーン反映結果
+    const bool applySucceeded = ApplyLevelDataToScene(true); // 読み込んだレベルデータのシーン反映結果
     SetLevelLoadStatus(applySucceeded, applySucceeded ? (loadMessage.empty() ? "Loaded." : loadMessage) : "Loaded, but no mesh objects.");
     return applySucceeded;
 }
@@ -1026,8 +1185,8 @@ bool PlayScene::ReloadLevelSceneObjects()
 /// </summary>
 void PlayScene::InitializeSceneObjects()
 {
-    levelDataFileName_ = kDefaultLevelDataFileName;
-    levelSaveFileName_ = kDefaultLevelSaveFileName;
+    levelDataFileName_ = ResolveEditableLevelFilePath(kDefaultLevelDataFileName);
+    levelSaveFileName_ = levelDataFileName_;
     if (ReloadLevelSceneObjects()) {
         return;
     }
@@ -1123,6 +1282,10 @@ void PlayScene::ReleaseSceneObjects()
     levelTotalObjectCount_ = 0;
     levelMeshObjectCount_ = 0;
     levelColliderObjectCount_ = 0;
+    levelDisabledObjectCount_ = 0;
+    levelSpawnPointCount_ = 0;
+    levelEventTriggerCount_ = 0;
+    levelCameraStartCount_ = 0;
     particleEmitterPointerView_.clear();
     nextParticleEmitterId_ = 1;
     temporalAfterimageSprites_.clear();
@@ -1166,6 +1329,10 @@ void PlayScene::Finalize()
 /// </summary>
 void PlayScene::HandleEffectStartInput()
 {
+    if (ShouldBlockGameShortcutInput()) {
+        return;
+    }
+
     InputManager* inputManager = InputManager::GetInstance(); // エフェクト開始入力を取得する入力管理
     if (inputManager
         && inputManager->IsKeyJustPressed(DIK_R)
@@ -1179,6 +1346,10 @@ void PlayScene::HandleEffectStartInput()
 /// </summary>
 void PlayScene::HandlePostProcessShortcutInput()
 {
+    if (ShouldBlockGameShortcutInput()) {
+        return;
+    }
+
     InputManager* inputManager = InputManager::GetInstance(); // ポストエフェクト切り替え入力を取得する入力管理
     if (!inputManager) {
         return;
@@ -1199,6 +1370,10 @@ void PlayScene::HandlePostProcessShortcutInput()
 /// </summary>
 void PlayScene::HandleEvaluationAnimationInput()
 {
+    if (ShouldBlockGameShortcutInput()) {
+        return;
+    }
+
     InputManager* inputManager = InputManager::GetInstance(); // 評価確認用入力を取得する入力管理
     if (!inputManager) {
         return;

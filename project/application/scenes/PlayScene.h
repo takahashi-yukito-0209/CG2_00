@@ -525,7 +525,7 @@ private:
     /// <summary>
     /// 現在保持しているレベルデータをシーン用3Dオブジェクトへ反映する。
     /// </summary>
-    bool ApplyLevelDataToScene();
+    bool ApplyLevelDataToScene(bool applyCameraStart = false);
 
     /// <summary>
     /// 現在保持しているレベルデータの集計情報を更新する。
@@ -702,7 +702,7 @@ private: // メンバー変数
     MyEngine::SceneContext ctx_;
     MyEngine::LevelData levelData_; // Blenderから読み込んだレベルデータ
     std::string levelDataFileName_; // 読み込み対象のレベルJSONファイル名
-    std::string levelSaveFileName_; // 書き出し対象のレベルJSONファイル名
+    std::string levelSaveFileName_; // 読み書き共通化後の保存先確認用レベルJSONファイル名
     bool levelLoadSucceeded_ = false; // 直近のレベルJSON読み込みが成功したか
     std::string levelLoadMessage_; // 直近のレベルJSON読み込み状態メッセージ
     bool levelSaveSucceeded_ = false; // 直近のレベルJSON保存が成功したか
@@ -712,6 +712,10 @@ private: // メンバー変数
     size_t levelTotalObjectCount_ = 0; // レベルJSONに含まれる総オブジェクト数
     size_t levelMeshObjectCount_ = 0; // レベルJSONから生成対象になったMesh数
     size_t levelColliderObjectCount_ = 0; // レベルJSONに含まれる有効コライダー数
+    size_t levelDisabledObjectCount_ = 0; // レベルJSONで無効化されているオブジェクト数
+    size_t levelSpawnPointCount_ = 0; // レベルJSONに含まれるスポーン地点数
+    size_t levelEventTriggerCount_ = 0; // レベルJSONに含まれるイベントトリガー数
+    size_t levelCameraStartCount_ = 0; // レベルJSONに含まれる開始カメラ数
     std::vector<std::unique_ptr<MyEngine::Sprite>> sprites_;
     std::vector<MyEngine::Sprite*> spritePointerView_; // ImGuiなど外部参照用のスプライト一覧
     uint32_t nextSpriteId_ = 1; // 次に生成するスプライトへ割り当てるID
