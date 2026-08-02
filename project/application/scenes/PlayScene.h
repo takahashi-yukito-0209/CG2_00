@@ -209,6 +209,66 @@ private:
     void DrawLevelDataImGui();
 
     /// <summary>
+    /// LevelData編集ImGuiの一時状態を保持する。
+    /// </summary>
+    struct LevelEditorImGuiState;
+
+    /// <summary>
+    /// LevelData編集ImGuiからレベル再読み込みを実行する。
+    /// </summary>
+    bool ExecuteLevelEditorReload(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiからレベル保存を実行する。
+    /// </summary>
+    void ExecuteLevelEditorSave();
+
+    /// <summary>
+    /// LevelData編集ImGuiから保存後再読み込みを実行する。
+    /// </summary>
+    void ExecuteLevelEditorSaveAndReload(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiの読み込み操作を描画する。
+    /// </summary>
+    void DrawLevelLoadSectionImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiの保存操作を描画する。
+    /// </summary>
+    void DrawLevelSaveSectionImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiのPrefab操作を描画する。
+    /// </summary>
+    void DrawLevelPrefabSectionImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiのシーン反映操作を描画する。
+    /// </summary>
+    void DrawLevelSceneApplySectionImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiの状態表示を描画する。
+    /// </summary>
+    void DrawLevelStatusSectionImGui();
+
+    /// <summary>
+    /// LevelData編集ImGuiの確認ポップアップを描画する。
+    /// </summary>
+    void DrawLevelConfirmPopupsImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiの階層オブジェクト編集を描画する。
+    /// </summary>
+    void DrawLevelObjectsSectionImGui(LevelEditorImGuiState& state);
+
+    /// <summary>
+    /// LevelData編集ImGuiの遅延履歴と自動保存を処理する。
+    /// </summary>
+    void FlushLevelEditorDeferredActions(LevelEditorImGuiState& state);
+
+    /// <summary>
     /// ImGuiで衝突判定の状態を表示する。
     /// </summary>
     void DrawCollisionDebugImGui();

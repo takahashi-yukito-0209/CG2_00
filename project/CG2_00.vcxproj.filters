@@ -294,6 +294,12 @@
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneEditorImGui.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneEvaluation.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
@@ -301,6 +307,9 @@
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneLevelEditor.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\scenes\PlaySceneLevelEditorHierarchy.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneLevelEditorOverlay.cpp">
@@ -591,6 +600,9 @@
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\PlaySceneLevelEditorHierarchy.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
     <ClInclude Include="application\effects\EffectProgress.h">

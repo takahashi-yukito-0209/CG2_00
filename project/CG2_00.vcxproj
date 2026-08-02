@@ -245,9 +245,12 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\Game.cpp" />
     <ClCompile Include="application\scenes\PlayScene.cpp" />
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp" />
+    <ClCompile Include="application\scenes\PlaySceneEditorImGui.cpp" />
+    <ClCompile Include="application\scenes\PlaySceneEvaluation.cpp" />
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp" />
     <ClCompile Include="application\scenes\PlaySceneParticle.cpp" />
     <ClCompile Include="application\scenes\PlaySceneLevelEditor.cpp" />
+    <ClCompile Include="application\scenes\PlaySceneLevelEditorHierarchy.cpp" />
     <ClCompile Include="application\scenes\PlaySceneLevelEditorOverlay.cpp" />
     <ClCompile Include="application\scenes\PlaySceneEffect.cpp" />
     <ClCompile Include="application\effects\EffectParticleUtility.cpp" />
@@ -450,6 +453,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h" />
+    <ClInclude Include="application\scenes\PlaySceneLevelEditorHierarchy.h" />
     <ClInclude Include="application\effects\EffectProgress.h" />
     <ClInclude Include="application\effects\EffectParticleUtility.h" />
     <ClInclude Include="application\effects\TimeStopEffect.h" />
