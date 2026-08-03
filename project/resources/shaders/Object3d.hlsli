@@ -16,7 +16,7 @@ struct Material
     int lightingMode;
     int useAlphaCutoutSampler;
     int useAlphaDiscard;
-    float _pad1;
+    int useTexture;
     float shininess; // specular power
     float environmentCoefficient;
     float2 _pad2; // pad to 16-byte

@@ -358,8 +358,27 @@ void Object3d::InitializeMaterialState()
     materialData_->useAlphaCutoutSampler = 0;
     useAlphaDiscard_ = true;
     materialData_->useAlphaDiscard = 1;
+    materialData_->useTexture = 1;
     materialData_->shininess = kDefaultShininess;
     materialData_->environmentCoefficient = kDefaultEnvironmentCoefficient;
+}
+
+/// <summary>
+/// マテリアル色を取得する。
+/// </summary>
+Math::Vector4 Object3d::GetMaterialColor() const
+{
+    return materialData_ ? materialData_->color : Math::Vector4 { 1.0f, 1.0f, 1.0f, 1.0f };
+}
+
+/// <summary>
+/// マテリアル色を設定する。
+/// </summary>
+void Object3d::SetMaterialColor(const Math::Vector4& color)
+{
+    if (materialData_) {
+        materialData_->color = color;
+    }
 }
 
 /// <summary>

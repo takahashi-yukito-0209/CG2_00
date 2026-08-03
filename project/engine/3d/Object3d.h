@@ -445,6 +445,16 @@ public: // メンバ関数
     const Math::Vector3 GetTranslate() const { return transform_.translate; }
 
     /// <summary>
+    /// マテリアル色を取得する。
+    /// </summary>
+    Math::Vector4 GetMaterialColor() const;
+
+    /// <summary>
+    /// マテリアル色を設定する。
+    /// </summary>
+    void SetMaterialColor(const Math::Vector4& color);
+
+    /// <summary>
     /// ライティングの有効・無効を取得する
     /// </summary>
     bool GetEnableLighting() const;
@@ -512,6 +522,21 @@ public: // メンバ関数
     /// 透過ピクセルをdiscardするか取得する
     /// </summary>
     bool GetUseAlphaDiscard() const { return useAlphaDiscard_; }
+
+    /// <summary>
+    /// テクスチャ色を使用するか設定する。
+    /// </summary>
+    void SetUseTexture(bool use)
+    {
+        if (materialData_) {
+            materialData_->useTexture = use ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// テクスチャ色を使用するか取得する。
+    /// </summary>
+    bool GetUseTexture() const { return materialData_ ? materialData_->useTexture != 0 : false; }
 
 private: // 内部関数
     // 初期化補助

@@ -32,6 +32,7 @@ constexpr Math::Vector4 kLevelColliderHitDebugColor = { 1.0f, 0.25f, 0.2f, 1.0f 
 constexpr Math::Vector4 kLevelSpawnPointDebugColor = { 0.2f, 1.0f, 0.35f, 1.0f }; // スポーン地点の表示色
 constexpr Math::Vector4 kLevelEventTriggerDebugColor = { 1.0f, 0.85f, 0.2f, 1.0f }; // イベントトリガーの表示色
 constexpr Math::Vector4 kLevelCameraStartDebugColor = { 0.35f, 0.6f, 1.0f, 1.0f }; // 開始カメラの表示色
+constexpr bool kShowSceneJsonObjects = false; // SceneJSON配置オブジェクトを表示するか
 constexpr uint32_t kGpuSpawnShapeSphere = 0; // GPU Emitterの球形状番号
 constexpr uint32_t kGpuSpawnShapeBox = 1; // GPU Emitterの箱形状番号
 constexpr uint32_t kGpuSpawnShapeRing = 2; // GPU Emitterのリング形状番号
@@ -520,6 +521,10 @@ void PlayScene::DrawSceneContent()
 /// </summary>
 void PlayScene::DrawSceneObjects()
 {
+    if (!kShowSceneJsonObjects) {
+        return;
+    }
+
     for (auto& object3d : objects3d_) {
         if (object3d) {
             object3d->Draw();
@@ -535,6 +540,7 @@ void PlayScene::DrawWorldAndParticles()
     if (ctx_.object3dCommon) {
         ctx_.object3dCommon->SetCommonDrawSetting();
         DrawSceneObjects();
+        DrawPlayerPrototype();
     }
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス
@@ -546,12 +552,14 @@ void PlayScene::DrawWorldAndParticles()
         if (!kUsePostEffectPreviewScene) {
             ctx_.debugRenderer->DrawGrid(kDebugGridCenter, kDebugGridHalfLineCount, kDebugGridSpacing, kDebugGridColor);
         }
-        if (!levelData_.objects.empty()) {
+        if (kShowSceneJsonObjects && !levelData_.objects.empty()) {
             DrawLevelObjectMetadataMarkers(*ctx_.debugRenderer, levelData_.objects);
         }
-        for (const auto& object3d : objects3d_) {
-            if (object3d) {
-                DrawSceneObjectCollider(*ctx_.debugRenderer, *object3d, collisionSystem_.HasCollision(object3d->GetObjectId()));
+        if (kShowSceneJsonObjects) {
+            for (const auto& object3d : objects3d_) {
+                if (object3d) {
+                    DrawSceneObjectCollider(*ctx_.debugRenderer, *object3d, collisionSystem_.HasCollision(object3d->GetObjectId()));
+                }
             }
         }
         if (!kUsePostEffectPreviewScene) {

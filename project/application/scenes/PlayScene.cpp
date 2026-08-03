@@ -29,28 +29,13 @@ constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終
 constexpr float kKeyboardDissolveThreshold = 0.45f; // キー切り替え時に見えやすいDissolve閾値
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
-constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
-constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
 constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
+constexpr bool kExposeSceneJsonObjectsToImGui = false; // SceneJSON配置オブジェクトをImGui編集対象として表示するか
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
-constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
-constexpr const char* kSimpleSkinModelFileName = "simpleSkin/simpleSkin.gltf"; // Skinning確認用simpleSkinモデル
-constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // Skinning確認用sneakWalkモデル
-constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
 constexpr const char* kDefaultLevelDataFileName = "levels/scene.json"; // 起動時に読み込むレベルJSON
 constexpr const char* kDefaultLevelSaveFileName = "levels/scene.json"; // ImGuiから書き出すレベルJSON
-constexpr uint8_t kEvaluationAnimationToggleKey = DIK_P; // アニメーション再生切り替えキー
-constexpr uint8_t kEvaluationAnimationSpeedDownKey = DIK_U; // アニメーション速度低下キー
-constexpr uint8_t kEvaluationAnimationSpeedUpKey = DIK_I; // アニメーション速度上昇キー
-constexpr uint8_t kEvaluationAnimationResetKey = DIK_O; // アニメーションリセットキー
-constexpr WORD kEvaluationAnimationToggleButton = XINPUT_GAMEPAD_A; // アニメーション再生切り替えボタン
-constexpr WORD kEvaluationAnimationSpeedDownButton = XINPUT_GAMEPAD_LEFT_SHOULDER; // アニメーション速度低下ボタン
-constexpr WORD kEvaluationAnimationSpeedUpButton = XINPUT_GAMEPAD_RIGHT_SHOULDER; // アニメーション速度上昇ボタン
-constexpr WORD kEvaluationAnimationResetButton = XINPUT_GAMEPAD_X; // アニメーションリセットボタン
-constexpr float kEvaluationAnimationPlaybackSpeedStep = 0.25f; // アニメーション速度の変更幅
-constexpr float kSkinningModelMoveSpeed = 3.0f; // Skinningモデルの移動速度
 
 struct SceneModelLoadDesc {
     const char* fileName; // モデルファイル名
@@ -105,49 +90,12 @@ bool ShouldBlockGameShortcutInput()
 #endif
 }
 
-constexpr std::array<const char*, 13> kSceneObjectCreateModelNames = {
-    "block/block.obj",
-    "plane/plane.gltf",
-    "bunny/bunny.obj",
-    "teapot/teapot.obj",
-    "fence/fence.obj",
-    "sphere/sphere.gltf",
-    "terrain/terrain.obj",
-    "multiMesh/multiMesh.obj",
-    "multiMaterial/multiMaterial.obj",
-    kAnimatedCubeModelFileName,
-    kSimpleSkinModelFileName,
-    kHumanSneakWalkModelFileName,
-    kHumanWalkModelFileName,
-}; // ImGuiから生成できる3Dモデル名
-constexpr std::array<const char*, 13> kSceneObjectCreateModelDisplayNames = {
-    "block.obj",
-    "plane.gltf",
-    "bunny.obj",
-    "teapot.obj",
-    "fence.obj",
-    "sphere.gltf",
-    "terrain.obj",
-    "multiMesh.obj",
-    "multiMaterial.obj",
-    "AnimatedCube.gltf",
-    "simpleSkin.gltf",
-    "sneakWalk.gltf",
-    "walk.gltf",
-}; // ImGuiに表示する3Dモデル名
 constexpr const char* kEnvironmentMapTextureName = "rostock_laage_airport_4k.dds"; // 環境マップ用DDS名
 constexpr const char* kCircleTextureName = "circle.png"; // 円形パーティクルに使用するテクスチャ名
 constexpr const char* kCircleFlashTextureName = "circle2.png"; // 発光系スプライトに使用するテクスチャ名
 constexpr const char* kGradationLineTextureName = "gradationLine.png"; // リングと円柱に使用するテクスチャ名
 constexpr const char* kUvCheckerTextureName = "uvChecker.png"; // 確認用UVテクスチャ名
 constexpr const char* kMonsterBallTextureName = "monsterBall.png"; // 確認用ボールテクスチャ名
-constexpr std::array<const char*, 5> kSceneSpriteCreateTextureNames = {
-    kUvCheckerTextureName,
-    kMonsterBallTextureName,
-    kCircleTextureName,
-    kCircleFlashTextureName,
-    kGradationLineTextureName,
-}; // ImGuiから生成できるスプライト用テクスチャ名
 constexpr std::array<const char*, 5> kSceneTextureNames = {
     kUvCheckerTextureName,
     kMonsterBallTextureName,
@@ -155,19 +103,6 @@ constexpr std::array<const char*, 5> kSceneTextureNames = {
     kGradationLineTextureName,
     kEnvironmentMapTextureName,
 }; // シーン初期化時に読み込むテクスチャ名
-
-/// <summary>
-/// パス文字列から表示用のファイル名部分だけを取得する。
-/// </summary>
-std::string GetDisplayFileName(const std::string& path)
-{
-    const size_t separatorPosition = path.find_last_of("/\\"); // 最後に見つかったパス区切り位置
-    if (separatorPosition == std::string::npos) {
-        return path;
-    }
-
-    return path.substr(separatorPosition + 1);
-}
 
 /// <summary>
 /// ヒットストップが残っているか判定する
@@ -202,52 +137,6 @@ bool IsCubeModelFile(const std::string& modelFileName)
         || ContainsModelKeyword(modelFileName, kCubeModelKeywordUpper);
 }
 
-/// <summary>
-/// 初期化時にアニメーションも設定するモデルか判定する
-/// </summary>
-bool IsAnimationModelFile(const std::string& modelFileName)
-{
-    return modelFileName == kAnimatedCubeModelFileName
-        || modelFileName == kHumanSneakWalkModelFileName
-        || modelFileName == kHumanWalkModelFileName;
-}
-
-/// <summary>
-/// Skinning確認用に表示サイズを調整するモデルか判定する
-/// </summary>
-bool IsSkinningPreviewModelFile(const std::string& modelFileName)
-{
-    return modelFileName == kSimpleSkinModelFileName
-        || modelFileName == kHumanSneakWalkModelFileName
-        || modelFileName == kHumanWalkModelFileName;
-}
-
-/// <summary>
-/// 評価確認用にパッドで動かす対象モデルか判定する
-/// </summary>
-bool IsEvaluationSkinningControlTargetModelFile(const std::string& modelFileName)
-{
-    return modelFileName == kHumanWalkModelFileName
-        || modelFileName == kHumanSneakWalkModelFileName
-        || modelFileName == kSimpleSkinModelFileName;
-}
-
-/// <summary>
-/// 移動入力を正規化する
-/// </summary>
-Vector3 NormalizeMoveInput(const Vector3& moveInput)
-{
-    const float length = std::sqrt(moveInput.x * moveInput.x + moveInput.y * moveInput.y + moveInput.z * moveInput.z); // 入力ベクトルの長さ
-    if (length <= 0.0001f) {
-        return { 0.0f, 0.0f, 0.0f };
-    }
-
-    if (length <= 1.0f) {
-        return moveInput;
-    }
-
-    return { moveInput.x / length, moveInput.y / length, moveInput.z / length };
-}
 
 /// <summary>
 /// レベルデータのコライダー情報をObject3dへ適用する。
@@ -577,75 +466,6 @@ void PlayScene::DeleteSceneSprite(size_t spriteIndex)
     RebuildSpritePointerView();
 }
 
-/// <summary>
-/// ImGuiでシーン内スプライトの生成と削除を行う。
-/// </summary>
-void PlayScene::DrawSceneSpriteEditImGui()
-{
-#ifdef USE_IMGUI
-    static int selectedCreateTextureIndex = 0; // 生成に使用するテクスチャ番号
-    static int selectedDeleteSpriteIndex = 0; // 削除対象のスプライト番号
-
-    ImGui::SeparatorText("Create");
-    const char* textureNames[kSceneSpriteCreateTextureNames.size()] = {}; // Combo表示用のテクスチャ名一覧
-    for (size_t textureIndex = 0; textureIndex < kSceneSpriteCreateTextureNames.size(); ++textureIndex) {
-        textureNames[textureIndex] = kSceneSpriteCreateTextureNames[textureIndex];
-    }
-
-    ImGui::Combo(
-        "Texture",
-        &selectedCreateTextureIndex,
-        textureNames,
-        static_cast<int>(kSceneSpriteCreateTextureNames.size()));
-    selectedCreateTextureIndex = (std::clamp)(
-        selectedCreateTextureIndex,
-        0,
-        static_cast<int>(kSceneSpriteCreateTextureNames.size()) - 1);
-    if (ImGui::Button("Create Sprite")) {
-        const std::string textureName = kSceneSpriteCreateTextureNames[static_cast<size_t>(selectedCreateTextureIndex)]; // 生成するスプライトのテクスチャ名
-        CreateSceneSprite(textureName);
-        selectedDeleteSpriteIndex = static_cast<int>(sprites_.size()) - 1;
-    }
-
-    ImGui::SeparatorText("Delete");
-    if (!sprites_.empty()) {
-        const int spriteCount = static_cast<int>(sprites_.size()); // 削除対象として選択できるスプライト数
-        selectedDeleteSpriteIndex = (std::clamp)(selectedDeleteSpriteIndex, 0, spriteCount - 1);
-
-        std::string preview = "Sprite " + std::to_string(selectedDeleteSpriteIndex); // Comboの現在表示名
-        Sprite* previewSprite = sprites_[static_cast<size_t>(selectedDeleteSpriteIndex)].get(); // 現在選択中のスプライト
-        if (previewSprite && !previewSprite->GetTextureFilePath().empty()) {
-            preview += " : " + GetDisplayFileName(previewSprite->GetTextureFilePath());
-        }
-
-        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
-            for (int spriteIndex = 0; spriteIndex < spriteCount; ++spriteIndex) {
-                Sprite* sprite = sprites_[static_cast<size_t>(spriteIndex)].get(); // 表示名を作る対象のスプライト
-                std::string label = "Sprite " + std::to_string(spriteIndex); // Comboに表示するスプライト名
-                if (sprite && !sprite->GetTextureFilePath().empty()) {
-                    label += " : " + GetDisplayFileName(sprite->GetTextureFilePath());
-                }
-
-                const bool isSelected = selectedDeleteSpriteIndex == spriteIndex; // 現在選択中かどうか
-                if (ImGui::Selectable(label.c_str(), isSelected)) {
-                    selectedDeleteSpriteIndex = spriteIndex;
-                }
-                if (isSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        if (ImGui::Button("Delete Sprite")) {
-            DeleteSceneSprite(static_cast<size_t>(selectedDeleteSpriteIndex));
-            selectedDeleteSpriteIndex = (std::min)(selectedDeleteSpriteIndex, static_cast<int>(sprites_.size()) - 1);
-        }
-    } else {
-        ImGui::Text("No sprites.");
-    }
-#endif
-}
 void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::string& modelFileName)
 {
     const bool isFenceModel = IsFenceModelFile(modelFileName); // アルファ抜き用サンプラーが必要なモデルか
@@ -659,11 +479,6 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetTranslate(kCubeInitialTranslate);
     }
 
-    const bool isSkinningPreviewModel = IsSkinningPreviewModelFile(modelFileName); // Skinning確認用モデルか
-    if (isSkinningPreviewModel) {
-        object3d.SetScale(kSkinningPreviewScale);
-        object3d.SetTranslate(kSkinningPreviewTranslate);
-    }
 }
 
 /// <summary>
@@ -675,9 +490,6 @@ void PlayScene::CreateSceneObject(const std::string& modelFileName)
     object3d->SetObjectId(IssueObjectId());
     object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     object3d->SetModel(modelFileName);
-    if (IsAnimationModelFile(modelFileName)) {
-        object3d->SetAnimation(modelFileName);
-    }
     ApplySceneObjectInitialSettings(*object3d, modelFileName);
     objects3d_.push_back(std::move(object3d));
     RebuildObjectPointerView();
@@ -710,99 +522,6 @@ void PlayScene::DeleteSceneObject(size_t objectIndex)
 }
 
 /// <summary>
-/// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
-/// </summary>
-void PlayScene::DrawSceneObjectEditImGui()
-{
-#ifdef USE_IMGUI
-    static int selectedCreateModelIndex = 0; // 生成に使用するモデル番号
-    static int selectedDeleteObjectIndex = 0; // 削除対象のオブジェクト番号
-
-    ImGui::SeparatorText("Create");
-    const char* modelNames[kSceneObjectCreateModelDisplayNames.size()] = {}; // Combo表示用のモデル名一覧
-    for (size_t modelIndex = 0; modelIndex < kSceneObjectCreateModelDisplayNames.size(); ++modelIndex) {
-        modelNames[modelIndex] = kSceneObjectCreateModelDisplayNames[modelIndex];
-    }
-
-    ImGui::Combo(
-        "Model",
-        &selectedCreateModelIndex,
-        modelNames,
-        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()));
-    selectedCreateModelIndex = (std::clamp)(
-        selectedCreateModelIndex,
-        0,
-        static_cast<int>(kSceneObjectCreateModelDisplayNames.size()) - 1);
-    if (ImGui::Button("Create Object")) {
-        const std::string modelFileName = kSceneObjectCreateModelNames[static_cast<size_t>(selectedCreateModelIndex)]; // 生成するモデルファイル名
-        CreateSceneObject(modelFileName);
-        selectedDeleteObjectIndex = static_cast<int>(objects3d_.size()) - 1;
-    }
-
-    ImGui::SeparatorText("Delete");
-    if (!objects3d_.empty()) {
-        const int objectCount = static_cast<int>(objects3d_.size()); // 削除対象として選択できるオブジェクト数
-        selectedDeleteObjectIndex = (std::clamp)(selectedDeleteObjectIndex, 0, objectCount - 1);
-
-        std::string preview = "Object " + std::to_string(selectedDeleteObjectIndex); // Comboの現在表示名
-        Object3d* previewObject = objects3d_[static_cast<size_t>(selectedDeleteObjectIndex)].get(); // 現在選択中のオブジェクト
-        if (previewObject && !previewObject->GetDebugName().empty()) {
-            preview += " : " + GetDisplayFileName(previewObject->GetDebugName());
-        }
-
-        if (ImGui::BeginCombo("Delete Target", preview.c_str())) {
-            for (int objectIndex = 0; objectIndex < objectCount; ++objectIndex) {
-                Object3d* object = objects3d_[static_cast<size_t>(objectIndex)].get(); // 表示名を作る対象のオブジェクト
-                std::string label = "Object " + std::to_string(objectIndex); // Comboに表示するオブジェクト名
-                if (object && !object->GetDebugName().empty()) {
-                    label += " : " + GetDisplayFileName(object->GetDebugName());
-                }
-
-                const bool isSelected = selectedDeleteObjectIndex == objectIndex; // 現在選択中かどうか
-                if (ImGui::Selectable(label.c_str(), isSelected)) {
-                    selectedDeleteObjectIndex = objectIndex;
-                }
-                if (isSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        if (ImGui::Button("Delete Object")) {
-            DeleteSceneObject(static_cast<size_t>(selectedDeleteObjectIndex));
-            selectedDeleteObjectIndex = (std::min)(selectedDeleteObjectIndex, static_cast<int>(objects3d_.size()) - 1);
-        }
-    } else {
-        ImGui::Text("No objects.");
-    }
-
-    DrawCollisionDebugImGui();
-#endif
-}
-
-/// <summary>
-/// ImGuiで衝突判定の状態を表示する。
-/// </summary>
-void PlayScene::DrawCollisionDebugImGui()
-{
-#ifdef USE_IMGUI
-    ImGui::SeparatorText("Collision");
-    ImGui::Text("Collider Count: %zu", collisionSystem_.GetColliderCount());
-    ImGui::Text("Broad Phase: %s", collisionSystem_.GetSpatialHashEnabled() ? "Spatial Hash" : "Brute Force");
-    ImGui::Text("Cell Size: %.2f", collisionSystem_.GetSpatialHashCellSize());
-    ImGui::Text("Candidate Pair Count: %zu", collisionSystem_.GetLastCandidatePairCount());
-    ImGui::Text("Hit Pair Count: %zu", lastCollisionPairCount_);
-
-    const std::vector<CollisionSystem::CollisionPair>& collisionPairs = collisionSystem_.GetCollisionPairs(); // 表示対象の衝突ペア一覧
-    for (size_t pairIndex = 0; pairIndex < collisionPairs.size(); ++pairIndex) {
-        const CollisionSystem::CollisionPair& pair = collisionPairs[pairIndex]; // 表示中の衝突ペア
-        ImGui::Text("Pair %zu: Object %u <-> Object %u", pairIndex, pair.objectIdA, pair.objectIdB);
-    }
-#endif
-}
-
-/// <summary>
 /// レベルデータ内のオブジェクト一覧からシーン用3Dオブジェクトを生成する。
 /// </summary>
 void PlayScene::CreateSceneObjectsFromLevelData(const std::vector<LevelObjectData>& objectDataList)
@@ -826,9 +545,6 @@ void PlayScene::CreateSceneObjectFromLevelData(const LevelObjectData& objectData
         object3d->SetObjectId(IssueObjectId());
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(objectData.fileName);
-        if (IsAnimationModelFile(objectData.fileName)) {
-            object3d->SetAnimation(objectData.fileName);
-        }
         ApplySceneObjectInitialSettings(*object3d, objectData.fileName);
         object3d->SetScale(objectData.transform.scale);
         object3d->SetRotate(objectData.transform.rotate);
@@ -1251,6 +967,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
     LoadSceneTextures();
     InitializeSkyBox();
     InitializeSceneObjects();
+    InitializePlayerPrototype();
     if (!kUsePostEffectPreviewScene) {
         InitializeParticleObjects();
         InitializeParticleEffects();
@@ -1292,6 +1009,15 @@ void PlayScene::ReleaseSceneObjects()
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
     timeReversalConvergenceSprite_.reset();
+    player_.Finalize();
+    playerPrototypeStageBlocks_.clear();
+    playerPrototypeSwitchObject_.reset();
+    playerPrototypeDoorObject_.reset();
+    playerPrototypeSwitchActive_ = false;
+    playerPrototypeDoorOpen_ = false;
+    playerPrototypeGoalReached_ = false;
+    pastSelfRecorder_.Clear();
+    pastSelfClone_.Finalize();
 }
 
 /// <summary>
@@ -1366,175 +1092,6 @@ void PlayScene::HandlePostProcessShortcutInput()
 }
 
 /// <summary>
-/// 評価確認用のアニメーション操作入力を処理する。
-/// </summary>
-void PlayScene::HandleEvaluationAnimationInput()
-{
-    if (ShouldBlockGameShortcutInput()) {
-        return;
-    }
-
-    InputManager* inputManager = InputManager::GetInstance(); // 評価確認用入力を取得する入力管理
-    if (!inputManager) {
-        return;
-    }
-
-    if (inputManager->IsKeyJustPressed(kEvaluationAnimationToggleKey) || inputManager->IsGamePadButtonJustPressed(kEvaluationAnimationToggleButton)) {
-        ToggleSceneAnimationEnabled();
-    }
-    if (inputManager->IsKeyJustPressed(kEvaluationAnimationSpeedDownKey) || inputManager->IsGamePadButtonJustPressed(kEvaluationAnimationSpeedDownButton)) {
-        AdjustSceneAnimationPlaybackSpeed(-kEvaluationAnimationPlaybackSpeedStep);
-    }
-    if (inputManager->IsKeyJustPressed(kEvaluationAnimationSpeedUpKey) || inputManager->IsGamePadButtonJustPressed(kEvaluationAnimationSpeedUpButton)) {
-        AdjustSceneAnimationPlaybackSpeed(kEvaluationAnimationPlaybackSpeedStep);
-    }
-    if (inputManager->IsKeyJustPressed(kEvaluationAnimationResetKey) || inputManager->IsGamePadButtonJustPressed(kEvaluationAnimationResetButton)) {
-        ResetSceneAnimations();
-    }
-}
-
-/// <summary>
-/// 評価確認用のSkinningモデル移動入力を処理する。
-/// </summary>
-void PlayScene::HandleSkinningModelControlInput(float deltaTime)
-{
-    Object3d* controlTarget = FindEvaluationSkinningControlObject(); // 操作対象のSkinningモデル
-    InputManager* inputManager = InputManager::GetInstance(); // 移動入力を取得する入力管理
-    if (!controlTarget || !inputManager) {
-        return;
-    }
-
-    Vector3 moveInput { 0.0f, 0.0f, 0.0f }; // キーボードとパッドを合成した移動入力
-    if (inputManager->IsKeyPressed(DIK_A)) {
-        moveInput.x -= 1.0f;
-    }
-    if (inputManager->IsKeyPressed(DIK_D)) {
-        moveInput.x += 1.0f;
-    }
-    if (inputManager->IsKeyPressed(DIK_W)) {
-        moveInput.z += 1.0f;
-    }
-    if (inputManager->IsKeyPressed(DIK_S)) {
-        moveInput.z -= 1.0f;
-    }
-
-    moveInput.x += inputManager->GetGamePadLeftStickX();
-    moveInput.z += inputManager->GetGamePadLeftStickY();
-    const Vector3 normalizedMoveInput = NormalizeMoveInput(moveInput); // 斜め移動を補正した移動入力
-    if (normalizedMoveInput.x == 0.0f && normalizedMoveInput.z == 0.0f) {
-        return;
-    }
-
-    Vector3 translate = controlTarget->GetTranslate(); // 操作対象の現在位置
-    translate.x += normalizedMoveInput.x * kSkinningModelMoveSpeed * deltaTime;
-    translate.z += normalizedMoveInput.z * kSkinningModelMoveSpeed * deltaTime;
-    controlTarget->SetTranslate(translate);
-}
-
-/// <summary>
-/// 評価確認用に操作するSkinningモデルを取得する。
-/// </summary>
-Object3d* PlayScene::FindEvaluationSkinningControlObject() const
-{
-    for (const auto& object3d : objects3d_) {
-        if (object3d && object3d->GetDebugName() == kHumanWalkModelFileName) {
-            return object3d.get();
-        }
-    }
-    for (const auto& object3d : objects3d_) {
-        if (object3d && IsEvaluationSkinningControlTargetModelFile(object3d->GetDebugName())) {
-            return object3d.get();
-        }
-    }
-
-    return nullptr;
-}
-
-/// <summary>
-/// シーン内アニメーションの再生有効状態をまとめて設定する。
-/// </summary>
-void PlayScene::SetSceneAnimationEnabled(bool enabled)
-{
-    for (auto& object3d : objects3d_) {
-        if (object3d && object3d->HasAnimation()) {
-            object3d->SetAnimationEnabled(enabled);
-        }
-    }
-}
-
-/// <summary>
-/// シーン内アニメーションの再生有効状態を切り替える。
-/// </summary>
-void PlayScene::ToggleSceneAnimationEnabled()
-{
-    bool enableAnimation = true; // 次に設定する再生状態
-    for (const auto& object3d : objects3d_) {
-        if (object3d && object3d->HasAnimation()) {
-            enableAnimation = !object3d->GetAnimationEnabled();
-            break;
-        }
-    }
-
-    SetSceneAnimationEnabled(enableAnimation);
-}
-
-/// <summary>
-/// シーン内アニメーションの再生速度をまとめて変更する。
-/// </summary>
-void PlayScene::AdjustSceneAnimationPlaybackSpeed(float speedDelta)
-{
-    for (auto& object3d : objects3d_) {
-        if (object3d && object3d->HasAnimation()) {
-            const float playbackSpeed = object3d->GetAnimationPlaybackSpeed() + speedDelta; // 変更後の再生速度
-            object3d->SetAnimationPlaybackSpeed(playbackSpeed);
-        }
-    }
-}
-
-/// <summary>
-/// シーン内アニメーションを先頭へ戻す。
-/// </summary>
-void PlayScene::ResetSceneAnimations()
-{
-    for (auto& object3d : objects3d_) {
-        if (object3d && object3d->HasAnimation()) {
-            object3d->ResetAnimation();
-        }
-    }
-}
-
-/// <summary>
-/// 評価確認用操作のImGuiを描画する。
-/// </summary>
-void PlayScene::DrawEvaluationControlImGui()
-{
-#ifdef USE_IMGUI
-    Object3d* controlTarget = FindEvaluationSkinningControlObject(); // 操作対象のSkinningモデル
-    ImGui::Text("Move Target: %s", controlTarget ? controlTarget->GetDebugName().c_str() : "none");
-    ImGui::Text("Keyboard Move: W/A/S/D");
-    ImGui::Text("Pad Move: Left Stick");
-    ImGui::SeparatorText("Animation");
-    ImGui::Text("Keyboard: P Play/Pause, U/I Speed, O Reset");
-    ImGui::Text("Pad: A Play/Pause, LB/RB Speed, X Reset");
-    if (ImGui::Button("Play / Pause")) {
-        ToggleSceneAnimationEnabled();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Reset")) {
-        ResetSceneAnimations();
-    }
-    if (ImGui::Button("Speed -")) {
-        AdjustSceneAnimationPlaybackSpeed(-kEvaluationAnimationPlaybackSpeedStep);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Speed +")) {
-        AdjustSceneAnimationPlaybackSpeed(kEvaluationAnimationPlaybackSpeedStep);
-    }
-#else
-    (void)this;
-#endif
-}
-/// <summary>
 /// キー入力で選択されたポストエフェクトを適用する。
 /// </summary>
 void PlayScene::ApplyPostProcessShortcut(PostEffectType effectType)
@@ -1606,8 +1163,6 @@ void PlayScene::Update(float dt)
         HandleEffectStartInput();
     }
     HandlePostProcessShortcutInput();
-    HandleEvaluationAnimationInput();
-    HandleSkinningModelControlInput(dt);
     if (kUsePostEffectPreviewScene) {
         postProcess_.Update(dt);
     } else {
@@ -1617,6 +1172,7 @@ void PlayScene::Update(float dt)
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
+    UpdatePlayerPrototype(dt);
     if (!kUsePostEffectPreviewScene) {
         UpdatePostEffectCenters();
         UpdateParticleSystems(dt);
@@ -1779,8 +1335,12 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
         return;
     }
 
-    RebuildObjectPointerView();
     out->clear();
+    if (!kExposeSceneJsonObjectsToImGui) {
+        return;
+    }
+
+    RebuildObjectPointerView();
     out->reserve(objectPointerView_.size());
     out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }

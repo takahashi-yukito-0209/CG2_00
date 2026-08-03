@@ -1,5 +1,6 @@
 #include "PlayScene.h"
 #include "PlaySceneLevelEditorOverlay.h"
+#include "PlaySceneLevelEditorHierarchy.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
@@ -23,6 +24,7 @@
 
 using namespace MyEngine;
 using namespace Math;
+using namespace PlaySceneLevelEditorHierarchy;
 
 namespace {
 namespace fs = std::filesystem;
@@ -30,6 +32,7 @@ constexpr std::array<const char*, 2> kLevelObjectTypeNames = { "MESH", "EMPTY" }
 constexpr std::array<const char*, 3> kLevelColliderTypeNames = { "BOX", "SPHERE", "CAPSULE" }; // LevelObjectのcollider type候補
 constexpr std::array<const char*, 3> kModelFileExtensions = { ".obj", ".gltf", ".glb" }; // LevelObjectに指定できるモデル拡張子
 constexpr const char* kSceneEditorWindowName = "Scene Editor"; // シーン編集用ImGuiウィンドウ名
+constexpr bool kShowSceneJsonLevelEditorOverlay = false; // SceneJSON非表示中にLevel EditorのScene View重ね描きを行うか
 constexpr const char* kEffectTypeComboLabel = "Effect Type"; // エフェクト種別選択のImGuiラベル
 constexpr const char* kEffectTriggerKeyText = "Trigger Key: R"; // エフェクト開始キーの表示文
 constexpr const char* kPlayEffectButtonLabel = "Play Effect"; // エフェクト再生ボタンの表示文
@@ -483,402 +486,6 @@ std::string BuildLevelObjectLabel(const LevelObjectData& objectData, size_t obje
 }
 
 /// <summary>
-/// Level Editor用の単位Transformを作成する。
-/// </summary>
-Math::Transform CreateLevelEditorIdentityTransform()
-{
-    return {
-        { 1.0f, 1.0f, 1.0f },
-        { 0.0f, 0.0f, 0.0f },
-        { 0.0f, 0.0f, 0.0f }
-    };
-}
-
-/// <summary>
-/// 親スケールが小さすぎる場合も破綻しないようにスケール成分を割る。
-/// </summary>
-float DivideLevelEditorScaleComponent(float worldScale, float parentScale)
-{
-    constexpr float kMinimumParentScale = 0.0001f; // 親スケールを除算できる最小値
-    if (std::fabs(parentScale) < kMinimumParentScale) {
-        return worldScale;
-    }
-
-    return worldScale / parentScale;
-}
-
-/// <summary>
-/// ワールドTransformを新しい親基準のローカルTransformへ変換する。
-/// </summary>
-Math::Transform BuildLevelEditorLocalTransformForParent(const Math::Transform& worldTransform, const Math::Transform& parentTransform)
-{
-    const Math::Matrix4x4 parentMatrix = MathUtil::MakeAffineMatrix(parentTransform.scale, parentTransform.rotate, parentTransform.translate); // 新しい親のワールド行列
-    const Math::Matrix4x4 inverseParentMatrix = MathUtil::Inverse(parentMatrix); // 新しい親の逆ワールド行列
-
-    Math::Transform localTransform {}; // 新しい親基準のローカルTransform
-    localTransform.scale = {
-        DivideLevelEditorScaleComponent(worldTransform.scale.x, parentTransform.scale.x),
-        DivideLevelEditorScaleComponent(worldTransform.scale.y, parentTransform.scale.y),
-        DivideLevelEditorScaleComponent(worldTransform.scale.z, parentTransform.scale.z)
-    };
-    localTransform.rotate = {
-        worldTransform.rotate.x - parentTransform.rotate.x,
-        worldTransform.rotate.y - parentTransform.rotate.y,
-        worldTransform.rotate.z - parentTransform.rotate.z
-    };
-    localTransform.translate = MathUtil::Transform(worldTransform.translate, inverseParentMatrix);
-    return localTransform;
-}
-
-/// <summary>
-/// Level Editorで追加する空の子オブジェクトを作成する。
-/// </summary>
-LevelObjectData CreateEmptyLevelEditorObject(const std::string& objectName)
-{
-    LevelObjectData objectData {}; // 追加する空オブジェクト
-    objectData.type = "EMPTY";
-    objectData.name = objectName;
-    objectData.localTransform = CreateLevelEditorIdentityTransform();
-    objectData.transform = objectData.localTransform;
-    return objectData;
-}
-
-/// <summary>
-/// 複製したレベルオブジェクトの名前を識別しやすい名前へ変更する。
-/// </summary>
-void RenameDuplicatedLevelObject(LevelObjectData& objectData)
-{
-    if (objectData.name.empty()) {
-        objectData.name = "Object_Copy";
-        return;
-    }
-
-    objectData.name += "_Copy";
-}
-
-/// <summary>
-/// LevelObjectの階層パスを番号列へ変換する。
-/// </summary>
-bool ParseLevelObjectPath(const std::string& objectPath, std::vector<size_t>& outIndices)
-{
-    constexpr size_t kRootPrefixLength = 5; // "root/" の文字数
-    outIndices.clear();
-    if (objectPath.rfind("root/", 0) != 0 || objectPath.size() <= kRootPrefixLength) {
-        return false;
-    }
-
-    size_t segmentStart = kRootPrefixLength; // 現在解析中の区切り開始位置
-    while (segmentStart < objectPath.size()) {
-        const size_t segmentEnd = objectPath.find('/', segmentStart); // 現在の区切り終了位置
-        const std::string segment = objectPath.substr(segmentStart, segmentEnd == std::string::npos ? std::string::npos : segmentEnd - segmentStart); // パス内の番号文字列
-        if (segment.empty()) {
-            return false;
-        }
-        try {
-            outIndices.push_back(static_cast<size_t>(std::stoull(segment)));
-        } catch (...) {
-            outIndices.clear();
-            return false;
-        }
-        if (segmentEnd == std::string::npos) {
-            break;
-        }
-        segmentStart = segmentEnd + 1;
-    }
-
-    return !outIndices.empty();
-}
-
-/// <summary>
-/// LevelObjectの親配列と自身の番号を階層パスから取得する。
-/// </summary>
-bool FindLevelObjectParentListByPath(std::vector<LevelObjectData>& rootObjectDataList, const std::string& objectPath, std::vector<LevelObjectData>** outParentList, size_t* outObjectIndex)
-{
-    std::vector<size_t> indices; // パスから取り出した階層番号
-    if (!ParseLevelObjectPath(objectPath, indices)) {
-        return false;
-    }
-
-    std::vector<LevelObjectData>* parentList = &rootObjectDataList; // 現在参照中の兄弟配列
-    for (size_t depth = 0; depth + 1 < indices.size(); ++depth) {
-        const size_t childIndex = indices[depth]; // 次に降りる子番号
-        if (childIndex >= parentList->size()) {
-            return false;
-        }
-        parentList = &(*parentList)[childIndex].children;
-    }
-
-    const size_t objectIndex = indices.back(); // 操作対象の兄弟内番号
-    if (objectIndex >= parentList->size()) {
-        return false;
-    }
-
-    *outParentList = parentList;
-    *outObjectIndex = objectIndex;
-    return true;
-}
-
-/// <summary>
-/// 階層パスからLevelObjectを取得する。
-/// </summary>
-LevelObjectData* FindLevelObjectByPath(std::vector<LevelObjectData>& rootObjectDataList, const std::string& objectPath)
-{
-    std::vector<LevelObjectData>* parentList = nullptr; // 親の兄弟配列
-    size_t objectIndex = 0; // 兄弟内番号
-    if (!FindLevelObjectParentListByPath(rootObjectDataList, objectPath, &parentList, &objectIndex)) {
-        return nullptr;
-    }
-    return &(*parentList)[objectIndex];
-}
-/// <summary>
-/// LevelObjectの階層パスが現在のLevelData上に存在するか判定する。
-/// </summary>
-bool DoesLevelObjectPathExist(std::vector<LevelObjectData>& rootObjectDataList, const std::string& objectPath)
-{
-    std::vector<LevelObjectData>* parentList = nullptr; // 親の兄弟配列
-    size_t objectIndex = 0; // 兄弟内番号
-    return FindLevelObjectParentListByPath(rootObjectDataList, objectPath, &parentList, &objectIndex);
-}
-
-/// <summary>
-/// 選択済みLevelObjectパスか判定する。
-/// </summary>
-bool IsLevelObjectPathSelected(const std::vector<std::string>& selectedObjectPaths, const std::string& objectPath)
-{
-    return std::find(selectedObjectPaths.begin(), selectedObjectPaths.end(), objectPath) != selectedObjectPaths.end();
-}
-
-/// <summary>
-/// LevelObjectの複数選択状態を切り替える。
-/// </summary>
-void SetLevelObjectPathSelected(std::vector<std::string>& selectedObjectPaths, const std::string& objectPath, bool selected)
-{
-    const auto pathIterator = std::find(selectedObjectPaths.begin(), selectedObjectPaths.end(), objectPath); // 既存選択の位置
-    if (selected) {
-        if (pathIterator == selectedObjectPaths.end()) {
-            selectedObjectPaths.push_back(objectPath);
-        }
-    } else if (pathIterator != selectedObjectPaths.end()) {
-        selectedObjectPaths.erase(pathIterator);
-    }
-}
-
-/// <summary>
-/// 存在しなくなったLevelObjectの選択パスを取り除く。
-/// </summary>
-void PruneSelectedLevelObjectPaths(std::vector<LevelObjectData>& rootObjectDataList, std::vector<std::string>& selectedObjectPaths)
-{
-    selectedObjectPaths.erase(
-        std::remove_if(
-            selectedObjectPaths.begin(),
-            selectedObjectPaths.end(),
-            [&](const std::string& objectPath) { return !DoesLevelObjectPathExist(rootObjectDataList, objectPath); }),
-        selectedObjectPaths.end());
-}
-
-/// <summary>
-/// 片方のLevelObjectパスがもう片方の祖先か判定する。
-/// </summary>
-bool IsLevelObjectPathAncestorOf(const std::string& ancestorPath, const std::string& descendantPath)
-{
-    return descendantPath.size() > ancestorPath.size()
-        && descendantPath.compare(0, ancestorPath.size(), ancestorPath) == 0
-        && descendantPath[ancestorPath.size()] == '/';
-}
-/// <summary>
-/// 祖先が選択済みのLevelObjectパスを操作対象から除外する。
-/// </summary>
-std::vector<std::string> BuildIndependentLevelObjectSelection(const std::vector<std::string>& selectedObjectPaths)
-{
-    std::vector<std::string> independentPaths; // 実際に操作する選択パス
-    for (const std::string& objectPath : selectedObjectPaths) {
-        bool hasSelectedAncestor = false; // 選択済み祖先を持つか
-        for (const std::string& otherPath : selectedObjectPaths) {
-            if (IsLevelObjectPathAncestorOf(otherPath, objectPath)) {
-                hasSelectedAncestor = true;
-                break;
-            }
-        }
-        if (!hasSelectedAncestor) {
-            independentPaths.push_back(objectPath);
-        }
-    }
-    return independentPaths;
-}
-
-/// <summary>
-/// 階層編集時に深い階層・後ろの兄弟から処理する順序へ並べる。
-/// </summary>
-bool CompareLevelObjectPathForReverseEdit(const std::string& lhs, const std::string& rhs)
-{
-    std::vector<size_t> lhsIndices; // 左辺パスの階層番号
-    std::vector<size_t> rhsIndices; // 右辺パスの階層番号
-    ParseLevelObjectPath(lhs, lhsIndices);
-    ParseLevelObjectPath(rhs, rhsIndices);
-    if (lhsIndices.size() != rhsIndices.size()) {
-        return lhsIndices.size() > rhsIndices.size();
-    }
-    for (size_t index = 0; index < lhsIndices.size() && index < rhsIndices.size(); ++index) {
-        if (lhsIndices[index] != rhsIndices[index]) {
-            return lhsIndices[index] > rhsIndices[index];
-        }
-    }
-    return lhs > rhs;
-}
-
-/// <summary>
-/// 指定パスのLevelObjectを直後へ複製する。
-/// </summary>
-bool DuplicateLevelObjectByPath(std::vector<LevelObjectData>& rootObjectDataList, const std::string& objectPath)
-{
-    std::vector<LevelObjectData>* parentList = nullptr; // 親の兄弟配列
-    size_t objectIndex = 0; // 兄弟内番号
-    if (!FindLevelObjectParentListByPath(rootObjectDataList, objectPath, &parentList, &objectIndex)) {
-        return false;
-    }
-
-    LevelObjectData duplicatedObject = (*parentList)[objectIndex]; // 複製して追加するオブジェクト
-    RenameDuplicatedLevelObject(duplicatedObject);
-    parentList->insert(parentList->begin() + static_cast<std::ptrdiff_t>(objectIndex + 1), std::move(duplicatedObject));
-    return true;
-}
-
-/// <summary>
-/// 指定パスのLevelObjectを削除する。
-/// </summary>
-bool DeleteLevelObjectByPath(std::vector<LevelObjectData>& rootObjectDataList, const std::string& objectPath)
-{
-    std::vector<LevelObjectData>* parentList = nullptr; // 親の兄弟配列
-    size_t objectIndex = 0; // 兄弟内番号
-    if (!FindLevelObjectParentListByPath(rootObjectDataList, objectPath, &parentList, &objectIndex)) {
-        return false;
-    }
-
-    parentList->erase(parentList->begin() + static_cast<std::ptrdiff_t>(objectIndex));
-    return true;
-}
-
-/// <summary>
-/// 選択中LevelObjectをまとめて複製する。
-/// </summary>
-bool DuplicateSelectedLevelObjects(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<std::string>& selectedObjectPaths)
-{
-    std::vector<std::string> targetPaths = BuildIndependentLevelObjectSelection(selectedObjectPaths); // 実際に複製するパス
-    std::sort(targetPaths.begin(), targetPaths.end(), CompareLevelObjectPathForReverseEdit);
-
-    bool edited = false; // 複製が発生したか
-    for (const std::string& objectPath : targetPaths) {
-        edited |= DuplicateLevelObjectByPath(rootObjectDataList, objectPath);
-    }
-    return edited;
-}
-
-/// <summary>
-/// 選択中LevelObjectをまとめて削除する。
-/// </summary>
-bool DeleteSelectedLevelObjects(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<std::string>& selectedObjectPaths)
-{
-    std::vector<std::string> targetPaths = BuildIndependentLevelObjectSelection(selectedObjectPaths); // 実際に削除するパス
-    std::sort(targetPaths.begin(), targetPaths.end(), CompareLevelObjectPathForReverseEdit);
-
-    bool edited = false; // 削除が発生したか
-    for (const std::string& objectPath : targetPaths) {
-        edited |= DeleteLevelObjectByPath(rootObjectDataList, objectPath);
-    }
-    return edited;
-}
-/// <summary>
-/// 選択中LevelObjectをクリップボードへコピーする。
-/// </summary>
-bool CopySelectedLevelObjects(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<std::string>& selectedObjectPaths, std::vector<LevelObjectData>& clipboard)
-{
-    clipboard.clear();
-    const std::vector<std::string> targetPaths = BuildIndependentLevelObjectSelection(selectedObjectPaths); // 実際にコピーするパス
-    for (const std::string& objectPath : targetPaths) {
-        LevelObjectData* objectData = FindLevelObjectByPath(rootObjectDataList, objectPath); // コピー元オブジェクト
-        if (objectData) {
-            clipboard.push_back(*objectData);
-        }
-    }
-    return !clipboard.empty();
-}
-
-/// <summary>
-/// クリップボード内のLevelObjectをルートへ貼り付ける。
-/// </summary>
-bool PasteLevelObjectsToRoot(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<LevelObjectData>& clipboard)
-{
-    if (clipboard.empty()) {
-        return false;
-    }
-
-    for (LevelObjectData pastedObject : clipboard) {
-        RenameDuplicatedLevelObject(pastedObject);
-        pastedObject.localTransform = pastedObject.transform;
-        rootObjectDataList.push_back(std::move(pastedObject));
-    }
-    return true;
-}
-
-/// <summary>
-/// 選択中LevelObjectをルートへ移動する。
-/// </summary>
-bool MoveSelectedLevelObjectsToRoot(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<std::string>& selectedObjectPaths)
-{
-    std::vector<std::string> targetPaths = BuildIndependentLevelObjectSelection(selectedObjectPaths); // 実際に移動するパス
-    std::sort(targetPaths.begin(), targetPaths.end(), CompareLevelObjectPathForReverseEdit);
-
-    bool edited = false; // 移動が発生したか
-    for (const std::string& objectPath : targetPaths) {
-        std::vector<LevelObjectData>* parentList = nullptr; // 親の兄弟配列
-        size_t objectIndex = 0; // 兄弟内番号
-        if (!FindLevelObjectParentListByPath(rootObjectDataList, objectPath, &parentList, &objectIndex) || parentList == &rootObjectDataList) {
-            continue;
-        }
-        LevelObjectData movedObject = std::move((*parentList)[objectIndex]); // ルートへ移動するオブジェクト
-        movedObject.localTransform = movedObject.transform;
-        parentList->erase(parentList->begin() + static_cast<std::ptrdiff_t>(objectIndex));
-        rootObjectDataList.push_back(std::move(movedObject));
-        edited = true;
-    }
-    return edited;
-}
-
-/// <summary>
-/// 選択中LevelObjectを指定パスの子へ移動する。
-/// </summary>
-bool MoveSelectedLevelObjectsToParent(std::vector<LevelObjectData>& rootObjectDataList, const std::vector<std::string>& selectedObjectPaths, const std::string& parentPath)
-{
-    LevelObjectData* parentObject = FindLevelObjectByPath(rootObjectDataList, parentPath); // 移動先の親オブジェクト
-    if (!parentObject) {
-        return false;
-    }
-
-    const Math::Transform parentTransform = parentObject->transform; // 移動先のワールドTransform
-    std::vector<std::string> movedPaths; // 元位置から削除するパス
-    const std::vector<std::string> targetPaths = BuildIndependentLevelObjectSelection(selectedObjectPaths); // 実際に移動するパス
-    for (const std::string& objectPath : targetPaths) {
-        if (objectPath == parentPath || IsLevelObjectPathAncestorOf(objectPath, parentPath)) {
-            continue;
-        }
-        LevelObjectData* objectData = FindLevelObjectByPath(rootObjectDataList, objectPath); // 移動元オブジェクト
-        if (!objectData) {
-            continue;
-        }
-        LevelObjectData movedObject = *objectData; // 子として追加するコピー
-        movedObject.localTransform = BuildLevelEditorLocalTransformForParent(movedObject.transform, parentTransform);
-        parentObject->children.push_back(std::move(movedObject));
-        movedPaths.push_back(objectPath);
-    }
-
-    std::sort(movedPaths.begin(), movedPaths.end(), CompareLevelObjectPathForReverseEdit);
-    bool edited = false; // 移動が発生したか
-    for (const std::string& objectPath : movedPaths) {
-        edited |= DeleteLevelObjectByPath(rootObjectDataList, objectPath);
-    }
-    return edited;
-}
-/// <summary>
 /// レベルオブジェクトの階層操作ボタンを描画する。
 /// </summary>
 bool DrawLevelObjectOperationButtons(std::vector<LevelObjectData>& objectDataList, std::vector<LevelObjectData>& rootObjectDataList, size_t objectIndex)
@@ -944,40 +551,137 @@ bool DrawLevelObjectOperationButtons(std::vector<LevelObjectData>& objectDataLis
 }
 
 /// <summary>
-/// 選択中LevelObjectをPrefab元から再読み込みする。
+/// レベルオブジェクトの基本情報をImGuiで編集する。
 /// </summary>
-bool ReloadSelectedLevelObjectFromPrefab(LevelObjectData& objectData, std::string* outMessage)
+bool DrawLevelObjectBasicImGui(LevelObjectData& objectData)
 {
-    if (objectData.prefabSource.empty()) {
-        if (outMessage) {
-            *outMessage = "Selected object has no prefab source.";
-        }
+    if (!ImGui::CollapsingHeader("Basic", ImGuiTreeNodeFlags_DefaultOpen)) {
         return false;
     }
 
-    LevelData prefabData {}; // 読み込んだPrefabデータ
-    std::string prefabLoadMessage; // Prefab読み込み結果
-    if (!LevelLoader::Load(objectData.prefabSource, prefabData, &prefabLoadMessage) || prefabData.objects.empty()) {
-        if (outMessage) {
-            *outMessage = prefabLoadMessage.empty() ? "Prefab reload failed." : prefabLoadMessage;
+    bool edited = false; // 基本情報が変更されたか
+    const std::vector<std::string> objectTypeChoices(kLevelObjectTypeNames.begin(), kLevelObjectTypeNames.end()); // type選択候補
+    bool objectEnabled = objectData.enabled; // ImGuiで編集中のオブジェクト有効フラグ
+    if (ImGui::Checkbox("Enabled", &objectEnabled)) {
+        objectData.enabled = objectEnabled;
+        edited = true;
+    }
+    edited |= EditStringCombo("Type", objectData.type, objectTypeChoices);
+    edited |= EditStringText("Name", objectData.name);
+    edited |= EditStringText("Tag", objectData.tag);
+    bool spawnPoint = objectData.spawnPoint; // ImGuiで編集中のスポーン地点フラグ
+    if (ImGui::Checkbox("Spawn Point", &spawnPoint)) {
+        objectData.spawnPoint = spawnPoint;
+        edited = true;
+    }
+    bool cameraStart = objectData.cameraStart; // ImGuiで編集中の開始カメラフラグ
+    if (ImGui::Checkbox("Camera Start", &cameraStart)) {
+        objectData.cameraStart = cameraStart;
+        edited = true;
+    }
+    edited |= EditStringText("Prefab Source", objectData.prefabSource);
+    if (!objectData.prefabSource.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear Prefab Link")) {
+            objectData.prefabSource.clear();
+            edited = true;
         }
+    }
+    if (objectData.type == "MESH") {
+        const std::vector<std::string> modelFiles = BuildModelFileList(); // file_name選択候補
+        edited |= EditStringCombo("File Select", objectData.fileName, modelFiles);
+        if (modelFiles.empty()) {
+            ImGui::TextDisabled("No model files found.");
+        }
+    }
+    edited |= EditStringText("File Text", objectData.fileName);
+    ImGui::Text("Children: %zu", objectData.children.size());
+    if (objectData.type.empty()) {
+        ImGui::TextDisabled("Type is required for reload.");
+    }
+
+    return edited;
+}
+
+/// <summary>
+/// レベルオブジェクトのローカルTransformをImGuiで編集する。
+/// </summary>
+bool DrawLevelObjectLocalTransformImGui(LevelObjectData& objectData)
+{
+    if (!ImGui::CollapsingHeader("Transform (Local)", ImGuiTreeNodeFlags_DefaultOpen)) {
         return false;
     }
 
-    const Math::Transform currentLocalTransform = objectData.localTransform; // 維持するローカルTransform
-    const Math::Transform currentWorldTransform = objectData.transform; // 維持するワールドTransform
-    const std::string currentName = objectData.name; // 維持する表示名
-    const std::string prefabSource = objectData.prefabSource; // 維持するPrefab参照
-    objectData = prefabData.objects.front();
-    objectData.name = currentName.empty() ? objectData.name : currentName;
-    objectData.prefabSource = prefabSource;
-    objectData.localTransform = currentLocalTransform;
-    objectData.transform = currentWorldTransform;
+    bool edited = false; // Transformが変更されたか
+    edited |= EditVector3Value("Translate", objectData.localTransform.translate);
+    edited |= EditRotationDegrees("Rotate Deg", objectData.localTransform.rotate);
+    edited |= EditVector3Value("Scale", objectData.localTransform.scale);
+    return edited;
+}
 
-    if (outMessage) {
-        *outMessage = "Reloaded selected object from prefab source.";
+/// <summary>
+/// レベルオブジェクトのイベントトリガーをImGuiで編集する。
+/// </summary>
+bool DrawLevelObjectEventTriggerImGui(LevelObjectData& objectData)
+{
+    if (!ImGui::CollapsingHeader("Event Trigger")) {
+        return false;
     }
-    return true;
+
+    bool edited = false; // イベントトリガーが変更されたか
+    bool triggerEnabled = objectData.eventTrigger.enabled; // ImGuiで編集中のイベントトリガー有効フラグ
+    if (ImGui::Checkbox("Trigger Enabled", &triggerEnabled)) {
+        objectData.eventTrigger.enabled = triggerEnabled;
+        edited = true;
+    }
+    if (objectData.eventTrigger.enabled) {
+        edited |= EditStringText("Event Name", objectData.eventTrigger.eventName);
+        edited |= EditVector3Value("Trigger Size", objectData.eventTrigger.size);
+        objectData.eventTrigger.size.x = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.x);
+        objectData.eventTrigger.size.y = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.y);
+        objectData.eventTrigger.size.z = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.z);
+    }
+    return edited;
+}
+
+/// <summary>
+/// レベルオブジェクトのコライダーをImGuiで編集する。
+/// </summary>
+bool DrawLevelObjectColliderImGui(LevelObjectData& objectData)
+{
+    if (!ImGui::CollapsingHeader("Collider")) {
+        return false;
+    }
+
+    bool edited = false; // コライダーが変更されたか
+    bool colliderEnabled = objectData.collider.enabled; // ImGuiで編集中のコライダー有効フラグ
+    if (ImGui::Checkbox("Collider Enabled", &colliderEnabled)) {
+        objectData.collider.enabled = colliderEnabled;
+        if (objectData.collider.enabled) {
+            SanitizeLevelColliderForEdit(objectData.collider);
+        }
+        edited = true;
+    }
+    if (objectData.type == "MESH" && !objectData.fileName.empty()) {
+        if (ImGui::Button("Fit Box To Model")) {
+            edited |= FitLevelColliderToModelBounds(objectData);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Uses local model bounds.");
+    }
+    if (objectData.collider.enabled) {
+        SanitizeLevelColliderForEdit(objectData.collider);
+        const std::vector<std::string> colliderTypeChoices(kLevelColliderTypeNames.begin(), kLevelColliderTypeNames.end()); // collider type選択候補
+        const bool colliderTypeEdited = EditStringCombo("Collider Shape", objectData.collider.type, colliderTypeChoices); // コライダー形状が変更されたか
+        edited |= colliderTypeEdited;
+        edited |= EditVector3Value("Collider Center", objectData.collider.center);
+        const bool colliderSizeEdited = EditVector3Value("Collider Size", objectData.collider.size); // コライダーサイズが変更されたか
+        if (colliderTypeEdited || colliderSizeEdited) {
+            SanitizeLevelColliderForEdit(objectData.collider);
+            edited = true;
+        }
+    }
+    return edited;
 }
 
 /// <summary>
@@ -986,100 +690,10 @@ bool ReloadSelectedLevelObjectFromPrefab(LevelObjectData& objectData, std::strin
 bool DrawLevelObjectDetail(LevelObjectData& objectData)
 {
     bool edited = false; // オブジェクト情報が変更されたか
-
-    if (ImGui::CollapsingHeader("Basic", ImGuiTreeNodeFlags_DefaultOpen)) {
-        const std::vector<std::string> objectTypeChoices(kLevelObjectTypeNames.begin(), kLevelObjectTypeNames.end()); // type選択候補
-        bool objectEnabled = objectData.enabled; // ImGuiで編集中のオブジェクト有効フラグ
-        if (ImGui::Checkbox("Enabled", &objectEnabled)) {
-            objectData.enabled = objectEnabled;
-            edited = true;
-        }
-        edited |= EditStringCombo("Type", objectData.type, objectTypeChoices);
-        edited |= EditStringText("Name", objectData.name);
-        edited |= EditStringText("Tag", objectData.tag);
-        bool spawnPoint = objectData.spawnPoint; // ImGuiで編集中のスポーン地点フラグ
-        if (ImGui::Checkbox("Spawn Point", &spawnPoint)) {
-            objectData.spawnPoint = spawnPoint;
-            edited = true;
-        }
-        bool cameraStart = objectData.cameraStart; // ImGuiで編集中の開始カメラフラグ
-        if (ImGui::Checkbox("Camera Start", &cameraStart)) {
-            objectData.cameraStart = cameraStart;
-            edited = true;
-        }
-        edited |= EditStringText("Prefab Source", objectData.prefabSource);
-        if (!objectData.prefabSource.empty()) {
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Clear Prefab Link")) {
-                objectData.prefabSource.clear();
-                edited = true;
-            }
-        }
-        if (objectData.type == "MESH") {
-            const std::vector<std::string> modelFiles = BuildModelFileList(); // file_name選択候補
-            edited |= EditStringCombo("File Select", objectData.fileName, modelFiles);
-            if (modelFiles.empty()) {
-                ImGui::TextDisabled("No model files found.");
-            }
-        }
-        edited |= EditStringText("File Text", objectData.fileName);
-        ImGui::Text("Children: %zu", objectData.children.size());
-        if (objectData.type.empty()) {
-            ImGui::TextDisabled("Type is required for reload.");
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Transform (Local)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        edited |= EditVector3Value("Translate", objectData.localTransform.translate);
-        edited |= EditRotationDegrees("Rotate Deg", objectData.localTransform.rotate);
-        edited |= EditVector3Value("Scale", objectData.localTransform.scale);
-    }
-
-    if (ImGui::CollapsingHeader("Event Trigger")) {
-        bool triggerEnabled = objectData.eventTrigger.enabled; // ImGuiで編集中のイベントトリガー有効フラグ
-        if (ImGui::Checkbox("Trigger Enabled", &triggerEnabled)) {
-            objectData.eventTrigger.enabled = triggerEnabled;
-            edited = true;
-        }
-        if (objectData.eventTrigger.enabled) {
-            edited |= EditStringText("Event Name", objectData.eventTrigger.eventName);
-            edited |= EditVector3Value("Trigger Size", objectData.eventTrigger.size);
-            objectData.eventTrigger.size.x = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.x);
-            objectData.eventTrigger.size.y = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.y);
-            objectData.eventTrigger.size.z = SanitizeLevelColliderSizeValue(objectData.eventTrigger.size.z);
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Collider")) {
-        bool colliderEnabled = objectData.collider.enabled; // ImGuiで編集中のコライダー有効フラグ
-        if (ImGui::Checkbox("Collider Enabled", &colliderEnabled)) {
-            objectData.collider.enabled = colliderEnabled;
-            if (objectData.collider.enabled) {
-                SanitizeLevelColliderForEdit(objectData.collider);
-            }
-            edited = true;
-        }
-        if (objectData.type == "MESH" && !objectData.fileName.empty()) {
-            if (ImGui::Button("Fit Box To Model")) {
-                edited |= FitLevelColliderToModelBounds(objectData);
-            }
-            ImGui::SameLine();
-            ImGui::TextDisabled("Uses local model bounds.");
-        }
-        if (objectData.collider.enabled) {
-            SanitizeLevelColliderForEdit(objectData.collider);
-            const std::vector<std::string> colliderTypeChoices(kLevelColliderTypeNames.begin(), kLevelColliderTypeNames.end()); // collider type選択候補
-            const bool colliderTypeEdited = EditStringCombo("Collider Shape", objectData.collider.type, colliderTypeChoices); // コライダー形状が変更されたか
-            edited |= colliderTypeEdited;
-            edited |= EditVector3Value("Collider Center", objectData.collider.center);
-            const bool colliderSizeEdited = EditVector3Value("Collider Size", objectData.collider.size); // コライダーサイズが変更されたか
-            if (colliderTypeEdited || colliderSizeEdited) {
-                SanitizeLevelColliderForEdit(objectData.collider);
-                edited = true;
-            }
-        }
-    }
-
+    edited |= DrawLevelObjectBasicImGui(objectData);
+    edited |= DrawLevelObjectLocalTransformImGui(objectData);
+    edited |= DrawLevelObjectEventTriggerImGui(objectData);
+    edited |= DrawLevelObjectColliderImGui(objectData);
     return edited;
 }
 
@@ -1162,6 +776,10 @@ bool DrawLevelObjectTree(PlayScene& scene, std::vector<LevelObjectData>& objectD
 void PlayScene::DrawSceneViewOverlay(const Matrix4x4& viewProjectionMatrix, float imageMinX, float imageMinY, float imageWidth, float imageHeight)
 {
 #ifdef USE_IMGUI
+    if (!kShowSceneJsonLevelEditorOverlay) {
+        return;
+    }
+
     if (!ctx_.imguiManager || ctx_.imguiManager->GetGizmoTargetMode() != 4) {
         return;
     }
@@ -1225,269 +843,326 @@ void PlayScene::DrawEffectControllerImGui()
 #endif
 }
 
-/// <summary>
-/// ImGuiでレベルJSONの読み込み状態を表示する。
-/// </summary>
-void PlayScene::DrawLevelDataImGui()
-{
 #ifdef USE_IMGUI
-    static std::array<char, 256> levelPathBuffer {}; // 編集中の読み込みレベルJSONファイル名
-    static std::array<char, 256> levelPrefabPathBuffer {}; // 編集中のPrefab JSONファイル名
-    static std::string bufferedLevelPath; // 読み込みバッファへ反映済みのファイル名
-    static std::string bufferedLevelPrefabPath; // Prefabバッファへ反映済みのファイル名
-    static std::string levelPrefabFileName = "levels/prefabs/selected_prefab.json"; // Prefab保存と挿入に使うJSONファイル名
-    static bool autoApplyEditedLevel = true; // LevelData編集時に即シーンへ反映するか
-    static bool autoSaveEditedLevel = true; // LevelData編集後にJSONへ自動保存するか
-    static bool pendingLevelAutoSave = false; // 編集完了後に自動保存を実行するか
-    static bool autoReloadLevelWhenChanged = false; // レベルJSONの更新時に自動再読込するか
-    static bool autoReloadHasTimestamp = false; // 自動再読込用の更新日時を保持済みか
-    static fs::file_time_type autoReloadLastWriteTime {}; // 自動再読込で最後に確認した更新日時
-    static std::vector<LevelData> levelUndoHistory; // LevelData編集のUndo履歴
-    static std::vector<LevelData> levelRedoHistory; // LevelData編集のRedo履歴
-    static bool pendingLevelEditHistory = false; // 編集終了待ちのUndo履歴があるか
-    static LevelData pendingLevelEditSnapshot; // 編集開始時点のLevelData
-    static int pendingLevelSaveAction = 0; // 未適用保存確認後に実行する処理
-    static std::vector<std::string> selectedLevelObjectPaths; // 複数選択中のLevelObjectパス
-    static std::vector<LevelObjectData> levelObjectClipboard; // コピーしたLevelObject群
-    SyncTextBuffer(levelDataFileName_, levelPathBuffer, bufferedLevelPath);
+
+struct PlayScene::LevelEditorImGuiState {
+    std::array<char, 256> levelPathBuffer {}; // 編集中の読み込みレベルJSONファイル名
+    std::array<char, 256> levelPrefabPathBuffer {}; // 編集中のPrefab JSONファイル名
+    std::string bufferedLevelPath; // 読み込みバッファへ反映済みのファイル名
+    std::string bufferedLevelPrefabPath; // Prefabバッファへ反映済みのファイル名
+    std::string levelPrefabFileName = "levels/prefabs/selected_prefab.json"; // Prefab保存と挿入に使うJSONファイル名
+    bool autoApplyEditedLevel = true; // LevelData編集時に即シーンへ反映するか
+    bool autoSaveEditedLevel = true; // LevelData編集後にJSONへ自動保存するか
+    bool pendingLevelAutoSave = false; // 編集完了後に自動保存を実行するか
+    bool autoReloadLevelWhenChanged = false; // レベルJSONの更新時に自動再読込するか
+    bool autoReloadHasTimestamp = false; // 自動再読込用の更新日時を保持済みか
+    fs::file_time_type autoReloadLastWriteTime {}; // 自動再読込で最後に確認した更新日時
+    std::vector<LevelData> levelUndoHistory; // LevelData編集のUndo履歴
+    std::vector<LevelData> levelRedoHistory; // LevelData編集のRedo履歴
+    bool pendingLevelEditHistory = false; // 編集終了待ちのUndo履歴があるか
+    LevelData pendingLevelEditSnapshot; // 編集開始時点のLevelData
+    int pendingLevelSaveAction = 0; // 未適用保存確認後に実行する処理
+    std::vector<std::string> selectedLevelObjectPaths; // 複数選択中のLevelObjectパス
+    std::vector<LevelObjectData> levelObjectClipboard; // コピーしたLevelObject群
+};
+
+/// <summary>
+/// LevelData編集ImGuiからレベル再読み込みを実行する。
+/// </summary>
+bool PlayScene::ExecuteLevelEditorReload(LevelEditorImGuiState& state)
+{
+    if (!ReloadLevelSceneObjects()) {
+        return false;
+    }
+
+    state.levelUndoHistory.clear();
+    state.levelRedoHistory.clear();
+    state.pendingLevelEditHistory = false;
+    state.pendingLevelAutoSave = false;
+    state.autoReloadHasTimestamp = false;
+    return true;
+}
+
+/// <summary>
+/// LevelData編集ImGuiからレベル保存を実行する。
+/// </summary>
+void PlayScene::ExecuteLevelEditorSave()
+{
     levelSaveFileName_ = levelDataFileName_;
-    SyncTextBuffer(levelPrefabFileName, levelPrefabPathBuffer, bufferedLevelPrefabPath);
+    SaveLevelSnapshot();
+}
 
-    auto executeReloadLevel = [&]() {
-        if (ReloadLevelSceneObjects()) {
-            levelUndoHistory.clear();
-            levelRedoHistory.clear();
-            pendingLevelEditHistory = false;
-            pendingLevelAutoSave = false;
-            autoReloadHasTimestamp = false;
-        }
-    }; // レベル再読み込み処理
-    auto executeSaveLevel = [&]() {
-        levelSaveFileName_ = levelDataFileName_;
-        SaveLevelSnapshot();
-    }; // レベル保存処理
-    auto executeSaveAndReloadLevel = [&]() {
-        levelSaveFileName_ = levelDataFileName_;
-        if (SaveLevelSnapshot()) {
-            bufferedLevelPath.clear();
-            executeReloadLevel();
-        }
-    }; // レベル保存後の再読み込み処理
+/// <summary>
+/// LevelData編集ImGuiから保存後再読み込みを実行する。
+/// </summary>
+void PlayScene::ExecuteLevelEditorSaveAndReload(LevelEditorImGuiState& state)
+{
+    levelSaveFileName_ = levelDataFileName_;
+    if (SaveLevelSnapshot()) {
+        state.bufferedLevelPath.clear();
+        ExecuteLevelEditorReload(state);
+    }
+}
 
-    if (ImGui::CollapsingHeader("Load", ImGuiTreeNodeFlags_DefaultOpen)) {
-        DrawLevelLoadFileSelector(levelDataFileName_, levelPathBuffer, bufferedLevelPath);
-        if (ImGui::InputText("Load / Save File", levelPathBuffer.data(), levelPathBuffer.size())) {
-            levelDataFileName_ = levelPathBuffer.data();
-            levelSaveFileName_ = levelDataFileName_;
-            bufferedLevelPath = levelDataFileName_;
-        }
-        if (ImGui::Button("Reload")) {
-            if (levelDirty_) {
-                ImGui::OpenPopup("Confirm Reload Level");
-            } else {
-                executeReloadLevel();
-            }
-        }
-        ImGui::SameLine();
-        ImGui::Checkbox("Auto Reload On File Change", &autoReloadLevelWhenChanged);
-        if (autoReloadLevelWhenChanged) {
-            const std::string resolvedLoadFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 自動再読込で監視する実ファイルパス
-            std::error_code fileTimeError; // 更新日時取得のエラー受け取り
-            const fs::path loadFilePath(resolvedLoadFilePath); // 更新日時を確認するレベルJSONパス
-            const fs::file_time_type currentWriteTime = fs::last_write_time(loadFilePath, fileTimeError); // 現在の更新日時
-            if (fileTimeError) {
-                autoReloadHasTimestamp = false;
-            } else if (!autoReloadHasTimestamp) {
-                autoReloadLastWriteTime = currentWriteTime;
-                autoReloadHasTimestamp = true;
-            } else if (currentWriteTime != autoReloadLastWriteTime) {
-                autoReloadLastWriteTime = currentWriteTime;
-                if (levelDirty_) {
-                    SetLevelLoadStatus(false, "Auto reload skipped because level has unsaved edits.");
-                } else {
-                    executeReloadLevel();
-                }
-            }
+/// <summary>
+/// LevelData編集ImGuiの読み込み操作を描画する。
+/// </summary>
+void PlayScene::DrawLevelLoadSectionImGui(LevelEditorImGuiState& state)
+{
+    if (!ImGui::CollapsingHeader("Load", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    DrawLevelLoadFileSelector(levelDataFileName_, state.levelPathBuffer, state.bufferedLevelPath);
+    if (ImGui::InputText("Load / Save File", state.levelPathBuffer.data(), state.levelPathBuffer.size())) {
+        levelDataFileName_ = state.levelPathBuffer.data();
+        levelSaveFileName_ = levelDataFileName_;
+        state.bufferedLevelPath = levelDataFileName_;
+    }
+    if (ImGui::Button("Reload")) {
+        if (levelDirty_) {
+            ImGui::OpenPopup("Confirm Reload Level");
         } else {
-            autoReloadHasTimestamp = false;
+            ExecuteLevelEditorReload(state);
         }
     }
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto Reload On File Change", &state.autoReloadLevelWhenChanged);
+    if (state.autoReloadLevelWhenChanged) {
+        const std::string resolvedLoadFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 自動再読込で監視する実ファイルパス
+        std::error_code fileTimeError; // 更新日時取得のエラー受け取り
+        const fs::path loadFilePath(resolvedLoadFilePath); // 更新日時を確認するレベルJSONパス
+        const fs::file_time_type currentWriteTime = fs::last_write_time(loadFilePath, fileTimeError); // 現在の更新日時
+        if (fileTimeError) {
+            state.autoReloadHasTimestamp = false;
+        } else if (!state.autoReloadHasTimestamp) {
+            state.autoReloadLastWriteTime = currentWriteTime;
+            state.autoReloadHasTimestamp = true;
+        } else if (currentWriteTime != state.autoReloadLastWriteTime) {
+            state.autoReloadLastWriteTime = currentWriteTime;
+            if (levelDirty_) {
+                SetLevelLoadStatus(false, "Auto reload skipped because level has unsaved edits.");
+            } else {
+                ExecuteLevelEditorReload(state);
+            }
+        }
+    } else {
+        state.autoReloadHasTimestamp = false;
+    }
+}
 
-    if (ImGui::CollapsingHeader("Save", ImGuiTreeNodeFlags_DefaultOpen)) {
-        levelSaveFileName_ = levelDataFileName_;
-        const std::string resolvedSaveFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 読み書き共通のレベルJSONパス
-        ImGui::TextWrapped("Load / Save File: %s", levelDataFileName_.empty() ? "-" : levelDataFileName_.c_str());
-        ImGui::TextWrapped("Resolved File: %s", resolvedSaveFilePath.empty() ? "-" : resolvedSaveFilePath.c_str());
-        if (ImGui::Button("Save Snapshot")) {
-            if (!levelAppliedToScene_) {
-                pendingLevelSaveAction = 1;
-                ImGui::OpenPopup("Confirm Save Not Applied");
-            } else {
-                executeSaveLevel();
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Save And Reload")) {
-            if (!levelAppliedToScene_) {
-                pendingLevelSaveAction = 2;
-                ImGui::OpenPopup("Confirm Save Not Applied");
-            } else {
-                executeSaveAndReloadLevel();
-            }
-        }
-        ImGui::Text("Save Result: %s", levelSaveSucceeded_ ? "Success" : "Failed");
-        ImGui::Text("Save Message: %s", levelSaveMessage_.empty() ? "-" : levelSaveMessage_.c_str());
+/// <summary>
+/// LevelData編集ImGuiの保存操作を描画する。
+/// </summary>
+void PlayScene::DrawLevelSaveSectionImGui(LevelEditorImGuiState& state)
+{
+    if (!ImGui::CollapsingHeader("Save", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
     }
 
+    levelSaveFileName_ = levelDataFileName_;
+    const std::string resolvedSaveFilePath = LevelWriter::ResolveWritableLevelPath(levelDataFileName_); // 読み書き共通のレベルJSONパス
+    ImGui::TextWrapped("Load / Save File: %s", levelDataFileName_.empty() ? "-" : levelDataFileName_.c_str());
+    ImGui::TextWrapped("Resolved File: %s", resolvedSaveFilePath.empty() ? "-" : resolvedSaveFilePath.c_str());
+    if (ImGui::Button("Save Snapshot")) {
+        if (!levelAppliedToScene_) {
+            state.pendingLevelSaveAction = 1;
+            ImGui::OpenPopup("Confirm Save Not Applied");
+        } else {
+            ExecuteLevelEditorSave();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save And Reload")) {
+        if (!levelAppliedToScene_) {
+            state.pendingLevelSaveAction = 2;
+            ImGui::OpenPopup("Confirm Save Not Applied");
+        } else {
+            ExecuteLevelEditorSaveAndReload(state);
+        }
+    }
+    ImGui::Text("Save Result: %s", levelSaveSucceeded_ ? "Success" : "Failed");
+    ImGui::Text("Save Message: %s", levelSaveMessage_.empty() ? "-" : levelSaveMessage_.c_str());
+}
 
-    if (ImGui::CollapsingHeader("Prefab")) {
-        if (ImGui::InputText("Prefab File", levelPrefabPathBuffer.data(), levelPrefabPathBuffer.size())) {
-            levelPrefabFileName = levelPrefabPathBuffer.data();
-            bufferedLevelPrefabPath = levelPrefabFileName;
+/// <summary>
+/// LevelData編集ImGuiのPrefab操作を描画する。
+/// </summary>
+void PlayScene::DrawLevelPrefabSectionImGui(LevelEditorImGuiState& state)
+{
+    if (!ImGui::CollapsingHeader("Prefab")) {
+        return;
+    }
+
+    if (ImGui::InputText("Prefab File", state.levelPrefabPathBuffer.data(), state.levelPrefabPathBuffer.size())) {
+        state.levelPrefabFileName = state.levelPrefabPathBuffer.data();
+        state.bufferedLevelPrefabPath = state.levelPrefabFileName;
+    }
+    ImGui::SeparatorText("Prefab Source");
+    const std::string resolvedPrefabFilePath = LevelWriter::ResolveWritableLevelPath(state.levelPrefabFileName); // 実際に使うPrefab JSONパス
+    ImGui::TextWrapped("Resolved Prefab File: %s", resolvedPrefabFilePath.empty() ? "-" : resolvedPrefabFilePath.c_str());
+    if (ImGui::Button("Save Selected As Prefab")) {
+        const bool levelDirtyBeforePrefabSave = levelDirty_; // Prefab保存前のLevelData未保存状態
+        const bool levelAppliedBeforePrefabSave = levelAppliedToScene_; // Prefab保存前のシーン反映状態
+        const int selectedObjectIndex = GetSelectedSceneObjectIndex(); // Prefab保存対象のMESH番号
+        LevelObjectData* selectedObjectData = selectedObjectIndex >= 0 ? FindLevelMeshObjectByIndex(static_cast<size_t>(selectedObjectIndex)) : nullptr; // Prefab保存対象
+        if (!selectedObjectData) {
+            SetLevelSaveStatus(false, "No selected mesh object to save as prefab.");
+        } else {
+            LevelData prefabData {}; // Prefabとして保存する単体LevelData
+            LevelObjectData prefabObject = *selectedObjectData; // 選択中オブジェクトの保存用コピー
+            prefabData.schemaVersion = kCurrentLevelSchemaVersion;
+            prefabData.name = "scene";
+            prefabObject.localTransform = prefabObject.transform;
+            prefabData.objects.push_back(std::move(prefabObject));
+            std::string prefabSaveMessage; // Prefab保存結果メッセージ
+            const bool prefabSaveSucceeded = LevelWriter::SaveHierarchySnapshot(state.levelPrefabFileName, prefabData, &prefabSaveMessage); // Prefab保存結果
+            SetLevelSaveStatus(prefabSaveSucceeded, prefabSaveMessage.empty() ? (prefabSaveSucceeded ? "Saved prefab." : "Prefab save failed.") : prefabSaveMessage);
+            levelDirty_ = levelDirtyBeforePrefabSave;
+            levelAppliedToScene_ = levelAppliedBeforePrefabSave;
         }
-        ImGui::SeparatorText("Prefab Source");
-        const std::string resolvedPrefabFilePath = LevelWriter::ResolveWritableLevelPath(levelPrefabFileName); // 実際に使うPrefab JSONパス
-        ImGui::TextWrapped("Resolved Prefab File: %s", resolvedPrefabFilePath.empty() ? "-" : resolvedPrefabFilePath.c_str());
-        if (ImGui::Button("Save Selected As Prefab")) {
-            const bool levelDirtyBeforePrefabSave = levelDirty_; // Prefab保存前のLevelData未保存状態
-            const bool levelAppliedBeforePrefabSave = levelAppliedToScene_; // Prefab保存前のシーン反映状態
-            const int selectedObjectIndex = GetSelectedSceneObjectIndex(); // Prefab保存対象のMESH番号
-            LevelObjectData* selectedObjectData = selectedObjectIndex >= 0 ? FindLevelMeshObjectByIndex(static_cast<size_t>(selectedObjectIndex)) : nullptr; // Prefab保存対象
-            if (!selectedObjectData) {
-                SetLevelSaveStatus(false, "No selected mesh object to save as prefab.");
-            } else {
-                LevelData prefabData {}; // Prefabとして保存する単体LevelData
-                LevelObjectData prefabObject = *selectedObjectData; // 選択中オブジェクトの保存用コピー
-                prefabData.schemaVersion = kCurrentLevelSchemaVersion;
-                prefabData.name = "scene";
-                prefabObject.localTransform = prefabObject.transform;
-                prefabData.objects.push_back(std::move(prefabObject));
-                std::string prefabSaveMessage; // Prefab保存結果メッセージ
-                const bool prefabSaveSucceeded = LevelWriter::SaveHierarchySnapshot(levelPrefabFileName, prefabData, &prefabSaveMessage); // Prefab保存結果
-                SetLevelSaveStatus(prefabSaveSucceeded, prefabSaveMessage.empty() ? (prefabSaveSucceeded ? "Saved prefab." : "Prefab save failed.") : prefabSaveMessage);
-                levelDirty_ = levelDirtyBeforePrefabSave;
-                levelAppliedToScene_ = levelAppliedBeforePrefabSave;
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Reload Selected From Prefab Source")) {
-            const int selectedObjectIndex = GetSelectedSceneObjectIndex(); // Prefab再読み込み対象のMESH番号
-            LevelObjectData* selectedObjectData = selectedObjectIndex >= 0 ? FindLevelMeshObjectByIndex(static_cast<size_t>(selectedObjectIndex)) : nullptr; // Prefab再読み込み対象
-            if (!selectedObjectData) {
-                SetLevelLoadStatus(false, "No selected mesh object to reload from prefab.");
-            } else {
-                PushLevelEditHistory(levelUndoHistory, levelData_);
-                levelRedoHistory.clear();
-                pendingLevelEditHistory = false;
-                std::string reloadMessage; // 再読み込み結果メッセージ
-                if (ReloadSelectedLevelObjectFromPrefab(*selectedObjectData, &reloadMessage)) {
-                    LevelLoader::ResolveWorldTransforms(levelData_);
-                    RefreshLevelDataSummary();
-                    levelAppliedToScene_ = false;
-                    MarkLevelDataDirty("Prefab source reloaded. Apply or save hierarchy snapshot.", false);
-                    SetLevelLoadStatus(true, reloadMessage);
-                } else {
-                    SetLevelLoadStatus(false, reloadMessage);
-                }
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Insert Prefab To Root")) {
-            LevelData prefabData {}; // 読み込んだPrefabデータ
-            std::string prefabLoadMessage; // Prefab読み込み結果メッセージ
-            if (!LevelLoader::Load(levelPrefabFileName, prefabData, &prefabLoadMessage) || prefabData.objects.empty()) {
-                SetLevelLoadStatus(false, prefabLoadMessage.empty() ? "Prefab load failed." : prefabLoadMessage);
-            } else {
-                PushLevelEditHistory(levelUndoHistory, levelData_);
-                levelRedoHistory.clear();
-                pendingLevelEditHistory = false;
-                for (LevelObjectData& prefabObject : prefabData.objects) {
-                    if (!prefabObject.name.empty()) {
-                        prefabObject.name += "_Instance";
-                    }
-                    prefabObject.prefabSource = levelPrefabFileName;
-                    levelData_.objects.push_back(std::move(prefabObject));
-                }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reload Selected From Prefab Source")) {
+        const int selectedObjectIndex = GetSelectedSceneObjectIndex(); // Prefab再読み込み対象のMESH番号
+        LevelObjectData* selectedObjectData = selectedObjectIndex >= 0 ? FindLevelMeshObjectByIndex(static_cast<size_t>(selectedObjectIndex)) : nullptr; // Prefab再読み込み対象
+        if (!selectedObjectData) {
+            SetLevelLoadStatus(false, "No selected mesh object to reload from prefab.");
+        } else {
+            PushLevelEditHistory(state.levelUndoHistory, levelData_);
+            state.levelRedoHistory.clear();
+            state.pendingLevelEditHistory = false;
+            std::string reloadMessage; // 再読み込み結果メッセージ
+            if (ReloadSelectedLevelObjectFromPrefab(*selectedObjectData, &reloadMessage)) {
                 LevelLoader::ResolveWorldTransforms(levelData_);
                 RefreshLevelDataSummary();
                 levelAppliedToScene_ = false;
-                MarkLevelDataDirty("Prefab inserted. Apply or save hierarchy snapshot.", false);
-                SetLevelLoadStatus(true, "Inserted prefab to root.");
+                MarkLevelDataDirty("Prefab source reloaded. Apply or save hierarchy snapshot.", false);
+                SetLevelLoadStatus(true, reloadMessage);
+            } else {
+                SetLevelLoadStatus(false, reloadMessage);
             }
         }
     }
-    if (ImGui::CollapsingHeader("Scene Apply", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Checkbox("Auto Apply Edited Level", &autoApplyEditedLevel);
-        ImGui::SameLine();
-        ImGui::Checkbox("Auto Save Edited Level", &autoSaveEditedLevel);
-        if (ImGui::Button("Sync Scene To Level")) {
-            PushLevelEditHistory(levelUndoHistory, levelData_);
-            levelRedoHistory.clear();
-            pendingLevelEditHistory = false;
-            if (SyncSceneObjectsToLevelData()) {
-                pendingLevelAutoSave = autoSaveEditedLevel;
-                MarkLevelDataDirty("Scene objects synced to level data. Save hierarchy snapshot.", true);
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Apply Edited Level")) {
-            if (ApplyLevelDataToScene()) {
-                pendingLevelAutoSave = autoSaveEditedLevel;
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Preload Level Models")) {
-            PreloadLevelModels();
-        }
-        if (ImGui::Button("Undo Level Edit")) {
-            if (RestoreLevelEditHistory(levelUndoHistory, levelRedoHistory, levelData_)) {
-                RefreshLevelDataSummary();
-                pendingLevelAutoSave = autoSaveEditedLevel;
-                if (autoApplyEditedLevel) {
-                    ApplyLevelDataToScene();
+    ImGui::SameLine();
+    if (ImGui::Button("Insert Prefab To Root")) {
+        LevelData prefabData {}; // 読み込んだPrefabデータ
+        std::string prefabLoadMessage; // Prefab読み込み結果メッセージ
+        if (!LevelLoader::Load(state.levelPrefabFileName, prefabData, &prefabLoadMessage) || prefabData.objects.empty()) {
+            SetLevelLoadStatus(false, prefabLoadMessage.empty() ? "Prefab load failed." : prefabLoadMessage);
+        } else {
+            PushLevelEditHistory(state.levelUndoHistory, levelData_);
+            state.levelRedoHistory.clear();
+            state.pendingLevelEditHistory = false;
+            for (LevelObjectData& prefabObject : prefabData.objects) {
+                if (!prefabObject.name.empty()) {
+                    prefabObject.name += "_Instance";
                 }
-                MarkLevelDataDirty("Undo level edit. Save hierarchy snapshot.", autoApplyEditedLevel);
+                prefabObject.prefabSource = state.levelPrefabFileName;
+                levelData_.objects.push_back(std::move(prefabObject));
             }
+            LevelLoader::ResolveWorldTransforms(levelData_);
+            RefreshLevelDataSummary();
+            levelAppliedToScene_ = false;
+            MarkLevelDataDirty("Prefab inserted. Apply or save hierarchy snapshot.", false);
+            SetLevelLoadStatus(true, "Inserted prefab to root.");
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Redo Level Edit")) {
-            if (RestoreLevelEditHistory(levelRedoHistory, levelUndoHistory, levelData_)) {
-                RefreshLevelDataSummary();
-                pendingLevelAutoSave = autoSaveEditedLevel;
-                if (autoApplyEditedLevel) {
-                    ApplyLevelDataToScene();
-                }
-                MarkLevelDataDirty("Redo level edit. Save hierarchy snapshot.", autoApplyEditedLevel);
-            }
-        }
-        ImGui::Text("Undo: %zu  Redo: %zu", levelUndoHistory.size(), levelRedoHistory.size());
+    }
+}
+
+/// <summary>
+/// LevelData編集ImGuiのシーン反映操作を描画する。
+/// </summary>
+void PlayScene::DrawLevelSceneApplySectionImGui(LevelEditorImGuiState& state)
+{
+    if (!ImGui::CollapsingHeader("Scene Apply", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
     }
 
-    if (ImGui::CollapsingHeader("Status")) {
-        ImGui::Text("Load Result: %s", levelLoadSucceeded_ ? "Success" : "Failed");
-        ImGui::Text("Load Message: %s", levelLoadMessage_.empty() ? "-" : levelLoadMessage_.c_str());
-        ImGui::Text("Scene Name: %s", levelData_.name.empty() ? "-" : levelData_.name.c_str());
-        ImGui::Text("Schema Version: %d", levelData_.schemaVersion);
-        ImGui::Text("Root Objects: %zu", levelData_.objects.size());
-        ImGui::Text("Total Objects: %zu", levelTotalObjectCount_);
-        ImGui::Text("Mesh Objects: %zu", levelMeshObjectCount_);
-        ImGui::Text("Colliders: %zu", levelColliderObjectCount_);
-        ImGui::Text("Disabled: %zu", levelDisabledObjectCount_);
-        ImGui::Text("Spawn Points: %zu", levelSpawnPointCount_);
-        ImGui::Text("Event Triggers: %zu", levelEventTriggerCount_);
-        ImGui::Text("Camera Starts: %zu", levelCameraStartCount_);
-        ImGui::Text("Dirty: %s", levelDirty_ ? "Unsaved" : "Saved");
-        ImGui::Text("Apply State: %s", levelAppliedToScene_ ? "Applied" : "Not Applied");
-        const LevelValidationSummary validationSummary = BuildLevelValidationSummary(levelData_); // LevelDataの検証結果
-        ImGui::Text("Invalid Types: %zu", validationSummary.invalidTypeCount);
-        ImGui::Text("Missing Model Names: %zu", validationSummary.missingModelFileNameCount);
-        ImGui::Text("Missing Model Assets: %zu", validationSummary.missingModelAssetCount);
+    ImGui::Checkbox("Auto Apply Edited Level", &state.autoApplyEditedLevel);
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto Save Edited Level", &state.autoSaveEditedLevel);
+    if (ImGui::Button("Sync Scene To Level")) {
+        PushLevelEditHistory(state.levelUndoHistory, levelData_);
+        state.levelRedoHistory.clear();
+        state.pendingLevelEditHistory = false;
+        if (SyncSceneObjectsToLevelData()) {
+            state.pendingLevelAutoSave = state.autoSaveEditedLevel;
+            MarkLevelDataDirty("Scene objects synced to level data. Save hierarchy snapshot.", true);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Apply Edited Level")) {
+        if (ApplyLevelDataToScene()) {
+            state.pendingLevelAutoSave = state.autoSaveEditedLevel;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Preload Level Models")) {
+        PreloadLevelModels();
+    }
+    if (ImGui::Button("Undo Level Edit")) {
+        if (RestoreLevelEditHistory(state.levelUndoHistory, state.levelRedoHistory, levelData_)) {
+            RefreshLevelDataSummary();
+            state.pendingLevelAutoSave = state.autoSaveEditedLevel;
+            if (state.autoApplyEditedLevel) {
+                ApplyLevelDataToScene();
+            }
+            MarkLevelDataDirty("Undo level edit. Save hierarchy snapshot.", state.autoApplyEditedLevel);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Redo Level Edit")) {
+        if (RestoreLevelEditHistory(state.levelRedoHistory, state.levelUndoHistory, levelData_)) {
+            RefreshLevelDataSummary();
+            state.pendingLevelAutoSave = state.autoSaveEditedLevel;
+            if (state.autoApplyEditedLevel) {
+                ApplyLevelDataToScene();
+            }
+            MarkLevelDataDirty("Redo level edit. Save hierarchy snapshot.", state.autoApplyEditedLevel);
+        }
+    }
+    ImGui::Text("Undo: %zu  Redo: %zu", state.levelUndoHistory.size(), state.levelRedoHistory.size());
+}
+
+/// <summary>
+/// LevelData編集ImGuiの状態表示を描画する。
+/// </summary>
+void PlayScene::DrawLevelStatusSectionImGui()
+{
+    if (!ImGui::CollapsingHeader("Status")) {
+        return;
     }
 
+    ImGui::Text("Load Result: %s", levelLoadSucceeded_ ? "Success" : "Failed");
+    ImGui::Text("Load Message: %s", levelLoadMessage_.empty() ? "-" : levelLoadMessage_.c_str());
+    ImGui::Text("Scene Name: %s", levelData_.name.empty() ? "-" : levelData_.name.c_str());
+    ImGui::Text("Schema Version: %d", levelData_.schemaVersion);
+    ImGui::Text("Root Objects: %zu", levelData_.objects.size());
+    ImGui::Text("Total Objects: %zu", levelTotalObjectCount_);
+    ImGui::Text("Mesh Objects: %zu", levelMeshObjectCount_);
+    ImGui::Text("Colliders: %zu", levelColliderObjectCount_);
+    ImGui::Text("Disabled: %zu", levelDisabledObjectCount_);
+    ImGui::Text("Spawn Points: %zu", levelSpawnPointCount_);
+    ImGui::Text("Event Triggers: %zu", levelEventTriggerCount_);
+    ImGui::Text("Camera Starts: %zu", levelCameraStartCount_);
+    ImGui::Text("Dirty: %s", levelDirty_ ? "Unsaved" : "Saved");
+    ImGui::Text("Apply State: %s", levelAppliedToScene_ ? "Applied" : "Not Applied");
+    const LevelValidationSummary validationSummary = BuildLevelValidationSummary(levelData_); // LevelDataの検証結果
+    ImGui::Text("Invalid Types: %zu", validationSummary.invalidTypeCount);
+    ImGui::Text("Missing Model Names: %zu", validationSummary.missingModelFileNameCount);
+    ImGui::Text("Missing Model Assets: %zu", validationSummary.missingModelAssetCount);
+}
+
+/// <summary>
+/// LevelData編集ImGuiの確認ポップアップを描画する。
+/// </summary>
+void PlayScene::DrawLevelConfirmPopupsImGui(LevelEditorImGuiState& state)
+{
     if (ImGui::BeginPopupModal("Confirm Reload Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("Unsaved level edits will be discarded by reload.");
         if (ImGui::Button("Discard And Reload")) {
-            executeReloadLevel();
+            ExecuteLevelEditorReload(state);
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
@@ -1500,104 +1175,145 @@ void PlayScene::DrawLevelDataImGui()
     if (ImGui::BeginPopupModal("Confirm Save Not Applied", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("LevelData has edits that are not applied to the scene. Save anyway?");
         if (ImGui::Button("Save Anyway")) {
-            if (pendingLevelSaveAction == 1) {
-                executeSaveLevel();
-            } else if (pendingLevelSaveAction == 2) {
-                executeSaveAndReloadLevel();
+            if (state.pendingLevelSaveAction == 1) {
+                ExecuteLevelEditorSave();
+            } else if (state.pendingLevelSaveAction == 2) {
+                ExecuteLevelEditorSaveAndReload(state);
             }
-            pendingLevelSaveAction = 0;
+            state.pendingLevelSaveAction = 0;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) {
-            pendingLevelSaveAction = 0;
+            state.pendingLevelSaveAction = 0;
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
-    if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (levelData_.objects.empty()) {
-            ImGui::TextDisabled("No level objects loaded.");
-        } else {
-            const LevelData beforeEditLevelData = levelData_; // 編集前のLevelDataスナップショット
-            size_t meshObjectIndex = 0; // LevelData内のMESH順に対応するObject3D番号
-            LevelLoader::ResolveWorldTransforms(levelData_);
-            bool levelEdited = false; // Levelタブでオブジェクト情報が編集されたか
-            ImGui::SeparatorText("Selection Tools");
-            PruneSelectedLevelObjectPaths(levelData_.objects, selectedLevelObjectPaths);
-            ImGui::Text("Selected: %zu", selectedLevelObjectPaths.size());
-            const bool hasSelectedObjects = !selectedLevelObjectPaths.empty(); // 複数選択があるか
-            if (!hasSelectedObjects) {
-                ImGui::BeginDisabled();
-            }
-            if (ImGui::Button("Copy Selected")) {
-                CopySelectedLevelObjects(levelData_.objects, selectedLevelObjectPaths, levelObjectClipboard);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Duplicate Selected")) {
-                levelEdited |= DuplicateSelectedLevelObjects(levelData_.objects, selectedLevelObjectPaths);
-                selectedLevelObjectPaths.clear();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Move Selected To Root")) {
-                levelEdited |= MoveSelectedLevelObjectsToRoot(levelData_.objects, selectedLevelObjectPaths);
-                selectedLevelObjectPaths.clear();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Delete Selected")) {
-                levelEdited |= DeleteSelectedLevelObjects(levelData_.objects, selectedLevelObjectPaths);
-                selectedLevelObjectPaths.clear();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Clear Selection")) {
-                selectedLevelObjectPaths.clear();
-            }
-            if (!hasSelectedObjects) {
-                ImGui::EndDisabled();
-            }
-            const bool hasClipboardObjects = !levelObjectClipboard.empty(); // 貼り付け可能なコピーがあるか
-            if (!hasClipboardObjects) {
-                ImGui::BeginDisabled();
-            }
-            if (ImGui::Button("Paste To Root")) {
-                levelEdited |= PasteLevelObjectsToRoot(levelData_.objects, levelObjectClipboard);
-            }
-            if (!hasClipboardObjects) {
-                ImGui::EndDisabled();
-            }
-            ImGui::SameLine();
-            ImGui::Text("Clipboard: %zu", levelObjectClipboard.size());
-            ImGui::SeparatorText("Hierarchy");
-            levelEdited |= DrawLevelObjectTree(*this, levelData_.objects, levelData_.objects, "root", meshObjectIndex, selectedLevelObjectPaths);
-            if (levelEdited) {
-                if (!pendingLevelEditHistory) {
-                    pendingLevelEditSnapshot = beforeEditLevelData;
-                    pendingLevelEditHistory = true;
-                }
-                RefreshLevelDataSummary();
-                pendingLevelAutoSave = autoSaveEditedLevel;
-                if (autoApplyEditedLevel) {
-                    ApplyLevelDataToScene();
-                    MarkLevelDataDirty("Level data edited and applied. Save hierarchy snapshot.", true);
-                } else {
-                    levelAppliedToScene_ = false;
-                    MarkLevelDataDirty("Level data edited. Apply or save hierarchy snapshot.", false);
-                }
-            }
-        }
+}
+
+/// <summary>
+/// LevelData編集ImGuiの階層オブジェクト編集を描画する。
+/// </summary>
+void PlayScene::DrawLevelObjectsSectionImGui(LevelEditorImGuiState& state)
+{
+    if (!ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
     }
 
-    if (pendingLevelEditHistory && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
-        PushLevelEditHistory(levelUndoHistory, pendingLevelEditSnapshot);
-        levelRedoHistory.clear();
-        pendingLevelEditHistory = false;
+    if (levelData_.objects.empty()) {
+        ImGui::TextDisabled("No level objects loaded.");
+        return;
     }
-    if (pendingLevelAutoSave && !pendingLevelEditHistory && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+
+    const LevelData beforeEditLevelData = levelData_; // 編集前のLevelDataスナップショット
+    size_t meshObjectIndex = 0; // LevelData内のMESH順に対応するObject3D番号
+    LevelLoader::ResolveWorldTransforms(levelData_);
+    bool levelEdited = false; // Levelタブでオブジェクト情報が編集されたか
+    ImGui::SeparatorText("Selection Tools");
+    PruneSelectedLevelObjectPaths(levelData_.objects, state.selectedLevelObjectPaths);
+    ImGui::Text("Selected: %zu", state.selectedLevelObjectPaths.size());
+    const bool hasSelectedObjects = !state.selectedLevelObjectPaths.empty(); // 複数選択があるか
+    if (!hasSelectedObjects) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Copy Selected")) {
+        CopySelectedLevelObjects(levelData_.objects, state.selectedLevelObjectPaths, state.levelObjectClipboard);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Duplicate Selected")) {
+        levelEdited |= DuplicateSelectedLevelObjects(levelData_.objects, state.selectedLevelObjectPaths);
+        state.selectedLevelObjectPaths.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Move Selected To Root")) {
+        levelEdited |= MoveSelectedLevelObjectsToRoot(levelData_.objects, state.selectedLevelObjectPaths);
+        state.selectedLevelObjectPaths.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Delete Selected")) {
+        levelEdited |= DeleteSelectedLevelObjects(levelData_.objects, state.selectedLevelObjectPaths);
+        state.selectedLevelObjectPaths.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Clear Selection")) {
+        state.selectedLevelObjectPaths.clear();
+    }
+    if (!hasSelectedObjects) {
+        ImGui::EndDisabled();
+    }
+    const bool hasClipboardObjects = !state.levelObjectClipboard.empty(); // 貼り付け可能なコピーがあるか
+    if (!hasClipboardObjects) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Paste To Root")) {
+        levelEdited |= PasteLevelObjectsToRoot(levelData_.objects, state.levelObjectClipboard);
+    }
+    if (!hasClipboardObjects) {
+        ImGui::EndDisabled();
+    }
+    ImGui::SameLine();
+    ImGui::Text("Clipboard: %zu", state.levelObjectClipboard.size());
+    ImGui::SeparatorText("Hierarchy");
+    levelEdited |= DrawLevelObjectTree(*this, levelData_.objects, levelData_.objects, "root", meshObjectIndex, state.selectedLevelObjectPaths);
+    if (!levelEdited) {
+        return;
+    }
+
+    if (!state.pendingLevelEditHistory) {
+        state.pendingLevelEditSnapshot = beforeEditLevelData;
+        state.pendingLevelEditHistory = true;
+    }
+    RefreshLevelDataSummary();
+    state.pendingLevelAutoSave = state.autoSaveEditedLevel;
+    if (state.autoApplyEditedLevel) {
+        ApplyLevelDataToScene();
+        MarkLevelDataDirty("Level data edited and applied. Save hierarchy snapshot.", true);
+    } else {
+        levelAppliedToScene_ = false;
+        MarkLevelDataDirty("Level data edited. Apply or save hierarchy snapshot.", false);
+    }
+}
+
+/// <summary>
+/// LevelData編集ImGuiの遅延履歴と自動保存を処理する。
+/// </summary>
+void PlayScene::FlushLevelEditorDeferredActions(LevelEditorImGuiState& state)
+{
+    if (state.pendingLevelEditHistory && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+        PushLevelEditHistory(state.levelUndoHistory, state.pendingLevelEditSnapshot);
+        state.levelRedoHistory.clear();
+        state.pendingLevelEditHistory = false;
+    }
+    if (state.pendingLevelAutoSave && !state.pendingLevelEditHistory && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
         if (SaveLevelSnapshot()) {
-            autoReloadHasTimestamp = false;
+            state.autoReloadHasTimestamp = false;
         }
-        pendingLevelAutoSave = false;
+        state.pendingLevelAutoSave = false;
     }
+}
+
+#endif
+
+/// <summary>
+/// ImGuiでレベルJSONの読み込み状態を表示する。
+/// </summary>
+void PlayScene::DrawLevelDataImGui()
+{
+#ifdef USE_IMGUI
+    static LevelEditorImGuiState levelEditorImGuiState; // LevelData編集ImGuiの一時状態
+    SyncTextBuffer(levelDataFileName_, levelEditorImGuiState.levelPathBuffer, levelEditorImGuiState.bufferedLevelPath);
+    levelSaveFileName_ = levelDataFileName_;
+    SyncTextBuffer(levelEditorImGuiState.levelPrefabFileName, levelEditorImGuiState.levelPrefabPathBuffer, levelEditorImGuiState.bufferedLevelPrefabPath);
+
+    DrawLevelLoadSectionImGui(levelEditorImGuiState);
+    DrawLevelSaveSectionImGui(levelEditorImGuiState);
+    DrawLevelPrefabSectionImGui(levelEditorImGuiState);
+    DrawLevelSceneApplySectionImGui(levelEditorImGuiState);
+    DrawLevelStatusSectionImGui();
+    DrawLevelConfirmPopupsImGui(levelEditorImGuiState);
+    DrawLevelObjectsSectionImGui(levelEditorImGuiState);
+    FlushLevelEditorDeferredActions(levelEditorImGuiState);
 #endif
 }
 
@@ -1639,6 +1355,11 @@ void PlayScene::DrawImGui()
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("Player")) {
+            DrawPlayerPrototypeImGui();
+            ImGui::EndTabItem();
+        }
+
         if (ImGui::BeginTabItem("Sprites")) {
             DrawSceneSpriteEditImGui();
             ImGui::EndTabItem();
@@ -1651,10 +1372,6 @@ void PlayScene::DrawImGui()
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("Evaluation")) {
-            DrawEvaluationControlImGui();
-            ImGui::EndTabItem();
-        }
 
         ImGui::EndTabBar();
     }

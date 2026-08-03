@@ -41,7 +41,7 @@ struct Material {
     int lightingMode; // ライティング方式
     int32_t useAlphaCutoutSampler; // 0以外の場合、アルファカットアウト用にpoint+clampサンプラーを使用
     int32_t useAlphaDiscard; // 0以外の場合、透過ピクセルをdiscardする
-    float padding2[1]; // GPU転送用の余白
+    int32_t useTexture; // 0以外の場合、テクスチャ色を使用する
     float shininess; // 反射の鋭さ（スペキュラー強度の指数）
     float environmentCoefficient; // 環境マップ反射強度
     float pad3[2]; // GPU転送用の余白
