@@ -40,7 +40,8 @@ PixelShaderOutput main(VertexShaderOutput input)
     // Sample with both samplers and select the result in shader code to avoid that limitation.
     float4 textureColorLinear = gtexture.Sample(gSampler, transformedUV.xy);
     float4 textureColorPoint = gtexture.Sample(gSamplerPointClamp, transformedUV.xy);
-    float4 textureColor = (gMaterial.useAlphaCutoutSampler != 0) ? textureColorPoint : textureColorLinear;
+    float4 sampledTextureColor = (gMaterial.useAlphaCutoutSampler != 0) ? textureColorPoint : textureColorLinear;
+    float4 textureColor = (gMaterial.useTexture != 0) ? sampledTextureColor : float4(1.0f, 1.0f, 1.0f, 1.0f);
     
     // Separate lighting for RGB and keep alpha controlled by material/texture
     float3 texRGB = textureColor.rgb;
