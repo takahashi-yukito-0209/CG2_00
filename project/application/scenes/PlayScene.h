@@ -7,6 +7,9 @@
 #include "../effects/TemporalRiftEffect.h"
 #include "../effects/TimeReversalEffect.h"
 #include "../effects/TimeStopEffect.h"
+#include "../player/PastSelfClone.h"
+#include "../player/PastSelfRecorder.h"
+#include "../player/Player.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -130,6 +133,15 @@ public: // メンバ関数
     void FillParticleEmitterPointers(std::vector<::ParticleEmitter*>* out) override;
 
 private:
+    /// <summary>
+    /// プレイヤー確認用の仮ステージブロック。
+    /// </summary>
+    struct PlayerPrototypeStageBlock {
+        std::unique_ptr<MyEngine::Object3d> object; // 表示用の仮ブロック
+        SolidCollider collider; // 地形として全面衝突する情報
+        bool goalMarker = false; // ゴール表示用のブロックか
+    };
+
     /// <summary>
     /// ポストプロセス描画で使用する状態
     /// </summary>
@@ -303,45 +315,96 @@ private:
     /// </summary>
     void HandlePostProcessShortcutInput();
 
-    /// <summary>
-    /// 評価確認用のアニメーション操作入力を処理する。
-    /// </summary>
-    void HandleEvaluationAnimationInput();
 
     /// <summary>
-    /// 評価確認用のSkinningモデル移動入力を処理する。
+    /// プレイヤー確認用オブジェクトを初期化する。
     /// </summary>
-    void HandleSkinningModelControlInput(float deltaTime);
+    void InitializePlayerPrototype();
 
     /// <summary>
-    /// 評価確認用に操作するSkinningモデルを取得する。
+    /// プレイヤー確認用の仮ステージを初期化する。
     /// </summary>
-    MyEngine::Object3d* FindEvaluationSkinningControlObject() const;
+    void InitializePlayerPrototypeStage();
 
     /// <summary>
-    /// シーン内アニメーションの再生有効状態をまとめて設定する。
+    /// プレイヤー確認用状態を更新する。
     /// </summary>
-    void SetSceneAnimationEnabled(bool enabled);
+    void UpdatePlayerPrototype(float deltaTime);
 
     /// <summary>
-    /// シーン内アニメーションの再生有効状態を切り替える。
+    /// プレイヤー確認用の分身ギミックを初期化する。
     /// </summary>
-    void ToggleSceneAnimationEnabled();
+    void InitializePlayerPrototypeMechanics();
 
     /// <summary>
-    /// シーン内アニメーションの再生速度をまとめて変更する。
+    /// プレイヤー確認用の分身ギミックを更新する。
     /// </summary>
-    void AdjustSceneAnimationPlaybackSpeed(float speedDelta);
+    void UpdatePlayerPrototypeMechanics();
 
     /// <summary>
-    /// シーン内アニメーションを先頭へ戻す。
+    /// プレイヤー確認用状態を初期状態へ戻す。
     /// </summary>
-    void ResetSceneAnimations();
+    void ResetPlayerPrototypeState();
 
     /// <summary>
-    /// 評価確認用操作のImGuiを描画する。
+    /// プレイヤー確認用の分身ギミック表示を更新する。
     /// </summary>
-    void DrawEvaluationControlImGui();
+    void UpdatePlayerPrototypeMechanicObjects(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// 分身記録の開始・終了地点マーカーを更新する。
+    /// </summary>
+    void UpdatePlayerPrototypeCloneRecordMarkers(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// 分身記録の開始・終了地点マーカーを描画する。
+    /// </summary>
+    void DrawPlayerPrototypeCloneRecordMarkers();
+
+    /// <summary>
+    /// プレイヤー確認用の分身ギミックを描画する。
+    /// </summary>
+    void DrawPlayerPrototypeMechanics();
+
+    /// <summary>
+    /// 分身用スイッチが押されているか判定する。
+    /// </summary>
+    bool IsPlayerPrototypeSwitchPressed() const;
+
+    /// <summary>
+    /// プレイヤー確認用の仮ステージを更新する。
+    /// </summary>
+    void UpdatePlayerPrototypeStage(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// プレイヤー確認用の仮ステージを描画する。
+    /// </summary>
+    void DrawPlayerPrototypeStage();
+
+    /// <summary>
+    /// プレイヤー確認用の全面コライダーを追加する。
+    /// </summary>
+    void AppendPlayerPrototypeSolidColliders(std::vector<SolidCollider>* colliders) const;
+
+    /// <summary>
+    /// プレイヤー確認用ゴール判定を更新する。
+    /// </summary>
+    void UpdatePlayerPrototypeGoal();
+
+    /// <summary>
+    /// プレイヤー確認用ゴール表示を現在状態に合わせる。
+    /// </summary>
+    void ApplyPlayerPrototypeGoalVisual();
+
+    /// <summary>
+    /// プレイヤー確認用オブジェクトを描画する。
+    /// </summary>
+    void DrawPlayerPrototype();
+
+    /// <summary>
+    /// ImGuiでプレイヤー確認用の状態を表示する。
+    /// </summary>
+    void DrawPlayerPrototypeImGui();
 
     /// <summary>
     /// キー入力で選択されたポストエフェクトを適用する。
@@ -784,6 +847,17 @@ private: // メンバー変数
     uint32_t nextObjectId_ = 1; // 次に生成する3Dオブジェクトへ割り当てるID
     MyEngine::CollisionSystem collisionSystem_; // シーン内3Dオブジェクトの衝突判定管理
     size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
+    Player player_; // 確認用プレイヤー
+    PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
+    PastSelfClone pastSelfClone_; // 記録済み状態を再生する確認用分身
+    std::vector<PlayerPrototypeStageBlock> playerPrototypeStageBlocks_; // プレイヤー検証用の仮ステージブロック一覧
+    std::unique_ptr<MyEngine::Object3d> playerPrototypeSwitchObject_; // 分身ギミック確認用の仮スイッチ
+    std::unique_ptr<MyEngine::Object3d> playerPrototypeDoorObject_; // 分身ギミック確認用の仮扉
+    std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneStartMarkerObject_; // 分身開始地点を示す仮マーカー
+    std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneEndMarkerObject_; // 分身終了地点を示す仮マーカー
+    bool playerPrototypeSwitchActive_ = false; // 仮スイッチが押されているか
+    bool playerPrototypeDoorOpen_ = false; // 仮扉が開いているか
+    bool playerPrototypeGoalReached_ = false; // 仮ゴールに到達したか
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;

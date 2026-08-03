@@ -11,7 +11,7 @@
 using namespace MyEngine;
 
 namespace {
-constexpr std::array<const char*, 13> kSceneObjectCreateModelNames = {
+constexpr std::array<const char*, 9> kSceneObjectCreateModelNames = {
     "block/block.obj",
     "plane/plane.gltf",
     "bunny/bunny.obj",
@@ -21,12 +21,8 @@ constexpr std::array<const char*, 13> kSceneObjectCreateModelNames = {
     "terrain/terrain.obj",
     "multiMesh/multiMesh.obj",
     "multiMaterial/multiMaterial.obj",
-    "AnimatedCube/AnimatedCube.gltf",
-    "simpleSkin/simpleSkin.gltf",
-    "human/sneakWalk.gltf",
-    "human/walk.gltf",
 }; // ImGuiから生成できる3Dモデル名
-constexpr std::array<const char*, 13> kSceneObjectCreateModelDisplayNames = {
+constexpr std::array<const char*, 9> kSceneObjectCreateModelDisplayNames = {
     "block.obj",
     "plane.gltf",
     "bunny.obj",
@@ -36,10 +32,6 @@ constexpr std::array<const char*, 13> kSceneObjectCreateModelDisplayNames = {
     "terrain.obj",
     "multiMesh.obj",
     "multiMaterial.obj",
-    "AnimatedCube.gltf",
-    "simpleSkin.gltf",
-    "sneakWalk.gltf",
-    "walk.gltf",
 }; // ImGuiに表示する3Dモデル名
 constexpr std::array<const char*, 5> kSceneSpriteCreateTextureNames = {
     "uvChecker.png",

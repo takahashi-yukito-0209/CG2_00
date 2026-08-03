@@ -29,15 +29,10 @@ constexpr float kHitStopFinishedThreshold = 0.0f; // ヒットストップが終
 constexpr float kKeyboardDissolveThreshold = 0.45f; // キー切り替え時に見えやすいDissolve閾値
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
-constexpr Vector3 kSkinningPreviewScale = { 3.0f, 3.0f, 3.0f }; // Skinning確認モデルの初期スケール
-constexpr Vector3 kSkinningPreviewTranslate = { 0.0f, 0.0f, 0.0f }; // Skinning確認モデルの初期位置
 constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
+constexpr bool kExposeSceneJsonObjectsToImGui = false; // SceneJSON配置オブジェクトをImGui編集対象として表示するか
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
-constexpr const char* kAnimatedCubeModelFileName = "AnimatedCube/AnimatedCube.gltf";
-constexpr const char* kSimpleSkinModelFileName = "simpleSkin/simpleSkin.gltf"; // Skinning確認用simpleSkinモデル
-constexpr const char* kHumanSneakWalkModelFileName = "human/sneakWalk.gltf"; // Skinning確認用sneakWalkモデル
-constexpr const char* kHumanWalkModelFileName = "human/walk.gltf"; // Skinning確認用walkモデル
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
 constexpr const char* kDefaultLevelDataFileName = "levels/scene.json"; // 起動時に読み込むレベルJSON
 constexpr const char* kDefaultLevelSaveFileName = "levels/scene.json"; // ImGuiから書き出すレベルJSON
@@ -142,25 +137,6 @@ bool IsCubeModelFile(const std::string& modelFileName)
         || ContainsModelKeyword(modelFileName, kCubeModelKeywordUpper);
 }
 
-/// <summary>
-/// 初期化時にアニメーションも設定するモデルか判定する
-/// </summary>
-bool IsAnimationModelFile(const std::string& modelFileName)
-{
-    return modelFileName == kAnimatedCubeModelFileName
-        || modelFileName == kHumanSneakWalkModelFileName
-        || modelFileName == kHumanWalkModelFileName;
-}
-
-/// <summary>
-/// Skinning確認用に表示サイズを調整するモデルか判定する
-/// </summary>
-bool IsSkinningPreviewModelFile(const std::string& modelFileName)
-{
-    return modelFileName == kSimpleSkinModelFileName
-        || modelFileName == kHumanSneakWalkModelFileName
-        || modelFileName == kHumanWalkModelFileName;
-}
 
 /// <summary>
 /// レベルデータのコライダー情報をObject3dへ適用する。
@@ -503,11 +479,6 @@ void PlayScene::ApplySceneObjectInitialSettings(Object3d& object3d, const std::s
         object3d.SetTranslate(kCubeInitialTranslate);
     }
 
-    const bool isSkinningPreviewModel = IsSkinningPreviewModelFile(modelFileName); // Skinning確認用モデルか
-    if (isSkinningPreviewModel) {
-        object3d.SetScale(kSkinningPreviewScale);
-        object3d.SetTranslate(kSkinningPreviewTranslate);
-    }
 }
 
 /// <summary>
@@ -519,9 +490,6 @@ void PlayScene::CreateSceneObject(const std::string& modelFileName)
     object3d->SetObjectId(IssueObjectId());
     object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
     object3d->SetModel(modelFileName);
-    if (IsAnimationModelFile(modelFileName)) {
-        object3d->SetAnimation(modelFileName);
-    }
     ApplySceneObjectInitialSettings(*object3d, modelFileName);
     objects3d_.push_back(std::move(object3d));
     RebuildObjectPointerView();
@@ -577,9 +545,6 @@ void PlayScene::CreateSceneObjectFromLevelData(const LevelObjectData& objectData
         object3d->SetObjectId(IssueObjectId());
         object3d->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
         object3d->SetModel(objectData.fileName);
-        if (IsAnimationModelFile(objectData.fileName)) {
-            object3d->SetAnimation(objectData.fileName);
-        }
         ApplySceneObjectInitialSettings(*object3d, objectData.fileName);
         object3d->SetScale(objectData.transform.scale);
         object3d->SetRotate(objectData.transform.rotate);
@@ -1002,6 +967,7 @@ void PlayScene::Initialize(const SceneContext& ctx)
     LoadSceneTextures();
     InitializeSkyBox();
     InitializeSceneObjects();
+    InitializePlayerPrototype();
     if (!kUsePostEffectPreviewScene) {
         InitializeParticleObjects();
         InitializeParticleEffects();
@@ -1043,6 +1009,15 @@ void PlayScene::ReleaseSceneObjects()
     timeReversalSprites_.clear();
     timeReversalAfterimageSprites_.clear();
     timeReversalConvergenceSprite_.reset();
+    player_.Finalize();
+    playerPrototypeStageBlocks_.clear();
+    playerPrototypeSwitchObject_.reset();
+    playerPrototypeDoorObject_.reset();
+    playerPrototypeSwitchActive_ = false;
+    playerPrototypeDoorOpen_ = false;
+    playerPrototypeGoalReached_ = false;
+    pastSelfRecorder_.Clear();
+    pastSelfClone_.Finalize();
 }
 
 /// <summary>
@@ -1188,8 +1163,6 @@ void PlayScene::Update(float dt)
         HandleEffectStartInput();
     }
     HandlePostProcessShortcutInput();
-    HandleEvaluationAnimationInput();
-    HandleSkinningModelControlInput(dt);
     if (kUsePostEffectPreviewScene) {
         postProcess_.Update(dt);
     } else {
@@ -1199,6 +1172,7 @@ void PlayScene::Update(float dt)
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
+    UpdatePlayerPrototype(dt);
     if (!kUsePostEffectPreviewScene) {
         UpdatePostEffectCenters();
         UpdateParticleSystems(dt);
@@ -1361,8 +1335,12 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
         return;
     }
 
-    RebuildObjectPointerView();
     out->clear();
+    if (!kExposeSceneJsonObjectsToImGui) {
+        return;
+    }
+
+    RebuildObjectPointerView();
     out->reserve(objectPointerView_.size());
     out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }

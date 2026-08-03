@@ -32,6 +32,7 @@ constexpr std::array<const char*, 2> kLevelObjectTypeNames = { "MESH", "EMPTY" }
 constexpr std::array<const char*, 3> kLevelColliderTypeNames = { "BOX", "SPHERE", "CAPSULE" }; // LevelObjectのcollider type候補
 constexpr std::array<const char*, 3> kModelFileExtensions = { ".obj", ".gltf", ".glb" }; // LevelObjectに指定できるモデル拡張子
 constexpr const char* kSceneEditorWindowName = "Scene Editor"; // シーン編集用ImGuiウィンドウ名
+constexpr bool kShowSceneJsonLevelEditorOverlay = false; // SceneJSON非表示中にLevel EditorのScene View重ね描きを行うか
 constexpr const char* kEffectTypeComboLabel = "Effect Type"; // エフェクト種別選択のImGuiラベル
 constexpr const char* kEffectTriggerKeyText = "Trigger Key: R"; // エフェクト開始キーの表示文
 constexpr const char* kPlayEffectButtonLabel = "Play Effect"; // エフェクト再生ボタンの表示文
@@ -775,6 +776,10 @@ bool DrawLevelObjectTree(PlayScene& scene, std::vector<LevelObjectData>& objectD
 void PlayScene::DrawSceneViewOverlay(const Matrix4x4& viewProjectionMatrix, float imageMinX, float imageMinY, float imageWidth, float imageHeight)
 {
 #ifdef USE_IMGUI
+    if (!kShowSceneJsonLevelEditorOverlay) {
+        return;
+    }
+
     if (!ctx_.imguiManager || ctx_.imguiManager->GetGizmoTargetMode() != 4) {
         return;
     }
@@ -1350,6 +1355,11 @@ void PlayScene::DrawImGui()
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("Player")) {
+            DrawPlayerPrototypeImGui();
+            ImGui::EndTabItem();
+        }
+
         if (ImGui::BeginTabItem("Sprites")) {
             DrawSceneSpriteEditImGui();
             ImGui::EndTabItem();
@@ -1362,10 +1372,6 @@ void PlayScene::DrawImGui()
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("Evaluation")) {
-            DrawEvaluationControlImGui();
-            ImGui::EndTabItem();
-        }
 
         ImGui::EndTabBar();
     }
