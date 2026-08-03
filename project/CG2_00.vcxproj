@@ -244,9 +244,12 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="engine\3d\Object3dCommon.cpp" />
     <ClCompile Include="application\Game.cpp" />
     <ClCompile Include="application\scenes\PlayScene.cpp" />
+    <ClCompile Include="application\scenes\PlayScenePlayer.cpp" />
+    <ClCompile Include="application\player\Player.cpp" />
+    <ClCompile Include="application\player\PastSelfRecorder.cpp" />
+    <ClCompile Include="application\player\PastSelfClone.cpp" />
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp" />
     <ClCompile Include="application\scenes\PlaySceneEditorImGui.cpp" />
-    <ClCompile Include="application\scenes\PlaySceneEvaluation.cpp" />
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp" />
     <ClCompile Include="application\scenes\PlaySceneParticle.cpp" />
     <ClCompile Include="application\scenes\PlaySceneLevelEditor.cpp" />
@@ -452,6 +455,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\ImGuiManager.h" />
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
+    <ClInclude Include="application\player\Player.h" />
+    <ClInclude Include="application\player\PlayerState.h" />
+    <ClInclude Include="application\player\PastSelfRecorder.h" />
+    <ClInclude Include="application\player\PastSelfClone.h" />
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h" />
     <ClInclude Include="application\scenes\PlaySceneLevelEditorHierarchy.h" />
     <ClInclude Include="application\effects\EffectProgress.h" />

@@ -106,6 +106,12 @@
     <Filter Include="ヘッダー ファイル\application\effects">
       <UniqueIdentifier>{263b1d14-7d42-4475-b0e0-87b1b41e5d4c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\application\player">
+      <UniqueIdentifier>{c5202354-e136-4d82-95c5-5c67cb1c0952}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\application\player">
+      <UniqueIdentifier>{aa50705e-43bd-44eb-965e-7aa220056fe6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -291,13 +297,22 @@
     <ClCompile Include="application\scenes\PlayScene.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\PlayScenePlayer.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="application\player\Player.cpp">
+      <Filter>ソース ファイル\application\player</Filter>
+    </ClCompile>
+    <ClCompile Include="application\player\PastSelfRecorder.cpp">
+      <Filter>ソース ファイル\application\player</Filter>
+    </ClCompile>
+    <ClCompile Include="application\player\PastSelfClone.cpp">
+      <Filter>ソース ファイル\application\player</Filter>
+    </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneEditorImGui.cpp">
-      <Filter>ソース ファイル\application\scenes</Filter>
-    </ClCompile>
-    <ClCompile Include="application\scenes\PlaySceneEvaluation.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
     <ClCompile Include="application\scenes\PlayScenePostProcess.cpp">
@@ -598,6 +613,18 @@
     </ClInclude>
     <ClInclude Include="application\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\player\Player.h">
+      <Filter>ヘッダー ファイル\application\player</Filter>
+    </ClInclude>
+    <ClInclude Include="application\player\PlayerState.h">
+      <Filter>ヘッダー ファイル\application\player</Filter>
+    </ClInclude>
+    <ClInclude Include="application\player\PastSelfRecorder.h">
+      <Filter>ヘッダー ファイル\application\player</Filter>
+    </ClInclude>
+    <ClInclude Include="application\player\PastSelfClone.h">
+      <Filter>ヘッダー ファイル\application\player</Filter>
     </ClInclude>
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
