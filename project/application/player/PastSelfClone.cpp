@@ -149,6 +149,15 @@ void PastSelfClone::Stop()
 }
 
 /// <summary>
+/// 分身を表示したまま再生だけを止める。
+/// </summary>
+void PastSelfClone::Pause()
+{
+    isPlaying_ = false;
+    ApplyStateMaterialColor();
+}
+
+/// <summary>
 /// 再生状態に応じた分身表示色を反映する。
 /// </summary>
 void PastSelfClone::ApplyStateMaterialColor()

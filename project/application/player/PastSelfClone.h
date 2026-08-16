@@ -43,6 +43,11 @@ public:
     void Stop();
 
     /// <summary>
+    /// 分身を表示したまま再生だけを止める。
+    /// </summary>
+    void Pause();
+
+    /// <summary>
     /// 分身の再生状態を更新する。
     /// </summary>
     void Update(float deltaTime, const std::vector<StandablePlatform>& standablePlatforms);
@@ -76,6 +81,21 @@ public:
     /// 分身が表示対象か取得する。
     /// </summary>
     bool IsVisible() const { return isVisible_; }
+
+    /// <summary>
+    /// 分身が再生中か取得する。
+    /// </summary>
+    bool IsPlaying() const { return isPlaying_; }
+
+    /// <summary>
+    /// 現在の再生時刻を取得する。
+    /// </summary>
+    float GetPlaybackTime() const { return playbackTime_; }
+
+    /// <summary>
+    /// 分身の再生時間を取得する。
+    /// </summary>
+    float GetDuration() const { return frames_.empty() ? 0.0f : frames_.back().time; }
 
 private:
     /// <summary>
