@@ -7,6 +7,7 @@
 #include "../effects/TemporalRiftEffect.h"
 #include "../effects/TimeReversalEffect.h"
 #include "../effects/TimeStopEffect.h"
+#include "../gimmicks/StageGimmicks.h"
 #include "../player/PastSelfClone.h"
 #include "../player/PastSelfRecorder.h"
 #include "../player/Player.h"
@@ -339,7 +340,7 @@ private:
     /// <summary>
     /// プレイヤー確認用の分身ギミックを更新する。
     /// </summary>
-    void UpdatePlayerPrototypeMechanics();
+    void UpdatePlayerPrototypeMechanics(float deltaTime);
 
     /// <summary>
     /// プレイヤー確認用状態を初期状態へ戻す。
@@ -365,11 +366,6 @@ private:
     /// プレイヤー確認用の分身ギミックを描画する。
     /// </summary>
     void DrawPlayerPrototypeMechanics();
-
-    /// <summary>
-    /// 分身用スイッチが押されているか判定する。
-    /// </summary>
-    bool IsPlayerPrototypeSwitchPressed() const;
 
     /// <summary>
     /// プレイヤー確認用の仮ステージを更新する。
@@ -405,6 +401,11 @@ private:
     /// ImGuiでプレイヤー確認用の状態を表示する。
     /// </summary>
     void DrawPlayerPrototypeImGui();
+
+    /// <summary>
+    /// プレイヤー確認用の検証状態をPlayerタブ内に表示する。
+    /// </summary>
+    void DrawPlayerPrototypeStatusHud();
 
     /// <summary>
     /// キー入力で選択されたポストエフェクトを適用する。
@@ -851,13 +852,36 @@ private: // メンバー変数
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
     PastSelfClone pastSelfClone_; // 記録済み状態を再生する確認用分身
     std::vector<PlayerPrototypeStageBlock> playerPrototypeStageBlocks_; // プレイヤー検証用の仮ステージブロック一覧
-    std::unique_ptr<MyEngine::Object3d> playerPrototypeSwitchObject_; // 分身ギミック確認用の仮スイッチ
-    std::unique_ptr<MyEngine::Object3d> playerPrototypeDoorObject_; // 分身ギミック確認用の仮扉
+    BoxSwitchGimmick playerPrototypeSwitch_; // 分身専用スイッチギミック
+    LinkedDoorGimmick playerPrototypeDoor_; // スイッチ連動扉ギミック
+    TimedSwitchGimmick playerPrototypeTimedSwitch_; // 時間差スイッチギミック
+    LinkedDoorGimmick playerPrototypeTimedDoor_; // 時間差スイッチ連動扉ギミック
+    WeightSwitchGimmick playerPrototypeWeightSwitch_; // 重さスイッチギミック
+    OneWayGateGimmick playerPrototypeOneWayGate_; // 一方通行ゲートギミック
+    BoxGoalGimmick playerPrototypeGoal_; // ゴール判定ギミック
     std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneStartMarkerObject_; // 分身開始地点を示す仮マーカー
     std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneEndMarkerObject_; // 分身終了地点を示す仮マーカー
     bool playerPrototypeSwitchActive_ = false; // 仮スイッチが押されているか
     bool playerPrototypeDoorOpen_ = false; // 仮扉が開いているか
     bool playerPrototypeGoalReached_ = false; // 仮ゴールに到達したか
+    bool playerPrototypePlayerOnSwitch_ = false; // プレイヤーが分身専用スイッチ上にいるか
+    bool playerPrototypeCloneOnSwitch_ = false; // 分身が分身専用スイッチ上にいるか
+    bool playerPrototypeDoorBlockedBeforeClone_ = false; // 分身なしで閉じた扉に阻まれたか
+    bool playerPrototypeClonePlatformUsed_ = false; // プレイヤーが分身を足場として利用したか
+    bool playerPrototypeDoorOpenedByClone_ = false; // 分身がスイッチを押して扉を開けたか
+    bool playerPrototypeTimedSwitchActive_ = false; // 時間差スイッチが起動中か
+    bool playerPrototypeTimedSwitchCloneOn_ = false; // 分身が時間差スイッチ上にいるか
+    bool playerPrototypeTimedDoorOpen_ = false; // 時間差扉が開いているか
+    bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
+    bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
+    bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
+    bool playerPrototypeOneWayGateBlocking_ = false; // 一方通行ゲートが戻りを塞いでいるか
+    bool playerPrototypeTimedDoorOpened_ = false; // 時間差扉を開けたか
+    bool playerPrototypeWeightSwitchActivated_ = false; // 重さスイッチを起動したか
+    bool playerPrototypeOneWayGateUsed_ = false; // 一方通行ゲートを通過したか
+    float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
+    float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
+    float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;

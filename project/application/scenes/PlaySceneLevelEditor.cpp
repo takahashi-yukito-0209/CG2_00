@@ -1356,6 +1356,8 @@ void PlayScene::DrawImGui()
         }
 
         if (ImGui::BeginTabItem("Player")) {
+            DrawPlayerPrototypeStatusHud();
+            ImGui::Separator();
             DrawPlayerPrototypeImGui();
             ImGui::EndTabItem();
         }
