@@ -94,6 +94,9 @@
     <Filter Include="ソース ファイル\application\effects">
       <UniqueIdentifier>{e14dc0e2-c64b-4e82-a935-9c084153f8c1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\application\gimmicks">
+      <UniqueIdentifier>{b7237630-e0f9-4ea0-b801-3ab5b6e774b1}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソース ファイル\engine\utility">
       <UniqueIdentifier>{f3d99883-ad4c-411a-83b1-c61da3991c1a}</UniqueIdentifier>
     </Filter>
@@ -105,6 +108,9 @@
     </Filter>
     <Filter Include="ヘッダー ファイル\application\effects">
       <UniqueIdentifier>{263b1d14-7d42-4475-b0e0-87b1b41e5d4c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\application\gimmicks">
+      <UniqueIdentifier>{a8b179fd-d61a-4cc9-8a5d-5cce96e0531b}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソース ファイル\application\player">
       <UniqueIdentifier>{c5202354-e136-4d82-95c5-5c67cb1c0952}</UniqueIdentifier>
@@ -308,6 +314,9 @@
     </ClCompile>
     <ClCompile Include="application\player\PastSelfClone.cpp">
       <Filter>ソース ファイル\application\player</Filter>
+    </ClCompile>
+    <ClCompile Include="application\gimmicks\StageGimmicks.cpp">
+      <Filter>ソース ファイル\application\gimmicks</Filter>
     </ClCompile>
     <ClCompile Include="application\scenes\PlaySceneDraw.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
@@ -625,6 +634,9 @@
     </ClInclude>
     <ClInclude Include="application\player\PastSelfClone.h">
       <Filter>ヘッダー ファイル\application\player</Filter>
+    </ClInclude>
+    <ClInclude Include="application\gimmicks\StageGimmicks.h">
+      <Filter>ヘッダー ファイル\application\gimmicks</Filter>
     </ClInclude>
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
