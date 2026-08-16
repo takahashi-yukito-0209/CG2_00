@@ -42,18 +42,20 @@ struct PlayerPrototypeStageBlockDesc {
     bool goalMarker; // ゴール表示用のブロックか
 };
 
-constexpr std::array<PlayerPrototypeStageBlockDesc, 8> kPlayerPrototypeStageBlockDescs = { {
+constexpr std::array<PlayerPrototypeStageBlockDesc, 10> kPlayerPrototypeStageBlockDescs = { {
     { { 4.8f, 0.12f, 4.0f }, { -7.1f, -0.06f, 0.0f }, { 0.92f, 0.96f, 1.0f, 1.0f }, true, false },
     { { 2.6f, 0.12f, 4.0f }, { -3.45f, -0.06f, 0.0f }, { 0.82f, 0.92f, 1.0f, 1.0f }, true, false },
     { { 1.25f, 0.34f, 3.3f }, { -1.45f, 0.17f, 0.0f }, { 0.55f, 0.82f, 1.0f, 1.0f }, true, false },
     { { 1.1f, 0.05f, 3.4f }, { 1.2f, 1.33f, 0.0f }, { 0.1f, 1.0f, 0.9f, 1.0f }, false, false },
     { { 3.2f, 0.12f, 4.0f }, { 1.2f, 1.19f, 0.0f }, { 0.55f, 0.95f, 0.72f, 1.0f }, true, false },
-    { { 2.9f, 0.12f, 4.0f }, { 5.1f, 2.59f, 0.0f }, { 0.72f, 0.98f, 0.68f, 1.0f }, true, false },
-    { { 2.0f, 0.12f, 4.0f }, { 7.65f, 2.94f, 0.0f }, { 0.64f, 0.92f, 0.72f, 1.0f }, true, false },
-    { { 0.22f, 2.2f, 2.2f }, { 8.45f, 4.0f, 0.0f }, { 0.12f, 1.0f, 0.45f, 1.0f }, false, true },
-} }; // 分身の踏み台化、スイッチ維持、扉通過を順に確認する仮ステージブロック
-constexpr Math::Vector3 kPlayerPrototypeGoalCenter = { 8.45f, 4.0f, 0.0f }; // 仮ゴール判定の中心
-constexpr Math::Vector3 kPlayerPrototypeGoalHalfSize = { 1.05f, 1.15f, 1.25f }; // 仮ゴール判定の半サイズ
+    { { 3.4f, 0.12f, 4.0f }, { 5.2f, 2.59f, 0.0f }, { 0.72f, 0.98f, 0.68f, 1.0f }, true, false },
+    { { 2.8f, 0.12f, 4.0f }, { 8.4f, 2.94f, 0.0f }, { 0.64f, 0.92f, 0.72f, 1.0f }, true, false },
+    { { 2.8f, 0.12f, 4.0f }, { 11.4f, 3.14f, 0.0f }, { 0.8f, 0.94f, 0.68f, 1.0f }, true, false },
+    { { 3.0f, 0.12f, 4.0f }, { 14.2f, 3.14f, 0.0f }, { 0.72f, 0.9f, 0.78f, 1.0f }, true, false },
+    { { 0.22f, 2.2f, 2.2f }, { 15.55f, 4.2f, 0.0f }, { 0.12f, 1.0f, 0.45f, 1.0f }, false, true },
+} }; // 各ギミックの作動状態を動画で読めるように間隔を取った仮ステージブロック
+constexpr Math::Vector3 kPlayerPrototypeGoalCenter = { 15.55f, 4.2f, 0.0f }; // 仮ゴール判定の中心
+constexpr Math::Vector3 kPlayerPrototypeGoalHalfSize = { 0.75f, 1.0f, 1.25f }; // 仮ゴール判定の半サイズ
 constexpr Math::Vector3 kPlayerPrototypeSwitchScale = { 2.0f, 0.12f, 2.7f }; // 仮スイッチの表示サイズ
 constexpr Math::Vector3 kPlayerPrototypeSwitchTranslate = { 1.2f, 1.31f, 0.0f }; // 仮スイッチの中心座標
 constexpr Math::Vector3 kPlayerPrototypeSwitchVolumeCenter = { 1.2f, 1.82f, 0.0f }; // スイッチ入力を受ける範囲中心
@@ -67,11 +69,11 @@ constexpr Math::Vector4 kPlayerPrototypeDoorClosedColor = { 1.0f, 0.12f, 0.12f, 
 constexpr Math::Vector4 kPlayerPrototypeDoorOpenColor = { 0.0f, 1.0f, 0.45f, 0.22f }; // 開いている仮扉色
 constexpr Math::Vector4 kPlayerPrototypeGoalClearColor = { 1.0f, 0.88f, 0.12f, 1.0f }; // クリア済みの仮ゴール色
 constexpr Math::Vector3 kPlayerPrototypeTimedSwitchScale = { 1.7f, 0.12f, 2.5f }; // 時間差スイッチの表示サイズ
-constexpr Math::Vector3 kPlayerPrototypeTimedSwitchTranslate = { 5.1f, 2.71f, 0.0f }; // 時間差スイッチの中心座標
-constexpr Math::Vector3 kPlayerPrototypeTimedSwitchVolumeCenter = { 5.1f, 3.21f, 0.0f }; // 時間差スイッチ入力を受ける範囲中心
+constexpr Math::Vector3 kPlayerPrototypeTimedSwitchTranslate = { 5.2f, 2.71f, 0.0f }; // 時間差スイッチの中心座標
+constexpr Math::Vector3 kPlayerPrototypeTimedSwitchVolumeCenter = { 5.2f, 3.21f, 0.0f }; // 時間差スイッチ入力を受ける範囲中心
 constexpr Math::Vector3 kPlayerPrototypeTimedSwitchVolumeHalfSize = { 1.0f, 0.7f, 1.45f }; // 時間差スイッチ入力を受ける範囲半サイズ
 constexpr Math::Vector3 kPlayerPrototypeTimedDoorScale = { 0.3f, 2.2f, 3.0f }; // 時間差扉の表示サイズ
-constexpr Math::Vector3 kPlayerPrototypeTimedDoorTranslate = { 6.55f, 3.72f, 0.0f }; // 時間差扉の中心座標
+constexpr Math::Vector3 kPlayerPrototypeTimedDoorTranslate = { 7.0f, 3.92f, 0.0f }; // 時間差扉の中心座標
 constexpr Math::Vector4 kPlayerPrototypeTimedSwitchInactiveColor = { 0.12f, 0.18f, 0.22f, 1.0f }; // 時間差スイッチ未入力時の表示色
 constexpr Math::Vector4 kPlayerPrototypeTimedSwitchActiveColor = { 0.0f, 0.7f, 1.0f, 1.0f }; // 時間差スイッチ起動中の表示色
 constexpr Math::Vector4 kPlayerPrototypeTimedSwitchTriggerColor = { 0.2f, 1.0f, 0.85f, 1.0f }; // 時間差スイッチを分身が踏んでいる時の表示色
@@ -79,14 +81,14 @@ constexpr Math::Vector4 kPlayerPrototypeTimedDoorClosedColor = { 0.0f, 0.38f, 1.
 constexpr Math::Vector4 kPlayerPrototypeTimedDoorOpenColor = { 0.0f, 0.7f, 1.0f, 0.22f }; // 開いている時間差扉色
 constexpr float kPlayerPrototypeTimedSwitchHoldSeconds = 3.0f; // 時間差スイッチの起動維持秒数
 constexpr Math::Vector3 kPlayerPrototypeWeightSwitchScale = { 1.45f, 0.12f, 2.4f }; // 重さスイッチの表示サイズ
-constexpr Math::Vector3 kPlayerPrototypeWeightSwitchTranslate = { 7.65f, 3.06f, 0.0f }; // 重さスイッチの中心座標
-constexpr Math::Vector3 kPlayerPrototypeWeightSwitchVolumeCenter = { 7.65f, 3.56f, 0.0f }; // 重さスイッチ入力を受ける範囲中心
+constexpr Math::Vector3 kPlayerPrototypeWeightSwitchTranslate = { 11.4f, 3.26f, 0.0f }; // 重さスイッチの中心座標
+constexpr Math::Vector3 kPlayerPrototypeWeightSwitchVolumeCenter = { 11.4f, 3.76f, 0.0f }; // 重さスイッチ入力を受ける範囲中心
 constexpr Math::Vector3 kPlayerPrototypeWeightSwitchVolumeHalfSize = { 0.95f, 0.7f, 1.45f }; // 重さスイッチ入力を受ける範囲半サイズ
 constexpr Math::Vector4 kPlayerPrototypeWeightSwitchInactiveColor = { 0.18f, 0.18f, 0.22f, 1.0f }; // 重さスイッチ未入力時の表示色
 constexpr Math::Vector4 kPlayerPrototypeWeightSwitchPartialColor = { 1.0f, 0.62f, 0.12f, 1.0f }; // 重さスイッチ片方入力時の表示色
 constexpr Math::Vector4 kPlayerPrototypeWeightSwitchActiveColor = { 0.65f, 1.0f, 0.1f, 1.0f }; // 重さスイッチ両方入力時の表示色
 constexpr Math::Vector3 kPlayerPrototypeOneWayGateScale = { 0.24f, 1.8f, 2.8f }; // 一方通行ゲートの表示サイズ
-constexpr Math::Vector3 kPlayerPrototypeOneWayGateTranslate = { 8.05f, 3.9f, 0.0f }; // 終盤で戻りを塞ぐ一方通行ゲートの中心座標
+constexpr Math::Vector3 kPlayerPrototypeOneWayGateTranslate = { 13.2f, 4.05f, 0.0f }; // 終盤で戻りを塞ぐ一方通行ゲートの中心座標
 constexpr Math::Vector4 kPlayerPrototypeOneWayGatePassableColor = { 0.0f, 0.65f, 1.0f, 0.25f }; // 通行可能時の一方通行ゲート色
 constexpr Math::Vector4 kPlayerPrototypeOneWayGateBlockingColor = { 0.15f, 0.25f, 1.0f, 0.85f }; // 戻りを塞ぐ時の一方通行ゲート色
 
@@ -421,6 +423,7 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeCloneEndMarkerObject_ = CreatePlayerPrototypeBlockObject(ctx_.object3dCommon, ctx_.imguiManager, IssueObjectId(), kPlayerPrototypeCloneEndMarkerScale, kPlayerPrototypeStartTranslate, kPlayerPrototypeCloneEndMarkerColor);
     playerPrototypeSwitchActive_ = false;
     playerPrototypeDoorOpen_ = false;
+    playerPrototypeDoorUnlockedByClone_ = false;
     playerPrototypePlayerOnSwitch_ = false;
     playerPrototypeCloneOnSwitch_ = false;
     playerPrototypeDoorBlockedBeforeClone_ = false;
@@ -439,6 +442,7 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypeRecordTakeCount_ = 0;
 }
 
 /// <summary>
@@ -446,19 +450,25 @@ void PlayScene::InitializePlayerPrototypeMechanics()
 /// </summary>
 void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
 {
-    const bool cloneVisible = pastSelfClone_.IsVisible(); // 分身ギミック判定に使う分身表示状態
-    const PlayerState& cloneState = pastSelfClone_.GetCurrentState(); // 分身ギミック判定に使う現在状態
-    playerPrototypeSwitch_.Update(player_.GetState(), cloneVisible, cloneState);
+    const PlayerState& playerState = player_.GetState(); // ギミック判定に使う現在のプレイヤー状態
+    const bool playbackCloneVisible = pastSelfClone_.IsVisible(); // 再生中または表示中の分身があるか
+    const bool recordingCloneRoute = pastSelfRecorder_.IsRecording(); // 未来の分身ルートを記録中か
+    const PlayerState& cloneInputState = playbackCloneVisible ? pastSelfClone_.GetCurrentState() : playerState; // 分身入力として扱う状態
+    const bool cloneInputVisible = playbackCloneVisible || recordingCloneRoute; // 分身専用入力を有効にするか
+    playerPrototypeSwitch_.Update(playerState, cloneInputVisible, cloneInputState);
     playerPrototypePlayerOnSwitch_ = playerPrototypeSwitch_.IsPlayerOnSwitch();
     playerPrototypeCloneOnSwitch_ = playerPrototypeSwitch_.IsCloneOnSwitch();
     playerPrototypeSwitchActive_ = playerPrototypeSwitch_.IsActive();
-    playerPrototypeDoor_.Update(playerPrototypeSwitchActive_);
+    if (playerPrototypeSwitchActive_) {
+        playerPrototypeDoorUnlockedByClone_ = true;
+    }
+    playerPrototypeDoor_.Update(playerPrototypeDoorUnlockedByClone_);
     playerPrototypeDoorOpen_ = playerPrototypeDoor_.IsOpen();
 
-    playerPrototypeTimedSwitch_.Update(deltaTime, cloneVisible, cloneState);
+    playerPrototypeTimedSwitch_.Update(deltaTime, cloneInputVisible, cloneInputState);
     playerPrototypeTimedSwitchActive_ = playerPrototypeTimedSwitch_.IsActive();
     playerPrototypeTimedSwitchCloneOn_ = playerPrototypeTimedSwitch_.IsCloneOnSwitch();
-    playerPrototypeWeightSwitch_.Update(player_.GetState(), cloneVisible, cloneState);
+    playerPrototypeWeightSwitch_.Update(playerState, playbackCloneVisible, pastSelfClone_.GetCurrentState());
     playerPrototypeWeightSwitchActive_ = playerPrototypeWeightSwitch_.IsActive();
     playerPrototypeWeightPlayerOn_ = playerPrototypeWeightSwitch_.IsPlayerOnSwitch();
     playerPrototypeWeightCloneOn_ = playerPrototypeWeightSwitch_.IsCloneOnSwitch();
@@ -499,6 +509,7 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeGoalReached_ = false;
     playerPrototypeSwitchActive_ = false;
     playerPrototypeDoorOpen_ = false;
+    playerPrototypeDoorUnlockedByClone_ = false;
     playerPrototypePlayerOnSwitch_ = false;
     playerPrototypeCloneOnSwitch_ = false;
     playerPrototypeDoorBlockedBeforeClone_ = false;
@@ -517,6 +528,7 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypeRecordTakeCount_ = 0;
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
     UpdatePlayerPrototypeMechanics(0.0f);
     ApplyPlayerPrototypeGoalVisual();
@@ -608,6 +620,10 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
     if (canAcceptInput && inputManager) {
         if (inputManager->IsKeyJustPressed(kRecordToggleKey)) {
             const bool wasRecording = pastSelfRecorder_.IsRecording(); // 切り替え前に記録中だったか
+            if (!wasRecording) {
+                pastSelfClone_.Stop();
+                ++playerPrototypeRecordTakeCount_;
+            }
             pastSelfRecorder_.Toggle();
             if (wasRecording) {
                 playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
@@ -787,6 +803,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
     ImGui::Text("Timed: Switch %s %.2f sec / Door %s", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
     ImGui::Text("Weight: %s  Player %s / Clone %s", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF");
     ImGui::Text("OneWay: %s", playerPrototypeOneWayGateBlocking_ ? "Blocking" : "Passable");
+    ImGui::Text("Route: %s  Takes: %u", playerPrototypeRecordTakeCount_ <= 1 ? "A One-record" : "B Multi-record", playerPrototypeRecordTakeCount_);
     ImGui::Text("Time: %.2f sec  Clear: %.2f sec  Record: %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_, playerPrototypeLastRecordDuration_);
     if (playerPrototypeGoalReached_) {
         ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.25f, 1.0f), "CLEAR");
@@ -797,6 +814,10 @@ void PlayScene::DrawPlayerPrototypeImGui()
     }
     if (ImGui::Button(pastSelfRecorder_.IsRecording() ? "Stop Recording" : "Start Recording")) {
         const bool wasRecording = pastSelfRecorder_.IsRecording(); // 切り替え前に記録中だったか
+        if (!wasRecording) {
+            pastSelfClone_.Stop();
+            ++playerPrototypeRecordTakeCount_;
+        }
         pastSelfRecorder_.Toggle();
         playerPrototypeLastRecordDuration_ = wasRecording ? pastSelfRecorder_.GetDuration() : 0.0f;
     }
@@ -838,15 +859,16 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     const char* recordStateLabel = pastSelfRecorder_.IsRecording() ? "Recording" : "Stopped"; // 記録状態表示
     const char* cloneStateLabel = !pastSelfClone_.IsVisible() ? "Stopped" : (pastSelfClone_.IsPlaying() ? "Playing" : "Finished"); // 分身状態表示
     const bool hasRecordFrames = pastSelfRecorder_.GetFrames().size() >= 2; // 分身再生に使える記録があるか
+    const char* routeLabel = playerPrototypeRecordTakeCount_ <= 1 ? "A One-record route" : "B Multi-record route"; // 現在の検証ルート種別
     const char* nextActionText = "Pass the door and reach the goal"; // HUDに表示する次の確認手順
     if (playerPrototypeGoalReached_) {
-        nextActionText = "Record this clear state in one take";
+        nextActionText = playerPrototypeRecordTakeCount_ <= 1 ? "A complete: one-record proof" : "B complete: multi-record proof";
     } else if (!playerPrototypeDoorBlockedBeforeClone_) {
         nextActionText = "First, show the closed door blocks the player";
     } else if (pastSelfRecorder_.IsRecording()) {
-        nextActionText = "Move to the clone-only switch, then press C";
+        nextActionText = "Record the future clone route through switches";
     } else if (!hasRecordFrames) {
-        nextActionText = "Press C and record a route to the switch";
+        nextActionText = "Press C once and record the full clone route";
     } else if (!pastSelfClone_.IsVisible()) {
         nextActionText = "Press V to play the recorded clone";
     } else if (playerPrototypePlayerOnSwitch_ && !playerPrototypeCloneOnSwitch_) {
@@ -856,7 +878,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     } else if (!playerPrototypeClonePlatformUsed_) {
         nextActionText = "Use the clone as a platform to reach the high floor";
     } else if (!playerPrototypeTimedDoorOpened_) {
-        nextActionText = "Record/play a second clone route to the timed switch";
+        nextActionText = "Let the same clone route trigger the timed switch";
     } else if (!playerPrototypeWeightSwitchActivated_) {
         nextActionText = "Follow the clone and stand on the weight switch together";
     } else if (!playerPrototypeOneWayGateUsed_) {
@@ -867,6 +889,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Separator();
     ImGui::Text("Move A/D  Jump Space  Record C  Play V  Stop B  Reset R");
     ImGui::Text("Time  : %.2f sec  Clear %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_);
+    ImGui::Text("Route : %s  Takes %u", routeLabel, playerPrototypeRecordTakeCount_);
     ImGui::Text("Record: %s  Frames: %zu  %.2f sec", recordStateLabel, pastSelfRecorder_.GetFrames().size(), playerPrototypeLastRecordDuration_);
     ImGui::Text("Clone : %s  %.2f / %.2f sec", cloneStateLabel, pastSelfClone_.GetPlaybackTime(), pastSelfClone_.GetDuration());
     ImGui::Text("Switch: %s  Clone %s  Player %s",
@@ -889,6 +912,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     if (playerPrototypeGoalReached_) {
         ImGui::Separator();
         ImGui::TextColored(checkedColor, "Goal Reached / CLEAR");
+        ImGui::TextColored(checkedColor, "%s", playerPrototypeRecordTakeCount_ <= 1 ? "A One-record proof complete" : "B Multi-record proof complete");
         ImGui::TextColored(checkedColor, "Clear %.2f sec / Record %.2f sec", playerPrototypeClearTime_, playerPrototypeLastRecordDuration_);
     }
 #endif

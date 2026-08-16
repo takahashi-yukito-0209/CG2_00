@@ -1021,6 +1021,7 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeSwitchActive_ = false;
     playerPrototypeDoorOpen_ = false;
     playerPrototypeGoalReached_ = false;
+    playerPrototypeDoorUnlockedByClone_ = false;
     playerPrototypePlayerOnSwitch_ = false;
     playerPrototypeCloneOnSwitch_ = false;
     playerPrototypeDoorBlockedBeforeClone_ = false;
@@ -1039,6 +1040,7 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypeRecordTakeCount_ = 0;
     pastSelfRecorder_.Clear();
     pastSelfClone_.Finalize();
 }

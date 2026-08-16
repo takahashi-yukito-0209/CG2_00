@@ -864,6 +864,7 @@ private: // メンバー変数
     bool playerPrototypeSwitchActive_ = false; // 仮スイッチが押されているか
     bool playerPrototypeDoorOpen_ = false; // 仮扉が開いているか
     bool playerPrototypeGoalReached_ = false; // 仮ゴールに到達したか
+    bool playerPrototypeDoorUnlockedByClone_ = false; // 分身入力で通常扉が開放済みか
     bool playerPrototypePlayerOnSwitch_ = false; // プレイヤーが分身専用スイッチ上にいるか
     bool playerPrototypeCloneOnSwitch_ = false; // 分身が分身専用スイッチ上にいるか
     bool playerPrototypeDoorBlockedBeforeClone_ = false; // 分身なしで閉じた扉に阻まれたか
@@ -882,6 +883,7 @@ private: // メンバー変数
     float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
+    uint32_t playerPrototypeRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;
