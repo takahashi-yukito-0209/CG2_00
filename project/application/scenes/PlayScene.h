@@ -917,6 +917,8 @@ private: // メンバー変数
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
     float playerPrototypePrepareFeedbackSeconds_ = 0.0f; // Prepare成功表示を残す秒数
+    Math::Vector3 playerPrototypeCameraFocus_ {}; // 追従補間後の確認用カメラ注視点
+    float playerPrototypeCameraDistance_ = 0.0f; // 追従補間後の確認用カメラ距離
     uint32_t playerPrototypeRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;

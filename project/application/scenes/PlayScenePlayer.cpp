@@ -18,10 +18,15 @@ using namespace MyEngine;
 
 namespace {
 constexpr const char* kPlayerPrototypeModelFileName = "block/block.obj"; // 確認用プレイヤーに使用する仮モデル
-constexpr float kPlayerPrototypeCameraDistance = 36.0f; // 2.5D確認用カメラの見た目距離
+constexpr float kPlayerPrototypeCameraMinimumDistance = 24.0f; // 対象が近い時のカメラ最小距離
+constexpr float kPlayerPrototypeCameraMaximumDistance = 44.0f; // 対象が離れた時のカメラ最大距離
 constexpr Math::Vector3 kPlayerPrototypeCameraRotate = { -0.12f, 0.0f, 0.0f }; // 横視点に少し見下ろしを足した確認用カメラ回転
 constexpr float kPlayerPrototypeCameraFovY = 0.62f; // 2.5D確認用カメラ視野角
-constexpr Math::Vector3 kPlayerPrototypeCameraFocusOffset = { 0.0f, 2.0f, 0.0f }; // プレイヤーと分身を画面内に収める注視点補正
+constexpr float kPlayerPrototypeCameraVisibleAspect = 1.15f; // 右側HUDを除いたゲーム表示領域として扱う横縦比
+constexpr float kPlayerPrototypeCameraHorizontalPadding = 3.5f; // 対象範囲の左右に確保する余白
+constexpr float kPlayerPrototypeCameraVerticalPadding = 2.5f; // 対象範囲の上下に確保する余白
+constexpr float kPlayerPrototypeCameraFollowSpeed = 6.0f; // 注視点と距離を追従させる速度
+constexpr Math::Vector3 kPlayerPrototypeCameraFocusOffset = { 2.0f, 1.5f, 0.0f }; // 右側HUDを避けながら対象を画面内に収める注視点補正
 constexpr uint8_t kRecordToggleKey = DIK_C; // 分身用記録の開始・停止キー
 constexpr uint8_t kClonePlayKey = DIK_V; // 分身再生キー
 constexpr uint8_t kCloneStopKey = DIK_B; // 分身停止キー
@@ -45,6 +50,11 @@ struct PlayerPrototypeStageBlockDesc {
     Math::Vector4 color; // 仮ブロックの表示色
     bool collidable; // 全面コライダーとして使うか
     bool goalMarker; // ゴール表示用のブロックか
+};
+
+struct PlayerPrototypeCameraFrame {
+    Math::Vector3 focus; // カメラが追従する注視点
+    float distance; // 対象範囲を収めるカメラ距離
 };
 
 constexpr std::array<PlayerPrototypeStageBlockDesc, 10> kPlayerPrototypeStageBlockDescs = { {
@@ -230,26 +240,71 @@ bool ShouldBlockPlayerInput()
 }
 
 /// <summary>
-/// プレイヤーと可視分身の位置からカメラ注視点を計算する。
+/// プレイヤー位置に応じて次に画面へ収めるギミック位置を取得する。
 /// </summary>
-Math::Vector3 CalculatePlayerPrototypeCameraFocus(const PlayerState& playerState, const std::vector<PlayerState>& cloneStates)
+Math::Vector3 GetPlayerPrototypeCameraTarget(const PlayerState& playerState)
 {
+    const float playerX = playerState.transform.translate.x; // 次のギミックを選ぶプレイヤーX座標
+    if (playerX < kPlayerPrototypeDoorTranslate.x) {
+        return kPlayerPrototypeDoorTranslate;
+    }
+    if (playerX < kPlayerPrototypeTimedDoorTranslate.x) {
+        return kPlayerPrototypeTimedDoorTranslate;
+    }
+    if (playerX < kPlayerPrototypeWeightSwitchTranslate.x) {
+        return kPlayerPrototypeWeightSwitchTranslate;
+    }
+    if (playerX < kPlayerPrototypeOneWayGateTranslate.x) {
+        return kPlayerPrototypeOneWayGateTranslate;
+    }
+    return kPlayerPrototypeGoalCenter;
+}
+
+/// <summary>
+/// プレイヤー、可視分身、次のギミックを収めるカメラ範囲を計算する。
+/// </summary>
+PlayerPrototypeCameraFrame CalculatePlayerPrototypeCameraFrame(const PlayerState& playerState, const std::vector<PlayerState>& cloneStates)
+{
+    const Math::Vector3 targetPosition = GetPlayerPrototypeCameraTarget(playerState); // 画面内に含める次のギミック位置
     float minimumX = playerState.transform.translate.x; // 画面内に収める対象の最小X座標
     float maximumX = playerState.transform.translate.x; // 画面内に収める対象の最大X座標
+    float minimumY = playerState.transform.translate.y; // 画面内に収める対象の最小Y座標
     float maximumY = playerState.transform.translate.y; // 画面内に収める対象の最大Y座標
     for (const PlayerState& cloneState : cloneStates) {
         minimumX = (std::min)(minimumX, cloneState.transform.translate.x);
         maximumX = (std::max)(maximumX, cloneState.transform.translate.x);
+        minimumY = (std::min)(minimumY, cloneState.transform.translate.y);
         maximumY = (std::max)(maximumY, cloneState.transform.translate.y);
     }
+    minimumX = (std::min)(minimumX, targetPosition.x);
+    maximumX = (std::max)(maximumX, targetPosition.x);
+    minimumY = (std::min)(minimumY, targetPosition.y);
+    maximumY = (std::max)(maximumY, targetPosition.y);
 
     Math::Vector3 focus = playerState.transform.translate; // カメラ中心にする基準座標
     focus.x = (minimumX + maximumX) * 0.5f;
-    focus.y = maximumY;
+    focus.y = (minimumY + maximumY) * 0.5f;
     focus.x += kPlayerPrototypeCameraFocusOffset.x;
     focus.y += kPlayerPrototypeCameraFocusOffset.y;
     focus.z = kPlayerPrototypeCameraFocusOffset.z;
-    return focus;
+
+    const float halfFovTangent = std::tan(kPlayerPrototypeCameraFovY * 0.5f); // 縦方向の表示範囲計算に使う視野角係数
+    const float horizontalHalfRange = (maximumX - minimumX) * 0.5f + kPlayerPrototypeCameraHorizontalPadding; // 左右余白を含む半幅
+    const float verticalHalfRange = (maximumY - minimumY) * 0.5f + kPlayerPrototypeCameraVerticalPadding; // 上下余白を含む半高
+    const float horizontalDistance = horizontalHalfRange / (halfFovTangent * kPlayerPrototypeCameraVisibleAspect); // 横幅を収めるための距離
+    const float verticalDistance = verticalHalfRange / halfFovTangent; // 高さを収めるための距離
+    const float distance = std::clamp((std::max)(horizontalDistance, verticalDistance),
+        kPlayerPrototypeCameraMinimumDistance, kPlayerPrototypeCameraMaximumDistance); // 使用範囲に制限したカメラ距離
+    return { focus, distance };
+}
+
+/// <summary>
+/// 現在値を目標値へフレーム時間に応じて追従させる。
+/// </summary>
+float FollowPlayerPrototypeCameraValue(float currentValue, float targetValue, float deltaTime)
+{
+    const float followRate = 1.0f - std::exp(-kPlayerPrototypeCameraFollowSpeed * (std::max)(deltaTime, 0.0f)); // フレームレートに依存しにくい追従率
+    return currentValue + (targetValue - currentValue) * followRate;
 }
 
 /// <summary>
@@ -269,7 +324,7 @@ Math::Vector3 RotatePointForPlayerPrototypeCamera(const Math::Vector3& position)
 /// <summary>
 /// 2.5D用の横視点カメラをプレイヤー位置に合わせて設定する。
 /// </summary>
-void ConfigurePlayerPrototypeCamera(Camera* camera, const Math::Vector3& focus)
+void ConfigurePlayerPrototypeCamera(Camera* camera, const Math::Vector3& focus, float distance)
 {
     if (!camera) {
         return;
@@ -279,7 +334,7 @@ void ConfigurePlayerPrototypeCamera(Camera* camera, const Math::Vector3& focus)
     const Math::Vector3 cameraTranslate = {
         rotatedFocus.x,
         rotatedFocus.y,
-        rotatedFocus.z - kPlayerPrototypeCameraDistance
+        rotatedFocus.z - distance
     }; // 横視点で注視点を画面中央に置くカメラ位置
     camera->SetTranslate(cameraTranslate);
     camera->SetRotate(kPlayerPrototypeCameraRotate);
@@ -332,7 +387,10 @@ void PlayScene::InitializePlayerPrototype()
     playerStartState.transform.translate = kPlayerPrototypeStartTranslate;
     player_.SetInitialState(playerStartState);
     pastSelfCloneManager_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, kPlayerPrototypeModelFileName);
-    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), {}));
+    const PlayerPrototypeCameraFrame initialCameraFrame = CalculatePlayerPrototypeCameraFrame(player_.GetState(), {}); // 初期位置と最初のギミックを収めるカメラ範囲
+    playerPrototypeCameraFocus_ = initialCameraFrame.focus;
+    playerPrototypeCameraDistance_ = initialCameraFrame.distance;
+    ConfigurePlayerPrototypeCamera(ctx_.camera, playerPrototypeCameraFocus_, playerPrototypeCameraDistance_);
 }
 
 /// <summary>
@@ -575,6 +633,9 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypePrepareFeedbackSeconds_ = 0.0f;
     playerPrototypeRecordTakeCount_ = 0;
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
+    const PlayerPrototypeCameraFrame resetCameraFrame = CalculatePlayerPrototypeCameraFrame(player_.GetState(), {}); // リセット直後の開始地点と最初のギミックを収める範囲
+    playerPrototypeCameraFocus_ = resetCameraFrame.focus;
+    playerPrototypeCameraDistance_ = resetCameraFrame.distance;
     UpdatePlayerPrototypeMechanics(0.0f);
     ApplyPlayerPrototypeGoalVisual();
 }
@@ -635,6 +696,9 @@ void PlayScene::ResetPlayerPrototypeReplayState(bool registerPrepareAction)
     playerPrototypePrepareFeedbackSeconds_ = registerPrepareAction ? kPrepareFeedbackDuration : 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
+    const PlayerPrototypeCameraFrame replayCameraFrame = CalculatePlayerPrototypeCameraFrame(player_.GetState(), {}); // Prepare直後の開始地点と最初のギミックを収める範囲
+    playerPrototypeCameraFocus_ = replayCameraFrame.focus;
+    playerPrototypeCameraDistance_ = replayCameraFrame.distance;
     UpdatePlayerPrototypeMechanics(0.0f);
     ApplyPlayerPrototypeGoalVisual();
 }
@@ -834,7 +898,12 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
     }
 
     const std::vector<PlayerState> visibleCloneStates = pastSelfCloneManager_.GetVisibleStates(); // カメラ範囲に含める可視分身状態一覧
-    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), visibleCloneStates));
+    const PlayerPrototypeCameraFrame targetCameraFrame = CalculatePlayerPrototypeCameraFrame(player_.GetState(), visibleCloneStates); // 現在の攻略対象を収める目標カメラ範囲
+    playerPrototypeCameraFocus_.x = FollowPlayerPrototypeCameraValue(playerPrototypeCameraFocus_.x, targetCameraFrame.focus.x, deltaTime);
+    playerPrototypeCameraFocus_.y = FollowPlayerPrototypeCameraValue(playerPrototypeCameraFocus_.y, targetCameraFrame.focus.y, deltaTime);
+    playerPrototypeCameraFocus_.z = FollowPlayerPrototypeCameraValue(playerPrototypeCameraFocus_.z, targetCameraFrame.focus.z, deltaTime);
+    playerPrototypeCameraDistance_ = FollowPlayerPrototypeCameraValue(playerPrototypeCameraDistance_, targetCameraFrame.distance, deltaTime);
+    ConfigurePlayerPrototypeCamera(ctx_.camera, playerPrototypeCameraFocus_, playerPrototypeCameraDistance_);
 
     if (!ctx_.camera) {
         return;
