@@ -315,6 +315,9 @@
     <ClCompile Include="application\player\PastSelfClone.cpp">
       <Filter>ソース ファイル\application\player</Filter>
     </ClCompile>
+    <ClCompile Include="application\player\PastSelfCloneManager.cpp">
+      <Filter>ソース ファイル\application\player</Filter>
+    </ClCompile>
     <ClCompile Include="application\gimmicks\StageGimmicks.cpp">
       <Filter>ソース ファイル\application\gimmicks</Filter>
     </ClCompile>
@@ -633,6 +636,9 @@
       <Filter>ヘッダー ファイル\application\player</Filter>
     </ClInclude>
     <ClInclude Include="application\player\PastSelfClone.h">
+      <Filter>ヘッダー ファイル\application\player</Filter>
+    </ClInclude>
+    <ClInclude Include="application\player\PastSelfCloneManager.h">
       <Filter>ヘッダー ファイル\application\player</Filter>
     </ClInclude>
     <ClInclude Include="application\gimmicks\StageGimmicks.h">

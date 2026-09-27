@@ -18,6 +18,11 @@ class Object3dCommon;
 class PastSelfClone {
 public:
     /// <summary>
+    /// コンストラクタ
+    /// </summary>
+    PastSelfClone();
+
+    /// <summary>
     /// デストラクタ
     /// </summary>
     ~PastSelfClone();
@@ -33,9 +38,24 @@ public:
     void Finalize();
 
     /// <summary>
+    /// 再生に使用する記録済みフレームを読み込む。
+    /// </summary>
+    bool Load(const std::vector<PastSelfFrame>& sourceFrames);
+
+    /// <summary>
+    /// 読み込み済みフレームの再生を開始する。
+    /// </summary>
+    bool Start();
+
+    /// <summary>
     /// 記録済みフレームの再生を開始する。
     /// </summary>
     bool Start(const std::vector<PastSelfFrame>& sourceFrames);
+
+    /// <summary>
+    /// 再生中と再生終了後の分身表示色を設定する。
+    /// </summary>
+    void SetMaterialColors(const Math::Vector4& playingColor, const Math::Vector4& finishedColor);
 
     /// <summary>
     /// 分身再生を停止する。
