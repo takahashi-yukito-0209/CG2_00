@@ -350,7 +350,12 @@ private:
     /// <summary>
     /// 記録済み分身を残したまま再生開始用の状態へ戻す。
     /// </summary>
-    void ResetPlayerPrototypeReplayState();
+    void ResetPlayerPrototypeReplayState(bool registerPrepareAction = true);
+
+    /// <summary>
+    /// 最後に保存した分身を削除して再生準備状態へ戻す。
+    /// </summary>
+    void UndoLastPlayerPrototypeClone();
 
     /// <summary>
     /// 新しい分身用のプレイヤー記録を開始する。
@@ -416,6 +421,11 @@ private:
     /// ImGuiでプレイヤー確認用の状態を表示する。
     /// </summary>
     void DrawPlayerPrototypeImGui();
+
+    /// <summary>
+    /// プレイヤー検証の重要な達成状態を固定表示する。
+    /// </summary>
+    void DrawPlayerPrototypeProofSummary();
 
     /// <summary>
     /// プレイヤー確認用の検証状態をPlayerタブ内に表示する。

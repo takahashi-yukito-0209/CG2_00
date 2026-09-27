@@ -38,6 +38,11 @@ public:
     void Clear();
 
     /// <summary>
+    /// 最後に保存した分身を削除する。
+    /// </summary>
+    bool RemoveLastClone();
+
+    /// <summary>
     /// 保存済み分身を先頭から同時に再生する。
     /// </summary>
     bool StartAll();
@@ -73,6 +78,11 @@ public:
     void DrawImGui();
 
     /// <summary>
+    /// ImGuiで分身ごとの識別色と再生状態を一覧表示する。
+    /// </summary>
+    void DrawIdentityLegendImGui();
+
+    /// <summary>
     /// 可視中の分身状態一覧を取得する。
     /// </summary>
     std::vector<PlayerState> GetVisibleStates() const;
@@ -86,6 +96,11 @@ public:
     /// 保存済み分身数を取得する。
     /// </summary>
     size_t GetCloneCount() const { return clones_.size(); }
+
+    /// <summary>
+    /// 最後に保存した分身の再生時間を取得する。
+    /// </summary>
+    float GetLastCloneDuration() const;
 
     /// <summary>
     /// 可視中の分身数を取得する。

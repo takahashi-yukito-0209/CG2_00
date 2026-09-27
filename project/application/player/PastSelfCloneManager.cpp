@@ -82,6 +82,23 @@ void PastSelfCloneManager::Clear()
 }
 
 /// <summary>
+/// 最後に保存した分身を削除する。
+/// </summary>
+bool PastSelfCloneManager::RemoveLastClone()
+{
+    if (clones_.empty()) {
+        return false;
+    }
+
+    std::unique_ptr<PastSelfClone>& clone = clones_.back(); // 削除する末尾の分身
+    if (clone) {
+        clone->Finalize();
+    }
+    clones_.pop_back();
+    return true;
+}
+
+/// <summary>
 /// 保存済み分身を先頭から同時に再生する。
 /// </summary>
 bool PastSelfCloneManager::StartAll()
@@ -162,6 +179,7 @@ void PastSelfCloneManager::DrawImGui()
 {
 #ifdef USE_IMGUI
     ImGui::Text("Stored: %zu  Visible: %zu  Playing: %zu", GetCloneCount(), GetVisibleCount(), GetPlayingCount());
+    DrawIdentityLegendImGui();
     for (size_t cloneIndex = 0; cloneIndex < clones_.size(); ++cloneIndex) {
         const std::unique_ptr<PastSelfClone>& clone = clones_[cloneIndex]; // 状態を表示する分身
         if (!clone) {
@@ -172,6 +190,44 @@ void PastSelfCloneManager::DrawImGui()
         if (ImGui::TreeNode("Clone", "Clone %zu", cloneIndex + 1)) {
             clone->DrawImGui();
             ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+#endif
+}
+
+/// <summary>
+/// ImGuiで分身ごとの識別色と再生状態を一覧表示する。
+/// </summary>
+void PastSelfCloneManager::DrawIdentityLegendImGui()
+{
+#ifdef USE_IMGUI
+    if (clones_.empty()) {
+        ImGui::TextDisabled("No stored clones");
+        return;
+    }
+
+    for (size_t cloneIndex = 0; cloneIndex < clones_.size(); ++cloneIndex) {
+        const std::unique_ptr<PastSelfClone>& clone = clones_[cloneIndex]; // 識別情報を表示する分身
+        if (!clone) {
+            continue;
+        }
+
+        const Math::Vector4& identityColor = clone->GetIdentityColor(); // 分身へ割り当てた識別色
+        const ImVec4 color = ImVec4(identityColor.x, identityColor.y, identityColor.z, 1.0f); // 不透明な色見本
+        const char* stateLabel = !clone->IsVisible() ? "Stored" : (clone->IsPlaying() ? "Playing" : "Finished"); // 現在の再生状態
+        ImGui::PushID(static_cast<int>(cloneIndex));
+        ImGui::ColorButton("##IdentityColor", color,
+            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+            ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+        ImGui::SameLine();
+        if (cloneIndex < 26) {
+            const char cloneLabel = static_cast<char>('A' + cloneIndex); // 保存順に割り当てる英字ラベル
+            ImGui::Text("Clone %c (#%zu): %s  %.2f / %.2f sec",
+                cloneLabel, cloneIndex + 1, stateLabel, clone->GetPlaybackTime(), clone->GetDuration());
+        } else {
+            ImGui::Text("Clone #%zu: %s  %.2f / %.2f sec",
+                cloneIndex + 1, stateLabel, clone->GetPlaybackTime(), clone->GetDuration());
         }
         ImGui::PopID();
     }
@@ -231,4 +287,15 @@ size_t PastSelfCloneManager::GetPlayingCount() const
     return static_cast<size_t>(std::count_if(clones_.begin(), clones_.end(), [](const std::unique_ptr<PastSelfClone>& clone) {
         return clone && clone->IsPlaying();
     }));
+}
+
+/// <summary>
+/// 最後に保存した分身の再生時間を取得する。
+/// </summary>
+float PastSelfCloneManager::GetLastCloneDuration() const
+{
+    if (clones_.empty() || !clones_.back()) {
+        return 0.0f;
+    }
+    return clones_.back()->GetDuration();
 }

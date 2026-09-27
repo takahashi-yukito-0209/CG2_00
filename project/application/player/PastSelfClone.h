@@ -117,6 +117,11 @@ public:
     /// </summary>
     float GetDuration() const { return frames_.empty() ? 0.0f : frames_.back().time; }
 
+    /// <summary>
+    /// 分身識別に使用する再生中の表示色を取得する。
+    /// </summary>
+    const Math::Vector4& GetIdentityColor() const { return materialColor_; }
+
 private:
     /// <summary>
     /// 指定時刻のプレイヤー状態を取得する。
