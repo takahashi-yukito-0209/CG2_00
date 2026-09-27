@@ -348,6 +348,11 @@ private:
     void ResetPlayerPrototypeState();
 
     /// <summary>
+    /// 記録済み分身を残したまま再生開始用の状態へ戻す。
+    /// </summary>
+    void ResetPlayerPrototypeReplayState();
+
+    /// <summary>
     /// プレイヤー確認用の分身ギミック表示を更新する。
     /// </summary>
     void UpdatePlayerPrototypeMechanicObjects(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
@@ -880,6 +885,11 @@ private: // メンバー変数
     bool playerPrototypeTimedDoorOpened_ = false; // 時間差扉を開けたか
     bool playerPrototypeWeightSwitchActivated_ = false; // 重さスイッチを起動したか
     bool playerPrototypeOneWayGateUsed_ = false; // 一方通行ゲートを通過したか
+    bool playerPrototypeResetShown_ = false; // リセット状態から検証を開始したことをHUDで示すか
+    bool playerPrototypeRecordStarted_ = false; // 分身記録を開始したことをHUDで示すか
+    bool playerPrototypeRecordStopped_ = false; // 分身記録を停止したことをHUDで示すか
+    bool playerPrototypePrepareUsed_ = false; // 記録を残したPrepare操作を使ったことをHUDで示すか
+    bool playerPrototypeReplayStarted_ = false; // 記録済み分身の再生を開始したことをHUDで示すか
     float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間

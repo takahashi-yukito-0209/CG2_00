@@ -491,6 +491,11 @@ void OneWayGateGimmick::Finalize()
 /// </summary>
 void OneWayGateGimmick::Update(const PlayerState& playerState)
 {
+    if (blocking_) {
+        ApplyVisual();
+        return;
+    }
+
     const float signedDistance = (playerState.transform.translate.x - translate_.x) * allowedDirectionX_; // 許可方向を正としたゲートからの距離
     blocking_ = signedDistance > 0.0f;
     ApplyVisual();

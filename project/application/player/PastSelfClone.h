@@ -116,8 +116,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object3d_; // 分身表示用の3Dオブジェクト
     std::vector<PastSelfFrame> frames_; // 再生に使用する記録フレーム
     PlayerState currentState_; // 現在の分身状態
-    Math::Vector4 materialColor_ { 0.35f, 0.8f, 1.0f, 0.45f }; // 再生中の分身表示色
-    Math::Vector4 finishedMaterialColor_ { 0.75f, 0.8f, 0.9f, 0.28f }; // 再生終了後の分身表示色
+    Math::Vector4 materialColor_ { 1.0f, 0.05f, 0.95f, 0.78f }; // 再生中の分身表示色
+    Math::Vector4 finishedMaterialColor_ { 0.9f, 0.45f, 1.0f, 0.5f }; // 再生終了後の分身表示色
     float playbackTime_ = 0.0f; // 現在の再生時刻
     float playbackSpeed_ = 1.0f; // 再生速度
     bool loopPlayback_ = false; // 終端でループするか
