@@ -1356,11 +1356,14 @@ void PlayScene::DrawImGui()
         }
 
         if (ImGui::BeginTabItem("Player")) {
-            DrawPlayerPrototypeProofSummary();
+            DrawPlayerPrototypeFixedStatusHud();
+            ImGui::Checkbox("Verification Details", &playerPrototypeShowVerificationDetails_);
             if (ImGui::BeginChild("PlayerTabDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
-                DrawPlayerPrototypeStatusHud();
-                ImGui::Separator();
                 DrawPlayerPrototypeImGui();
+                if (playerPrototypeShowVerificationDetails_) {
+                    ImGui::Separator();
+                    DrawPlayerPrototypeStatusHud();
+                }
             }
             ImGui::EndChild();
             ImGui::EndTabItem();

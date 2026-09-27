@@ -423,9 +423,9 @@ private:
     void DrawPlayerPrototypeImGui();
 
     /// <summary>
-    /// プレイヤー検証の重要な達成状態を固定表示する。
+    /// プレイヤー操作に必要な主要状態を固定表示する。
     /// </summary>
-    void DrawPlayerPrototypeProofSummary();
+    void DrawPlayerPrototypeFixedStatusHud();
 
     /// <summary>
     /// プレイヤー確認用の検証状態をPlayerタブ内に表示する。
@@ -912,6 +912,7 @@ private: // メンバー変数
     bool playerPrototypePrepareUsed_ = false; // 記録を残したPrepare操作を使ったことをHUDで示すか
     bool playerPrototypeReplayStarted_ = false; // 記録済み分身の再生を開始したことをHUDで示すか
     bool playerPrototypeRecordingPendingCommit_ = false; // 現在の記録を分身として保存する必要があるか
+    bool playerPrototypeShowVerificationDetails_ = false; // 検証用の詳細HUDを表示するか
     float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
