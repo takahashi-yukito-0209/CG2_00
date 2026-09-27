@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace MyEngine {
@@ -107,9 +108,9 @@ public:
     void Finalize();
 
     /// <summary>
-    /// プレイヤーと分身の位置からスイッチ状態を更新する。
+    /// プレイヤーと可視分身の位置からスイッチ状態を更新する。
     /// </summary>
-    void Update(const PlayerState& playerState, bool cloneVisible, const PlayerState& cloneState);
+    void Update(const PlayerState& playerState, std::span<const PlayerState> cloneStates);
 
     /// <summary>
     /// 表示用オブジェクトを更新する。
@@ -179,9 +180,9 @@ public:
     void Finalize();
 
     /// <summary>
-    /// 分身の位置と経過時間からスイッチ状態を更新する。
+    /// 可視分身の位置と経過時間からスイッチ状態を更新する。
     /// </summary>
-    void Update(float deltaTime, bool cloneVisible, const PlayerState& cloneState);
+    void Update(float deltaTime, std::span<const PlayerState> cloneStates);
 
     /// <summary>
     /// 表示用オブジェクトを更新する。
@@ -251,9 +252,9 @@ public:
     void Finalize();
 
     /// <summary>
-    /// プレイヤーと分身の位置からスイッチ状態を更新する。
+    /// プレイヤーと可視分身の位置からスイッチ状態を更新する。
     /// </summary>
-    void Update(const PlayerState& playerState, bool cloneVisible, const PlayerState& cloneState);
+    void Update(const PlayerState& playerState, std::span<const PlayerState> cloneStates);
 
     /// <summary>
     /// 表示用オブジェクトを更新する。

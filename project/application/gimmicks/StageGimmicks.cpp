@@ -96,12 +96,14 @@ void BoxSwitchGimmick::Finalize()
 }
 
 /// <summary>
-/// プレイヤーと分身の位置からスイッチ状態を更新する。
+/// プレイヤーと可視分身の位置からスイッチ状態を更新する。
 /// </summary>
-void BoxSwitchGimmick::Update(const PlayerState& playerState, bool cloneVisible, const PlayerState& cloneState)
+void BoxSwitchGimmick::Update(const PlayerState& playerState, std::span<const PlayerState> cloneStates)
 {
     playerOnSwitch_ = Contains(playerState);
-    cloneOnSwitch_ = cloneVisible && Contains(cloneState);
+    cloneOnSwitch_ = std::any_of(cloneStates.begin(), cloneStates.end(), [this](const PlayerState& cloneState) {
+        return Contains(cloneState);
+    });
     active_ = cloneOnSwitch_;
     ApplyVisual();
 }
@@ -192,11 +194,13 @@ void TimedSwitchGimmick::Finalize()
 }
 
 /// <summary>
-/// 分身の位置と経過時間からスイッチ状態を更新する。
+/// 可視分身の位置と経過時間からスイッチ状態を更新する。
 /// </summary>
-void TimedSwitchGimmick::Update(float deltaTime, bool cloneVisible, const PlayerState& cloneState)
+void TimedSwitchGimmick::Update(float deltaTime, std::span<const PlayerState> cloneStates)
 {
-    cloneOnSwitch_ = cloneVisible && Contains(cloneState);
+    cloneOnSwitch_ = std::any_of(cloneStates.begin(), cloneStates.end(), [this](const PlayerState& cloneState) {
+        return Contains(cloneState);
+    });
     if (cloneOnSwitch_) {
         remainingSeconds_ = holdSeconds_;
     } else {
@@ -290,12 +294,14 @@ void WeightSwitchGimmick::Finalize()
 }
 
 /// <summary>
-/// プレイヤーと分身の位置からスイッチ状態を更新する。
+/// プレイヤーと可視分身の位置からスイッチ状態を更新する。
 /// </summary>
-void WeightSwitchGimmick::Update(const PlayerState& playerState, bool cloneVisible, const PlayerState& cloneState)
+void WeightSwitchGimmick::Update(const PlayerState& playerState, std::span<const PlayerState> cloneStates)
 {
     playerOnSwitch_ = Contains(playerState);
-    cloneOnSwitch_ = cloneVisible && Contains(cloneState);
+    cloneOnSwitch_ = std::any_of(cloneStates.begin(), cloneStates.end(), [this](const PlayerState& cloneState) {
+        return Contains(cloneState);
+    });
     active_ = playerOnSwitch_ && cloneOnSwitch_;
     ApplyVisual();
 }

@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <span>
 #include <vector>
 
 using namespace MyEngine;
@@ -25,6 +26,7 @@ constexpr uint8_t kClonePlayKey = DIK_V; // 分身再生キー
 constexpr uint8_t kCloneStopKey = DIK_B; // 分身停止キー
 constexpr uint8_t kReplayPrepareKey = DIK_T; // 記録を残したまま再生準備へ戻すキー
 constexpr uint8_t kPrototypeResetKey = DIK_R; // 確認用パズルのリセットキー
+constexpr float kPrepareFeedbackDuration = 1.5f; // Prepare成功表示を維持する秒数
 constexpr float kPlayerPrototypeFallResetY = -5.0f; // 仮ステージ外へ落ちたとみなすY座標
 constexpr Math::Vector3 kPlayerPrototypeStartTranslate = { -8.7f, 0.5f, 0.0f }; // プレイヤー開始位置
 constexpr Math::Vector4 kPlayerPrototypeNormalPlayerColor = { 0.0f, 0.86f, 1.0f, 1.0f }; // 通常時のプレイヤー色
@@ -226,16 +228,22 @@ bool ShouldBlockPlayerInput()
 }
 
 /// <summary>
-/// プレイヤーと分身の位置からカメラ注視点を計算する。
+/// プレイヤーと可視分身の位置からカメラ注視点を計算する。
 /// </summary>
-Math::Vector3 CalculatePlayerPrototypeCameraFocus(const PlayerState& playerState, bool cloneVisible, const PlayerState& cloneState)
+Math::Vector3 CalculatePlayerPrototypeCameraFocus(const PlayerState& playerState, const std::vector<PlayerState>& cloneStates)
 {
-    Math::Vector3 focus = playerState.transform.translate; // カメラ中心にする基準座標
-    if (cloneVisible) {
-        focus.x = (playerState.transform.translate.x + cloneState.transform.translate.x) * 0.5f;
-        focus.y = (std::max)(playerState.transform.translate.y, cloneState.transform.translate.y);
+    float minimumX = playerState.transform.translate.x; // 画面内に収める対象の最小X座標
+    float maximumX = playerState.transform.translate.x; // 画面内に収める対象の最大X座標
+    float maximumY = playerState.transform.translate.y; // 画面内に収める対象の最大Y座標
+    for (const PlayerState& cloneState : cloneStates) {
+        minimumX = (std::min)(minimumX, cloneState.transform.translate.x);
+        maximumX = (std::max)(maximumX, cloneState.transform.translate.x);
+        maximumY = (std::max)(maximumY, cloneState.transform.translate.y);
     }
 
+    Math::Vector3 focus = playerState.transform.translate; // カメラ中心にする基準座標
+    focus.x = (minimumX + maximumX) * 0.5f;
+    focus.y = maximumY;
     focus.x += kPlayerPrototypeCameraFocusOffset.x;
     focus.y += kPlayerPrototypeCameraFocusOffset.y;
     focus.z = kPlayerPrototypeCameraFocusOffset.z;
@@ -280,14 +288,9 @@ void ConfigurePlayerPrototypeCamera(Camera* camera, const Math::Vector3& focus)
 /// <summary>
 /// プレイヤーが上面に乗れる足場一覧を作成する。
 /// </summary>
-std::vector<StandablePlatform> BuildPlayerStandablePlatforms(const PastSelfClone& pastSelfClone)
+std::vector<StandablePlatform> BuildPlayerStandablePlatforms(const PastSelfCloneManager& cloneManager)
 {
-    std::vector<StandablePlatform> platforms; // プレイヤー用の上面足場一覧
-    const StandablePlatform clonePlatform = pastSelfClone.GetStandablePlatform(); // 分身の上面足場
-    if (clonePlatform.enabled) {
-        platforms.push_back(clonePlatform);
-    }
-    return platforms;
+    return cloneManager.GetStandablePlatforms();
 }
 
 /// <summary>
@@ -301,6 +304,16 @@ std::vector<StandablePlatform> BuildCloneStandablePlatforms(const Player& player
         platforms.push_back(playerPlatform);
     }
     return platforms;
+}
+
+/// <summary>
+/// プレイヤーがいずれかの分身足場に立っているか判定する。
+/// </summary>
+bool IsPlayerStandingOnClonePlatform(const PlayerState& playerState, const std::vector<StandablePlatform>& clonePlatforms)
+{
+    return std::any_of(clonePlatforms.begin(), clonePlatforms.end(), [&playerState](const StandablePlatform& clonePlatform) {
+        return IsPlayerStateStandingOnPlatform(playerState, clonePlatform);
+    });
 }
 } // namespace
 
@@ -316,8 +329,8 @@ void PlayScene::InitializePlayerPrototype()
     PlayerState playerStartState = player_.GetState(); // 仮ステージに合わせた開始状態
     playerStartState.transform.translate = kPlayerPrototypeStartTranslate;
     player_.SetInitialState(playerStartState);
-    pastSelfClone_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, kPlayerPrototypeModelFileName);
-    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), false, pastSelfClone_.GetCurrentState()));
+    pastSelfCloneManager_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, kPlayerPrototypeModelFileName);
+    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), {}));
 }
 
 /// <summary>
@@ -443,6 +456,7 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeWeightCloneOn_ = false;
     playerPrototypeOneWayGateBlocking_ = false;
     playerPrototypeTimedDoorOpened_ = false;
+    playerPrototypeDualCloneSwitchesActivated_ = false;
     playerPrototypeWeightSwitchActivated_ = false;
     playerPrototypeOneWayGateUsed_ = false;
     playerPrototypeResetShown_ = true;
@@ -450,9 +464,11 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeRecordStopped_ = false;
     playerPrototypePrepareUsed_ = false;
     playerPrototypeReplayStarted_ = false;
+    playerPrototypeRecordingPendingCommit_ = false;
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypePrepareFeedbackSeconds_ = 0.0f;
     playerPrototypeRecordTakeCount_ = 0;
 }
 
@@ -462,11 +478,15 @@ void PlayScene::InitializePlayerPrototypeMechanics()
 void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
 {
     const PlayerState& playerState = player_.GetState(); // ギミック判定に使う現在のプレイヤー状態
-    const bool playbackCloneVisible = pastSelfClone_.IsVisible(); // 再生中または表示中の分身があるか
-    const bool recordingCloneRoute = pastSelfRecorder_.IsRecording(); // 未来の分身ルートを記録中か
-    const PlayerState& cloneInputState = playbackCloneVisible ? pastSelfClone_.GetCurrentState() : playerState; // 分身入力として扱う状態
-    const bool cloneInputVisible = playbackCloneVisible || recordingCloneRoute; // 分身専用入力を有効にするか
-    playerPrototypeSwitch_.Update(playerState, cloneInputVisible, cloneInputState);
+    const std::vector<PlayerState> cloneStates = pastSelfCloneManager_.GetVisibleStates(); // ギミック入力に使用する可視分身状態一覧
+    const std::span<const PlayerState> cloneStateView { cloneStates }; // ギミックへ渡す分身状態の参照範囲
+    const bool playbackCloneVisible = !cloneStates.empty(); // 再生中または表示中の分身があるか
+    std::vector<PlayerState> timedSwitchInputStates = cloneStates; // 時間差スイッチへ入力する分身と記録中プレイヤーの状態一覧
+    if (pastSelfRecorder_.IsRecording()) {
+        timedSwitchInputStates.push_back(playerState);
+    }
+    const std::span<const PlayerState> timedSwitchInputView { timedSwitchInputStates }; // 時間差スイッチへ渡す状態の参照範囲
+    playerPrototypeSwitch_.Update(playerState, cloneStateView);
     playerPrototypePlayerOnSwitch_ = playerPrototypeSwitch_.IsPlayerOnSwitch();
     playerPrototypeCloneOnSwitch_ = playerPrototypeSwitch_.IsCloneOnSwitch();
     playerPrototypeSwitchActive_ = playerPrototypeSwitch_.IsActive();
@@ -476,14 +496,15 @@ void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
     playerPrototypeDoor_.Update(playerPrototypeDoorUnlockedByClone_);
     playerPrototypeDoorOpen_ = playerPrototypeDoor_.IsOpen();
 
-    playerPrototypeTimedSwitch_.Update(deltaTime, playbackCloneVisible, pastSelfClone_.GetCurrentState());
+    playerPrototypeTimedSwitch_.Update(deltaTime, timedSwitchInputView);
     playerPrototypeTimedSwitchActive_ = playerPrototypeTimedSwitch_.IsActive();
     playerPrototypeTimedSwitchCloneOn_ = playerPrototypeTimedSwitch_.IsCloneOnSwitch();
-    playerPrototypeWeightSwitch_.Update(playerState, playbackCloneVisible, pastSelfClone_.GetCurrentState());
+    playerPrototypeWeightSwitch_.Update(playerState, cloneStateView);
     playerPrototypeWeightSwitchActive_ = playerPrototypeWeightSwitch_.IsActive();
     playerPrototypeWeightPlayerOn_ = playerPrototypeWeightSwitch_.IsPlayerOnSwitch();
     playerPrototypeWeightCloneOn_ = playerPrototypeWeightSwitch_.IsCloneOnSwitch();
-    playerPrototypeTimedDoor_.Update(playerPrototypeTimedSwitchActive_ || playerPrototypeWeightSwitchActive_);
+    const bool dualCloneSwitchInputActive = playerPrototypeSwitchActive_ && playerPrototypeTimedSwitchActive_; // 緑と青のスイッチが同時に起動しているか
+    playerPrototypeTimedDoor_.Update(dualCloneSwitchInputActive || playerPrototypeWeightSwitchActive_);
     playerPrototypeTimedDoorOpen_ = playerPrototypeTimedDoor_.IsOpen();
     playerPrototypeOneWayGate_.Update(player_.GetState());
     playerPrototypeOneWayGateBlocking_ = playerPrototypeOneWayGate_.IsBlocking();
@@ -491,8 +512,11 @@ void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
     if (playbackCloneVisible && playerPrototypeCloneOnSwitch_) {
         playerPrototypeDoorOpenedByClone_ = true;
     }
-    if (playerPrototypeTimedDoorOpen_) {
+    if (playerPrototypeTimedDoorOpen_ && dualCloneSwitchInputActive) {
         playerPrototypeTimedDoorOpened_ = true;
+    }
+    if (!pastSelfRecorder_.IsRecording() && cloneStates.size() >= 2 && playerPrototypeSwitchActive_ && playerPrototypeTimedSwitchCloneOn_) {
+        playerPrototypeDualCloneSwitchesActivated_ = true;
     }
     if (playerPrototypeWeightSwitchActive_) {
         playerPrototypeWeightSwitchActivated_ = true;
@@ -509,7 +533,7 @@ void PlayScene::ResetPlayerPrototypeState()
 {
     player_.Reset();
     pastSelfRecorder_.Clear();
-    pastSelfClone_.Stop();
+    pastSelfCloneManager_.Clear();
     playerPrototypeGoal_.Reset();
     playerPrototypeSwitch_.Reset();
     playerPrototypeDoor_.Reset();
@@ -534,6 +558,7 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeWeightCloneOn_ = false;
     playerPrototypeOneWayGateBlocking_ = false;
     playerPrototypeTimedDoorOpened_ = false;
+    playerPrototypeDualCloneSwitchesActivated_ = false;
     playerPrototypeWeightSwitchActivated_ = false;
     playerPrototypeOneWayGateUsed_ = false;
     playerPrototypeResetShown_ = true;
@@ -541,9 +566,11 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeRecordStopped_ = false;
     playerPrototypePrepareUsed_ = false;
     playerPrototypeReplayStarted_ = false;
+    playerPrototypeRecordingPendingCommit_ = false;
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypePrepareFeedbackSeconds_ = 0.0f;
     playerPrototypeRecordTakeCount_ = 0;
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
     UpdatePlayerPrototypeMechanics(0.0f);
@@ -559,6 +586,7 @@ void PlayScene::ResetPlayerPrototypeReplayState()
     const bool keepClonePlatformUsed = playerPrototypeClonePlatformUsed_; // 分身足場を利用した実証結果
     const bool keepDoorOpenedByClone = playerPrototypeDoorOpenedByClone_; // 分身で通常扉を開けた実証結果
     const bool keepTimedDoorOpened = playerPrototypeTimedDoorOpened_; // 時間差扉を開けた実証結果
+    const bool keepDualCloneSwitchesActivated = playerPrototypeDualCloneSwitchesActivated_; // 複数分身で離れたスイッチを同時起動した実証結果
     const bool keepWeightSwitchActivated = playerPrototypeWeightSwitchActivated_; // 重さスイッチを起動した実証結果
     const bool keepOneWayGateUsed = playerPrototypeOneWayGateUsed_; // 一方通行ゲートを利用した実証結果
     const bool keepResetShown = playerPrototypeResetShown_; // リセット開始を示す実証結果
@@ -567,7 +595,7 @@ void PlayScene::ResetPlayerPrototypeReplayState()
     const bool keepReplayStarted = playerPrototypeReplayStarted_; // 再生開始を示す実証結果
     const bool keepDoorUnlocked = keepDoorOpenedByClone; // 再生済み分身で開放した通常扉状態
     player_.Reset();
-    pastSelfClone_.Stop();
+    pastSelfCloneManager_.StopAll();
     playerPrototypeGoal_.Reset();
     playerPrototypeSwitch_.Reset();
     playerPrototypeDoor_.Reset();
@@ -592,6 +620,7 @@ void PlayScene::ResetPlayerPrototypeReplayState()
     playerPrototypeWeightCloneOn_ = false;
     playerPrototypeOneWayGateBlocking_ = false;
     playerPrototypeTimedDoorOpened_ = keepTimedDoorOpened;
+    playerPrototypeDualCloneSwitchesActivated_ = keepDualCloneSwitchesActivated;
     playerPrototypeWeightSwitchActivated_ = keepWeightSwitchActivated;
     playerPrototypeOneWayGateUsed_ = keepOneWayGateUsed;
     playerPrototypeResetShown_ = keepResetShown;
@@ -599,10 +628,47 @@ void PlayScene::ResetPlayerPrototypeReplayState()
     playerPrototypeRecordStopped_ = keepRecordStopped;
     playerPrototypePrepareUsed_ = true;
     playerPrototypeReplayStarted_ = keepReplayStarted;
+    playerPrototypeRecordingPendingCommit_ = false;
+    playerPrototypePrepareFeedbackSeconds_ = kPrepareFeedbackDuration;
     playerPrototypeClearTime_ = 0.0f;
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
     UpdatePlayerPrototypeMechanics(0.0f);
     ApplyPlayerPrototypeGoalVisual();
+}
+
+/// <summary>
+/// 新しい分身用のプレイヤー記録を開始する。
+/// </summary>
+void PlayScene::StartPlayerPrototypeRecording()
+{
+    if (pastSelfRecorder_.IsRecording()) {
+        return;
+    }
+
+    if (pastSelfCloneManager_.StartAll()) {
+        playerPrototypeReplayStarted_ = true;
+    }
+    pastSelfRecorder_.Start();
+    ++playerPrototypeRecordTakeCount_;
+    playerPrototypeRecordStarted_ = true;
+    playerPrototypeRecordingPendingCommit_ = true;
+    playerPrototypeLastRecordDuration_ = 0.0f;
+}
+
+/// <summary>
+/// 現在の記録を停止し、新しい分身として保存する。
+/// </summary>
+void PlayScene::FinishPlayerPrototypeRecording()
+{
+    if (!playerPrototypeRecordingPendingCommit_) {
+        return;
+    }
+
+    pastSelfRecorder_.Stop();
+    playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
+    const bool cloneAdded = pastSelfCloneManager_.AddClone(pastSelfRecorder_.GetFrames()); // 有効な記録から分身を保存できたか
+    playerPrototypeRecordStopped_ = playerPrototypeRecordStopped_ || cloneAdded;
+    playerPrototypeRecordingPendingCommit_ = false;
 }
 
 /// <summary>
@@ -681,61 +747,59 @@ void PlayScene::DrawPlayerPrototypeMechanics()
 /// </summary>
 void PlayScene::UpdatePlayerPrototype(float deltaTime)
 {
+    playerPrototypePrepareFeedbackSeconds_ = (std::max)(playerPrototypePrepareFeedbackSeconds_ - deltaTime, 0.0f);
     const bool blockInputByImGui = ShouldBlockPlayerInput(); // ImGui操作でゲーム入力を止めるか
     InputManager* inputManager = InputManager::GetInstance(); // プレイヤー確認用入力を取得する管理クラス
     if (!blockInputByImGui && inputManager && inputManager->IsKeyJustPressed(kPrototypeResetKey)) {
         ResetPlayerPrototypeState();
     }
+    const bool canPrepareReplay = !blockInputByImGui && inputManager && !pastSelfRecorder_.IsRecording() && pastSelfCloneManager_.GetCloneCount() > 0; // Prepare入力を受け付けられるか
+    if (canPrepareReplay && inputManager->IsKeyJustPressed(kReplayPrepareKey)) {
+        ResetPlayerPrototypeReplayState();
+    }
 
     const bool canAcceptInput = !playerPrototypeGoalReached_ && !blockInputByImGui; // プレイヤーと分身操作の入力を受け取れるか
     if (canAcceptInput && inputManager) {
         if (inputManager->IsKeyJustPressed(kRecordToggleKey)) {
-            const bool wasRecording = pastSelfRecorder_.IsRecording(); // 切り替え前に記録中だったか
-            if (!wasRecording) {
-                pastSelfClone_.Stop();
-                ++playerPrototypeRecordTakeCount_;
-                playerPrototypeRecordStarted_ = true;
-            }
-            pastSelfRecorder_.Toggle();
-            if (wasRecording) {
-                playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
-                playerPrototypeRecordStopped_ = true;
+            if (pastSelfRecorder_.IsRecording()) {
+                FinishPlayerPrototypeRecording();
             } else {
-                playerPrototypeLastRecordDuration_ = 0.0f;
+                StartPlayerPrototypeRecording();
             }
         }
         if (inputManager->IsKeyJustPressed(kClonePlayKey)) {
-            if (pastSelfClone_.Start(pastSelfRecorder_.GetFrames())) {
+            if (pastSelfCloneManager_.StartAll()) {
                 playerPrototypeReplayStarted_ = true;
             }
         }
         if (inputManager->IsKeyJustPressed(kCloneStopKey)) {
-            pastSelfClone_.Stop();
-        }
-        if (!pastSelfRecorder_.IsRecording() && pastSelfRecorder_.GetFrames().size() >= 2 && inputManager->IsKeyJustPressed(kReplayPrepareKey)) {
-            ResetPlayerPrototypeReplayState();
+            pastSelfCloneManager_.StopAll();
         }
     }
 
     if (!playerPrototypeGoalReached_) {
         playerPrototypeElapsedTime_ += deltaTime;
-        pastSelfClone_.Update(deltaTime, BuildCloneStandablePlatforms(player_));
+        pastSelfCloneManager_.Update(deltaTime, BuildCloneStandablePlatforms(player_));
         UpdatePlayerPrototypeMechanics(deltaTime);
         std::vector<SolidCollider> solidColliders; // プレイヤーが全面衝突する地形と扉
         AppendPlayerPrototypeSolidColliders(&solidColliders);
-        std::vector<StandablePlatform> standablePlatforms = BuildPlayerStandablePlatforms(pastSelfClone_); // プレイヤーが上面だけ乗れる分身足場
+        std::vector<StandablePlatform> standablePlatforms = BuildPlayerStandablePlatforms(pastSelfCloneManager_); // プレイヤーが上面だけ乗れる分身足場
         player_.Update(deltaTime, canAcceptInput, solidColliders, standablePlatforms);
         const SolidCollider doorCollider = playerPrototypeDoor_.GetSolidCollider(); // 閉じている扉の衝突判定
         if (doorCollider.enabled && IsPlayerStateTouchingSolidCollider(player_.GetState(), doorCollider)) {
             playerPrototypeDoorBlockedBeforeClone_ = true;
         }
-        if (IsPlayerStateStandingOnPlatform(player_.GetState(), pastSelfClone_.GetStandablePlatform())) {
+        if (IsPlayerStandingOnClonePlatform(player_.GetState(), standablePlatforms)) {
             playerPrototypeClonePlatformUsed_ = true;
         }
         if (player_.GetState().transform.translate.y < kPlayerPrototypeFallResetY) {
             ResetPlayerPrototypeState();
         }
+        const bool wasRecording = pastSelfRecorder_.IsRecording(); // 記録更新前に記録中だったか
         pastSelfRecorder_.Update(deltaTime, player_.GetState());
+        if (wasRecording && !pastSelfRecorder_.IsRecording()) {
+            FinishPlayerPrototypeRecording();
+        }
         if (!pastSelfRecorder_.IsRecording() && pastSelfRecorder_.GetFrames().size() >= 2) {
             playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
         }
@@ -747,7 +811,8 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
         player_.SetMaterialColor(kPlayerPrototypeClearPlayerColor);
     }
 
-    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), pastSelfClone_.IsVisible(), pastSelfClone_.GetCurrentState()));
+    const std::vector<PlayerState> visibleCloneStates = pastSelfCloneManager_.GetVisibleStates(); // カメラ範囲に含める可視分身状態一覧
+    ConfigurePlayerPrototypeCamera(ctx_.camera, CalculatePlayerPrototypeCameraFocus(player_.GetState(), visibleCloneStates));
 
     if (!ctx_.camera) {
         return;
@@ -759,7 +824,7 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
     UpdatePlayerPrototypeMechanicObjects(viewMatrix, projectionMatrix);
     UpdatePlayerPrototypeCloneRecordMarkers(viewMatrix, projectionMatrix);
     player_.UpdateObject(viewMatrix, projectionMatrix);
-    pastSelfClone_.UpdateObject(viewMatrix, projectionMatrix);
+    pastSelfCloneManager_.UpdateObjects(viewMatrix, projectionMatrix);
 }
 
 /// <summary>
@@ -834,7 +899,7 @@ void PlayScene::UpdatePlayerPrototypeGoal()
     playerPrototypeClearTime_ = playerPrototypeElapsedTime_;
     playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
     pastSelfRecorder_.Stop();
-    pastSelfClone_.Pause();
+    pastSelfCloneManager_.PauseAll();
     player_.SetMaterialColor(kPlayerPrototypeClearPlayerColor);
     ApplyPlayerPrototypeGoalVisual();
 }
@@ -862,7 +927,7 @@ void PlayScene::DrawPlayerPrototype()
     DrawPlayerPrototypeStage();
     DrawPlayerPrototypeMechanics();
     DrawPlayerPrototypeCloneRecordMarkers();
-    pastSelfClone_.Draw();
+    pastSelfCloneManager_.Draw();
     player_.Draw();
 }
 
@@ -881,42 +946,41 @@ void PlayScene::DrawPlayerPrototypeImGui()
     ImGui::Text("Timed: Switch %s %.2f sec / Door %s", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
     ImGui::Text("Weight: %s  Player %s / Clone %s", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF");
     ImGui::Text("OneWay: %s", playerPrototypeOneWayGateBlocking_ ? "Blocking" : "Passable");
-    ImGui::Text("Route: Multi-record main  Takes: %u", playerPrototypeRecordTakeCount_);
+    ImGui::Text("Route: Multi-clone main  Takes: %u  Stored: %zu", playerPrototypeRecordTakeCount_, pastSelfCloneManager_.GetCloneCount());
     ImGui::Text("Time: %.2f sec  Clear: %.2f sec  Record: %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_, playerPrototypeLastRecordDuration_);
     if (playerPrototypeGoalReached_) {
         ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.25f, 1.0f), "CLEAR");
     }
     ImGui::Text("Goal: %s", playerPrototypeGoalReached_ ? "Reached" : "Not Reached");
+    const bool canPrepareReplay = !pastSelfRecorder_.IsRecording() && pastSelfCloneManager_.GetCloneCount() > 0; // 分身群を残して再生準備へ戻せるか
+    ImGui::Text("Prepare: %s", canPrepareReplay ? "Ready - keeps stored clones" : "Locked - store a clone and stop recording");
+    if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
+        ImGui::TextColored(ImVec4(0.15f, 1.0f, 0.45f, 1.0f), "PREPARED: clones kept / replay ready");
+    }
     if (playerPrototypeGoalReached_) {
         ImGui::BeginDisabled();
     }
     if (ImGui::Button(pastSelfRecorder_.IsRecording() ? "Stop Recording" : "Start Recording")) {
-        const bool wasRecording = pastSelfRecorder_.IsRecording(); // 切り替え前に記録中だったか
-        if (!wasRecording) {
-            pastSelfClone_.Stop();
-            ++playerPrototypeRecordTakeCount_;
-            playerPrototypeRecordStarted_ = true;
-        }
-        pastSelfRecorder_.Toggle();
-        if (wasRecording) {
-            playerPrototypeLastRecordDuration_ = pastSelfRecorder_.GetDuration();
-            playerPrototypeRecordStopped_ = true;
+        if (pastSelfRecorder_.IsRecording()) {
+            FinishPlayerPrototypeRecording();
         } else {
-            playerPrototypeLastRecordDuration_ = 0.0f;
+            StartPlayerPrototypeRecording();
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Play Clone")) {
-        if (pastSelfClone_.Start(pastSelfRecorder_.GetFrames())) {
+    if (ImGui::Button("Play Clones")) {
+        if (pastSelfCloneManager_.StartAll()) {
             playerPrototypeReplayStarted_ = true;
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Stop Clone")) {
-        pastSelfClone_.Stop();
+    if (ImGui::Button("Stop Clones")) {
+        pastSelfCloneManager_.StopAll();
+    }
+    if (playerPrototypeGoalReached_) {
+        ImGui::EndDisabled();
     }
     ImGui::SameLine();
-    const bool canPrepareReplay = !pastSelfRecorder_.IsRecording() && pastSelfRecorder_.GetFrames().size() >= 2; // 記録を残して再生準備へ戻せるか
     if (!canPrepareReplay) {
         ImGui::BeginDisabled();
     }
@@ -924,9 +988,6 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ResetPlayerPrototypeReplayState();
     }
     if (!canPrepareReplay) {
-        ImGui::EndDisabled();
-    }
-    if (playerPrototypeGoalReached_) {
         ImGui::EndDisabled();
     }
     ImGui::SameLine();
@@ -939,8 +1000,8 @@ void PlayScene::DrawPlayerPrototypeImGui()
     if (ImGui::CollapsingHeader("Recorder", ImGuiTreeNodeFlags_DefaultOpen)) {
         pastSelfRecorder_.DrawImGui();
     }
-    if (ImGui::CollapsingHeader("Clone", ImGuiTreeNodeFlags_DefaultOpen)) {
-        pastSelfClone_.DrawImGui();
+    if (ImGui::CollapsingHeader("Clones", ImGuiTreeNodeFlags_DefaultOpen)) {
+        pastSelfCloneManager_.DrawImGui();
     }
 #endif
 }
@@ -957,10 +1018,15 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     const ImVec4 timedDoorColor = ImVec4(0.0f, 0.7f, 1.0f, 1.0f); // 時間差扉と時間差スイッチの案内色
     const ImVec4 weightSwitchColor = ImVec4(1.0f, 0.9f, 0.12f, 1.0f); // 重さスイッチの案内色
     const ImVec4 oneWayGateColor = ImVec4(0.9f, 0.05f, 1.0f, 1.0f); // 一方通行ゲートの案内色
+    const ImVec4 cloneAColor = ImVec4(1.0f, 0.05f, 0.95f, 1.0f); // 1体目の分身案内色
+    const ImVec4 cloneBColor = ImVec4(1.0f, 0.35f, 0.05f, 1.0f); // 2体目の分身案内色
     const char* recordStateLabel = pastSelfRecorder_.IsRecording() ? "Recording" : "Stopped"; // 記録状態表示
-    const char* cloneStateLabel = !pastSelfClone_.IsVisible() ? "Stopped" : (pastSelfClone_.IsPlaying() ? "Playing" : "Finished"); // 分身状態表示
-    const bool hasRecordFrames = pastSelfRecorder_.GetFrames().size() >= 2; // 分身再生に使える記録があるか
-    const char* routeLabel = "Multi-record main route"; // 現在の検証ルート種別
+    const size_t storedCloneCount = pastSelfCloneManager_.GetCloneCount(); // 保存済みの分身数
+    const size_t visibleCloneCount = pastSelfCloneManager_.GetVisibleCount(); // 表示中の分身数
+    const size_t playingCloneCount = pastSelfCloneManager_.GetPlayingCount(); // 再生中の分身数
+    const bool hasStoredClones = storedCloneCount > 0; // 同時再生に使用できる分身があるか
+    const bool canPrepareReplay = !pastSelfRecorder_.IsRecording() && hasStoredClones; // Prepare操作を受け付けられるか
+    const char* routeLabel = "Multi-clone main route"; // 現在の検証ルート種別
     const char* phaseLabel = "Reset / no record"; // 現在の検証フェーズ表示
     const int completedCheckCount = (playerPrototypeDoorBlockedBeforeClone_ ? 1 : 0) +
         (playerPrototypeDoorOpenedByClone_ ? 1 : 0) +
@@ -976,49 +1042,51 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
         (playerPrototypeReplayStarted_ ? 1 : 0); // 動画確認用の操作フロー達成数
     const bool allChecksComplete = completedCheckCount == 7; // すべての検証項目を達成したか
     const bool videoFlowComplete = completedFlowCount == 5; // 撮影で必要な操作フローを満たしたか
-    const bool enoughRecordTakes = playerPrototypeRecordTakeCount_ >= 2; // 複数回記録を使ったルートとして扱えるか
-    const bool multiRecordRouteComplete = allChecksComplete && videoFlowComplete && playerPrototypeGoalReached_ && enoughRecordTakes; // 複数回記録を使う正式ルートとして完了したか
+    const bool enoughStoredClones = storedCloneCount >= 2; // 複数分身を使ったルートとして扱えるか
+    const bool multiCloneRouteComplete = allChecksComplete && videoFlowComplete && playerPrototypeGoalReached_ && enoughStoredClones && playerPrototypeDualCloneSwitchesActivated_; // 複数分身を使う正式ルートとして完了したか
     if (playerPrototypeGoalReached_) {
         phaseLabel = "Goal reached";
     } else if (pastSelfRecorder_.IsRecording()) {
         phaseLabel = "Recording";
-    } else if (hasRecordFrames && !pastSelfClone_.IsVisible()) {
+    } else if (hasStoredClones && visibleCloneCount == 0) {
         phaseLabel = "Replay ready after Prepare";
-    } else if (pastSelfClone_.IsPlaying()) {
-        phaseLabel = "Replay playing";
-    } else if (pastSelfClone_.IsVisible()) {
-        phaseLabel = "Replay finished";
+    } else if (playingCloneCount > 0) {
+        phaseLabel = "Clones playing";
+    } else if (visibleCloneCount > 0) {
+        phaseLabel = "Clones finished";
     }
 
     const char* nextActionText = "Pass the door and reach the goal"; // HUDに表示する次の確認手順
     if (playerPrototypeGoalReached_) {
-        if (multiRecordRouteComplete) {
-            nextActionText = "Multi-record route complete";
+        if (multiCloneRouteComplete) {
+            nextActionText = "Multi-clone route complete";
         } else if (!allChecksComplete) {
             nextActionText = "Goal reached; verification checks still missing";
         } else if (!videoFlowComplete) {
             nextActionText = "Goal reached; video proof flow still missing";
-        } else if (!enoughRecordTakes) {
-            nextActionText = "Goal reached; use 2 or more takes for the main route";
+        } else if (!enoughStoredClones) {
+            nextActionText = "Goal reached; store 2 or more clones for the main route";
         }
     } else if (pastSelfRecorder_.IsRecording()) {
         nextActionText = "Record a clone role, then use Prepare for the next setup";
-    } else if (!hasRecordFrames) {
+    } else if (!hasStoredClones) {
         nextActionText = "Press C to record the next clone role";
     } else if (!playerPrototypePrepareUsed_) {
         nextActionText = "Press T or Prepare before replay so the setup is visible";
     } else if (!playerPrototypeDoorBlockedBeforeClone_) {
         nextActionText = "Show the closed green door blocks the player";
-    } else if (!pastSelfClone_.IsVisible()) {
-        nextActionText = "Press V to play the recorded clone";
+    } else if (visibleCloneCount == 0) {
+        nextActionText = "Press V to play all recorded clones";
     } else if (playerPrototypePlayerOnSwitch_ && !playerPrototypeCloneOnSwitch_) {
         nextActionText = "Player contact is ignored; wait for clone";
     } else if (!playerPrototypeDoorOpenedByClone_) {
         nextActionText = "Wait until the clone opens the switch";
     } else if (!playerPrototypeClonePlatformUsed_) {
         nextActionText = "Jump on the clone at the blue step, then follow it";
+    } else if (!playerPrototypeDualCloneSwitchesActivated_) {
+        nextActionText = "Keep clone A on green while clone B triggers blue";
     } else if (!playerPrototypeTimedDoorOpened_) {
-        nextActionText = "Let the same clone route trigger the timed switch";
+        nextActionText = "Use the separated clone switches to open the blue door";
     } else if (!playerPrototypeWeightSwitchActivated_) {
         nextActionText = "Follow the clone and stand on the weight switch together";
     } else if (!playerPrototypeOneWayGateUsed_) {
@@ -1031,9 +1099,16 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Phase : %s", phaseLabel);
     ImGui::Text("Time  : %.2f sec  Clear %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_);
     ImGui::Text("Route : %s  Takes: %u", routeLabel, playerPrototypeRecordTakeCount_);
-    ImGui::Text("Need  : Takes >= 2 for multi-record proof");
+    ImGui::Text("Need  : Stored >= 2 and Green + Blue active together");
     ImGui::Text("Record: %s  Frames: %zu  %.2f sec", recordStateLabel, pastSelfRecorder_.GetFrames().size(), playerPrototypeLastRecordDuration_);
-    ImGui::Text("Clone : %s  %.2f / %.2f sec", cloneStateLabel, pastSelfClone_.GetPlaybackTime(), pastSelfClone_.GetDuration());
+    ImGui::Text("Clones: Stored %zu  Visible %zu  Playing %zu", storedCloneCount, visibleCloneCount, playingCloneCount);
+    ImGui::Text("Prepare: %s", canPrepareReplay ? "Ready" : "Locked");
+    if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
+        ImGui::TextColored(checkedColor, "PREPARED: start position / records kept");
+    }
+    ImGui::TextColored(cloneAColor, "Clone A: Magenta / Green role");
+    ImGui::SameLine();
+    ImGui::TextColored(cloneBColor, "Clone B: Orange / Blue route");
     ImGui::Text("Switch: %s  Clone %s  Player %s",
         playerPrototypeSwitchActive_ ? "ON" : "OFF",
         playerPrototypeCloneOnSwitch_ ? "ON" : "OFF",
@@ -1046,7 +1121,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Checks: %d / 7%s", completedCheckCount, allChecksComplete ? " All complete" : "");
     ImGui::Text("Video : %d / 5%s", completedFlowCount, videoFlowComplete ? " Flow complete" : "");
     ImGui::TextColored(normalDoorColor, "Green : Clone switch door");
-    ImGui::TextColored(timedDoorColor, "Blue  : Timed door / timed switch");
+    ImGui::TextColored(timedDoorColor, "Blue  : Green + timed switch door");
     ImGui::TextColored(weightSwitchColor, "Yellow: Weight switch");
     ImGui::TextColored(oneWayGateColor, "Purple: One-way return block");
     ImGui::Separator();
@@ -1060,23 +1135,28 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Gimmick Debug");
     ImGui::Text("Units : BoxSwitch / LinkedDoor / TimedSwitch / WeightSwitch / OneWayGate / Goal");
     ImGui::TextColored(normalDoorColor, "Green : BoxSwitch Clone %s -> LinkedDoor %s", playerPrototypeCloneOnSwitch_ ? "ON" : "OFF", playerPrototypeDoorOpen_ ? "Open" : "Closed");
-    ImGui::TextColored(timedDoorColor, "Blue  : TimedSwitch %s %.2f sec -> TimedDoor %s", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
+    ImGui::TextColored(timedDoorColor, "Blue  : Green %s + TimedSwitch %s %.2f sec -> TimedDoor %s", playerPrototypeSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
     ImGui::TextColored(weightSwitchColor, "Yellow: WeightSwitch Player %s + Clone %s -> %s", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF");
     ImGui::TextColored(oneWayGateColor, "Purple: OneWayGate %s", playerPrototypeOneWayGateBlocking_ ? "Return blocked" : "Passable");
     ImGui::Separator();
     ImGui::TextColored(playerPrototypeDoorBlockedBeforeClone_ ? checkedColor : uncheckedColor, "[%c] Closed door blocked player", playerPrototypeDoorBlockedBeforeClone_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeDoorOpenedByClone_ ? checkedColor : uncheckedColor, "[%c] Clone opened door switch", playerPrototypeDoorOpenedByClone_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeClonePlatformUsed_ ? checkedColor : uncheckedColor, "[%c] Player used clone as platform", playerPrototypeClonePlatformUsed_ ? 'x' : ' ');
-    ImGui::TextColored(playerPrototypeTimedDoorOpened_ ? checkedColor : uncheckedColor, "[%c] Timed or weight switch opened blue door", playerPrototypeTimedDoorOpened_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeTimedDoorOpened_ ? checkedColor : uncheckedColor, "[%c] Green and timed switches opened blue door", playerPrototypeTimedDoorOpened_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeWeightSwitchActivated_ ? checkedColor : uncheckedColor, "[%c] Player and clone activated weight switch", playerPrototypeWeightSwitchActivated_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeOneWayGateUsed_ ? checkedColor : uncheckedColor, "[%c] One-way gate blocked return path", playerPrototypeOneWayGateUsed_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeGoalReached_ ? checkedColor : uncheckedColor, "[%c] Goal reached", playerPrototypeGoalReached_ ? 'x' : ' ');
+    ImGui::Separator();
+    ImGui::Text("Multi-clone proof");
+    ImGui::TextColored(enoughStoredClones ? checkedColor : uncheckedColor, "[%c] Two or more clones stored", enoughStoredClones ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeDualCloneSwitchesActivated_ ? checkedColor : uncheckedColor, "[%c] Separate clones activated Green + Blue", playerPrototypeDualCloneSwitchesActivated_ ? 'x' : ' ');
     if (playerPrototypeGoalReached_) {
         ImGui::Separator();
         ImGui::TextColored(checkedColor, "Goal Reached / CLEAR");
-        ImGui::TextColored(allChecksComplete ? checkedColor : uncheckedColor, "%s", allChecksComplete ? "7 / 7 All complete" : "7 / 7 incomplete");
+        ImGui::TextColored(allChecksComplete ? checkedColor : uncheckedColor, "%d / 7%s", completedCheckCount,
+            allChecksComplete ? " All complete" : " incomplete");
         ImGui::TextColored(videoFlowComplete ? checkedColor : uncheckedColor, "%s", videoFlowComplete ? "Video flow complete" : "Video flow incomplete");
-        ImGui::TextColored(multiRecordRouteComplete ? checkedColor : uncheckedColor, "%s", multiRecordRouteComplete ? "Multi-record route complete" : "Multi-record route incomplete");
+        ImGui::TextColored(multiCloneRouteComplete ? checkedColor : uncheckedColor, "%s", multiCloneRouteComplete ? "Multi-clone route complete" : "Multi-clone route incomplete");
         ImGui::TextColored(allChecksComplete ? checkedColor : uncheckedColor, "%s", allChecksComplete ? "All verification checks complete" : "Verification checks still missing");
         ImGui::TextColored(checkedColor, "Clear %.2f sec / Record %.2f sec", playerPrototypeClearTime_, playerPrototypeLastRecordDuration_);
     }

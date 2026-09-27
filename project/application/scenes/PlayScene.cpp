@@ -1035,14 +1035,16 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeWeightCloneOn_ = false;
     playerPrototypeOneWayGateBlocking_ = false;
     playerPrototypeTimedDoorOpened_ = false;
+    playerPrototypeDualCloneSwitchesActivated_ = false;
     playerPrototypeWeightSwitchActivated_ = false;
     playerPrototypeOneWayGateUsed_ = false;
     playerPrototypeElapsedTime_ = 0.0f;
     playerPrototypeClearTime_ = 0.0f;
     playerPrototypeLastRecordDuration_ = 0.0f;
+    playerPrototypePrepareFeedbackSeconds_ = 0.0f;
     playerPrototypeRecordTakeCount_ = 0;
     pastSelfRecorder_.Clear();
-    pastSelfClone_.Finalize();
+    pastSelfCloneManager_.Finalize();
 }
 
 /// <summary>

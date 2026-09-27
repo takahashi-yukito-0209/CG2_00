@@ -8,7 +8,7 @@
 #include "../effects/TimeReversalEffect.h"
 #include "../effects/TimeStopEffect.h"
 #include "../gimmicks/StageGimmicks.h"
-#include "../player/PastSelfClone.h"
+#include "../player/PastSelfCloneManager.h"
 #include "../player/PastSelfRecorder.h"
 #include "../player/Player.h"
 
@@ -351,6 +351,16 @@ private:
     /// 記録済み分身を残したまま再生開始用の状態へ戻す。
     /// </summary>
     void ResetPlayerPrototypeReplayState();
+
+    /// <summary>
+    /// 新しい分身用のプレイヤー記録を開始する。
+    /// </summary>
+    void StartPlayerPrototypeRecording();
+
+    /// <summary>
+    /// 現在の記録を停止し、新しい分身として保存する。
+    /// </summary>
+    void FinishPlayerPrototypeRecording();
 
     /// <summary>
     /// プレイヤー確認用の分身ギミック表示を更新する。
@@ -855,7 +865,7 @@ private: // メンバー変数
     size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
     Player player_; // 確認用プレイヤー
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
-    PastSelfClone pastSelfClone_; // 記録済み状態を再生する確認用分身
+    PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生する確認用分身の管理クラス
     std::vector<PlayerPrototypeStageBlock> playerPrototypeStageBlocks_; // プレイヤー検証用の仮ステージブロック一覧
     BoxSwitchGimmick playerPrototypeSwitch_; // 分身専用スイッチギミック
     LinkedDoorGimmick playerPrototypeDoor_; // スイッチ連動扉ギミック
@@ -883,6 +893,7 @@ private: // メンバー変数
     bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
     bool playerPrototypeOneWayGateBlocking_ = false; // 一方通行ゲートが戻りを塞いでいるか
     bool playerPrototypeTimedDoorOpened_ = false; // 時間差扉を開けたか
+    bool playerPrototypeDualCloneSwitchesActivated_ = false; // 離れた2つのスイッチを複数分身で同時起動したか
     bool playerPrototypeWeightSwitchActivated_ = false; // 重さスイッチを起動したか
     bool playerPrototypeOneWayGateUsed_ = false; // 一方通行ゲートを通過したか
     bool playerPrototypeResetShown_ = false; // リセット状態から検証を開始したことをHUDで示すか
@@ -890,9 +901,11 @@ private: // メンバー変数
     bool playerPrototypeRecordStopped_ = false; // 分身記録を停止したことをHUDで示すか
     bool playerPrototypePrepareUsed_ = false; // 記録を残したPrepare操作を使ったことをHUDで示すか
     bool playerPrototypeReplayStarted_ = false; // 記録済み分身の再生を開始したことをHUDで示すか
+    bool playerPrototypeRecordingPendingCommit_ = false; // 現在の記録を分身として保存する必要があるか
     float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
+    float playerPrototypePrepareFeedbackSeconds_ = 0.0f; // Prepare成功表示を残す秒数
     uint32_t playerPrototypeRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
