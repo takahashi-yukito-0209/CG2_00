@@ -428,6 +428,16 @@ private:
     void DrawPlayerPrototypeFixedStatusHud();
 
     /// <summary>
+    /// 現在の攻略状態から次に行う確認手順を取得する。
+    /// </summary>
+    const char* GetPlayerPrototypeNextActionText() const;
+
+    /// <summary>
+    /// 新たに達成した検証項目をHUD通知へ登録する。
+    /// </summary>
+    void RegisterPlayerPrototypeCheckCompleted(const char* checkText);
+
+    /// <summary>
     /// プレイヤー確認用の検証状態をPlayerタブ内に表示する。
     /// </summary>
     void DrawPlayerPrototypeStatusHud();
@@ -917,6 +927,8 @@ private: // メンバー変数
     float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
     float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
     float playerPrototypePrepareFeedbackSeconds_ = 0.0f; // Prepare成功表示を残す秒数
+    std::string playerPrototypeRecentCheckText_; // 直近に達成した検証項目の表示文
+    float playerPrototypeRecentCheckSeconds_ = 0.0f; // 達成通知を表示する残り時間
     Math::Vector3 playerPrototypeCameraFocus_ {}; // 追従補間後の確認用カメラ注視点
     float playerPrototypeCameraDistance_ = 0.0f; // 追従補間後の確認用カメラ距離
     uint32_t playerPrototypeRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 
 using namespace MyEngine;
 
@@ -229,6 +230,15 @@ void PastSelfCloneManager::DrawIdentityLegendImGui()
             ImGui::Text("Clone #%zu: %s  %.2f / %.2f sec",
                 cloneIndex + 1, stateLabel, clone->GetPlaybackTime(), clone->GetDuration());
         }
+        const float cloneDuration = clone->GetDuration(); // 進捗率の基準にする分身の記録時間
+        const float playbackProgress = cloneDuration > 0.0f
+            ? std::clamp(clone->GetPlaybackTime() / cloneDuration, 0.0f, 1.0f)
+            : 0.0f; // 現在の再生進捗率
+        char progressText[64] {}; // 再生ゲージ上に表示する時間文字列
+        std::snprintf(progressText, sizeof(progressText), "%.2f / %.2f sec", clone->GetPlaybackTime(), cloneDuration);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+        ImGui::ProgressBar(playbackProgress, ImVec2(-1.0f, 0.0f), progressText);
+        ImGui::PopStyleColor();
         ImGui::PopID();
     }
 #endif
