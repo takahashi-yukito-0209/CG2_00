@@ -28,6 +28,13 @@ constexpr float kPlatformHorizontalInset = 0.02f; // 端での不安定な着地
 constexpr Vector3 kBaseBodyHalfSize = { 0.5f, 0.5f, 0.5f }; // 仮ブロックモデルの基準半サイズ
 constexpr uint8_t kJumpKey = DIK_SPACE; // ジャンプキー
 
+enum class MovingColliderPushDirection {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}; // 移動コライダーとの重なりを解消する方向
+
 /// <summary>
 /// Transformのスケールから現在の半サイズを計算する。
 /// </summary>
@@ -79,6 +86,16 @@ bool HasSolidHorizontalOverlap(const Vector3& playerCenter, const Vector3& playe
     const bool overlapsX = std::fabs(playerCenter.x - collider.center.x) < playerHalfSize.x + collider.halfSize.x; // X方向の重なり
     const bool overlapsZ = std::fabs(playerCenter.z - collider.center.z) < playerHalfSize.z + collider.halfSize.z; // Z方向の重なり
     return overlapsX && overlapsZ;
+}
+
+/// <summary>
+/// 2つの全面コライダーが同じ位置と大きさを表しているか判定する。
+/// </summary>
+bool IsSameSolidCollider(const SolidCollider& lhs, const SolidCollider& rhs)
+{
+    return lhs.enabled == rhs.enabled &&
+        lhs.center.x == rhs.center.x && lhs.center.y == rhs.center.y && lhs.center.z == rhs.center.z &&
+        lhs.halfSize.x == rhs.halfSize.x && lhs.halfSize.y == rhs.halfSize.y && lhs.halfSize.z == rhs.halfSize.z;
 }
 }
 
@@ -191,6 +208,114 @@ bool Player::ShouldJump() const
 }
 
 /// <summary>
+/// 移動足場など外部要因による移動量を現在位置へ反映する。
+/// </summary>
+void Player::ApplyExternalTranslation(const Math::Vector3& translation)
+{
+    state_.transform.translate.x += translation.x;
+    state_.transform.translate.y += translation.y;
+    state_.transform.translate.z += translation.z;
+}
+
+/// <summary>
+/// 移動前後のコライダーから追従と重なりの排斥を解決する。
+/// </summary>
+void Player::ResolveMovingSolidCollider(const SolidCollider& previousCollider, const SolidCollider& currentCollider)
+{
+    if (!previousCollider.enabled || !currentCollider.enabled) {
+        return;
+    }
+
+    const Vector3 playerHalfSize = CalculateBodyHalfSize(state_.transform); // 移動足場との判定に使うプレイヤー半サイズ
+    const float previousFootY = state_.transform.translate.y - playerHalfSize.y; // 足場移動前のプレイヤー足元Y座標
+    const float previousPlatformTopY = previousCollider.center.y + previousCollider.halfSize.y; // 移動前の足場上面Y座標
+    const bool wasStandingOnPlatform = state_.isGrounded &&
+        HasSolidHorizontalOverlap(state_.transform.translate, playerHalfSize, previousCollider) &&
+        std::fabs(previousFootY - previousPlatformTopY) <= kPlatformSnapTolerance; // 移動前に足場上面へ接地していたか
+    const Vector3 platformMovement {
+        currentCollider.center.x - previousCollider.center.x,
+        currentCollider.center.y - previousCollider.center.y,
+        currentCollider.center.z - previousCollider.center.z
+    }; // 足場が直近の更新で移動した量
+
+    if (wasStandingOnPlatform) {
+        ApplyExternalTranslation(platformMovement);
+        state_.transform.translate.y = currentCollider.center.y + currentCollider.halfSize.y + playerHalfSize.y;
+        verticalVelocity_ = 0.0f;
+        state_.isGrounded = true;
+        return;
+    }
+
+    if (!HasSolidOverlap(state_.transform.translate, playerHalfSize, currentCollider)) {
+        return;
+    }
+
+    const float playerMinX = state_.transform.translate.x - playerHalfSize.x; // 重なり解決前のプレイヤー左端X座標
+    const float playerMaxX = state_.transform.translate.x + playerHalfSize.x; // 重なり解決前のプレイヤー右端X座標
+    const float playerFootY = state_.transform.translate.y - playerHalfSize.y; // 重なり解決前のプレイヤー足元Y座標
+    const float playerHeadY = state_.transform.translate.y + playerHalfSize.y; // 重なり解決前のプレイヤー頭上Y座標
+    const float platformMinX = currentCollider.center.x - currentCollider.halfSize.x; // 移動後の足場左端X座標
+    const float platformMaxX = currentCollider.center.x + currentCollider.halfSize.x; // 移動後の足場右端X座標
+    const float platformTopY = currentCollider.center.y + currentCollider.halfSize.y; // 移動後の足場上面Y座標
+    const float platformBottomY = currentCollider.center.y - currentCollider.halfSize.y; // 移動後の足場下面Y座標
+    const float pushToLeftDistance = playerMaxX - platformMinX; // 左側へ排斥するために必要な距離
+    const float pushToRightDistance = platformMaxX - playerMinX; // 右側へ排斥するために必要な距離
+    const float pushToTopDistance = platformTopY - playerFootY; // 上面へ排斥するために必要な距離
+    const float pushToBottomDistance = playerHeadY - platformBottomY; // 下面へ排斥するために必要な距離
+
+    const bool isPressedDownWhileGrounded = state_.isGrounded && platformMovement.y < 0.0f; // 接地中に下降足場から押されているか
+    MovingColliderPushDirection pushDirection = MovingColliderPushDirection::Left; // 重なりを解消する方向
+    if (isPressedDownWhileGrounded) {
+        pushDirection = pushToRightDistance < pushToLeftDistance
+            ? MovingColliderPushDirection::Right
+            : MovingColliderPushDirection::Left;
+    } else {
+        float minimumPushDistance = pushToLeftDistance; // 現在採用している排斥距離
+        if (pushToRightDistance < minimumPushDistance) {
+            minimumPushDistance = pushToRightDistance;
+            pushDirection = MovingColliderPushDirection::Right;
+        }
+        if (pushToTopDistance < minimumPushDistance) {
+            minimumPushDistance = pushToTopDistance;
+            pushDirection = MovingColliderPushDirection::Top;
+        }
+        if (pushToBottomDistance < minimumPushDistance) {
+            pushDirection = MovingColliderPushDirection::Bottom;
+        }
+    }
+
+    if (pushDirection == MovingColliderPushDirection::Left) {
+        state_.transform.translate.x = platformMinX - playerHalfSize.x;
+        return;
+    }
+    if (pushDirection == MovingColliderPushDirection::Right) {
+        state_.transform.translate.x = platformMaxX + playerHalfSize.x;
+        return;
+    }
+    if (pushDirection == MovingColliderPushDirection::Top) {
+        state_.transform.translate.y = platformTopY + playerHalfSize.y;
+        verticalVelocity_ = 0.0f;
+        state_.isGrounded = true;
+        return;
+    }
+
+    state_.transform.translate.y = platformBottomY - playerHalfSize.y;
+    if (verticalVelocity_ > 0.0f) {
+        verticalVelocity_ = 0.0f;
+    }
+    state_.isGrounded = false;
+}
+
+/// <summary>
+/// 外部移動後に生じた全面コライダーとの横方向の重なりを解決する。
+/// </summary>
+void Player::ResolveExternalSolidCollisions(const std::vector<SolidCollider>& solidColliders, const SolidCollider& sourceCollider)
+{
+    const float currentCenterX = state_.transform.translate.x; // 外部移動後の排斥方向を決める現在の中心X座標
+    ResolveHorizontalSolidCollisions(currentCenterX, solidColliders, &sourceCollider);
+}
+
+/// <summary>
 /// 2.5D用の横移動を更新する。
 /// </summary>
 void Player::UpdateHorizontalMovement(float deltaTime, bool canAcceptInput, const std::vector<SolidCollider>& solidColliders)
@@ -217,10 +342,13 @@ void Player::UpdateHorizontalMovement(float deltaTime, bool canAcceptInput, cons
 /// <summary>
 /// 全面コライダーへの横方向衝突を解決する。
 /// </summary>
-void Player::ResolveHorizontalSolidCollisions(float previousCenterX, const std::vector<SolidCollider>& solidColliders)
+void Player::ResolveHorizontalSolidCollisions(float previousCenterX, const std::vector<SolidCollider>& solidColliders, const SolidCollider* ignoredCollider)
 {
     const Vector3 playerHalfSize = CalculateBodyHalfSize(state_.transform); // 現在のプレイヤー半サイズ
     for (const SolidCollider& collider : solidColliders) {
+        if (ignoredCollider && IsSameSolidCollider(collider, *ignoredCollider)) {
+            continue;
+        }
         if (!HasSolidOverlap(state_.transform.translate, playerHalfSize, collider)) {
             continue;
         }

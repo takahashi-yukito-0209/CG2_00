@@ -99,6 +99,22 @@ struct LinkedBridgeGimmickDesc {
 };
 
 /// <summary>
+/// 昇降足場ギミックの初期化情報
+/// </summary>
+struct MovingPlatformGimmickDesc {
+    uint32_t objectId = 0; // 表示オブジェクトに割り当てるID
+    std::string modelFileName; // 表示に使用するモデルファイル名
+    Math::Vector3 scale { 1.0f, 1.0f, 1.0f }; // 足場の表示スケール
+    Math::Vector3 lowerTranslate { 0.0f, 0.0f, 0.0f }; // 往復移動の下端座標
+    Math::Vector3 upperTranslate { 0.0f, 2.0f, 0.0f }; // 往復移動の上端座標
+    Math::Vector4 inactiveColor { 0.18f, 0.18f, 0.22f, 1.0f }; // 停止中の表示色
+    Math::Vector4 activeColor { 1.0f, 0.45f, 0.1f, 1.0f }; // 稼働中の表示色
+    float moveSpeed = 1.0f; // 1秒あたりの移動距離
+    float upperWaitSeconds = 0.0f; // 上端へ到達した後に停止する秒数
+    float lowerWaitSeconds = 0.0f; // 下端へ到達した後に停止する秒数
+};
+
+/// <summary>
 /// 一方通行ゲートギミックの初期化情報
 /// </summary>
 struct OneWayGateGimmickDesc {
@@ -528,6 +544,98 @@ private:
     Math::Vector4 retractedColor_ { 0.18f, 0.18f, 0.22f, 0.18f }; // 未展開時の表示色
     Math::Vector4 deployedColor_ { 1.0f, 0.85f, 0.12f, 1.0f }; // 展開時の表示色
     bool deployed_ = false; // 橋が展開されているか
+};
+
+/// <summary>
+/// 入力中に下端と上端を往復する昇降足場ギミックを管理するクラス
+/// </summary>
+class MovingPlatformGimmick {
+public:
+    /// <summary>
+    /// 昇降足場の表示、移動範囲、速度を初期化する。
+    /// </summary>
+    void Initialize(MyEngine::Object3dCommon* object3dCommon, MyEngine::ImGuiManager* imguiManager, const MovingPlatformGimmickDesc& desc);
+
+    /// <summary>
+    /// 昇降足場が保持する表示用リソースを解放する。
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
+    /// 入力状態と経過時間から足場位置を更新する。
+    /// </summary>
+    void Update(float deltaTime, bool shouldMove);
+
+    /// <summary>
+    /// 表示用オブジェクトを更新する。
+    /// </summary>
+    void UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// 昇降足場を描画する。
+    /// </summary>
+    void Draw();
+
+    /// <summary>
+    /// 昇降足場を下端の停止状態へ戻す。
+    /// </summary>
+    void Reset();
+
+    /// <summary>
+    /// 現在位置の全面コライダーを取得する。
+    /// </summary>
+    SolidCollider GetSolidCollider() const;
+
+    /// <summary>
+    /// 更新前位置の全面コライダーを取得する。
+    /// </summary>
+    SolidCollider GetPreviousSolidCollider() const;
+
+    /// <summary>
+    /// 直近の更新で移動した量を取得する。
+    /// </summary>
+    Math::Vector3 GetMovementDelta() const;
+
+    /// <summary>
+    /// 足場が入力を受けて稼働中か取得する。
+    /// </summary>
+    bool IsActive() const { return active_; }
+
+    /// <summary>
+    /// 端点で待機中か取得する。
+    /// </summary>
+    bool IsWaitingAtEndpoint() const { return endpointWaitRemainingSeconds_ > 0.0f; }
+
+    /// <summary>
+    /// 端点で待機する残り秒数を取得する。
+    /// </summary>
+    float GetEndpointWaitRemainingSeconds() const { return endpointWaitRemainingSeconds_; }
+
+    /// <summary>
+    /// 現在の足場座標を取得する。
+    /// </summary>
+    const Math::Vector3& GetCurrentTranslate() const { return currentTranslate_; }
+
+private:
+    /// <summary>
+    /// 現在状態に応じた表示色と座標を反映する。
+    /// </summary>
+    void ApplyVisual();
+
+    std::unique_ptr<MyEngine::Object3d> object_; // 昇降足場表示用オブジェクト
+    Math::Vector3 scale_ { 1.0f, 1.0f, 1.0f }; // 足場の表示スケール
+    Math::Vector3 lowerTranslate_ { 0.0f, 0.0f, 0.0f }; // 往復移動の下端座標
+    Math::Vector3 upperTranslate_ { 0.0f, 2.0f, 0.0f }; // 往復移動の上端座標
+    Math::Vector3 currentTranslate_ { 0.0f, 0.0f, 0.0f }; // 現在の足場座標
+    Math::Vector3 previousTranslate_ { 0.0f, 0.0f, 0.0f }; // 更新前の足場座標
+    Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 停止中の表示色
+    Math::Vector4 activeColor_ { 1.0f, 0.45f, 0.1f, 1.0f }; // 稼働中の表示色
+    float moveSpeed_ = 1.0f; // 1秒あたりの移動距離
+    float upperWaitSeconds_ = 0.0f; // 上端へ到達した後に停止する秒数
+    float lowerWaitSeconds_ = 0.0f; // 下端へ到達した後に停止する秒数
+    float endpointWaitRemainingSeconds_ = 0.0f; // 現在の端点で停止する残り秒数
+    bool active_ = false; // 入力を受けて稼働中か
+    bool movingToUpper_ = true; // 上端へ向かって移動中か
 };
 
 /// <summary>

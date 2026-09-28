@@ -43,6 +43,21 @@ public:
     void SetInitialState(const PlayerState& state);
 
     /// <summary>
+    /// 移動足場など外部要因による移動量を現在位置へ反映する。
+    /// </summary>
+    void ApplyExternalTranslation(const Math::Vector3& translation);
+
+    /// <summary>
+    /// 移動前後のコライダーから追従と重なりの排斥を解決する。
+    /// </summary>
+    void ResolveMovingSolidCollider(const SolidCollider& previousCollider, const SolidCollider& currentCollider);
+
+    /// <summary>
+    /// 外部移動後に生じた全面コライダーとの横方向の重なりを解決する。
+    /// </summary>
+    void ResolveExternalSolidCollisions(const std::vector<SolidCollider>& solidColliders, const SolidCollider& sourceCollider);
+
+    /// <summary>
     /// 入力、全面コライダー、上面足場からプレイヤー状態を更新する。
     /// </summary>
     void Update(float deltaTime, bool canAcceptInput, const std::vector<SolidCollider>& solidColliders, const std::vector<StandablePlatform>& standablePlatforms);
@@ -116,7 +131,7 @@ private:
     /// <summary>
     /// 全面コライダーへの横方向衝突を解決する。
     /// </summary>
-    void ResolveHorizontalSolidCollisions(float previousCenterX, const std::vector<SolidCollider>& solidColliders);
+    void ResolveHorizontalSolidCollisions(float previousCenterX, const std::vector<SolidCollider>& solidColliders, const SolidCollider* ignoredCollider = nullptr);
 
     /// <summary>
     /// 全面コライダーへの縦方向衝突を解決する。

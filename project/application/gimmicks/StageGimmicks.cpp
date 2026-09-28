@@ -32,6 +32,27 @@ Math::Vector3 CalculateBoxHalfSize(const Math::Vector3& scale)
 }
 
 /// <summary>
+/// 現在座標を目標座標へ最大移動量の範囲で近づける。
+/// </summary>
+Math::Vector3 MoveTowards(const Math::Vector3& current, const Math::Vector3& target, float maxDistance)
+{
+    const float deltaX = target.x - current.x; // 目標までのX方向距離
+    const float deltaY = target.y - current.y; // 目標までのY方向距離
+    const float deltaZ = target.z - current.z; // 目標までのZ方向距離
+    const float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ); // 目標までの直線距離
+    if (distance <= maxDistance || distance <= 0.0001f) {
+        return target;
+    }
+
+    const float moveRatio = maxDistance / distance; // 最大移動量を距離へ換算した比率
+    return {
+        current.x + deltaX * moveRatio,
+        current.y + deltaY * moveRatio,
+        current.z + deltaZ * moveRatio
+    };
+}
+
+/// <summary>
 /// 仮ギミック用のブロックオブジェクトを作成する。
 /// </summary>
 std::unique_ptr<Object3d> CreateGimmickObject(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, uint32_t objectId, const std::string& modelFileName, const Math::Vector3& scale, const Math::Vector3& translate, const Math::Vector4& color)
@@ -667,6 +688,158 @@ void LinkedBridgeGimmick::ApplyVisual()
 void LinkedBridgeGimmick::DrawWithAlphaBlend()
 {
     DrawObjectWithAlphaBlend(object_.get());
+}
+
+/// <summary>
+/// 昇降足場の表示、移動範囲、速度を初期化する。
+/// </summary>
+void MovingPlatformGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, const MovingPlatformGimmickDesc& desc)
+{
+    scale_ = desc.scale;
+    lowerTranslate_ = desc.lowerTranslate;
+    upperTranslate_ = desc.upperTranslate;
+    inactiveColor_ = desc.inactiveColor;
+    activeColor_ = desc.activeColor;
+    moveSpeed_ = (std::max)(desc.moveSpeed, 0.0f);
+    upperWaitSeconds_ = (std::max)(desc.upperWaitSeconds, 0.0f);
+    lowerWaitSeconds_ = (std::max)(desc.lowerWaitSeconds, 0.0f);
+    object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, scale_, lowerTranslate_, inactiveColor_);
+    Reset();
+}
+
+/// <summary>
+/// 昇降足場が保持する表示用リソースを解放する。
+/// </summary>
+void MovingPlatformGimmick::Finalize()
+{
+    object_.reset();
+    Reset();
+}
+
+/// <summary>
+/// 入力状態と経過時間から足場位置を更新する。
+/// </summary>
+void MovingPlatformGimmick::Update(float deltaTime, bool shouldMove)
+{
+    previousTranslate_ = currentTranslate_;
+    active_ = shouldMove;
+    if (active_) {
+        const float safeDeltaTime = (std::max)(deltaTime, 0.0f); // タイマーと移動に使用する負数を除いた経過時間
+        if (endpointWaitRemainingSeconds_ > 0.0f) {
+            endpointWaitRemainingSeconds_ = (std::max)(endpointWaitRemainingSeconds_ - safeDeltaTime, 0.0f);
+            if (endpointWaitRemainingSeconds_ > 0.0f) {
+                ApplyVisual();
+                return;
+            }
+            movingToUpper_ = !movingToUpper_;
+        }
+
+        const Math::Vector3& targetTranslate = movingToUpper_ ? upperTranslate_ : lowerTranslate_; // 現在向かう端点座標
+        currentTranslate_ = MoveTowards(currentTranslate_, targetTranslate, moveSpeed_ * safeDeltaTime);
+        const Math::Vector3 remaining = {
+            targetTranslate.x - currentTranslate_.x,
+            targetTranslate.y - currentTranslate_.y,
+            targetTranslate.z - currentTranslate_.z
+        }; // 更新後に残っている目標までの距離
+        const float remainingDistanceSquared = remaining.x * remaining.x + remaining.y * remaining.y + remaining.z * remaining.z; // 端点到達判定用の距離二乗
+        if (remainingDistanceSquared <= 0.000001f) {
+            const float endpointWaitSeconds = movingToUpper_ ? upperWaitSeconds_ : lowerWaitSeconds_; // 到達した端点で停止する秒数
+            if (endpointWaitSeconds > 0.0f) {
+                endpointWaitRemainingSeconds_ = endpointWaitSeconds;
+            } else {
+                movingToUpper_ = !movingToUpper_;
+            }
+        }
+    } else {
+        endpointWaitRemainingSeconds_ = 0.0f;
+        movingToUpper_ = true;
+        currentTranslate_ = MoveTowards(currentTranslate_, lowerTranslate_, moveSpeed_ * (std::max)(deltaTime, 0.0f));
+    }
+    ApplyVisual();
+}
+
+/// <summary>
+/// 表示用オブジェクトを更新する。
+/// </summary>
+void MovingPlatformGimmick::UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix)
+{
+    if (!object_) {
+        return;
+    }
+
+    object_->Update(viewMatrix, projectionMatrix);
+}
+
+/// <summary>
+/// 昇降足場を描画する。
+/// </summary>
+void MovingPlatformGimmick::Draw()
+{
+    if (object_) {
+        object_->Draw();
+    }
+}
+
+/// <summary>
+/// 昇降足場を下端の停止状態へ戻す。
+/// </summary>
+void MovingPlatformGimmick::Reset()
+{
+    currentTranslate_ = lowerTranslate_;
+    previousTranslate_ = lowerTranslate_;
+    active_ = false;
+    movingToUpper_ = true;
+    endpointWaitRemainingSeconds_ = 0.0f;
+    ApplyVisual();
+}
+
+/// <summary>
+/// 現在位置の全面コライダーを取得する。
+/// </summary>
+SolidCollider MovingPlatformGimmick::GetSolidCollider() const
+{
+    SolidCollider collider {}; // 現在位置から作成する足場コライダー
+    collider.center = currentTranslate_;
+    collider.halfSize = CalculateBoxHalfSize(scale_);
+    collider.enabled = true;
+    return collider;
+}
+
+/// <summary>
+/// 更新前位置の全面コライダーを取得する。
+/// </summary>
+SolidCollider MovingPlatformGimmick::GetPreviousSolidCollider() const
+{
+    SolidCollider collider {}; // 更新前位置から作成する足場コライダー
+    collider.center = previousTranslate_;
+    collider.halfSize = CalculateBoxHalfSize(scale_);
+    collider.enabled = true;
+    return collider;
+}
+
+/// <summary>
+/// 直近の更新で移動した量を取得する。
+/// </summary>
+Math::Vector3 MovingPlatformGimmick::GetMovementDelta() const
+{
+    return {
+        currentTranslate_.x - previousTranslate_.x,
+        currentTranslate_.y - previousTranslate_.y,
+        currentTranslate_.z - previousTranslate_.z
+    };
+}
+
+/// <summary>
+/// 現在状態に応じた表示色と座標を反映する。
+/// </summary>
+void MovingPlatformGimmick::ApplyVisual()
+{
+    if (!object_) {
+        return;
+    }
+
+    object_->SetTranslate(currentTranslate_);
+    object_->SetMaterialColor(active_ ? activeColor_ : inactiveColor_);
 }
 
 /// <summary>

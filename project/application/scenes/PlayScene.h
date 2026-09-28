@@ -900,6 +900,7 @@ private: // メンバー変数
     LinkedDoorGimmick playerPrototypeTimedDoor_; // 時間差スイッチ連動扉ギミック
     ToggleSwitchGimmick playerPrototypeToggleSwitch_; // 任意試作区間のトグルスイッチギミック
     LinkedDoorGimmick playerPrototypeToggleGate_; // トグルスイッチに連動する任意試作区間のゲート
+    MovingPlatformGimmick playerPrototypeToggleElevator_; // トグルスイッチに連動する任意試作区間の昇降足場
     WeightSwitchGimmick playerPrototypeWeightSwitch_; // 重さスイッチギミック
     LinkedBridgeGimmick playerPrototypeGoalBridge_; // 重さスイッチに連動するゴール前の橋ギミック
     OneWayGateGimmick playerPrototypeOneWayGate_; // 一方通行ゲートギミック
@@ -921,6 +922,7 @@ private: // メンバー変数
     bool playerPrototypeToggleSwitchActive_ = false; // トグルスイッチがONか
     bool playerPrototypeToggleSwitchCloneOn_ = false; // 分身がトグルスイッチ上にいるか
     bool playerPrototypeToggleGateOpen_ = false; // トグル連動ゲートが開いているか
+    bool playerPrototypeToggleElevatorActive_ = false; // トグル連動昇降足場が稼働中か
     bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
     bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
     bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
