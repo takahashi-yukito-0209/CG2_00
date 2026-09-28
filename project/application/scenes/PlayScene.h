@@ -923,6 +923,12 @@ private: // メンバー変数
     bool playerPrototypeToggleSwitchCloneOn_ = false; // 分身がトグルスイッチ上にいるか
     bool playerPrototypeToggleGateOpen_ = false; // トグル連動ゲートが開いているか
     bool playerPrototypeToggleElevatorActive_ = false; // トグル連動昇降足場が稼働中か
+    bool playerPrototypeOneCloneToggleActivated_ = false; // 1体用ルートで分身がトグルスイッチを起動したか
+    bool playerPrototypeOneCloneElevatorRidden_ = false; // 1体用ルートでプレイヤーが昇降足場へ乗ったか
+    bool playerPrototypeOneCloneTutorialComplete_ = false; // 1体用トグル昇降床ルートを完了したか
+    bool playerPrototypeTwoCloneReplayPrepared_ = false; // 2体用ルートで保存分身を残して再生準備したか
+    bool playerPrototypeTwoCloneSwitchesActivated_ = false; // 2体用ルートで別々の分身が緑と青のスイッチを同時起動したか
+    bool playerPrototypeTwoCloneTutorialComplete_ = false; // 2体用連携ルートで青扉を通過したか
     bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
     bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
     bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか

@@ -1038,6 +1038,12 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeToggleSwitchCloneOn_ = false;
     playerPrototypeToggleGateOpen_ = false;
     playerPrototypeToggleElevatorActive_ = false;
+    playerPrototypeOneCloneToggleActivated_ = false;
+    playerPrototypeOneCloneElevatorRidden_ = false;
+    playerPrototypeOneCloneTutorialComplete_ = false;
+    playerPrototypeTwoCloneReplayPrepared_ = false;
+    playerPrototypeTwoCloneSwitchesActivated_ = false;
+    playerPrototypeTwoCloneTutorialComplete_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;

@@ -585,6 +585,12 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeToggleSwitchCloneOn_ = false;
     playerPrototypeToggleGateOpen_ = false;
     playerPrototypeToggleElevatorActive_ = false;
+    playerPrototypeOneCloneToggleActivated_ = false;
+    playerPrototypeOneCloneElevatorRidden_ = false;
+    playerPrototypeOneCloneTutorialComplete_ = false;
+    playerPrototypeTwoCloneReplayPrepared_ = false;
+    playerPrototypeTwoCloneSwitchesActivated_ = false;
+    playerPrototypeTwoCloneTutorialComplete_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -651,6 +657,14 @@ void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
     playerPrototypeToggleGateOpen_ = playerPrototypeToggleGate_.IsOpen();
     playerPrototypeToggleElevator_.Update(deltaTime, playerPrototypeToggleSwitchActive_);
     playerPrototypeToggleElevatorActive_ = playerPrototypeToggleElevator_.IsActive();
+    const bool oneCloneTutorialEligible = playerPrototypeRecordTakeCount_ == 1 &&
+        pastSelfCloneManager_.GetCloneCount() == 1 && playerPrototypeRecordStopped_ &&
+        playerPrototypePrepareUsed_ && playerPrototypeReplayStarted_; // 1回の記録と1体の分身で再生準備まで行ったか
+    if (oneCloneTutorialEligible && playerPrototypeToggleSwitchCloneOn_ && playerPrototypeToggleSwitchActive_ &&
+        !playerPrototypeOneCloneToggleActivated_) {
+        playerPrototypeOneCloneToggleActivated_ = true;
+        RegisterPlayerPrototypeCheckCompleted("Clone activated the orange toggle");
+    }
     playerPrototypeOneWayGate_.Update(player_.GetState());
     playerPrototypeOneWayGateBlocking_ = playerPrototypeOneWayGate_.IsBlocking();
 
@@ -664,6 +678,14 @@ void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
     }
     if (!pastSelfRecorder_.IsRecording() && cloneStates.size() >= 2 && playerPrototypeSwitchActive_ && playerPrototypeTimedSwitchCloneOn_) {
         playerPrototypeDualCloneSwitchesActivated_ = true;
+    }
+    const bool twoCloneTutorialEligible = !pastSelfRecorder_.IsRecording() &&
+        playerPrototypeRecordTakeCount_ == 2 && pastSelfCloneManager_.GetCloneCount() == 2 &&
+        playerPrototypeRecordStopped_ && playerPrototypeTwoCloneReplayPrepared_; // 2回の記録と2体の分身で再生準備したか
+    if (twoCloneTutorialEligible && cloneStates.size() == 2 && playerPrototypeSwitchActive_ &&
+        playerPrototypeTimedSwitchCloneOn_ && !playerPrototypeTwoCloneSwitchesActivated_) {
+        playerPrototypeTwoCloneSwitchesActivated_ = true;
+        RegisterPlayerPrototypeCheckCompleted("Two clones activated green and blue switches");
     }
     if (playerPrototypeWeightSwitchActive_ && !playerPrototypeWeightSwitchActivated_) {
         playerPrototypeWeightSwitchActivated_ = true;
@@ -715,6 +737,12 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeToggleSwitchCloneOn_ = false;
     playerPrototypeToggleGateOpen_ = false;
     playerPrototypeToggleElevatorActive_ = false;
+    playerPrototypeOneCloneToggleActivated_ = false;
+    playerPrototypeOneCloneElevatorRidden_ = false;
+    playerPrototypeOneCloneTutorialComplete_ = false;
+    playerPrototypeTwoCloneReplayPrepared_ = false;
+    playerPrototypeTwoCloneSwitchesActivated_ = false;
+    playerPrototypeTwoCloneTutorialComplete_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -794,6 +822,13 @@ void PlayScene::ResetPlayerPrototypeReplayState(bool registerPrepareAction)
     playerPrototypeToggleSwitchCloneOn_ = false;
     playerPrototypeToggleGateOpen_ = false;
     playerPrototypeToggleElevatorActive_ = false;
+    playerPrototypeOneCloneToggleActivated_ = false;
+    playerPrototypeOneCloneElevatorRidden_ = false;
+    playerPrototypeOneCloneTutorialComplete_ = false;
+    playerPrototypeTwoCloneReplayPrepared_ = registerPrepareAction &&
+        playerPrototypeRecordTakeCount_ == 2 && pastSelfCloneManager_.GetCloneCount() == 2;
+    playerPrototypeTwoCloneSwitchesActivated_ = false;
+    playerPrototypeTwoCloneTutorialComplete_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -1010,6 +1045,35 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
         player_.ResolveExternalSolidCollisions(solidColliders, currentElevatorCollider);
         std::vector<StandablePlatform> standablePlatforms = BuildPlayerStandablePlatforms(pastSelfCloneManager_); // プレイヤーが上面だけ乗れる分身足場
         player_.Update(deltaTime, canAcceptInput, solidColliders, standablePlatforms);
+        const StandablePlatform toggleElevatorPlatform {
+            currentElevatorCollider.center,
+            currentElevatorCollider.halfSize,
+            currentElevatorCollider.enabled
+        }; // 昇降足場の上面利用を判定する足場情報
+        const bool playerStandingOnToggleElevator = IsPlayerStateStandingOnPlatform(player_.GetState(), toggleElevatorPlatform); // プレイヤーが昇降足場上に立っているか
+        if (playerPrototypeOneCloneToggleActivated_ && playerStandingOnToggleElevator &&
+            !playerPrototypeOneCloneElevatorRidden_) {
+            playerPrototypeOneCloneElevatorRidden_ = true;
+            RegisterPlayerPrototypeCheckCompleted("Player rode the orange moving lift");
+        }
+        constexpr float kElevatorEndpointTolerance = 0.05f; // 上端到達判定に許容する位置誤差
+        const bool elevatorAtUpperEndpoint = std::fabs(
+            playerPrototypeToggleElevator_.GetCurrentTranslate().y - kPlayerPrototypeToggleElevatorUpperTranslate.y) <=
+            kElevatorEndpointTolerance; // 昇降足場が上端へ到達しているか
+        if (playerPrototypeOneCloneElevatorRidden_ && playerStandingOnToggleElevator && elevatorAtUpperEndpoint &&
+            !playerPrototypeOneCloneTutorialComplete_) {
+            playerPrototypeOneCloneTutorialComplete_ = true;
+            RegisterPlayerPrototypeCheckCompleted("One-clone tutorial route complete");
+        }
+        const Math::Vector3 playerHalfSize = CalculatePlayerStateHalfSize(player_.GetState()); // 青扉通過判定に使うプレイヤー半サイズ
+        const float timedDoorRightEdge = kPlayerPrototypeTimedDoorTranslate.x +
+            std::fabs(kPlayerPrototypeTimedDoorScale.x) * 0.5f; // 青扉の右端X座標
+        const bool playerPassedTimedDoor = player_.GetState().transform.translate.x - playerHalfSize.x > timedDoorRightEdge; // プレイヤー全体が青扉の右側へ抜けたか
+        if (playerPrototypeTwoCloneSwitchesActivated_ && playerPrototypeTimedDoorOpened_ &&
+            playerPassedTimedDoor && !playerPrototypeTwoCloneTutorialComplete_) {
+            playerPrototypeTwoCloneTutorialComplete_ = true;
+            RegisterPlayerPrototypeCheckCompleted("Two-clone tutorial route complete");
+        }
         const SolidCollider doorCollider = playerPrototypeDoor_.GetSolidCollider(); // 閉じている扉の衝突判定
         if (doorCollider.enabled && IsPlayerStateTouchingSolidCollider(player_.GetState(), doorCollider) && !playerPrototypeDoorBlockedBeforeClone_) {
             playerPrototypeDoorBlockedBeforeClone_ = true;
@@ -1428,8 +1492,20 @@ void PlayScene::DrawPlayerPrototypeFixedStatusHud()
     const bool videoFlowComplete = completedFlowCount == 5; // 動画操作項目をすべて達成したか
     const bool multiCloneRouteComplete = allChecksComplete && videoFlowComplete && playerPrototypeGoalReached_ &&
         storedCloneCount >= 2 && playerPrototypeDualCloneSwitchesActivated_; // 複数分身ルートを完了したか
+    const bool oneCloneRecordingStored = playerPrototypeRecordTakeCount_ == 1 && storedCloneCount == 1 &&
+        playerPrototypeRecordStopped_; // 1体用ルートに必要な記録を1回だけ保存したか
+    const int oneCloneTutorialCheckCount = (oneCloneRecordingStored ? 1 : 0) +
+        (playerPrototypeOneCloneToggleActivated_ ? 1 : 0) +
+        (playerPrototypeOneCloneElevatorRidden_ ? 1 : 0) +
+        (playerPrototypeOneCloneTutorialComplete_ ? 1 : 0); // 1体用ルートの達成済み項目数
+    const bool twoCloneRecordingsStored = playerPrototypeRecordTakeCount_ == 2 && storedCloneCount == 2 &&
+        playerPrototypeRecordStopped_; // 2体用ルートに必要な記録を2回保存したか
+    const int twoCloneTutorialCheckCount = (twoCloneRecordingsStored ? 1 : 0) +
+        (playerPrototypeTwoCloneReplayPrepared_ ? 1 : 0) +
+        (playerPrototypeTwoCloneSwitchesActivated_ ? 1 : 0) +
+        (playerPrototypeTwoCloneTutorialComplete_ ? 1 : 0); // 2体用ルートの達成済み項目数
     const char* nextActionText = GetPlayerPrototypeNextActionText(); // 通常表示でも確認できる次の攻略手順
-    const float summaryHeight = ImGui::GetTextLineHeightWithSpacing() * 6.0f +
+    const float summaryHeight = ImGui::GetTextLineHeightWithSpacing() * 8.0f +
         ImGui::GetStyle().WindowPadding.y * 2.0f; // 固定サマリー領域の高さ
 
     ImGui::BeginChild("PlayerFixedStatus", ImVec2(0.0f, summaryHeight), ImGuiChildFlags_Borders,
@@ -1470,6 +1546,12 @@ void PlayScene::DrawPlayerPrototypeFixedStatusHud()
             ImGui::TextWrapped("Next: %s", nextActionText);
         }
     }
+    ImGui::TextColored(playerPrototypeOneCloneTutorialComplete_ ? checkedColor : uncheckedColor,
+        "One-clone tutorial: %d / 4%s", oneCloneTutorialCheckCount,
+        playerPrototypeOneCloneTutorialComplete_ ? " Complete" : "");
+    ImGui::TextColored(playerPrototypeTwoCloneTutorialComplete_ ? checkedColor : uncheckedColor,
+        "Two-clone tutorial: %d / 4%s", twoCloneTutorialCheckCount,
+        playerPrototypeTwoCloneTutorialComplete_ ? " Complete" : "");
     ImGui::EndChild();
 #endif
 }
@@ -1564,6 +1646,26 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::TextColored(playerPrototypeRecordStopped_ ? checkedColor : uncheckedColor, "[%c] Recording stopped", playerPrototypeRecordStopped_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypePrepareUsed_ ? checkedColor : uncheckedColor, "[%c] Prepare returned with record kept", playerPrototypePrepareUsed_ ? 'x' : ' ');
     ImGui::TextColored(playerPrototypeReplayStarted_ ? checkedColor : uncheckedColor, "[%c] Recorded clone replay started", playerPrototypeReplayStarted_ ? 'x' : ' ');
+    ImGui::Separator();
+    const bool oneCloneRecordingStored = playerPrototypeRecordTakeCount_ == 1 && storedCloneCount == 1 &&
+        playerPrototypeRecordStopped_; // 1回の記録から分身を1体だけ保存したか
+    ImGui::Text("One-clone tutorial");
+    ImGui::TextColored(oneCloneRecordingStored ? checkedColor : uncheckedColor, "[%c] One recording stored", oneCloneRecordingStored ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeOneCloneToggleActivated_ ? checkedColor : uncheckedColor, "[%c] Clone activated orange toggle", playerPrototypeOneCloneToggleActivated_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeOneCloneElevatorRidden_ ? checkedColor : uncheckedColor, "[%c] Player rode orange moving lift", playerPrototypeOneCloneElevatorRidden_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeOneCloneTutorialComplete_ ? checkedColor : uncheckedColor, "[%c] Upper endpoint reached", playerPrototypeOneCloneTutorialComplete_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeOneCloneTutorialComplete_ ? checkedColor : uncheckedColor, "%s",
+        playerPrototypeOneCloneTutorialComplete_ ? "One-clone tutorial route complete" : "One-clone tutorial route incomplete");
+    ImGui::Separator();
+    const bool twoCloneRecordingsStored = playerPrototypeRecordTakeCount_ == 2 && storedCloneCount == 2 &&
+        playerPrototypeRecordStopped_; // 2回の記録から分身を2体だけ保存したか
+    ImGui::Text("Two-clone tutorial");
+    ImGui::TextColored(twoCloneRecordingsStored ? checkedColor : uncheckedColor, "[%c] Two recordings stored", twoCloneRecordingsStored ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeTwoCloneReplayPrepared_ ? checkedColor : uncheckedColor, "[%c] Prepare kept two records", playerPrototypeTwoCloneReplayPrepared_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeTwoCloneSwitchesActivated_ ? checkedColor : uncheckedColor, "[%c] Separate clones activated Green + Blue", playerPrototypeTwoCloneSwitchesActivated_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeTwoCloneTutorialComplete_ ? checkedColor : uncheckedColor, "[%c] Player passed blue door", playerPrototypeTwoCloneTutorialComplete_ ? 'x' : ' ');
+    ImGui::TextColored(playerPrototypeTwoCloneTutorialComplete_ ? checkedColor : uncheckedColor, "%s",
+        playerPrototypeTwoCloneTutorialComplete_ ? "Two-clone tutorial route complete" : "Two-clone tutorial route incomplete");
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Implementation Proof", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Runtime-owned classes");
