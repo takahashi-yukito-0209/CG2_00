@@ -383,6 +383,7 @@ void PlayScene::InitializePlayerPrototype()
 {
     InitializePlayerPrototypeStage();
     InitializePlayerPrototypeMechanics();
+    pastSelfRecorder_.SetMaxRecordTime(playerPrototypeStageRules_.maxRecordTime);
     player_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, kPlayerPrototypeModelFileName);
     player_.SetMaterialColor(kPlayerPrototypeNormalPlayerColor);
     PlayerState playerStartState = player_.GetState(); // 仮ステージに合わせた開始状態
@@ -727,11 +728,20 @@ void PlayScene::UndoLastPlayerPrototypeClone()
 }
 
 /// <summary>
+/// 現在のステージルールで新しい分身記録を開始できるか判定する。
+/// </summary>
+bool PlayScene::CanStartPlayerPrototypeRecording() const
+{
+    return !playerPrototypeGoalReached_ && !pastSelfRecorder_.IsRecording() &&
+        pastSelfCloneManager_.GetCloneCount() < playerPrototypeStageRules_.maxStoredClones;
+}
+
+/// <summary>
 /// 新しい分身用のプレイヤー記録を開始する。
 /// </summary>
 void PlayScene::StartPlayerPrototypeRecording()
 {
-    if (pastSelfRecorder_.IsRecording()) {
+    if (!CanStartPlayerPrototypeRecording()) {
         return;
     }
 
@@ -1042,6 +1052,8 @@ void PlayScene::DrawPlayerPrototype()
 void PlayScene::DrawPlayerPrototypeImGui()
 {
 #ifdef USE_IMGUI
+    const size_t storedCloneCount = pastSelfCloneManager_.GetCloneCount(); // 現在保存している分身数
+    const bool cloneSlotsFull = storedCloneCount >= playerPrototypeStageRules_.maxStoredClones; // 保存枠が上限へ到達したか
     ImGui::Text("Move: A/D or Left Stick X");
     ImGui::Text("Jump: Space or GamePad A");
     ImGui::TextWrapped("C: Record next + replay stored  V: Replay stored only  B: Stop clones");
@@ -1053,7 +1065,8 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ImGui::Text("Timed: Switch %s %.2f sec / Door %s", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
         ImGui::Text("Weight: %s  Player %s / Clone %s", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF");
         ImGui::Text("OneWay: %s", playerPrototypeOneWayGateBlocking_ ? "Blocking" : "Passable");
-        ImGui::Text("Route: Multi-clone main  Takes: %u  Stored: %zu", playerPrototypeRecordTakeCount_, pastSelfCloneManager_.GetCloneCount());
+        ImGui::Text("Route: Multi-clone main  Takes: %u  Stored: %zu / %zu",
+            playerPrototypeRecordTakeCount_, storedCloneCount, playerPrototypeStageRules_.maxStoredClones);
     }
     ImGui::Text("Time: %.2f sec  Clear: %.2f sec  Record: %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_, playerPrototypeLastRecordDuration_);
     if (pastSelfRecorder_.IsRecording() || !pastSelfRecorder_.GetFrames().empty()) {
@@ -1076,8 +1089,11 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.25f, 1.0f), "CLEAR");
     }
     ImGui::Text("Goal: %s", playerPrototypeGoalReached_ ? "Reached" : "Not Reached");
+    if (cloneSlotsFull && !pastSelfRecorder_.IsRecording() && !playerPrototypeGoalReached_) {
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "Clone slots full: press X to remove the last clone");
+    }
     const bool canPrepareReplay = !playerPrototypeGoalReached_ && !pastSelfRecorder_.IsRecording() &&
-        pastSelfCloneManager_.GetCloneCount() > 0; // 分身群を残して再生準備へ戻せるか
+        storedCloneCount > 0; // 分身群を残して再生準備へ戻せるか
     ImGui::Text("Prepare: %s", playerPrototypeGoalReached_ ? "Locked - reset puzzle to restart" :
         (canPrepareReplay ? "Ready - keeps stored clones" : "Locked - store a clone and stop recording"));
     if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
@@ -1086,12 +1102,19 @@ void PlayScene::DrawPlayerPrototypeImGui()
     if (playerPrototypeGoalReached_) {
         ImGui::BeginDisabled();
     }
+    const bool disableRecordingButton = !pastSelfRecorder_.IsRecording() && !CanStartPlayerPrototypeRecording(); // 新規記録を開始できず停止操作でもないか
+    if (disableRecordingButton) {
+        ImGui::BeginDisabled();
+    }
     if (ImGui::Button(pastSelfRecorder_.IsRecording() ? "Stop Recording" : "Record Next + Replay Stored")) {
         if (pastSelfRecorder_.IsRecording()) {
             FinishPlayerPrototypeRecording();
         } else {
             StartPlayerPrototypeRecording();
         }
+    }
+    if (disableRecordingButton) {
+        ImGui::EndDisabled();
     }
     ImGui::SameLine();
     if (ImGui::Button("Replay Stored Only")) {
@@ -1117,7 +1140,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
     }
     ImGui::SameLine();
     const bool canUndoLastClone = !playerPrototypeGoalReached_ && !pastSelfRecorder_.IsRecording() &&
-        pastSelfCloneManager_.GetCloneCount() > 0; // 最後の分身を削除できるか
+        storedCloneCount > 0; // 最後の分身を削除できるか
     if (!canUndoLastClone) {
         ImGui::BeginDisabled();
     }
@@ -1191,6 +1214,9 @@ const char* PlayScene::GetPlayerPrototypeNextActionText() const
     }
     if (pastSelfRecorder_.IsRecording()) {
         return "Recording next clone; stored clones replay automatically";
+    }
+    if (playerPrototypeStageRules_.maxStoredClones == 0) {
+        return "No clone slots configured for this stage";
     }
     if (!hasStoredClones) {
         return "Press C to record the first clone role";
@@ -1277,8 +1303,9 @@ void PlayScene::DrawPlayerPrototypeFixedStatusHud()
     ImGui::Text(playerPrototypeGoalReached_ ? "Final Result" : "Play Status");
     ImGui::SameLine();
     ImGui::Text("Record: %s", pastSelfRecorder_.IsRecording() ? "Recording" : "Stopped");
-    ImGui::Text("Takes: %u  Stored: %zu  Visible: %zu  Playing: %zu",
-        playerPrototypeRecordTakeCount_, storedCloneCount, visibleCloneCount, playingCloneCount);
+    ImGui::Text("Takes: %u  Stored: %zu/%zu  Visible: %zu  Playing: %zu",
+        playerPrototypeRecordTakeCount_, storedCloneCount, playerPrototypeStageRules_.maxStoredClones,
+        visibleCloneCount, playingCloneCount);
     if (playerPrototypeGoalReached_) {
         ImGui::TextColored(checkedColor, "Goal Reached / CLEAR");
         ImGui::TextColored(allChecksComplete ? checkedColor : uncheckedColor, "%d / 7%s",
@@ -1372,7 +1399,8 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Route : %s  Takes: %u", routeLabel, playerPrototypeRecordTakeCount_);
     ImGui::Text("Need  : Stored >= 2 and Green + Blue active together");
     ImGui::Text("Record: %s  Frames: %zu  %.2f sec", recordStateLabel, pastSelfRecorder_.GetFrames().size(), playerPrototypeLastRecordDuration_);
-    ImGui::Text("Clones: Stored %zu  Visible %zu  Playing %zu", storedCloneCount, visibleCloneCount, playingCloneCount);
+    ImGui::Text("Clones: Stored %zu/%zu  Visible %zu  Playing %zu", storedCloneCount,
+        playerPrototypeStageRules_.maxStoredClones, visibleCloneCount, playingCloneCount);
     ImGui::Text("Prepare: %s", playerPrototypeGoalReached_ ? "Locked after clear" : (canPrepareReplay ? "Ready" : "Locked"));
     if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
         ImGui::TextColored(checkedColor, "PREPARED: start position / records kept");

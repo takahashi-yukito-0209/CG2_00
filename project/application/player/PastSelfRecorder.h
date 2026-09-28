@@ -66,6 +66,11 @@ public:
     /// </summary>
     float GetMaxRecordTime() const { return maxRecordTime_; }
 
+    /// <summary>
+    /// 記録可能な最大時間を設定する。
+    /// </summary>
+    void SetMaxRecordTime(float maxRecordTime);
+
 private:
     std::vector<PastSelfFrame> frames_; // 記録済みフレーム
     float elapsedTime_ = 0.0f; // 記録開始からの経過時間

@@ -11,6 +11,7 @@
 #include "../player/PastSelfCloneManager.h"
 #include "../player/PastSelfRecorder.h"
 #include "../player/Player.h"
+#include "StageRuleSettings.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -361,6 +362,11 @@ private:
     /// 新しい分身用のプレイヤー記録を開始する。
     /// </summary>
     void StartPlayerPrototypeRecording();
+
+    /// <summary>
+    /// 現在のステージルールで新しい分身記録を開始できるか判定する。
+    /// </summary>
+    bool CanStartPlayerPrototypeRecording() const;
 
     /// <summary>
     /// 現在の記録を停止し、新しい分身として保存する。
@@ -884,6 +890,7 @@ private: // メンバー変数
     MyEngine::CollisionSystem collisionSystem_; // シーン内3Dオブジェクトの衝突判定管理
     size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
     Player player_; // 確認用プレイヤー
+    StageRuleSettings playerPrototypeStageRules_; // プレイヤー検証ステージへ適用する調整可能なルール
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
     PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生する確認用分身の管理クラス
     std::vector<PlayerPrototypeStageBlock> playerPrototypeStageBlocks_; // プレイヤー検証用の仮ステージブロック一覧

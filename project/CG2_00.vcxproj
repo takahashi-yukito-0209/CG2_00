@@ -457,6 +457,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\base\ImGuiManager.h" />
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
+    <ClInclude Include="application\scenes\StageRuleSettings.h" />
     <ClInclude Include="application\player\Player.h" />
     <ClInclude Include="application\player\PlayerState.h" />
     <ClInclude Include="application\player\PastSelfRecorder.h" />

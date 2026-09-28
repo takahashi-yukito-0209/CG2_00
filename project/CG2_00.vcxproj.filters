@@ -626,6 +626,9 @@
     <ClInclude Include="application\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
+    <ClInclude Include="application\scenes\StageRuleSettings.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
     <ClInclude Include="application\player\Player.h">
       <Filter>ヘッダー ファイル\application\player</Filter>
     </ClInclude>
