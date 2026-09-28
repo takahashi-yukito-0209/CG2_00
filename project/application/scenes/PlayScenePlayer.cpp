@@ -1044,7 +1044,8 @@ void PlayScene::DrawPlayerPrototypeImGui()
 #ifdef USE_IMGUI
     ImGui::Text("Move: A/D or Left Stick X");
     ImGui::Text("Jump: Space or GamePad A");
-    ImGui::TextWrapped("Record: C  Play Clone: V  Stop Clone: B  Undo Last: X  Prepare: T  Reset: R");
+    ImGui::TextWrapped("C: Record next + replay stored  V: Replay stored only  B: Stop clones");
+    ImGui::TextWrapped("T: Prepare replay  X: Undo last clone  R: Reset puzzle");
     if (playerPrototypeShowVerificationDetails_) {
         ImGui::Text("Switch: %s", playerPrototypeSwitchActive_ ? "ON" : "OFF");
         ImGui::Text("Switch Source: Clone %s / Player %s", playerPrototypeCloneOnSwitch_ ? "ON" : "OFF", playerPrototypePlayerOnSwitch_ ? "ON" : "OFF");
@@ -1083,7 +1084,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
     if (playerPrototypeGoalReached_) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::Button(pastSelfRecorder_.IsRecording() ? "Stop Recording" : "Start Recording")) {
+    if (ImGui::Button(pastSelfRecorder_.IsRecording() ? "Stop Recording" : "Record Next + Replay Stored")) {
         if (pastSelfRecorder_.IsRecording()) {
             FinishPlayerPrototypeRecording();
         } else {
@@ -1091,7 +1092,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Play Clones")) {
+    if (ImGui::Button("Replay Stored Only")) {
         if (pastSelfCloneManager_.StartAll()) {
             playerPrototypeReplayStarted_ = true;
         }
@@ -1187,7 +1188,7 @@ const char* PlayScene::GetPlayerPrototypeNextActionText() const
         return "Goal reached; multi-clone proof still missing";
     }
     if (pastSelfRecorder_.IsRecording()) {
-        return "Record a clone role, then stop recording";
+        return "Recording next clone; stored clones replay automatically";
     }
     if (!hasStoredClones) {
         return "Press C to record the first clone role";
@@ -1199,7 +1200,7 @@ const char* PlayScene::GetPlayerPrototypeNextActionText() const
         return "Show the closed green door blocks the player";
     }
     if (visibleCloneCount == 0) {
-        return "Press V to play all stored clones";
+        return "Press V to replay stored clones only (no new recording)";
     }
     if (playerPrototypePlayerOnSwitch_ && !playerPrototypeCloneOnSwitch_) {
         return "Move the clone onto the green switch";
@@ -1362,7 +1363,8 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
 
     ImGui::Text("Prototype Verify");
     ImGui::Separator();
-    ImGui::TextWrapped("Move A/D  Jump Space  Record C  Play V  Stop B  Undo X  Prepare T  Reset R");
+    ImGui::TextWrapped("C Record next + replay stored | V Replay stored only | B Stop clones");
+    ImGui::TextWrapped("T Prepare replay | X Undo last clone | R Reset puzzle");
     ImGui::Text("Phase : %s", phaseLabel);
     ImGui::Text("Time  : %.2f sec  Clear %.2f sec", playerPrototypeElapsedTime_, playerPrototypeClearTime_);
     ImGui::Text("Route : %s  Takes: %u", routeLabel, playerPrototypeRecordTakeCount_);
