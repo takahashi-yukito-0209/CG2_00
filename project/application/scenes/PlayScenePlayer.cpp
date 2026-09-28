@@ -59,7 +59,8 @@ struct PlayerPrototypeCameraFrame {
     float distance; // 対象範囲を収めるカメラ距離
 };
 
-constexpr std::array<PlayerPrototypeStageBlockDesc, 9> kPlayerPrototypeStageBlockDescs = { {
+constexpr std::array<PlayerPrototypeStageBlockDesc, 10> kPlayerPrototypeStageBlockDescs = { {
+    { { 5.0f, 0.12f, 4.0f }, { -12.0f, -0.06f, 0.0f }, { 0.96f, 0.88f, 0.7f, 1.0f }, true, false },
     { { 4.8f, 0.12f, 4.0f }, { -7.1f, -0.06f, 0.0f }, { 0.92f, 0.96f, 1.0f, 1.0f }, true, false },
     { { 2.6f, 0.12f, 4.0f }, { -3.45f, -0.06f, 0.0f }, { 0.82f, 0.92f, 1.0f, 1.0f }, true, false },
     { { 1.25f, 0.34f, 3.3f }, { -1.45f, 0.17f, 0.0f }, { 0.55f, 0.82f, 1.0f, 1.0f }, true, false },
@@ -96,6 +97,17 @@ constexpr Math::Vector4 kPlayerPrototypeTimedSwitchTriggerColor = { 0.2f, 1.0f, 
 constexpr Math::Vector4 kPlayerPrototypeTimedDoorClosedColor = { 0.0f, 0.16f, 0.8f, 1.0f }; // 閉じている時間差扉色
 constexpr Math::Vector4 kPlayerPrototypeTimedDoorOpenColor = { 0.3f, 0.86f, 1.0f, 0.5f }; // 開いている時間差扉色
 constexpr float kPlayerPrototypeTimedSwitchHoldSeconds = 4.5f; // 時間差スイッチの起動維持秒数
+constexpr Math::Vector3 kPlayerPrototypeToggleSwitchScale = { 1.2f, 0.12f, 2.4f }; // 任意試作区間のトグルスイッチ表示サイズ
+constexpr Math::Vector3 kPlayerPrototypeToggleSwitchTranslate = { -7.75f, 0.06f, 0.0f }; // トグルスイッチの中心座標
+constexpr Math::Vector3 kPlayerPrototypeToggleSwitchVolumeCenter = { -7.75f, 0.56f, 0.0f }; // トグルスイッチ入力範囲の中心
+constexpr Math::Vector3 kPlayerPrototypeToggleSwitchVolumeHalfSize = { 0.65f, 0.7f, 1.4f }; // トグルスイッチ入力範囲の半サイズ
+constexpr Math::Vector4 kPlayerPrototypeToggleSwitchInactiveColor = { 0.3f, 0.12f, 0.02f, 1.0f }; // トグルスイッチOFF時の表示色
+constexpr Math::Vector4 kPlayerPrototypeToggleSwitchActiveColor = { 1.0f, 0.42f, 0.05f, 1.0f }; // トグルスイッチON時の表示色
+constexpr Math::Vector4 kPlayerPrototypeToggleSwitchPressedColor = { 1.0f, 0.85f, 0.15f, 1.0f }; // トグルスイッチを分身が踏んでいる時の表示色
+constexpr Math::Vector3 kPlayerPrototypeToggleGateScale = { 0.3f, 2.2f, 3.0f }; // 任意試作区間のトグル連動ゲート表示サイズ
+constexpr Math::Vector3 kPlayerPrototypeToggleGateTranslate = { -11.5f, 1.1f, 0.0f }; // トグル連動ゲートの中心座標
+constexpr Math::Vector4 kPlayerPrototypeToggleGateClosedColor = { 0.55f, 0.18f, 0.02f, 1.0f }; // トグル連動ゲート閉鎖時の表示色
+constexpr Math::Vector4 kPlayerPrototypeToggleGateOpenColor = { 1.0f, 0.55f, 0.12f, 0.35f }; // トグル連動ゲート開放時の表示色
 constexpr Math::Vector3 kPlayerPrototypeWeightSwitchScale = { 1.45f, 0.12f, 2.4f }; // 重さスイッチの表示サイズ
 constexpr Math::Vector3 kPlayerPrototypeWeightSwitchTranslate = { 11.4f, 2.76f, 0.0f }; // 重さスイッチの中心座標
 constexpr Math::Vector3 kPlayerPrototypeWeightSwitchVolumeCenter = { 11.4f, 3.26f, 0.0f }; // 重さスイッチ入力を受ける範囲中心
@@ -477,6 +489,25 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     timedDoorDesc.closedColor = kPlayerPrototypeTimedDoorClosedColor;
     timedDoorDesc.openColor = kPlayerPrototypeTimedDoorOpenColor;
 
+    ToggleSwitchGimmickDesc toggleSwitchDesc {}; // 任意試作区間のトグルスイッチ初期化情報
+    toggleSwitchDesc.objectId = IssueObjectId();
+    toggleSwitchDesc.modelFileName = kPlayerPrototypeModelFileName;
+    toggleSwitchDesc.scale = kPlayerPrototypeToggleSwitchScale;
+    toggleSwitchDesc.translate = kPlayerPrototypeToggleSwitchTranslate;
+    toggleSwitchDesc.volumeCenter = kPlayerPrototypeToggleSwitchVolumeCenter;
+    toggleSwitchDesc.volumeHalfSize = kPlayerPrototypeToggleSwitchVolumeHalfSize;
+    toggleSwitchDesc.inactiveColor = kPlayerPrototypeToggleSwitchInactiveColor;
+    toggleSwitchDesc.activeColor = kPlayerPrototypeToggleSwitchActiveColor;
+    toggleSwitchDesc.pressedColor = kPlayerPrototypeToggleSwitchPressedColor;
+
+    LinkedDoorGimmickDesc toggleGateDesc {}; // トグルスイッチに連動する任意試作区間ゲートの初期化情報
+    toggleGateDesc.objectId = IssueObjectId();
+    toggleGateDesc.modelFileName = kPlayerPrototypeModelFileName;
+    toggleGateDesc.scale = kPlayerPrototypeToggleGateScale;
+    toggleGateDesc.translate = kPlayerPrototypeToggleGateTranslate;
+    toggleGateDesc.closedColor = kPlayerPrototypeToggleGateClosedColor;
+    toggleGateDesc.openColor = kPlayerPrototypeToggleGateOpenColor;
+
     WeightSwitchGimmickDesc weightSwitchDesc {}; // 重さスイッチの初期化情報
     weightSwitchDesc.objectId = IssueObjectId();
     weightSwitchDesc.modelFileName = kPlayerPrototypeModelFileName;
@@ -509,6 +540,8 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeDoor_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, doorDesc);
     playerPrototypeTimedSwitch_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, timedSwitchDesc);
     playerPrototypeTimedDoor_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, timedDoorDesc);
+    playerPrototypeToggleSwitch_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, toggleSwitchDesc);
+    playerPrototypeToggleGate_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, toggleGateDesc);
     playerPrototypeWeightSwitch_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, weightSwitchDesc);
     playerPrototypeGoalBridge_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, goalBridgeDesc);
     playerPrototypeOneWayGate_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, oneWayGateDesc);
@@ -526,6 +559,9 @@ void PlayScene::InitializePlayerPrototypeMechanics()
     playerPrototypeTimedSwitchActive_ = false;
     playerPrototypeTimedSwitchCloneOn_ = false;
     playerPrototypeTimedDoorOpen_ = false;
+    playerPrototypeToggleSwitchActive_ = false;
+    playerPrototypeToggleSwitchCloneOn_ = false;
+    playerPrototypeToggleGateOpen_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -585,6 +621,11 @@ void PlayScene::UpdatePlayerPrototypeMechanics(float deltaTime)
     const bool dualCloneSwitchInputActive = playerPrototypeSwitchActive_ && playerPrototypeTimedSwitchActive_; // 緑と青のスイッチが同時に起動しているか
     playerPrototypeTimedDoor_.Update(dualCloneSwitchInputActive || playerPrototypeWeightSwitchActive_);
     playerPrototypeTimedDoorOpen_ = playerPrototypeTimedDoor_.IsOpen();
+    playerPrototypeToggleSwitch_.Update(cloneStateView);
+    playerPrototypeToggleSwitchActive_ = playerPrototypeToggleSwitch_.IsActive();
+    playerPrototypeToggleSwitchCloneOn_ = playerPrototypeToggleSwitch_.IsCloneOnSwitch();
+    playerPrototypeToggleGate_.Update(playerPrototypeToggleSwitchActive_);
+    playerPrototypeToggleGateOpen_ = playerPrototypeToggleGate_.IsOpen();
     playerPrototypeOneWayGate_.Update(player_.GetState());
     playerPrototypeOneWayGateBlocking_ = playerPrototypeOneWayGate_.IsBlocking();
 
@@ -627,6 +668,8 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeDoor_.Reset();
     playerPrototypeTimedSwitch_.Reset();
     playerPrototypeTimedDoor_.Reset();
+    playerPrototypeToggleSwitch_.Reset();
+    playerPrototypeToggleGate_.Reset();
     playerPrototypeWeightSwitch_.Reset();
     playerPrototypeGoalBridge_.Reset();
     playerPrototypeOneWayGate_.Reset();
@@ -642,6 +685,9 @@ void PlayScene::ResetPlayerPrototypeState()
     playerPrototypeTimedSwitchActive_ = false;
     playerPrototypeTimedSwitchCloneOn_ = false;
     playerPrototypeTimedDoorOpen_ = false;
+    playerPrototypeToggleSwitchActive_ = false;
+    playerPrototypeToggleSwitchCloneOn_ = false;
+    playerPrototypeToggleGateOpen_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -699,6 +745,8 @@ void PlayScene::ResetPlayerPrototypeReplayState(bool registerPrepareAction)
     playerPrototypeDoor_.Reset();
     playerPrototypeTimedSwitch_.Reset();
     playerPrototypeTimedDoor_.Reset();
+    playerPrototypeToggleSwitch_.Reset();
+    playerPrototypeToggleGate_.Reset();
     playerPrototypeWeightSwitch_.Reset();
     playerPrototypeGoalBridge_.Reset();
     playerPrototypeOneWayGate_.Reset();
@@ -714,6 +762,9 @@ void PlayScene::ResetPlayerPrototypeReplayState(bool registerPrepareAction)
     playerPrototypeTimedSwitchActive_ = false;
     playerPrototypeTimedSwitchCloneOn_ = false;
     playerPrototypeTimedDoorOpen_ = false;
+    playerPrototypeToggleSwitchActive_ = false;
+    playerPrototypeToggleSwitchCloneOn_ = false;
+    playerPrototypeToggleGateOpen_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
@@ -806,6 +857,8 @@ void PlayScene::UpdatePlayerPrototypeMechanicObjects(const Math::Matrix4x4& view
     playerPrototypeDoor_.UpdateObject(viewMatrix, projectionMatrix);
     playerPrototypeTimedSwitch_.UpdateObject(viewMatrix, projectionMatrix);
     playerPrototypeTimedDoor_.UpdateObject(viewMatrix, projectionMatrix);
+    playerPrototypeToggleSwitch_.UpdateObject(viewMatrix, projectionMatrix);
+    playerPrototypeToggleGate_.UpdateObject(viewMatrix, projectionMatrix);
     playerPrototypeWeightSwitch_.UpdateObject(viewMatrix, projectionMatrix);
     playerPrototypeGoalBridge_.UpdateObject(viewMatrix, projectionMatrix);
     playerPrototypeOneWayGate_.UpdateObject(viewMatrix, projectionMatrix);
@@ -865,6 +918,8 @@ void PlayScene::DrawPlayerPrototypeMechanics()
     playerPrototypeDoor_.Draw();
     playerPrototypeTimedSwitch_.Draw();
     playerPrototypeTimedDoor_.Draw();
+    playerPrototypeToggleSwitch_.Draw();
+    playerPrototypeToggleGate_.Draw();
     playerPrototypeWeightSwitch_.Draw();
     playerPrototypeGoalBridge_.Draw();
     playerPrototypeOneWayGate_.Draw();
@@ -1018,6 +1073,11 @@ void PlayScene::AppendPlayerPrototypeSolidColliders(std::vector<SolidCollider>* 
         colliders->push_back(timedDoorCollider);
     }
 
+    const SolidCollider toggleGateCollider = playerPrototypeToggleGate_.GetSolidCollider(); // 閉じているトグル連動ゲートの全面コライダー
+    if (toggleGateCollider.enabled) {
+        colliders->push_back(toggleGateCollider);
+    }
+
     const SolidCollider goalBridgeCollider = playerPrototypeGoalBridge_.GetSolidCollider(); // 展開中のゴール前の橋コライダー
     if (goalBridgeCollider.enabled) {
         colliders->push_back(goalBridgeCollider);
@@ -1096,6 +1156,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ImGui::Text("Switch Source: Clone %s / Player %s", playerPrototypeCloneOnSwitch_ ? "ON" : "OFF", playerPrototypePlayerOnSwitch_ ? "ON" : "OFF");
         ImGui::Text("Door: %s", playerPrototypeDoorOpen_ ? "Open" : "Closed");
         ImGui::Text("Timed: Switch %s %.2f sec / Door %s", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
+        ImGui::Text("Toggle Lab: Switch %s  Clone %s / Gate %s", playerPrototypeToggleSwitchActive_ ? "ON" : "OFF", playerPrototypeToggleSwitchCloneOn_ ? "ON" : "OFF", playerPrototypeToggleGateOpen_ ? "Open" : "Closed");
         ImGui::Text("Weight: %s  Player %s / Clone %s  Bridge %s", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF", playerPrototypeGoalBridgeDeployed_ ? "Deployed" : "Retracted");
         ImGui::Text("OneWay: %s", playerPrototypeOneWayGateBlocking_ ? "Blocking" : "Passable");
         ImGui::Text("Route: Multi-clone main  Takes: %u  Stored: %zu / %zu",
@@ -1383,6 +1444,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     const ImVec4 uncheckedColor = ImVec4(1.0f, 0.35f, 0.25f, 1.0f); // 未達成項目の表示色
     const ImVec4 normalDoorColor = ImVec4(0.0f, 1.0f, 0.36f, 1.0f); // 通常扉と分身スイッチの案内色
     const ImVec4 timedDoorColor = ImVec4(0.0f, 0.7f, 1.0f, 1.0f); // 時間差扉と時間差スイッチの案内色
+    const ImVec4 toggleSwitchColor = ImVec4(1.0f, 0.45f, 0.08f, 1.0f); // トグルスイッチと連動ゲートの案内色
     const ImVec4 weightSwitchColor = ImVec4(1.0f, 0.9f, 0.12f, 1.0f); // 重さスイッチの案内色
     const ImVec4 oneWayGateColor = ImVec4(0.9f, 0.05f, 1.0f, 1.0f); // 一方通行ゲートの案内色
     const char* recordStateLabel = pastSelfRecorder_.IsRecording() ? "Recording" : "Stopped"; // 記録状態表示
@@ -1444,6 +1506,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
         playerPrototypePlayerOnSwitch_ ? "ON" : "OFF");
     ImGui::Text("Door  : %s  Timed %s  Goal %s%s", playerPrototypeDoorOpen_ ? "Open" : "Closed", playerPrototypeTimedDoorOpen_ ? "Open" : "Closed", playerPrototypeGoalReached_ ? "Reached" : "Not Reached", playerPrototypeGoalReached_ ? " / CLEAR" : "");
     ImGui::Text("Timed: %s  Clone %s  %.2f sec", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitchCloneOn_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds());
+    ImGui::Text("Toggle: %s  Clone %s  Gate %s", playerPrototypeToggleSwitchActive_ ? "ON" : "OFF", playerPrototypeToggleSwitchCloneOn_ ? "ON" : "OFF", playerPrototypeToggleGateOpen_ ? "Open" : "Closed");
     ImGui::Text("Weight: %s  Player %s  Clone %s  Bridge %s", playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF", playerPrototypeGoalBridgeDeployed_ ? "Deployed" : "Retracted");
     ImGui::Text("OneWay: %s", playerPrototypeOneWayGateBlocking_ ? "Blocking" : "Passable");
     ImGui::Text("Next  : %s", nextActionText);
@@ -1451,6 +1514,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Video : %d / 5%s", completedFlowCount, videoFlowComplete ? " Flow complete" : "");
     ImGui::TextColored(normalDoorColor, "Green : Clone switch door");
     ImGui::TextColored(timedDoorColor, "Blue  : Green + timed switch door");
+    ImGui::TextColored(toggleSwitchColor, "Orange: Optional toggle-switch test gate");
     ImGui::TextColored(weightSwitchColor, "Yellow: Weight switch + goal bridge");
     ImGui::TextColored(oneWayGateColor, "Purple: One-way return block");
     ImGui::Separator();
@@ -1469,6 +1533,8 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
             typeid(playerPrototypeSwitch_).name(), typeid(playerPrototypeDoor_).name());
         ImGui::BulletText("Blue route  : %s + %s",
             typeid(playerPrototypeSwitch_).name(), typeid(playerPrototypeTimedSwitch_).name());
+        ImGui::BulletText("Toggle lab  : %s -> %s",
+            typeid(playerPrototypeToggleSwitch_).name(), typeid(playerPrototypeToggleGate_).name());
         ImGui::BulletText("Weight route: %s -> %s", typeid(playerPrototypeWeightSwitch_).name(), typeid(playerPrototypeGoalBridge_).name());
         ImGui::BulletText("Return route: %s", typeid(playerPrototypeOneWayGate_).name());
         ImGui::BulletText("Goal        : %s", typeid(playerPrototypeGoal_).name());
@@ -1478,6 +1544,9 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
         ImGui::BulletText("Green %s + Timed %s -> Blue door %s",
             playerPrototypeSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF",
             playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
+        ImGui::BulletText("Toggle %s / Clone %s -> Test gate %s",
+            playerPrototypeToggleSwitchActive_ ? "ON" : "OFF", playerPrototypeToggleSwitchCloneOn_ ? "ON" : "OFF",
+            playerPrototypeToggleGateOpen_ ? "Open" : "Closed");
         ImGui::BulletText("Player %s + Clone %s -> Weight %s -> Bridge %s",
             playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF",
             playerPrototypeWeightSwitchActive_ ? "ON" : "OFF", playerPrototypeGoalBridgeDeployed_ ? "Deployed" : "Retracted");
@@ -1489,9 +1558,10 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     }
     ImGui::Separator();
     ImGui::Text("Gimmick Debug");
-    ImGui::Text("Units : BoxSwitch / LinkedDoor / TimedSwitch / WeightSwitch / LinkedBridge / OneWayGate / Goal");
+    ImGui::Text("Units : BoxSwitch / LinkedDoor / TimedSwitch / ToggleSwitch / WeightSwitch / LinkedBridge / OneWayGate / Goal");
     ImGui::TextColored(normalDoorColor, "Green : BoxSwitch Clone %s -> LinkedDoor %s", playerPrototypeCloneOnSwitch_ ? "ON" : "OFF", playerPrototypeDoorOpen_ ? "Open" : "Closed");
     ImGui::TextColored(timedDoorColor, "Blue  : Green %s + TimedSwitch %s %.2f sec -> TimedDoor %s", playerPrototypeSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitchActive_ ? "ON" : "OFF", playerPrototypeTimedSwitch_.GetRemainingSeconds(), playerPrototypeTimedDoorOpen_ ? "Open" : "Closed");
+    ImGui::TextColored(toggleSwitchColor, "Orange: ToggleSwitch %s  Clone %s -> TestGate %s", playerPrototypeToggleSwitchActive_ ? "ON" : "OFF", playerPrototypeToggleSwitchCloneOn_ ? "ON" : "OFF", playerPrototypeToggleGateOpen_ ? "Open" : "Closed");
     ImGui::TextColored(weightSwitchColor, "Yellow: WeightSwitch Player %s + Clone %s -> Bridge %s", playerPrototypeWeightPlayerOn_ ? "ON" : "OFF", playerPrototypeWeightCloneOn_ ? "ON" : "OFF", playerPrototypeGoalBridgeDeployed_ ? "Deployed" : "Retracted");
     ImGui::TextColored(oneWayGateColor, "Purple: OneWayGate %s", playerPrototypeOneWayGateBlocking_ ? "Return blocked" : "Passable");
     ImGui::Separator();

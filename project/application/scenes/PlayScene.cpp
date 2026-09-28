@@ -1015,6 +1015,8 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeDoor_.Finalize();
     playerPrototypeTimedSwitch_.Finalize();
     playerPrototypeTimedDoor_.Finalize();
+    playerPrototypeToggleSwitch_.Finalize();
+    playerPrototypeToggleGate_.Finalize();
     playerPrototypeWeightSwitch_.Finalize();
     playerPrototypeGoalBridge_.Finalize();
     playerPrototypeOneWayGate_.Finalize();
@@ -1031,6 +1033,9 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeTimedSwitchActive_ = false;
     playerPrototypeTimedSwitchCloneOn_ = false;
     playerPrototypeTimedDoorOpen_ = false;
+    playerPrototypeToggleSwitchActive_ = false;
+    playerPrototypeToggleSwitchCloneOn_ = false;
+    playerPrototypeToggleGateOpen_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;

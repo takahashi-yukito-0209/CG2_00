@@ -271,6 +271,104 @@ void TimedSwitchGimmick::ApplyVisual()
 }
 
 /// <summary>
+/// トグルスイッチの表示、判定範囲、色を初期化する。
+/// </summary>
+void ToggleSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, const ToggleSwitchGimmickDesc& desc)
+{
+    volumeCenter_ = desc.volumeCenter;
+    volumeHalfSize_ = desc.volumeHalfSize;
+    inactiveColor_ = desc.inactiveColor;
+    activeColor_ = desc.activeColor;
+    pressedColor_ = desc.pressedColor;
+    object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
+    Reset();
+}
+
+/// <summary>
+/// トグルスイッチが保持する表示用リソースを解放する。
+/// </summary>
+void ToggleSwitchGimmick::Finalize()
+{
+    object_.reset();
+    Reset();
+}
+
+/// <summary>
+/// 可視分身の位置からスイッチ状態を更新する。
+/// </summary>
+void ToggleSwitchGimmick::Update(std::span<const PlayerState> cloneStates)
+{
+    cloneOnSwitch_ = std::any_of(cloneStates.begin(), cloneStates.end(), [this](const PlayerState& cloneState) {
+        return Contains(cloneState);
+    });
+    const bool cloneEnteredSwitch = cloneOnSwitch_ && !cloneOnSwitchLastFrame_; // 分身が判定外から入った瞬間か
+    if (cloneEnteredSwitch) {
+        active_ = !active_;
+    }
+    cloneOnSwitchLastFrame_ = cloneOnSwitch_;
+    ApplyVisual();
+}
+
+/// <summary>
+/// 表示用オブジェクトを更新する。
+/// </summary>
+void ToggleSwitchGimmick::UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix)
+{
+    if (!object_) {
+        return;
+    }
+
+    object_->Update(viewMatrix, projectionMatrix);
+}
+
+/// <summary>
+/// トグルスイッチを描画する。
+/// </summary>
+void ToggleSwitchGimmick::Draw()
+{
+    if (!object_) {
+        return;
+    }
+
+    object_->Draw();
+}
+
+/// <summary>
+/// トグルスイッチをOFF状態へ戻す。
+/// </summary>
+void ToggleSwitchGimmick::Reset()
+{
+    active_ = false;
+    cloneOnSwitch_ = false;
+    cloneOnSwitchLastFrame_ = false;
+    ApplyVisual();
+}
+
+/// <summary>
+/// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
+/// </summary>
+bool ToggleSwitchGimmick::Contains(const PlayerState& state) const
+{
+    return IsPointInsideBox(state.transform.translate, volumeCenter_, volumeHalfSize_);
+}
+
+/// <summary>
+/// 現在状態に応じた表示色を反映する。
+/// </summary>
+void ToggleSwitchGimmick::ApplyVisual()
+{
+    if (!object_) {
+        return;
+    }
+
+    Math::Vector4 color = active_ ? activeColor_ : inactiveColor_; // ON/OFF状態から選択した表示色
+    if (cloneOnSwitch_) {
+        color = pressedColor_;
+    }
+    object_->SetMaterialColor(color);
+}
+
+/// <summary>
 /// 重さスイッチの表示、判定範囲、色を初期化する。
 /// </summary>
 void WeightSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, const WeightSwitchGimmickDesc& desc)

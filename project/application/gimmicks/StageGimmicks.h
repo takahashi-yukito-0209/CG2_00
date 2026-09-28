@@ -45,6 +45,21 @@ struct TimedSwitchGimmickDesc {
 };
 
 /// <summary>
+/// トグルスイッチギミックの初期化情報
+/// </summary>
+struct ToggleSwitchGimmickDesc {
+    uint32_t objectId = 0; // 表示オブジェクトに割り当てるID
+    std::string modelFileName; // 表示に使用するモデルファイル名
+    Math::Vector3 scale { 1.0f, 1.0f, 1.0f }; // スイッチの表示スケール
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // スイッチの中心座標
+    Math::Vector3 volumeCenter { 0.0f, 0.0f, 0.0f }; // 入力判定範囲の中心
+    Math::Vector3 volumeHalfSize { 0.5f, 0.5f, 0.5f }; // 入力判定範囲の半サイズ
+    Math::Vector4 inactiveColor { 0.18f, 0.18f, 0.22f, 1.0f }; // OFF時の表示色
+    Math::Vector4 activeColor { 1.0f, 0.45f, 0.1f, 1.0f }; // ON時の表示色
+    Math::Vector4 pressedColor { 1.0f, 0.85f, 0.2f, 1.0f }; // 分身が踏んでいる時の表示色
+};
+
+/// <summary>
 /// 重さスイッチギミックの初期化情報
 /// </summary>
 struct WeightSwitchGimmickDesc {
@@ -246,6 +261,73 @@ private:
     float holdSeconds_ = 3.0f; // 入力後に起動を維持する秒数
     float remainingSeconds_ = 0.0f; // 起動維持の残り秒数
     bool cloneOnSwitch_ = false; // 分身が判定内にいるか
+};
+
+/// <summary>
+/// 分身が判定へ入るたびにONとOFFを切り替えるスイッチギミックを管理するクラス
+/// </summary>
+class ToggleSwitchGimmick {
+public:
+    /// <summary>
+    /// トグルスイッチの表示、判定範囲、色を初期化する。
+    /// </summary>
+    void Initialize(MyEngine::Object3dCommon* object3dCommon, MyEngine::ImGuiManager* imguiManager, const ToggleSwitchGimmickDesc& desc);
+
+    /// <summary>
+    /// トグルスイッチが保持する表示用リソースを解放する。
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
+    /// 可視分身の位置からスイッチ状態を更新する。
+    /// </summary>
+    void Update(std::span<const PlayerState> cloneStates);
+
+    /// <summary>
+    /// 表示用オブジェクトを更新する。
+    /// </summary>
+    void UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// トグルスイッチを描画する。
+    /// </summary>
+    void Draw();
+
+    /// <summary>
+    /// トグルスイッチをOFF状態へ戻す。
+    /// </summary>
+    void Reset();
+
+    /// <summary>
+    /// スイッチがONか取得する。
+    /// </summary>
+    bool IsActive() const { return active_; }
+
+    /// <summary>
+    /// 分身がスイッチ判定内にいるか取得する。
+    /// </summary>
+    bool IsCloneOnSwitch() const { return cloneOnSwitch_; }
+
+private:
+    /// <summary>
+    /// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
+    /// </summary>
+    bool Contains(const PlayerState& state) const;
+
+    /// <summary>
+    /// 現在状態に応じた表示色を反映する。
+    /// </summary>
+    void ApplyVisual();
+
+    std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
+    Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
+    Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
+    Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // OFF時の表示色
+    Math::Vector4 activeColor_ { 1.0f, 0.45f, 0.1f, 1.0f }; // ON時の表示色
+    Math::Vector4 pressedColor_ { 1.0f, 0.85f, 0.2f, 1.0f }; // 分身が踏んでいる時の表示色
+    bool active_ = false; // スイッチがONか
+    bool cloneOnSwitch_ = false; // 分身が判定内にいるか
+    bool cloneOnSwitchLastFrame_ = false; // 前フレームに分身が判定内にいたか
 };
 
 /// <summary>
