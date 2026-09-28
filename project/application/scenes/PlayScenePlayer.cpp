@@ -844,13 +844,13 @@ void PlayScene::UpdatePlayerPrototype(float deltaTime)
     if (!blockInputByImGui && inputManager && inputManager->IsKeyJustPressed(kPrototypeResetKey)) {
         ResetPlayerPrototypeState();
     }
-    const bool canPrepareReplay = !blockInputByImGui && inputManager && !pastSelfRecorder_.IsRecording() &&
-        pastSelfCloneManager_.GetCloneCount() > 0; // Prepare入力を受け付けられるか
+    const bool canPrepareReplay = !playerPrototypeGoalReached_ && !blockInputByImGui && inputManager &&
+        !pastSelfRecorder_.IsRecording() && pastSelfCloneManager_.GetCloneCount() > 0; // Prepare入力を受け付けられるか
     if (canPrepareReplay && inputManager->IsKeyJustPressed(kReplayPrepareKey)) {
         ResetPlayerPrototypeReplayState();
     }
-    const bool canUndoLastClone = !blockInputByImGui && inputManager && !pastSelfRecorder_.IsRecording() &&
-        pastSelfCloneManager_.GetCloneCount() > 0; // 分身削除入力を受け付けられるか
+    const bool canUndoLastClone = !playerPrototypeGoalReached_ && !blockInputByImGui && inputManager &&
+        !pastSelfRecorder_.IsRecording() && pastSelfCloneManager_.GetCloneCount() > 0; // 分身削除入力を受け付けられるか
     if (canUndoLastClone && inputManager->IsKeyJustPressed(kCloneUndoKey)) {
         UndoLastPlayerPrototypeClone();
     }
@@ -1076,8 +1076,10 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.25f, 1.0f), "CLEAR");
     }
     ImGui::Text("Goal: %s", playerPrototypeGoalReached_ ? "Reached" : "Not Reached");
-    const bool canPrepareReplay = !pastSelfRecorder_.IsRecording() && pastSelfCloneManager_.GetCloneCount() > 0; // 分身群を残して再生準備へ戻せるか
-    ImGui::Text("Prepare: %s", canPrepareReplay ? "Ready - keeps stored clones" : "Locked - store a clone and stop recording");
+    const bool canPrepareReplay = !playerPrototypeGoalReached_ && !pastSelfRecorder_.IsRecording() &&
+        pastSelfCloneManager_.GetCloneCount() > 0; // 分身群を残して再生準備へ戻せるか
+    ImGui::Text("Prepare: %s", playerPrototypeGoalReached_ ? "Locked - reset puzzle to restart" :
+        (canPrepareReplay ? "Ready - keeps stored clones" : "Locked - store a clone and stop recording"));
     if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
         ImGui::TextColored(ImVec4(0.15f, 1.0f, 0.45f, 1.0f), "PREPARED: clones kept / replay ready");
     }
@@ -1114,7 +1116,7 @@ void PlayScene::DrawPlayerPrototypeImGui()
         ImGui::EndDisabled();
     }
     ImGui::SameLine();
-    const bool canUndoLastClone = !pastSelfRecorder_.IsRecording() &&
+    const bool canUndoLastClone = !playerPrototypeGoalReached_ && !pastSelfRecorder_.IsRecording() &&
         pastSelfCloneManager_.GetCloneCount() > 0; // 最後の分身を削除できるか
     if (!canUndoLastClone) {
         ImGui::BeginDisabled();
@@ -1371,7 +1373,7 @@ void PlayScene::DrawPlayerPrototypeStatusHud()
     ImGui::Text("Need  : Stored >= 2 and Green + Blue active together");
     ImGui::Text("Record: %s  Frames: %zu  %.2f sec", recordStateLabel, pastSelfRecorder_.GetFrames().size(), playerPrototypeLastRecordDuration_);
     ImGui::Text("Clones: Stored %zu  Visible %zu  Playing %zu", storedCloneCount, visibleCloneCount, playingCloneCount);
-    ImGui::Text("Prepare: %s", canPrepareReplay ? "Ready" : "Locked");
+    ImGui::Text("Prepare: %s", playerPrototypeGoalReached_ ? "Locked after clear" : (canPrepareReplay ? "Ready" : "Locked"));
     if (playerPrototypePrepareFeedbackSeconds_ > 0.0f) {
         ImGui::TextColored(checkedColor, "PREPARED: start position / records kept");
     }
