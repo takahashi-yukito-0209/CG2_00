@@ -72,6 +72,18 @@ struct LinkedDoorGimmickDesc {
 };
 
 /// <summary>
+/// 連動橋ギミックの初期化情報
+/// </summary>
+struct LinkedBridgeGimmickDesc {
+    uint32_t objectId = 0; // 表示オブジェクトに割り当てるID
+    std::string modelFileName; // 表示に使用するモデルファイル名
+    Math::Vector3 scale { 1.0f, 1.0f, 1.0f }; // 橋の表示スケール
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // 橋の中心座標
+    Math::Vector4 retractedColor { 0.18f, 0.18f, 0.22f, 0.18f }; // 未展開時の表示色
+    Math::Vector4 deployedColor { 1.0f, 0.85f, 0.12f, 1.0f }; // 展開時の表示色
+};
+
+/// <summary>
 /// 一方通行ゲートギミックの初期化情報
 /// </summary>
 struct OneWayGateGimmickDesc {
@@ -370,6 +382,70 @@ private:
     Math::Vector4 closedColor_ { 1.0f, 0.12f, 0.12f, 1.0f }; // 閉じている時の表示色
     Math::Vector4 openColor_ { 0.0f, 1.0f, 0.45f, 0.22f }; // 開いている時の表示色
     bool open_ = false; // 扉が開いているか
+};
+
+/// <summary>
+/// 入力に連動して足場を展開する橋ギミックを管理するクラス
+/// </summary>
+class LinkedBridgeGimmick {
+public:
+    /// <summary>
+    /// 橋の表示、衝突範囲、色を初期化する。
+    /// </summary>
+    void Initialize(MyEngine::Object3dCommon* object3dCommon, MyEngine::ImGuiManager* imguiManager, const LinkedBridgeGimmickDesc& desc);
+
+    /// <summary>
+    /// 橋が保持する表示用リソースを解放する。
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
+    /// 入力状態に合わせて橋の展開状態を更新する。
+    /// </summary>
+    void Update(bool shouldDeploy);
+
+    /// <summary>
+    /// 表示用オブジェクトを更新する。
+    /// </summary>
+    void UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+
+    /// <summary>
+    /// 橋を描画する。
+    /// </summary>
+    void Draw();
+
+    /// <summary>
+    /// 橋を未展開状態へ戻す。
+    /// </summary>
+    void Reset();
+
+    /// <summary>
+    /// 展開中の橋の全面コライダーを取得する。
+    /// </summary>
+    SolidCollider GetSolidCollider() const;
+
+    /// <summary>
+    /// 橋が展開されているか取得する。
+    /// </summary>
+    bool IsDeployed() const { return deployed_; }
+
+private:
+    /// <summary>
+    /// 現在状態に応じた表示色を反映する。
+    /// </summary>
+    void ApplyVisual();
+
+    /// <summary>
+    /// 指定した3DオブジェクトをAlphaブレンドで描画する。
+    /// </summary>
+    void DrawWithAlphaBlend();
+
+    std::unique_ptr<MyEngine::Object3d> object_; // 橋表示用オブジェクト
+    Math::Vector3 scale_ { 1.0f, 1.0f, 1.0f }; // 橋の表示スケール
+    Math::Vector3 translate_ { 0.0f, 0.0f, 0.0f }; // 橋の中心座標
+    Math::Vector4 retractedColor_ { 0.18f, 0.18f, 0.22f, 0.18f }; // 未展開時の表示色
+    Math::Vector4 deployedColor_ { 1.0f, 0.85f, 0.12f, 1.0f }; // 展開時の表示色
+    bool deployed_ = false; // 橋が展開されているか
 };
 
 /// <summary>

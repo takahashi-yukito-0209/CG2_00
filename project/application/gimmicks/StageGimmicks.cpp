@@ -470,6 +470,108 @@ void LinkedDoorGimmick::DrawWithAlphaBlend()
 }
 
 /// <summary>
+/// 橋の表示、衝突範囲、色を初期化する。
+/// </summary>
+void LinkedBridgeGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, const LinkedBridgeGimmickDesc& desc)
+{
+    scale_ = desc.scale;
+    translate_ = desc.translate;
+    retractedColor_ = desc.retractedColor;
+    deployedColor_ = desc.deployedColor;
+    object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, scale_, translate_, retractedColor_);
+    Reset();
+}
+
+/// <summary>
+/// 橋が保持する表示用リソースを解放する。
+/// </summary>
+void LinkedBridgeGimmick::Finalize()
+{
+    object_.reset();
+    Reset();
+}
+
+/// <summary>
+/// 入力状態に合わせて橋の展開状態を更新する。
+/// </summary>
+void LinkedBridgeGimmick::Update(bool shouldDeploy)
+{
+    deployed_ = shouldDeploy;
+    ApplyVisual();
+}
+
+/// <summary>
+/// 表示用オブジェクトを更新する。
+/// </summary>
+void LinkedBridgeGimmick::UpdateObject(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix)
+{
+    if (!object_) {
+        return;
+    }
+
+    object_->Update(viewMatrix, projectionMatrix);
+}
+
+/// <summary>
+/// 橋を描画する。
+/// </summary>
+void LinkedBridgeGimmick::Draw()
+{
+    if (!object_) {
+        return;
+    }
+
+    if (deployed_) {
+        object_->Draw();
+        return;
+    }
+
+    DrawWithAlphaBlend();
+}
+
+/// <summary>
+/// 橋を未展開状態へ戻す。
+/// </summary>
+void LinkedBridgeGimmick::Reset()
+{
+    deployed_ = false;
+    ApplyVisual();
+}
+
+/// <summary>
+/// 展開中の橋の全面コライダーを取得する。
+/// </summary>
+SolidCollider LinkedBridgeGimmick::GetSolidCollider() const
+{
+    SolidCollider collider {}; // 橋から作成する全面コライダー
+    collider.center = translate_;
+    collider.halfSize = CalculateBoxHalfSize(scale_);
+    collider.enabled = deployed_;
+    return collider;
+}
+
+/// <summary>
+/// 現在状態に応じた表示色を反映する。
+/// </summary>
+void LinkedBridgeGimmick::ApplyVisual()
+{
+    if (!object_) {
+        return;
+    }
+
+    const Math::Vector4 color = deployed_ ? deployedColor_ : retractedColor_; // 展開状態に応じた表示色
+    object_->SetMaterialColor(color);
+}
+
+/// <summary>
+/// 指定した3DオブジェクトをAlphaブレンドで描画する。
+/// </summary>
+void LinkedBridgeGimmick::DrawWithAlphaBlend()
+{
+    DrawObjectWithAlphaBlend(object_.get());
+}
+
+/// <summary>
 /// 一方通行ゲートの表示、衝突範囲、通行方向を初期化する。
 /// </summary>
 void OneWayGateGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiManager, const OneWayGateGimmickDesc& desc)

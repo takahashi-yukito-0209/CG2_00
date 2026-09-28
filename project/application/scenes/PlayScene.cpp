@@ -1016,6 +1016,7 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeTimedSwitch_.Finalize();
     playerPrototypeTimedDoor_.Finalize();
     playerPrototypeWeightSwitch_.Finalize();
+    playerPrototypeGoalBridge_.Finalize();
     playerPrototypeOneWayGate_.Finalize();
     playerPrototypeGoal_.Reset();
     playerPrototypeSwitchActive_ = false;

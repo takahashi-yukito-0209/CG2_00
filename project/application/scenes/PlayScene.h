@@ -899,6 +899,7 @@ private: // メンバー変数
     TimedSwitchGimmick playerPrototypeTimedSwitch_; // 時間差スイッチギミック
     LinkedDoorGimmick playerPrototypeTimedDoor_; // 時間差スイッチ連動扉ギミック
     WeightSwitchGimmick playerPrototypeWeightSwitch_; // 重さスイッチギミック
+    LinkedBridgeGimmick playerPrototypeGoalBridge_; // 重さスイッチに連動するゴール前の橋ギミック
     OneWayGateGimmick playerPrototypeOneWayGate_; // 一方通行ゲートギミック
     BoxGoalGimmick playerPrototypeGoal_; // ゴール判定ギミック
     std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneStartMarkerObject_; // 分身開始地点を示す仮マーカー
@@ -918,6 +919,8 @@ private: // メンバー変数
     bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
     bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
     bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
+    bool playerPrototypeGoalBridgeUnlocked_ = false; // 重さスイッチ入力でゴール前の橋を解放済みか
+    bool playerPrototypeGoalBridgeDeployed_ = false; // ゴール前の橋が展開されているか
     bool playerPrototypeOneWayGateBlocking_ = false; // 一方通行ゲートが戻りを塞いでいるか
     bool playerPrototypeTimedDoorOpened_ = false; // 時間差扉を開けたか
     bool playerPrototypeDualCloneSwitchesActivated_ = false; // 離れた2つのスイッチを複数分身で同時起動したか
