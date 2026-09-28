@@ -145,6 +145,15 @@ private:
     };
 
     /// <summary>
+    /// プレイヤー検証ステージで確認する攻略ルート種別。
+    /// </summary>
+    enum class PlayerPrototypeRouteMode {
+        OneCloneTutorial, // 分身1体でトグル昇降床を攻略するルート
+        TwoCloneTutorial, // 分身2体で緑と青のスイッチを同時起動するルート
+        FullVerification, // すべてのギミックを確認する総合ルート
+    };
+
+    /// <summary>
     /// ポストプロセス描画で使用する状態
     /// </summary>
     struct PostProcessDrawContext {
@@ -427,6 +436,21 @@ private:
     /// ImGuiでプレイヤー確認用の状態を表示する。
     /// </summary>
     void DrawPlayerPrototypeImGui();
+
+    /// <summary>
+    /// プレイヤー検証ルートの選択UIを表示する。
+    /// </summary>
+    void DrawPlayerPrototypeRouteSelector();
+
+    /// <summary>
+    /// 選択された検証ルートに対応するルールを適用する。
+    /// </summary>
+    void ApplyPlayerPrototypeRouteMode(PlayerPrototypeRouteMode routeMode);
+
+    /// <summary>
+    /// 現在選択中の検証ルート名を取得する。
+    /// </summary>
+    const char* GetPlayerPrototypeRouteLabel() const;
 
     /// <summary>
     /// プレイヤー操作に必要な主要状態を固定表示する。
@@ -890,6 +914,7 @@ private: // メンバー変数
     MyEngine::CollisionSystem collisionSystem_; // シーン内3Dオブジェクトの衝突判定管理
     size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
     Player player_; // 確認用プレイヤー
+    PlayerPrototypeRouteMode playerPrototypeRouteMode_ = PlayerPrototypeRouteMode::FullVerification; // 現在選択中の検証ルート
     StageRuleSettings playerPrototypeStageRules_; // プレイヤー検証ステージへ適用する調整可能なルール
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
     PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生する確認用分身の管理クラス

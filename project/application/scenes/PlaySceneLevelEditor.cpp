@@ -1356,6 +1356,7 @@ void PlayScene::DrawImGui()
         }
 
         if (ImGui::BeginTabItem("Player")) {
+            DrawPlayerPrototypeRouteSelector();
             DrawPlayerPrototypeFixedStatusHud();
             ImGui::Checkbox("Verification Details", &playerPrototypeShowVerificationDetails_);
             if (ImGui::BeginChild("PlayerTabDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
