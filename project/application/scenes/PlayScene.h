@@ -408,6 +408,16 @@ private:
     void UpdatePlayerPrototypeStage(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
+    /// 選択中の検証ルートで指定された仮ステージブロックを使用するか判定する。
+    /// </summary>
+    bool IsPlayerPrototypeStageBlockEnabled(size_t blockIndex) const;
+
+    /// <summary>
+    /// 選択中の検証ルートに応じたカメラ注視対象を取得する。
+    /// </summary>
+    Math::Vector3 GetPlayerPrototypeRouteCameraTarget(const PlayerState& playerState) const;
+
+    /// <summary>
     /// プレイヤー確認用の仮ステージを描画する。
     /// </summary>
     void DrawPlayerPrototypeStage();
@@ -448,9 +458,24 @@ private:
     void ApplyPlayerPrototypeRouteMode(PlayerPrototypeRouteMode routeMode);
 
     /// <summary>
+    /// クリア済みのルートから次の検証ルートへ進む。
+    /// </summary>
+    void AdvancePlayerPrototypeRoute();
+
+    /// <summary>
     /// 現在選択中の検証ルート名を取得する。
     /// </summary>
     const char* GetPlayerPrototypeRouteLabel() const;
+
+    /// <summary>
+    /// 現在選択中の検証ルートが完了しているか判定する。
+    /// </summary>
+    bool IsPlayerPrototypeSelectedRouteComplete() const;
+
+    /// <summary>
+    /// 選択中のチュートリアルルートのクリア状態を確定する。
+    /// </summary>
+    void FinalizePlayerPrototypeSelectedRoute();
 
     /// <summary>
     /// プレイヤー操作に必要な主要状態を固定表示する。
@@ -954,6 +979,10 @@ private: // メンバー変数
     bool playerPrototypeTwoCloneReplayPrepared_ = false; // 2体用ルートで保存分身を残して再生準備したか
     bool playerPrototypeTwoCloneSwitchesActivated_ = false; // 2体用ルートで別々の分身が緑と青のスイッチを同時起動したか
     bool playerPrototypeTwoCloneTutorialComplete_ = false; // 2体用連携ルートで青扉を通過したか
+    bool playerPrototypeRouteClearFinalized_ = false; // 選択中のチュートリアルルートのクリア結果を確定済みか
+    bool playerPrototypeOneCloneRouteCleared_ = false; // 1体用ルートを通算でクリア済みか
+    bool playerPrototypeTwoCloneRouteCleared_ = false; // 2体用ルートを通算でクリア済みか
+    bool playerPrototypeFullVerificationCleared_ = false; // 総合検証ルートを通算でクリア済みか
     bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
     bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
     bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか

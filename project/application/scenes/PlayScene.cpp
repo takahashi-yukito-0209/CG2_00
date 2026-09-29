@@ -1044,6 +1044,10 @@ void PlayScene::ReleaseSceneObjects()
     playerPrototypeTwoCloneReplayPrepared_ = false;
     playerPrototypeTwoCloneSwitchesActivated_ = false;
     playerPrototypeTwoCloneTutorialComplete_ = false;
+    playerPrototypeRouteClearFinalized_ = false;
+    playerPrototypeOneCloneRouteCleared_ = false;
+    playerPrototypeTwoCloneRouteCleared_ = false;
+    playerPrototypeFullVerificationCleared_ = false;
     playerPrototypeWeightSwitchActive_ = false;
     playerPrototypeWeightPlayerOn_ = false;
     playerPrototypeWeightCloneOn_ = false;
