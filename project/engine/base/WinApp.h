@@ -63,6 +63,11 @@ public: // メンバ関数
     /// </summary>
     void SetResizeCallback(const std::function<void(uint32_t, uint32_t)>& callback);
 
+    /// <summary>
+    /// ゲームウィンドウのクライアント領域でマウスカーソルを表示するか設定する。
+    /// </summary>
+    void SetCursorVisible(bool visible);
+
 private: // メンバ関数
     /// <summary>
     /// ウィンドウクラスの属性を設定し、システムに登録
@@ -81,6 +86,7 @@ private: // メンバ変数
     HINSTANCE hInstance_ = nullptr; // アプリケーションインスタンスハンドル
     HWND hwnd_ = nullptr; // ウィンドウハンドル
     bool timerResolutionRaised_ = false; // タイマー分解能を上げているか
+    bool cursorVisible_ = true; // クライアント領域でマウスカーソルを表示するか
     std::wstring windowTitle_; // ウィンドウタイトル（オプションで指定されたものを保存）
     std::function<void(uint32_t, uint32_t)> resizeCallback_; // サイズ変更通知先
 };

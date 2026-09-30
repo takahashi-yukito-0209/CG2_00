@@ -182,8 +182,21 @@ void Game::SetupLogFile()
 /// </summary>
 bool Game::InitializeWindowAndInput(HINSTANCE hInstance, int nCmdShow)
 {
-    impl_->winApp.Initialize(hInstance, nCmdShow, L"CG2_00");
+#ifdef _DEBUG
+    constexpr wchar_t kWindowTitle[] = L"TRACE SHIFT - Debug Build"; // Debug版のウィンドウタイトル
+#elif defined(USE_IMGUI)
+    constexpr wchar_t kWindowTitle[] = L"TRACE SHIFT - Development Build"; // Development版のウィンドウタイトル
+#else
+    constexpr wchar_t kWindowTitle[] = L"TRACE SHIFT"; // Release版のウィンドウタイトル
+#endif
+    impl_->winApp.Initialize(hInstance, nCmdShow, kWindowTitle);
     impl_->hwnd = impl_->winApp.GetHwnd();
+
+#ifdef USE_IMGUI
+    impl_->winApp.SetCursorVisible(true);
+#else
+    impl_->winApp.SetCursorVisible(false);
+#endif
 
 #ifdef _DEBUG
 

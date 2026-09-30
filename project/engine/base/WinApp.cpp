@@ -98,6 +98,7 @@ bool WinApp::ProcessMessage()
 void WinApp::Finalize()
 {
     resizeCallback_ = {};
+    SetCursorVisible(true);
     if (timerResolutionRaised_) {
         timeEndPeriod(1);
         timerResolutionRaised_ = false;
@@ -120,6 +121,21 @@ void WinApp::SetResizeCallback(const std::function<void(uint32_t, uint32_t)>& ca
 {
     resizeCallback_ = callback;
 }
+
+/// <summary>
+/// ゲームウィンドウのクライアント領域でマウスカーソルを表示するか設定する。
+/// </summary>
+void WinApp::SetCursorVisible(bool visible)
+{
+    cursorVisible_ = visible;
+    if (!hwnd_ || GetForegroundWindow() != hwnd_) {
+        return;
+    }
+
+    HCURSOR cursor = visible ? LoadCursor(nullptr, IDC_ARROW) : nullptr; // 現在設定するマウスカーソル
+    SetCursor(cursor);
+}
+
 /// <summary>
 /// ウィンドウプロシージャ
 /// </summary>
@@ -138,6 +154,13 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
+
+    case WM_SETCURSOR:
+        if (winApp && !winApp->cursorVisible_ && LOWORD(lparam) == HTCLIENT) {
+            SetCursor(nullptr);
+            return TRUE;
+        }
+        break;
 
     case WM_SIZE:
         // WM_SIZE は連続で来るため短いデバウンスを行い、最終的なサイズだけ通知する
