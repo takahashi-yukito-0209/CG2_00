@@ -540,7 +540,7 @@ void PlayScene::DrawWorldAndParticles()
     if (ctx_.object3dCommon) {
         ctx_.object3dCommon->SetCommonDrawSetting();
         DrawSceneObjects();
-        DrawPlayerPrototype();
+        DrawPastSelfTutorial();
     }
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス

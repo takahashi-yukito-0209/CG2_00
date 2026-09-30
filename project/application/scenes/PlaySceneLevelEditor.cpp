@@ -1356,14 +1356,14 @@ void PlayScene::DrawImGui()
         }
 
         if (ImGui::BeginTabItem("Player")) {
-            DrawPlayerPrototypeRouteSelector();
-            DrawPlayerPrototypeFixedStatusHud();
-            ImGui::Checkbox("Verification Details", &playerPrototypeShowVerificationDetails_);
+            DrawPastSelfTutorialRouteSelector();
+            DrawPastSelfTutorialFixedStatusHud();
+            ImGui::Checkbox("Verification Details", &pastSelfTutorialShowVerificationDetails_);
             if (ImGui::BeginChild("PlayerTabDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
-                DrawPlayerPrototypeImGui();
-                if (playerPrototypeShowVerificationDetails_) {
+                DrawPastSelfTutorialImGui();
+                if (pastSelfTutorialShowVerificationDetails_) {
                     ImGui::Separator();
-                    DrawPlayerPrototypeStatusHud();
+                    DrawPastSelfTutorialStatusHud();
                 }
             }
             ImGui::EndChild();

@@ -3,7 +3,7 @@
 #include <cstddef>
 
 /// <summary>
-/// ステージごとに調整可能な分身パズルのルール設定。
+/// ステージごとに調整可能な分身ステージのルール設定。
 /// </summary>
 struct StageRuleSettings {
     size_t maxStoredClones = 3; // 同時に保存できる分身の最大数

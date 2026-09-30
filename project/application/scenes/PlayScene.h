@@ -136,21 +136,21 @@ public: // メンバ関数
 
 private:
     /// <summary>
-    /// プレイヤー確認用の仮ステージブロック。
+    /// 分身チュートリアル用のステージブロック。
     /// </summary>
-    struct PlayerPrototypeStageBlock {
-        std::unique_ptr<MyEngine::Object3d> object; // 表示用の仮ブロック
+    struct PastSelfTutorialStageBlock {
+        std::unique_ptr<MyEngine::Object3d> object; // 表示用のステージブロック
         SolidCollider collider; // 地形として全面衝突する情報
         bool goalMarker = false; // ゴール表示用のブロックか
     };
 
     /// <summary>
-    /// プレイヤー検証ステージで確認する攻略ルート種別。
+    /// 分身チュートリアルで使用する攻略ルート種別。
     /// </summary>
-    enum class PlayerPrototypeRouteMode {
-        OneCloneTutorial, // 分身1体でトグル昇降床を攻略するルート
-        TwoCloneTutorial, // 分身2体で緑と青のスイッチを同時起動するルート
-        FullVerification, // すべてのギミックを確認する総合ルート
+    enum class PastSelfTutorialRoute {
+        OneCloneBasics, // 分身1体でトグル昇降床を攻略するルート
+        TwoCloneCooperation, // 分身2体で緑と青のスイッチを同時起動するルート
+        FinalChallenge, // すべてのギミックを確認する総合ルート
     };
 
     /// <summary>
@@ -328,174 +328,174 @@ private:
 
 
     /// <summary>
-    /// プレイヤー確認用オブジェクトを初期化する。
+    /// 分身チュートリアル用オブジェクトを初期化する。
     /// </summary>
-    void InitializePlayerPrototype();
+    void InitializePastSelfTutorial();
 
     /// <summary>
-    /// プレイヤー確認用の仮ステージを初期化する。
+    /// 分身チュートリアル用ステージを初期化する。
     /// </summary>
-    void InitializePlayerPrototypeStage();
+    void InitializePastSelfTutorialStage();
 
     /// <summary>
-    /// プレイヤー確認用状態を更新する。
+    /// 分身チュートリアル用状態を更新する。
     /// </summary>
-    void UpdatePlayerPrototype(float deltaTime);
+    void UpdatePastSelfTutorial(float deltaTime);
 
     /// <summary>
-    /// プレイヤー確認用の分身ギミックを初期化する。
+    /// 分身チュートリアル用の分身ギミックを初期化する。
     /// </summary>
-    void InitializePlayerPrototypeMechanics();
+    void InitializePastSelfTutorialMechanics();
 
     /// <summary>
-    /// プレイヤー確認用の分身ギミックを更新する。
+    /// 分身チュートリアル用の分身ギミックを更新する。
     /// </summary>
-    void UpdatePlayerPrototypeMechanics(float deltaTime);
+    void UpdatePastSelfTutorialMechanics(float deltaTime);
 
     /// <summary>
-    /// プレイヤー確認用状態を初期状態へ戻す。
+    /// 分身チュートリアル用状態を初期状態へ戻す。
     /// </summary>
-    void ResetPlayerPrototypeState();
+    void ResetPastSelfTutorialState();
 
     /// <summary>
     /// 記録済み分身を残したまま再生開始用の状態へ戻す。
     /// </summary>
-    void ResetPlayerPrototypeReplayState(bool registerPrepareAction = true);
+    void ResetPastSelfTutorialReplayState(bool registerPrepareAction = true);
 
     /// <summary>
     /// 最後に保存した分身を削除して再生準備状態へ戻す。
     /// </summary>
-    void UndoLastPlayerPrototypeClone();
+    void UndoLastPastSelfTutorialClone();
 
     /// <summary>
     /// 新しい分身用のプレイヤー記録を開始する。
     /// </summary>
-    void StartPlayerPrototypeRecording();
+    void StartPastSelfTutorialRecording();
 
     /// <summary>
     /// 現在のステージルールで新しい分身記録を開始できるか判定する。
     /// </summary>
-    bool CanStartPlayerPrototypeRecording() const;
+    bool CanStartPastSelfTutorialRecording() const;
 
     /// <summary>
     /// 現在の記録を停止し、新しい分身として保存する。
     /// </summary>
-    void FinishPlayerPrototypeRecording();
+    void FinishPastSelfTutorialRecording();
 
     /// <summary>
-    /// プレイヤー確認用の分身ギミック表示を更新する。
+    /// 分身チュートリアル用の分身ギミック表示を更新する。
     /// </summary>
-    void UpdatePlayerPrototypeMechanicObjects(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+    void UpdatePastSelfTutorialMechanicObjects(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
     /// 分身記録の開始・終了地点マーカーを更新する。
     /// </summary>
-    void UpdatePlayerPrototypeCloneRecordMarkers(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+    void UpdatePastSelfTutorialCloneRecordMarkers(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
     /// 分身記録の開始・終了地点マーカーを描画する。
     /// </summary>
-    void DrawPlayerPrototypeCloneRecordMarkers();
+    void DrawPastSelfTutorialCloneRecordMarkers();
 
     /// <summary>
-    /// プレイヤー確認用の分身ギミックを描画する。
+    /// 分身チュートリアル用の分身ギミックを描画する。
     /// </summary>
-    void DrawPlayerPrototypeMechanics();
+    void DrawPastSelfTutorialMechanics();
 
     /// <summary>
-    /// プレイヤー確認用の仮ステージを更新する。
+    /// 分身チュートリアル用ステージを更新する。
     /// </summary>
-    void UpdatePlayerPrototypeStage(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
+    void UpdatePastSelfTutorialStage(const Math::Matrix4x4& viewMatrix, const Math::Matrix4x4& projectionMatrix);
 
     /// <summary>
-    /// 選択中の検証ルートで指定された仮ステージブロックを使用するか判定する。
+    /// 選択中のチュートリアルルートで指定されたステージブロックを使用するか判定する。
     /// </summary>
-    bool IsPlayerPrototypeStageBlockEnabled(size_t blockIndex) const;
+    bool IsPastSelfTutorialStageBlockEnabled(size_t blockIndex) const;
 
     /// <summary>
-    /// 選択中の検証ルートに応じたカメラ注視対象を取得する。
+    /// 選択中のチュートリアルルートに応じたカメラ注視対象を取得する。
     /// </summary>
-    Math::Vector3 GetPlayerPrototypeRouteCameraTarget(const PlayerState& playerState) const;
+    Math::Vector3 GetPastSelfTutorialRouteCameraTarget(const PlayerState& playerState) const;
 
     /// <summary>
-    /// プレイヤー確認用の仮ステージを描画する。
+    /// 分身チュートリアル用ステージを描画する。
     /// </summary>
-    void DrawPlayerPrototypeStage();
+    void DrawPastSelfTutorialStage();
 
     /// <summary>
-    /// プレイヤー確認用の全面コライダーを追加する。
+    /// 分身チュートリアル用の全面コライダーを追加する。
     /// </summary>
-    void AppendPlayerPrototypeSolidColliders(std::vector<SolidCollider>* colliders) const;
+    void AppendPastSelfTutorialSolidColliders(std::vector<SolidCollider>* colliders) const;
 
     /// <summary>
-    /// プレイヤー確認用ゴール判定を更新する。
+    /// 分身チュートリアル用ゴール判定を更新する。
     /// </summary>
-    void UpdatePlayerPrototypeGoal();
+    void UpdatePastSelfTutorialGoal();
 
     /// <summary>
-    /// プレイヤー確認用ゴール表示を現在状態に合わせる。
+    /// 分身チュートリアル用ゴール表示を現在状態に合わせる。
     /// </summary>
-    void ApplyPlayerPrototypeGoalVisual();
+    void ApplyPastSelfTutorialGoalVisual();
 
     /// <summary>
-    /// プレイヤー確認用オブジェクトを描画する。
+    /// 分身チュートリアル用オブジェクトを描画する。
     /// </summary>
-    void DrawPlayerPrototype();
+    void DrawPastSelfTutorial();
 
     /// <summary>
-    /// ImGuiでプレイヤー確認用の状態を表示する。
+    /// ImGuiで分身チュートリアル用の状態を表示する。
     /// </summary>
-    void DrawPlayerPrototypeImGui();
+    void DrawPastSelfTutorialImGui();
 
     /// <summary>
-    /// プレイヤー検証ルートの選択UIを表示する。
+    /// 分身チュートリアルルートの選択UIを表示する。
     /// </summary>
-    void DrawPlayerPrototypeRouteSelector();
+    void DrawPastSelfTutorialRouteSelector();
 
     /// <summary>
-    /// 選択された検証ルートに対応するルールを適用する。
+    /// 選択されたチュートリアルルートに対応するルールを適用する。
     /// </summary>
-    void ApplyPlayerPrototypeRouteMode(PlayerPrototypeRouteMode routeMode);
+    void SelectPastSelfTutorialRoute(PastSelfTutorialRoute route);
 
     /// <summary>
-    /// クリア済みのルートから次の検証ルートへ進む。
+    /// クリア済みのルートから次のチュートリアルルートへ進む。
     /// </summary>
-    void AdvancePlayerPrototypeRoute();
+    void AdvancePastSelfTutorialRoute();
 
     /// <summary>
-    /// 現在選択中の検証ルート名を取得する。
+    /// 現在選択中のチュートリアルルート名を取得する。
     /// </summary>
-    const char* GetPlayerPrototypeRouteLabel() const;
+    const char* GetPastSelfTutorialRouteLabel() const;
 
     /// <summary>
-    /// 現在選択中の検証ルートが完了しているか判定する。
+    /// 現在選択中のチュートリアルルートが完了しているか判定する。
     /// </summary>
-    bool IsPlayerPrototypeSelectedRouteComplete() const;
+    bool IsPastSelfTutorialSelectedRouteComplete() const;
 
     /// <summary>
     /// 選択中のチュートリアルルートのクリア状態を確定する。
     /// </summary>
-    void FinalizePlayerPrototypeSelectedRoute();
+    void FinalizePastSelfTutorialSelectedRoute();
 
     /// <summary>
     /// プレイヤー操作に必要な主要状態を固定表示する。
     /// </summary>
-    void DrawPlayerPrototypeFixedStatusHud();
+    void DrawPastSelfTutorialFixedStatusHud();
 
     /// <summary>
     /// 現在の攻略状態から次に行う確認手順を取得する。
     /// </summary>
-    const char* GetPlayerPrototypeNextActionText() const;
+    const char* GetPastSelfTutorialNextActionText() const;
 
     /// <summary>
     /// 新たに達成した検証項目をHUD通知へ登録する。
     /// </summary>
-    void RegisterPlayerPrototypeCheckCompleted(const char* checkText);
+    void RegisterPastSelfTutorialCheckCompleted(const char* checkText);
 
     /// <summary>
-    /// プレイヤー確認用の検証状態をPlayerタブ内に表示する。
+    /// 分身チュートリアル用の検証状態をPlayerタブ内に表示する。
     /// </summary>
-    void DrawPlayerPrototypeStatusHud();
+    void DrawPastSelfTutorialStatusHud();
 
     /// <summary>
     /// キー入力で選択されたポストエフェクトを適用する。
@@ -938,77 +938,77 @@ private: // メンバー変数
     uint32_t nextObjectId_ = 1; // 次に生成する3Dオブジェクトへ割り当てるID
     MyEngine::CollisionSystem collisionSystem_; // シーン内3Dオブジェクトの衝突判定管理
     size_t lastCollisionPairCount_ = 0; // 直近フレームで衝突していたペア数
-    Player player_; // 確認用プレイヤー
-    PlayerPrototypeRouteMode playerPrototypeRouteMode_ = PlayerPrototypeRouteMode::FullVerification; // 現在選択中の検証ルート
-    StageRuleSettings playerPrototypeStageRules_; // プレイヤー検証ステージへ適用する調整可能なルール
+    Player player_; // 分身チュートリアルを操作するプレイヤー
+    PastSelfTutorialRoute pastSelfTutorialRoute_ = PastSelfTutorialRoute::FinalChallenge; // 現在選択中のチュートリアルルート
+    StageRuleSettings pastSelfTutorialStageRules_; // 分身チュートリアルステージへ適用する調整可能なルール
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
-    PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生する確認用分身の管理クラス
-    std::vector<PlayerPrototypeStageBlock> playerPrototypeStageBlocks_; // プレイヤー検証用の仮ステージブロック一覧
-    BoxSwitchGimmick playerPrototypeSwitch_; // 分身専用スイッチギミック
-    LinkedDoorGimmick playerPrototypeDoor_; // スイッチ連動扉ギミック
-    TimedSwitchGimmick playerPrototypeTimedSwitch_; // 時間差スイッチギミック
-    LinkedDoorGimmick playerPrototypeTimedDoor_; // 時間差スイッチ連動扉ギミック
-    ToggleSwitchGimmick playerPrototypeToggleSwitch_; // 任意試作区間のトグルスイッチギミック
-    LinkedDoorGimmick playerPrototypeToggleGate_; // トグルスイッチに連動する任意試作区間のゲート
-    MovingPlatformGimmick playerPrototypeToggleElevator_; // トグルスイッチに連動する任意試作区間の昇降足場
-    WeightSwitchGimmick playerPrototypeWeightSwitch_; // 重さスイッチギミック
-    LinkedBridgeGimmick playerPrototypeGoalBridge_; // 重さスイッチに連動するゴール前の橋ギミック
-    OneWayGateGimmick playerPrototypeOneWayGate_; // 一方通行ゲートギミック
-    BoxGoalGimmick playerPrototypeGoal_; // ゴール判定ギミック
-    std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneStartMarkerObject_; // 分身開始地点を示す仮マーカー
-    std::unique_ptr<MyEngine::Object3d> playerPrototypeCloneEndMarkerObject_; // 分身終了地点を示す仮マーカー
-    bool playerPrototypeSwitchActive_ = false; // 仮スイッチが押されているか
-    bool playerPrototypeDoorOpen_ = false; // 仮扉が開いているか
-    bool playerPrototypeGoalReached_ = false; // 仮ゴールに到達したか
-    bool playerPrototypeDoorUnlockedByClone_ = false; // 分身入力で通常扉が開放済みか
-    bool playerPrototypePlayerOnSwitch_ = false; // プレイヤーが分身専用スイッチ上にいるか
-    bool playerPrototypeCloneOnSwitch_ = false; // 分身が分身専用スイッチ上にいるか
-    bool playerPrototypeDoorBlockedBeforeClone_ = false; // 分身なしで閉じた扉に阻まれたか
-    bool playerPrototypeClonePlatformUsed_ = false; // プレイヤーが分身を足場として利用したか
-    bool playerPrototypeDoorOpenedByClone_ = false; // 分身がスイッチを押して扉を開けたか
-    bool playerPrototypeTimedSwitchActive_ = false; // 時間差スイッチが起動中か
-    bool playerPrototypeTimedSwitchCloneOn_ = false; // 分身が時間差スイッチ上にいるか
-    bool playerPrototypeTimedDoorOpen_ = false; // 時間差扉が開いているか
-    bool playerPrototypeToggleSwitchActive_ = false; // トグルスイッチがONか
-    bool playerPrototypeToggleSwitchCloneOn_ = false; // 分身がトグルスイッチ上にいるか
-    bool playerPrototypeToggleGateOpen_ = false; // トグル連動ゲートが開いているか
-    bool playerPrototypeToggleElevatorActive_ = false; // トグル連動昇降足場が稼働中か
-    bool playerPrototypeOneCloneToggleActivated_ = false; // 1体用ルートで分身がトグルスイッチを起動したか
-    bool playerPrototypeOneCloneElevatorRidden_ = false; // 1体用ルートでプレイヤーが昇降足場へ乗ったか
-    bool playerPrototypeOneCloneTutorialComplete_ = false; // 1体用トグル昇降床ルートを完了したか
-    bool playerPrototypeTwoCloneReplayPrepared_ = false; // 2体用ルートで保存分身を残して再生準備したか
-    bool playerPrototypeTwoCloneSwitchesActivated_ = false; // 2体用ルートで別々の分身が緑と青のスイッチを同時起動したか
-    bool playerPrototypeTwoCloneTutorialComplete_ = false; // 2体用連携ルートで青扉を通過したか
-    bool playerPrototypeRouteClearFinalized_ = false; // 選択中のチュートリアルルートのクリア結果を確定済みか
-    bool playerPrototypeOneCloneRouteCleared_ = false; // 1体用ルートを通算でクリア済みか
-    bool playerPrototypeTwoCloneRouteCleared_ = false; // 2体用ルートを通算でクリア済みか
-    bool playerPrototypeFullVerificationCleared_ = false; // 総合検証ルートを通算でクリア済みか
-    bool playerPrototypeWeightSwitchActive_ = false; // 重さスイッチが起動中か
-    bool playerPrototypeWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
-    bool playerPrototypeWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
-    bool playerPrototypeGoalBridgeUnlocked_ = false; // 重さスイッチ入力でゴール前の橋を解放済みか
-    bool playerPrototypeGoalBridgeDeployed_ = false; // ゴール前の橋が展開されているか
-    bool playerPrototypeOneWayGateBlocking_ = false; // 一方通行ゲートが戻りを塞いでいるか
-    bool playerPrototypeTimedDoorOpened_ = false; // 時間差扉を開けたか
-    bool playerPrototypeDualCloneSwitchesActivated_ = false; // 離れた2つのスイッチを複数分身で同時起動したか
-    bool playerPrototypeWeightSwitchActivated_ = false; // 重さスイッチを起動したか
-    bool playerPrototypeOneWayGateUsed_ = false; // 一方通行ゲートを通過したか
-    bool playerPrototypeResetShown_ = false; // リセット状態から検証を開始したことをHUDで示すか
-    bool playerPrototypeRecordStarted_ = false; // 分身記録を開始したことをHUDで示すか
-    bool playerPrototypeRecordStopped_ = false; // 分身記録を停止したことをHUDで示すか
-    bool playerPrototypePrepareUsed_ = false; // 記録を残したPrepare操作を使ったことをHUDで示すか
-    bool playerPrototypeReplayStarted_ = false; // 記録済み分身の再生を開始したことをHUDで示すか
-    bool playerPrototypeRecordingPendingCommit_ = false; // 現在の記録を分身として保存する必要があるか
-    bool playerPrototypeShowVerificationDetails_ = false; // 検証用の詳細HUDを表示するか
-    float playerPrototypeElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
-    float playerPrototypeClearTime_ = 0.0f; // クリア時点の経過時間
-    float playerPrototypeLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
-    float playerPrototypePrepareFeedbackSeconds_ = 0.0f; // Prepare成功表示を残す秒数
-    std::string playerPrototypeRecentCheckText_; // 直近に達成した検証項目の表示文
-    float playerPrototypeRecentCheckSeconds_ = 0.0f; // 達成通知を表示する残り時間
-    Math::Vector3 playerPrototypeCameraFocus_ {}; // 追従補間後の確認用カメラ注視点
-    float playerPrototypeCameraDistance_ = 0.0f; // 追従補間後の確認用カメラ距離
-    uint32_t playerPrototypeRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数
+    PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生するチュートリアル用分身の管理クラス
+    std::vector<PastSelfTutorialStageBlock> pastSelfTutorialStageBlocks_; // 分身チュートリアル用のステージブロック一覧
+    BoxSwitchGimmick pastSelfTutorialSwitch_; // 分身専用スイッチギミック
+    LinkedDoorGimmick pastSelfTutorialDoor_; // スイッチ連動扉ギミック
+    TimedSwitchGimmick pastSelfTutorialTimedSwitch_; // 時間差スイッチギミック
+    LinkedDoorGimmick pastSelfTutorialTimedDoor_; // 時間差スイッチ連動扉ギミック
+    ToggleSwitchGimmick pastSelfTutorialToggleSwitch_; // 1体用ルートのトグルスイッチギミック
+    LinkedDoorGimmick pastSelfTutorialToggleGate_; // トグルスイッチに連動する1体用ルートのゲート
+    MovingPlatformGimmick pastSelfTutorialToggleElevator_; // トグルスイッチに連動する1体用ルートの昇降足場
+    WeightSwitchGimmick pastSelfTutorialWeightSwitch_; // 重さスイッチギミック
+    LinkedBridgeGimmick pastSelfTutorialGoalBridge_; // 重さスイッチに連動するゴール前の橋ギミック
+    OneWayGateGimmick pastSelfTutorialOneWayGate_; // 一方通行ゲートギミック
+    BoxGoalGimmick pastSelfTutorialGoal_; // ゴール判定ギミック
+    std::unique_ptr<MyEngine::Object3d> pastSelfTutorialCloneStartMarkerObject_; // 分身開始地点を示す案内マーカー
+    std::unique_ptr<MyEngine::Object3d> pastSelfTutorialCloneEndMarkerObject_; // 分身終了地点を示す案内マーカー
+    bool pastSelfTutorialSwitchActive_ = false; // スイッチが押されているか
+    bool pastSelfTutorialDoorOpen_ = false; // 扉が開いているか
+    bool pastSelfTutorialGoalReached_ = false; // ゴールに到達したか
+    bool pastSelfTutorialDoorUnlockedByClone_ = false; // 分身入力で通常扉が開放済みか
+    bool pastSelfTutorialPlayerOnSwitch_ = false; // プレイヤーが分身専用スイッチ上にいるか
+    bool pastSelfTutorialCloneOnSwitch_ = false; // 分身が分身専用スイッチ上にいるか
+    bool pastSelfTutorialDoorBlockedBeforeClone_ = false; // 分身なしで閉じた扉に阻まれたか
+    bool pastSelfTutorialClonePlatformUsed_ = false; // プレイヤーが分身を足場として利用したか
+    bool pastSelfTutorialDoorOpenedByClone_ = false; // 分身がスイッチを押して扉を開けたか
+    bool pastSelfTutorialTimedSwitchActive_ = false; // 時間差スイッチが起動中か
+    bool pastSelfTutorialTimedSwitchCloneOn_ = false; // 分身が時間差スイッチ上にいるか
+    bool pastSelfTutorialTimedDoorOpen_ = false; // 時間差扉が開いているか
+    bool pastSelfTutorialToggleSwitchActive_ = false; // トグルスイッチがONか
+    bool pastSelfTutorialToggleSwitchCloneOn_ = false; // 分身がトグルスイッチ上にいるか
+    bool pastSelfTutorialToggleGateOpen_ = false; // トグル連動ゲートが開いているか
+    bool pastSelfTutorialToggleElevatorActive_ = false; // トグル連動昇降足場が稼働中か
+    bool pastSelfTutorialOneCloneToggleActivated_ = false; // 1体用ルートで分身がトグルスイッチを起動したか
+    bool pastSelfTutorialOneCloneElevatorRidden_ = false; // 1体用ルートでプレイヤーが昇降足場へ乗ったか
+    bool pastSelfTutorialOneCloneBasicsComplete_ = false; // 1体用トグル昇降床ルートを完了したか
+    bool pastSelfTutorialTwoCloneReplayPrepared_ = false; // 2体用ルートで保存分身を残して再生準備したか
+    bool pastSelfTutorialTwoCloneSwitchesActivated_ = false; // 2体用ルートで別々の分身が緑と青のスイッチを同時起動したか
+    bool pastSelfTutorialTwoCloneCooperationComplete_ = false; // 2体用連携ルートで青扉を通過したか
+    bool pastSelfTutorialRouteClearFinalized_ = false; // 選択中のチュートリアルルートのクリア結果を確定済みか
+    bool pastSelfTutorialOneCloneRouteCleared_ = false; // 1体用ルートを通算でクリア済みか
+    bool pastSelfTutorialTwoCloneRouteCleared_ = false; // 2体用ルートを通算でクリア済みか
+    bool pastSelfTutorialFinalChallengeCleared_ = false; // 最終課題を通算でクリア済みか
+    bool pastSelfTutorialWeightSwitchActive_ = false; // 重さスイッチが起動中か
+    bool pastSelfTutorialWeightPlayerOn_ = false; // プレイヤーが重さスイッチ上にいるか
+    bool pastSelfTutorialWeightCloneOn_ = false; // 分身が重さスイッチ上にいるか
+    bool pastSelfTutorialGoalBridgeUnlocked_ = false; // 重さスイッチ入力でゴール前の橋を解放済みか
+    bool pastSelfTutorialGoalBridgeDeployed_ = false; // ゴール前の橋が展開されているか
+    bool pastSelfTutorialOneWayGateBlocking_ = false; // 一方通行ゲートが戻りを塞いでいるか
+    bool pastSelfTutorialTimedDoorOpened_ = false; // 時間差扉を開けたか
+    bool pastSelfTutorialDualCloneSwitchesActivated_ = false; // 離れた2つのスイッチを複数分身で同時起動したか
+    bool pastSelfTutorialWeightSwitchActivated_ = false; // 重さスイッチを起動したか
+    bool pastSelfTutorialOneWayGateUsed_ = false; // 一方通行ゲートを通過したか
+    bool pastSelfTutorialResetShown_ = false; // リセット状態から検証を開始したことをHUDで示すか
+    bool pastSelfTutorialRecordStarted_ = false; // 分身記録を開始したことをHUDで示すか
+    bool pastSelfTutorialRecordStopped_ = false; // 分身記録を停止したことをHUDで示すか
+    bool pastSelfTutorialPrepareUsed_ = false; // 記録を残したPrepare操作を使ったことをHUDで示すか
+    bool pastSelfTutorialReplayStarted_ = false; // 記録済み分身の再生を開始したことをHUDで示すか
+    bool pastSelfTutorialRecordingPendingCommit_ = false; // 現在の記録を分身として保存する必要があるか
+    bool pastSelfTutorialShowVerificationDetails_ = false; // 検証用の詳細HUDを表示するか
+    float pastSelfTutorialElapsedTime_ = 0.0f; // 現在の挑戦開始からの経過時間
+    float pastSelfTutorialClearTime_ = 0.0f; // クリア時点の経過時間
+    float pastSelfTutorialLastRecordDuration_ = 0.0f; // 最後に確定した分身記録時間
+    float pastSelfTutorialPrepareFeedbackSeconds_ = 0.0f; // Prepare成功表示を残す秒数
+    std::string pastSelfTutorialRecentCheckText_; // 直近に達成した検証項目の表示文
+    float pastSelfTutorialRecentCheckSeconds_ = 0.0f; // 達成通知を表示する残り時間
+    Math::Vector3 pastSelfTutorialCameraFocus_ {}; // 追従補間後のチュートリアル用カメラ注視点
+    float pastSelfTutorialCameraDistance_ = 0.0f; // 追従補間後のチュートリアル用カメラ距離
+    uint32_t pastSelfTutorialRecordTakeCount_ = 0; // 現在の挑戦で開始した分身記録回数
     std::unique_ptr<MyEngine::Object3d> particlePlane_;
     std::unique_ptr<MyEngine::Object3d> particleRing_;
     std::unique_ptr<MyEngine::Object3d> particleCylinder_;
