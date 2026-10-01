@@ -46,6 +46,11 @@ public:
     void Draw() override;
 
     /// <summary>
+    /// タイトルのパーティクル編集UIを描画する。
+    /// </summary>
+    void DrawImGui() override;
+
+    /// <summary>
     /// シーンに入るときの処理
     /// </summary>
     void OnEnter() override;
@@ -54,7 +59,8 @@ public:
     /// シーンから出るときの処理
     /// </summary>
     void OnExit() override;
-/// <summary>
+
+    /// <summary>
     /// Scene View用のオフスクリーン描画だけにするか設定する。
     /// </summary>
     void SetSceneViewOnly(bool enabled) override;
@@ -104,6 +110,11 @@ private:
     /// ParticleManagerへタイトルシーン用の描画状態を登録する。
     /// </summary>
     void RegisterParticleManagerState();
+
+    /// <summary>
+    /// GPUパーティクル確認用のカメラ位置を設定する。
+    /// </summary>
+    void ConfigureParticlePreviewCamera();
 
 private:
     MyEngine::SceneContext ctx_; // シーンへ渡された共通コンテキスト
