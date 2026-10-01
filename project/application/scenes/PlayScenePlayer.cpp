@@ -5,6 +5,10 @@
 #include "../../engine/3d/Object3d.h"
 #include "../../engine/3d/Object3dCommon.h"
 #include "../../engine/io/InputManager.h"
+#include "../../engine/level/LevelWriter.h"
+#include "../../engine/utility/FileUtility.h"
+#include "../../engine/utility/JsonFileLoader.h"
+#include "../../engine/utility/ResourceResolver.h"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +16,7 @@
 #include <cstdio>
 #include <memory>
 #include <span>
+#include <string>
 #include <typeinfo>
 #include <vector>
 
@@ -19,6 +24,12 @@ using namespace MyEngine;
 
 namespace {
 constexpr const char* kPastSelfTutorialModelFileName = "block/block.obj"; // チュートリアルプレイヤーに使用するモデル
+constexpr const char* kPastSelfTutorialStageFileName = "levels/trace_shift_stage.json"; // 実ステージブロックの保存ファイル
+constexpr int kPastSelfTutorialStageSchemaVersion = 1; // 実ステージJSONのスキーマバージョン
+constexpr uint32_t kPastSelfTutorialOneCloneRouteMask = 1u << 0; // 1体ルートで使用するブロックフラグ
+constexpr uint32_t kPastSelfTutorialTwoCloneRouteMask = 1u << 1; // 2体ルートで使用するブロックフラグ
+constexpr uint32_t kPastSelfTutorialFinalRouteMask = 1u << 2; // 最終ルートで使用するブロックフラグ
+constexpr uint32_t kPastSelfTutorialAllRouteMask = kPastSelfTutorialOneCloneRouteMask | kPastSelfTutorialTwoCloneRouteMask | kPastSelfTutorialFinalRouteMask; // 全ルートのブロックフラグ
 constexpr float kPastSelfTutorialCameraMinimumDistance = 24.0f; // 対象が近い時のカメラ最小距離
 constexpr float kPastSelfTutorialCameraMaximumDistance = 44.0f; // 対象が離れた時のカメラ最大距離
 constexpr Math::Vector3 kPastSelfTutorialCameraRotate = { -0.12f, 0.0f, 0.0f }; // 横視点に少し見下ろしを足したチュートリアル用カメラ回転
@@ -54,6 +65,18 @@ struct PastSelfTutorialStageBlockDesc {
     bool goalMarker; // ゴール表示用のブロックか
 };
 
+struct LoadedStageBlockData {
+    std::string name; // JSONから読み込んだブロック名
+    Math::Vector3 scale { 1.0f, 1.0f, 1.0f }; // JSONから読み込んだ表示スケール
+    Math::Vector3 rotate { 0.0f, 0.0f, 0.0f }; // JSONから読み込んだ表示回転
+    Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // JSONから読み込んだ表示座標
+    Math::Vector4 color { 1.0f, 1.0f, 1.0f, 1.0f }; // JSONから読み込んだ表示色
+    uint32_t routeMask = kPastSelfTutorialFinalRouteMask; // JSONから読み込んだ対象ルート
+    bool collidable = true; // JSONから読み込んだ衝突有効状態
+    bool oneCloneGoalPlatform = false; // JSONから読み込んだ1体ルート到達床状態
+    bool goalMarker = false; // JSONから読み込んだゴール表示状態
+};
+
 struct PastSelfTutorialCameraFrame {
     Math::Vector3 focus; // カメラが追従する注視点
     float distance; // 対象範囲を収めるカメラ距離
@@ -72,6 +95,19 @@ constexpr std::array<PastSelfTutorialStageBlockDesc, 11> kPastSelfTutorialStageB
     { { 2.8f, 0.12f, 4.0f }, { 11.4f, 2.64f, 0.0f }, { 0.8f, 0.94f, 0.68f, 1.0f }, true, false },
     { { 0.22f, 2.2f, 2.2f }, { 15.55f, 3.7f, 0.0f }, { 0.12f, 1.0f, 0.45f, 1.0f }, false, true },
 } }; // 各ギミックの作動状態を動画で読めるように間隔を取ったチュートリアルステージブロック
+constexpr std::array<const char*, 11> kPastSelfTutorialStageBlockEditorLabels = {
+    "Upper Goal Platform",
+    "Left Start Platform",
+    "Center Approach Platform",
+    "Switch Approach Platform",
+    "Switch Step",
+    "Switch Guide Plate",
+    "Door Exit Platform",
+    "Timed Route Platform",
+    "Upper Route Platform",
+    "Goal Approach Platform",
+    "Goal Marker",
+}; // ステージ編集一覧へ表示するブロック名
 constexpr Math::Vector3 kPastSelfTutorialGoalCenter = { 15.55f, 3.7f, 0.0f }; // ゴール判定の中心
 constexpr Math::Vector3 kPastSelfTutorialGoalHalfSize = { 0.75f, 1.0f, 1.25f }; // ゴール判定の半サイズ
 constexpr Math::Vector3 kPastSelfTutorialSwitchScale = { 2.0f, 0.12f, 2.7f }; // スイッチの表示サイズ
@@ -143,6 +179,46 @@ Math::Vector3 CalculateStageBlockHalfSize(const Math::Vector3& scale)
         std::fabs(scale.y) * 0.5f,
         std::fabs(scale.z) * 0.5f
     };
+}
+
+/// <summary>
+/// JSON配列からVector3を読み込む。
+/// </summary>
+bool ReadStageVector3(const JsonDocument& value, Math::Vector3& outVector)
+{
+    if (!value.is_array() || value.size() != 3 || !value[0].is_number() || !value[1].is_number() || !value[2].is_number()) {
+        return false;
+    }
+    outVector = { value[0].get<float>(), value[1].get<float>(), value[2].get<float>() };
+    return true;
+}
+
+/// <summary>
+/// JSON配列からVector4を読み込む。
+/// </summary>
+bool ReadStageVector4(const JsonDocument& value, Math::Vector4& outVector)
+{
+    if (!value.is_array() || value.size() != 4 || !value[0].is_number() || !value[1].is_number() || !value[2].is_number() || !value[3].is_number()) {
+        return false;
+    }
+    outVector = { value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>() };
+    return true;
+}
+
+/// <summary>
+/// Vector3をJSON配列へ変換する。
+/// </summary>
+JsonDocument WriteStageVector3(const Math::Vector3& value)
+{
+    return JsonDocument::array({ value.x, value.y, value.z });
+}
+
+/// <summary>
+/// Vector4をJSON配列へ変換する。
+/// </summary>
+JsonDocument WriteStageVector4(const Math::Vector4& value)
+{
+    return JsonDocument::array({ value.x, value.y, value.z, value.w });
 }
 
 /// <summary>
@@ -406,6 +482,7 @@ void PlayScene::InitializePastSelfTutorial()
 {
     InitializePastSelfTutorialStage();
     InitializePastSelfTutorialMechanics();
+    ApplyPastSelfTutorialGimmickLayouts();
     pastSelfRecorder_.SetMaxRecordTime(pastSelfTutorialStageRules_.maxRecordTime);
     player_.Initialize(ctx_.object3dCommon, ctx_.imguiManager, kPastSelfTutorialModelFileName);
     player_.SetMaterialColor(kPastSelfTutorialNormalPlayerColor);
@@ -421,33 +498,384 @@ void PlayScene::InitializePastSelfTutorial()
 }
 
 /// <summary>
+/// 指定情報から実ステージブロックを構築して末尾へ追加する。
+/// </summary>
+size_t PlayScene::AppendPastSelfTutorialStageBlock(const std::string& name, const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& translate, const Math::Vector4& color, bool collidable, bool oneCloneGoalPlatform, bool goalMarker, uint32_t routeMask)
+{
+    PastSelfTutorialStageBlock stageBlock {}; // 追加する実ステージブロック
+    stageBlock.name = name.empty() ? "Stage Block" : name;
+    stageBlock.object = CreatePastSelfTutorialBlockObject(ctx_.object3dCommon, ctx_.imguiManager, IssueObjectId(), scale, translate, color);
+    stageBlock.object->SetRotate(rotate);
+    stageBlock.collider.center = translate;
+    stageBlock.collider.halfSize = CalculateStageBlockHalfSize(scale);
+    stageBlock.collider.enabled = collidable;
+    stageBlock.baseColor = color;
+    stageBlock.routeMask = routeMask == 0 ? kPastSelfTutorialFinalRouteMask : routeMask;
+    stageBlock.oneCloneGoalPlatform = oneCloneGoalPlatform;
+    stageBlock.goalMarker = goalMarker;
+    pastSelfTutorialStageBlocks_.push_back(std::move(stageBlock));
+    return pastSelfTutorialStageBlocks_.size() - 1;
+}
+
+/// <summary>
 /// 分身チュートリアル用ステージを初期化する。
 /// </summary>
 void PlayScene::InitializePastSelfTutorialStage()
 {
-    pastSelfTutorialStageBlocks_.clear();
-    pastSelfTutorialStageBlocks_.reserve(kPastSelfTutorialStageBlockDescs.size());
-
-    for (const PastSelfTutorialStageBlockDesc& blockDesc : kPastSelfTutorialStageBlockDescs) {
-        PastSelfTutorialStageBlock stageBlock {}; // 生成するチュートリアルステージブロック
-        stageBlock.object = std::make_unique<Object3d>();
-        stageBlock.object->SetObjectId(IssueObjectId());
-        stageBlock.object->Initialize(ctx_.object3dCommon, ctx_.imguiManager);
-        stageBlock.object->SetModel(kPastSelfTutorialModelFileName);
-        stageBlock.object->SetScale(blockDesc.scale);
-        stageBlock.object->SetRotate({ 0.0f, 0.0f, 0.0f });
-        stageBlock.object->SetTranslate(blockDesc.translate);
-        stageBlock.object->SetMaterialColor(blockDesc.color);
-        stageBlock.object->SetUseTexture(false);
-        stageBlock.object->SetEnableLighting(false);
-        stageBlock.object->SetUseAlphaDiscard(false);
-        stageBlock.collider = BuildStageBlockSolidCollider(blockDesc);
-        stageBlock.goalMarker = blockDesc.goalMarker;
-        pastSelfTutorialStageBlocks_.push_back(std::move(stageBlock));
+    if (pastSelfTutorialStageFileName_.empty()) {
+        pastSelfTutorialStageFileName_ = kPastSelfTutorialStageFileName;
+    }
+    pastSelfTutorialStageFilePath_ = LevelWriter::ResolveWritableLevelPath(pastSelfTutorialStageFileName_);
+    if (!pastSelfTutorialStageFilePath_.empty() && ReloadPastSelfTutorialStage()) {
+        pastSelfTutorialGoalReached_ = false;
+        ApplyPastSelfTutorialGoalVisual();
+        return;
     }
 
+    pastSelfTutorialStageBlocks_.clear();
+    pastSelfTutorialGimmickLayouts_.clear();
+    pastSelfTutorialStageBlocks_.reserve(kPastSelfTutorialStageBlockDescs.size());
+    for (size_t blockIndex = 0; blockIndex < kPastSelfTutorialStageBlockDescs.size(); ++blockIndex) {
+        const PastSelfTutorialStageBlockDesc& blockDesc = kPastSelfTutorialStageBlockDescs[blockIndex]; // フォールバック用の固定ブロック情報
+        uint32_t routeMask = kPastSelfTutorialFinalRouteMask; // このブロックを使用するルート
+        if (blockIndex <= 2) {
+            routeMask |= kPastSelfTutorialOneCloneRouteMask;
+        }
+        if (blockIndex >= 2 && blockIndex <= 8) {
+            routeMask |= kPastSelfTutorialTwoCloneRouteMask;
+        }
+        AppendPastSelfTutorialStageBlock(kPastSelfTutorialStageBlockEditorLabels[blockIndex], blockDesc.scale, { 0.0f, 0.0f, 0.0f }, blockDesc.translate, blockDesc.color, blockDesc.collidable, blockIndex == 0, blockDesc.goalMarker, routeMask);
+    }
+
+    pastSelfTutorialStageFileSucceeded_ = false;
+    pastSelfTutorialStageFileMessage_ = "Stage JSON load failed. Using built-in fallback.";
     pastSelfTutorialGoalReached_ = false;
     ApplyPastSelfTutorialGoalVisual();
+}
+
+/// <summary>
+/// 実ステージブロックをJSONから再読み込みする。
+/// </summary>
+bool PlayScene::ReloadPastSelfTutorialStage()
+{
+    if (pastSelfTutorialStageFileName_.empty() || FileUtility::GetExtension(pastSelfTutorialStageFileName_) != ".json") {
+        pastSelfTutorialStageFileSucceeded_ = false;
+        pastSelfTutorialStageFileMessage_ = "Stage file must be a non-empty .json path.";
+        return false;
+    }
+    pastSelfTutorialStageFilePath_ = LevelWriter::ResolveWritableLevelPath(pastSelfTutorialStageFileName_);
+
+    ResourceResolver::ClearCache();
+    JsonDocument root; // 読み込んだステージJSON
+    std::string resolvedPath; // 実際に読み込んだファイルパス
+    std::string loadError; // JSON読み込み失敗理由
+    if (!JsonFileLoader::Load(pastSelfTutorialStageFilePath_, root, &resolvedPath, ResourceResolver::Type::Json, &loadError)) {
+        pastSelfTutorialStageFileSucceeded_ = false;
+        pastSelfTutorialStageFileMessage_ = loadError.empty() ? "Failed to load stage JSON." : loadError;
+        return false;
+    }
+    if (!root.is_object() || root.value("name", std::string()) != "trace_shift_stage" || !root.contains("blocks") || !root["blocks"].is_array()) {
+        pastSelfTutorialStageFileSucceeded_ = false;
+        pastSelfTutorialStageFileMessage_ = "Invalid trace_shift_stage JSON root.";
+        return false;
+    }
+
+    std::vector<LoadedStageBlockData> loadedBlocks; // 検証済みのブロック情報
+    loadedBlocks.reserve(root["blocks"].size());
+    for (size_t blockIndex = 0; blockIndex < root["blocks"].size(); ++blockIndex) {
+        const JsonDocument& blockObject = root["blocks"][blockIndex]; // 読み込み中のブロックJSON
+        if (!blockObject.is_object() || !blockObject.contains("transform") || !blockObject["transform"].is_object()) {
+            pastSelfTutorialStageFileSucceeded_ = false;
+            pastSelfTutorialStageFileMessage_ = "Invalid block entry at index " + std::to_string(blockIndex) + ".";
+            return false;
+        }
+
+        LoadedStageBlockData blockData {}; // 検証後に追加するブロック情報
+        blockData.name = blockObject.value("name", "Stage Block " + std::to_string(blockIndex));
+        blockData.collidable = blockObject.value("collidable", true);
+        blockData.oneCloneGoalPlatform = blockObject.value("one_clone_goal_platform", false);
+        blockData.goalMarker = blockObject.value("goal_marker", false);
+        blockData.routeMask = blockObject.value("route_mask", kPastSelfTutorialFinalRouteMask) & kPastSelfTutorialAllRouteMask;
+        const JsonDocument& transformObject = blockObject["transform"]; // ブロックのTransform JSON
+        if (!transformObject.contains("scale") || !ReadStageVector3(transformObject["scale"], blockData.scale)
+            || !transformObject.contains("rotate") || !ReadStageVector3(transformObject["rotate"], blockData.rotate)
+            || !transformObject.contains("translate") || !ReadStageVector3(transformObject["translate"], blockData.translate)
+            || !blockObject.contains("color") || !ReadStageVector4(blockObject["color"], blockData.color)) {
+            pastSelfTutorialStageFileSucceeded_ = false;
+            pastSelfTutorialStageFileMessage_ = "Invalid block values at index " + std::to_string(blockIndex) + ".";
+            return false;
+        }
+        if (blockData.routeMask == 0) {
+            blockData.routeMask = kPastSelfTutorialFinalRouteMask;
+        }
+        loadedBlocks.push_back(std::move(blockData));
+    }
+    if (loadedBlocks.empty()) {
+        pastSelfTutorialStageFileSucceeded_ = false;
+        pastSelfTutorialStageFileMessage_ = "Stage JSON contains no blocks.";
+        return false;
+    }
+
+    std::vector<PastSelfTutorialGimmickLayout> loadedGimmicks; // 検証済みのギミック配置情報
+    if (root.contains("gimmicks")) {
+        if (!root["gimmicks"].is_array()) {
+            pastSelfTutorialStageFileSucceeded_ = false;
+            pastSelfTutorialStageFileMessage_ = "Invalid gimmicks array.";
+            return false;
+        }
+        loadedGimmicks.reserve(root["gimmicks"].size());
+        for (size_t gimmickIndex = 0; gimmickIndex < root["gimmicks"].size(); ++gimmickIndex) {
+            const JsonDocument& gimmickObject = root["gimmicks"][gimmickIndex]; // 読み込み中のギミックJSON
+            if (!gimmickObject.is_object() || !gimmickObject.contains("transform") || !gimmickObject["transform"].is_object()) {
+                pastSelfTutorialStageFileSucceeded_ = false;
+                pastSelfTutorialStageFileMessage_ = "Invalid gimmick entry at index " + std::to_string(gimmickIndex) + ".";
+                return false;
+            }
+
+            PastSelfTutorialGimmickLayout gimmickLayout {}; // 検証後に追加するギミック配置
+            gimmickLayout.id = gimmickObject.value("id", std::string());
+            const JsonDocument& transformObject = gimmickObject["transform"]; // ギミックのTransform JSON
+            if (gimmickLayout.id.empty()
+                || !transformObject.contains("scale") || !ReadStageVector3(transformObject["scale"], gimmickLayout.scale)
+                || !transformObject.contains("rotate") || !ReadStageVector3(transformObject["rotate"], gimmickLayout.rotate)
+                || !transformObject.contains("translate") || !ReadStageVector3(transformObject["translate"], gimmickLayout.translate)) {
+                pastSelfTutorialStageFileSucceeded_ = false;
+                pastSelfTutorialStageFileMessage_ = "Invalid gimmick values at index " + std::to_string(gimmickIndex) + ".";
+                return false;
+            }
+            if (transformObject.contains("upper_translate")) {
+                if (!ReadStageVector3(transformObject["upper_translate"], gimmickLayout.upperTranslate)) {
+                    pastSelfTutorialStageFileSucceeded_ = false;
+                    pastSelfTutorialStageFileMessage_ = "Invalid gimmick upper translate at index " + std::to_string(gimmickIndex) + ".";
+                    return false;
+                }
+                gimmickLayout.hasUpperTranslate = true;
+            }
+            loadedGimmicks.push_back(std::move(gimmickLayout));
+        }
+    }
+
+    pastSelfTutorialStageBlocks_.clear();
+    pastSelfTutorialStageBlocks_.reserve(loadedBlocks.size());
+    for (const LoadedStageBlockData& blockData : loadedBlocks) {
+        AppendPastSelfTutorialStageBlock(blockData.name, blockData.scale, blockData.rotate, blockData.translate, blockData.color, blockData.collidable, blockData.oneCloneGoalPlatform, blockData.goalMarker, blockData.routeMask);
+    }
+    for (const PastSelfTutorialStageBlock& stageBlock : pastSelfTutorialStageBlocks_) {
+        if (!stageBlock.goalMarker || !stageBlock.object) {
+            continue;
+        }
+        const Math::Vector3 markerScale = stageBlock.object->GetScale(); // 再読込後のゴール表示スケール
+        BoxGoalGimmickDesc goalDesc {}; // 再読込後に反映するゴール判定
+        goalDesc.center = stageBlock.object->GetTranslate();
+        goalDesc.halfSize = {
+            kPastSelfTutorialGoalHalfSize.x * std::fabs(markerScale.x / kPastSelfTutorialStageBlockDescs.back().scale.x),
+            kPastSelfTutorialGoalHalfSize.y * std::fabs(markerScale.y / kPastSelfTutorialStageBlockDescs.back().scale.y),
+            kPastSelfTutorialGoalHalfSize.z * std::fabs(markerScale.z / kPastSelfTutorialStageBlockDescs.back().scale.z),
+        };
+        pastSelfTutorialGoal_.Configure(goalDesc);
+        break;
+    }
+    pastSelfTutorialGimmickLayouts_ = std::move(loadedGimmicks);
+    ApplyPastSelfTutorialGimmickLayouts();
+    pastSelfTutorialStageFileSucceeded_ = true;
+    pastSelfTutorialStageFileMessage_ = "Loaded stage JSON: " + resolvedPath;
+    pastSelfTutorialGoalReached_ = false;
+    ApplyPastSelfTutorialGoalVisual();
+    return true;
+}
+
+/// <summary>
+/// 現在の実ステージブロックとギミック配置をJSONへ保存する。
+/// </summary>
+bool PlayScene::SavePastSelfTutorialStage()
+{
+    if (pastSelfTutorialStageFileName_.empty() || FileUtility::GetExtension(pastSelfTutorialStageFileName_) != ".json") {
+        pastSelfTutorialStageFileSucceeded_ = false;
+        pastSelfTutorialStageFileMessage_ = "Stage file must be a non-empty .json path.";
+        return false;
+    }
+    pastSelfTutorialStageFilePath_ = LevelWriter::ResolveWritableLevelPath(pastSelfTutorialStageFileName_);
+
+    JsonDocument root = JsonDocument::object(); // 保存するステージJSONルート
+    JsonDocument blocks = JsonDocument::array(); // 保存するブロック配列
+    root["schema_version"] = kPastSelfTutorialStageSchemaVersion;
+    root["name"] = "trace_shift_stage";
+    for (PastSelfTutorialStageBlock& stageBlock : pastSelfTutorialStageBlocks_) {
+        if (!stageBlock.object) {
+            continue;
+        }
+        JsonDocument blockObject = JsonDocument::object(); // 保存するブロック1件分
+        blockObject["name"] = stageBlock.name;
+        blockObject["transform"] = {
+            { "scale", WriteStageVector3(stageBlock.object->GetScale()) },
+            { "rotate", WriteStageVector3(stageBlock.object->GetRotate()) },
+            { "translate", WriteStageVector3(stageBlock.object->GetTranslate()) },
+        };
+        blockObject["color"] = WriteStageVector4(stageBlock.baseColor);
+        blockObject["collidable"] = stageBlock.collider.enabled;
+        blockObject["one_clone_goal_platform"] = stageBlock.oneCloneGoalPlatform;
+        blockObject["goal_marker"] = stageBlock.goalMarker;
+        blockObject["route_mask"] = stageBlock.routeMask;
+        blocks.push_back(std::move(blockObject));
+    }
+    root["blocks"] = std::move(blocks);
+
+    JsonDocument gimmicks = JsonDocument::array(); // 保存するギミック配置配列
+    const auto appendGimmick = [&gimmicks](const char* id, Object3d* object) {
+        if (!object) {
+            return;
+        }
+        JsonDocument gimmickObject = JsonDocument::object(); // 保存するギミック1件分
+        gimmickObject["id"] = id;
+        gimmickObject["transform"] = {
+            { "scale", WriteStageVector3(object->GetScale()) },
+            { "rotate", WriteStageVector3(object->GetRotate()) },
+            { "translate", WriteStageVector3(object->GetTranslate()) },
+        };
+        gimmicks.push_back(std::move(gimmickObject));
+    }; // 通常ギミックの配置を保存配列へ追加する処理
+    appendGimmick("clone_switch", pastSelfTutorialSwitch_.GetEditorObject());
+    appendGimmick("linked_door", pastSelfTutorialDoor_.GetEditorObject());
+    appendGimmick("timed_switch", pastSelfTutorialTimedSwitch_.GetEditorObject());
+    appendGimmick("timed_door", pastSelfTutorialTimedDoor_.GetEditorObject());
+    appendGimmick("toggle_switch", pastSelfTutorialToggleSwitch_.GetEditorObject());
+    appendGimmick("toggle_gate", pastSelfTutorialToggleGate_.GetEditorObject());
+    appendGimmick("weight_switch", pastSelfTutorialWeightSwitch_.GetEditorObject());
+    appendGimmick("goal_bridge", pastSelfTutorialGoalBridge_.GetEditorObject());
+    appendGimmick("one_way_gate", pastSelfTutorialOneWayGate_.GetEditorObject());
+
+    Object3d* toggleElevatorObject = pastSelfTutorialToggleElevator_.GetEditorObject(); // 保存する昇降足場表示オブジェクト
+    if (toggleElevatorObject) {
+        JsonDocument elevatorObject = JsonDocument::object(); // 保存する昇降足場配置
+        elevatorObject["id"] = "toggle_elevator";
+        elevatorObject["transform"] = {
+            { "scale", WriteStageVector3(toggleElevatorObject->GetScale()) },
+            { "rotate", WriteStageVector3(toggleElevatorObject->GetRotate()) },
+            { "translate", WriteStageVector3(pastSelfTutorialToggleElevator_.GetEditorLowerTranslate()) },
+            { "upper_translate", WriteStageVector3(pastSelfTutorialToggleElevator_.GetEditorUpperTranslate()) },
+        };
+        gimmicks.push_back(std::move(elevatorObject));
+    }
+    root["gimmicks"] = std::move(gimmicks);
+
+    const bool saveSucceeded = FileUtility::WriteText(pastSelfTutorialStageFilePath_, root.dump(4)); // JSON書き込み結果
+    pastSelfTutorialStageFileSucceeded_ = saveSucceeded;
+    pastSelfTutorialStageFileMessage_ = saveSucceeded
+        ? "Saved stage JSON: " + pastSelfTutorialStageFilePath_
+        : "Failed to save stage JSON: " + pastSelfTutorialStageFilePath_;
+    ResourceResolver::ClearCache();
+    return saveSucceeded;
+}
+
+/// <summary>
+/// 読み込んだギミック配置を実ステージへ反映する。
+/// </summary>
+void PlayScene::ApplyPastSelfTutorialGimmickLayouts()
+{
+    const auto applyObjectTransform = [](Object3d* object, const PastSelfTutorialGimmickLayout& layout) {
+        if (!object) {
+            return false;
+        }
+        object->SetScale(layout.scale);
+        object->SetRotate(layout.rotate);
+        object->SetTranslate(layout.translate);
+        return true;
+    }; // 通常ギミックの表示Transformを復元する処理
+
+    for (const PastSelfTutorialGimmickLayout& layout : pastSelfTutorialGimmickLayouts_) {
+        if (layout.id == "clone_switch") {
+            if (applyObjectTransform(pastSelfTutorialSwitch_.GetEditorObject(), layout)) {
+                pastSelfTutorialSwitch_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "linked_door") {
+            if (applyObjectTransform(pastSelfTutorialDoor_.GetEditorObject(), layout)) {
+                pastSelfTutorialDoor_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "timed_switch") {
+            if (applyObjectTransform(pastSelfTutorialTimedSwitch_.GetEditorObject(), layout)) {
+                pastSelfTutorialTimedSwitch_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "timed_door") {
+            if (applyObjectTransform(pastSelfTutorialTimedDoor_.GetEditorObject(), layout)) {
+                pastSelfTutorialTimedDoor_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "toggle_switch") {
+            if (applyObjectTransform(pastSelfTutorialToggleSwitch_.GetEditorObject(), layout)) {
+                pastSelfTutorialToggleSwitch_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "toggle_gate") {
+            if (applyObjectTransform(pastSelfTutorialToggleGate_.GetEditorObject(), layout)) {
+                pastSelfTutorialToggleGate_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "toggle_elevator" && layout.hasUpperTranslate) {
+            pastSelfTutorialToggleElevator_.RestoreEditorTransform(layout.scale, layout.rotate, layout.translate, layout.upperTranslate);
+        } else if (layout.id == "weight_switch") {
+            if (applyObjectTransform(pastSelfTutorialWeightSwitch_.GetEditorObject(), layout)) {
+                pastSelfTutorialWeightSwitch_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "goal_bridge") {
+            if (applyObjectTransform(pastSelfTutorialGoalBridge_.GetEditorObject(), layout)) {
+                pastSelfTutorialGoalBridge_.ApplyEditorTransform();
+            }
+        } else if (layout.id == "one_way_gate") {
+            if (applyObjectTransform(pastSelfTutorialOneWayGate_.GetEditorObject(), layout)) {
+                pastSelfTutorialOneWayGate_.ApplyEditorTransform();
+            }
+        }
+    }
+}
+
+/// <summary>
+/// 現在の攻略状況を収めるゲーム用カメラ位置へ戻す。
+/// </summary>
+void PlayScene::ResetPastSelfTutorialCameraFrame()
+{
+    const std::vector<PlayerState> visibleCloneStates = pastSelfCloneManager_.GetVisibleStates(); // カメラ範囲へ含める可視分身状態一覧
+    const PastSelfTutorialCameraFrame cameraFrame = CalculatePastSelfTutorialCameraFrame(
+        player_.GetState(), visibleCloneStates, GetPastSelfTutorialRouteCameraTarget(player_.GetState())); // 現在の攻略対象を収めるカメラ範囲
+    pastSelfTutorialCameraFocus_ = cameraFrame.focus;
+    pastSelfTutorialCameraDistance_ = cameraFrame.distance;
+    ConfigurePastSelfTutorialCamera(ctx_.camera, pastSelfTutorialCameraFocus_, pastSelfTutorialCameraDistance_);
+}
+
+/// <summary>
+/// 選択中ルート用の新しいステージブロックを追加する。
+/// </summary>
+size_t PlayScene::CreatePastSelfTutorialStageBlock()
+{
+    uint32_t routeMask = kPastSelfTutorialFinalRouteMask; // 新規ブロックを使用するルート
+    if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::OneCloneBasics) {
+        routeMask |= kPastSelfTutorialOneCloneRouteMask;
+    } else if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::TwoCloneCooperation) {
+        routeMask |= kPastSelfTutorialTwoCloneRouteMask;
+    }
+    const std::string blockName = "Stage Block " + std::to_string(pastSelfTutorialStageBlocks_.size()); // 新規ブロック名
+    return AppendPastSelfTutorialStageBlock(blockName, { 2.0f, 0.25f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.75f, 0.82f, 0.9f, 1.0f }, true, false, false, routeMask);
+}
+
+/// <summary>
+/// 指定したステージブロックを複製する。
+/// </summary>
+size_t PlayScene::DuplicatePastSelfTutorialStageBlock(size_t blockIndex)
+{
+    if (blockIndex >= pastSelfTutorialStageBlocks_.size() || !pastSelfTutorialStageBlocks_[blockIndex].object) {
+        return pastSelfTutorialStageBlocks_.size();
+    }
+    PastSelfTutorialStageBlock& sourceBlock = pastSelfTutorialStageBlocks_[blockIndex]; // 複製元のステージブロック
+    const Math::Vector3 duplicatedTranslate = sourceBlock.object->GetTranslate() + Math::Vector3 { 0.5f, 0.5f, 0.0f }; // 元と重ならない複製座標
+    return AppendPastSelfTutorialStageBlock(sourceBlock.name + " Copy", sourceBlock.object->GetScale(), sourceBlock.object->GetRotate(), duplicatedTranslate, sourceBlock.object->GetMaterialColor(), sourceBlock.collider.enabled, false, false, sourceBlock.routeMask);
+}
+
+/// <summary>
+/// 指定したステージブロックを削除する。
+/// </summary>
+bool PlayScene::DeletePastSelfTutorialStageBlock(size_t blockIndex)
+{
+    if (blockIndex >= pastSelfTutorialStageBlocks_.size() || pastSelfTutorialStageBlocks_[blockIndex].goalMarker) {
+        return false;
+    }
+    pastSelfTutorialStageBlocks_.erase(pastSelfTutorialStageBlocks_.begin() + static_cast<std::ptrdiff_t>(blockIndex));
+    return true;
 }
 
 /// <summary>
@@ -477,6 +905,19 @@ void PlayScene::InitializePastSelfTutorialMechanics()
     BoxGoalGimmickDesc goalDesc {}; // ゴール判定の初期化情報
     goalDesc.center = kPastSelfTutorialGoalCenter;
     goalDesc.halfSize = kPastSelfTutorialGoalHalfSize;
+    for (const PastSelfTutorialStageBlock& stageBlock : pastSelfTutorialStageBlocks_) {
+        if (!stageBlock.goalMarker || !stageBlock.object) {
+            continue;
+        }
+        const Math::Vector3 markerScale = stageBlock.object->GetScale(); // JSONから読み込んだゴール表示スケール
+        goalDesc.center = stageBlock.object->GetTranslate();
+        goalDesc.halfSize = {
+            kPastSelfTutorialGoalHalfSize.x * std::fabs(markerScale.x / kPastSelfTutorialStageBlockDescs.back().scale.x),
+            kPastSelfTutorialGoalHalfSize.y * std::fabs(markerScale.y / kPastSelfTutorialStageBlockDescs.back().scale.y),
+            kPastSelfTutorialGoalHalfSize.z * std::fabs(markerScale.z / kPastSelfTutorialStageBlockDescs.back().scale.z),
+        };
+        break;
+    }
 
     TimedSwitchGimmickDesc timedSwitchDesc {}; // 時間差スイッチの初期化情報
     timedSwitchDesc.objectId = IssueObjectId();
@@ -1138,14 +1579,16 @@ void PlayScene::UpdatePastSelfTutorial(float deltaTime)
         player_.SetMaterialColor(kPastSelfTutorialClearPlayerColor);
     }
 
-    const std::vector<PlayerState> visibleCloneStates = pastSelfCloneManager_.GetVisibleStates(); // カメラ範囲に含める可視分身状態一覧
-    const PastSelfTutorialCameraFrame targetCameraFrame = CalculatePastSelfTutorialCameraFrame(
-        player_.GetState(), visibleCloneStates, GetPastSelfTutorialRouteCameraTarget(player_.GetState())); // 現在の攻略対象を収める目標カメラ範囲
-    pastSelfTutorialCameraFocus_.x = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.x, targetCameraFrame.focus.x, deltaTime);
-    pastSelfTutorialCameraFocus_.y = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.y, targetCameraFrame.focus.y, deltaTime);
-    pastSelfTutorialCameraFocus_.z = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.z, targetCameraFrame.focus.z, deltaTime);
-    pastSelfTutorialCameraDistance_ = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraDistance_, targetCameraFrame.distance, deltaTime);
-    ConfigurePastSelfTutorialCamera(ctx_.camera, pastSelfTutorialCameraFocus_, pastSelfTutorialCameraDistance_);
+    if (pastSelfTutorialAutoCameraFollow_) {
+        const std::vector<PlayerState> visibleCloneStates = pastSelfCloneManager_.GetVisibleStates(); // カメラ範囲に含める可視分身状態一覧
+        const PastSelfTutorialCameraFrame targetCameraFrame = CalculatePastSelfTutorialCameraFrame(
+            player_.GetState(), visibleCloneStates, GetPastSelfTutorialRouteCameraTarget(player_.GetState())); // 現在の攻略対象を収める目標カメラ範囲
+        pastSelfTutorialCameraFocus_.x = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.x, targetCameraFrame.focus.x, deltaTime);
+        pastSelfTutorialCameraFocus_.y = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.y, targetCameraFrame.focus.y, deltaTime);
+        pastSelfTutorialCameraFocus_.z = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraFocus_.z, targetCameraFrame.focus.z, deltaTime);
+        pastSelfTutorialCameraDistance_ = FollowPastSelfTutorialCameraValue(pastSelfTutorialCameraDistance_, targetCameraFrame.distance, deltaTime);
+        ConfigurePastSelfTutorialCamera(ctx_.camera, pastSelfTutorialCameraFocus_, pastSelfTutorialCameraDistance_);
+    }
 
     if (!ctx_.camera) {
         return;
@@ -1171,12 +1614,12 @@ void PlayScene::UpdatePastSelfTutorialStage(const Math::Matrix4x4& viewMatrix, c
         }
         PastSelfTutorialStageBlock& stageBlock = pastSelfTutorialStageBlocks_[blockIndex]; // 更新対象のチュートリアルステージブロック
         if (stageBlock.object) {
-            if (blockIndex == 0) {
+            if (stageBlock.oneCloneGoalPlatform) {
                 const bool oneCloneUpperGoalComplete = pastSelfTutorialRoute_ == PastSelfTutorialRoute::OneCloneBasics &&
                     pastSelfTutorialOneCloneBasicsComplete_; // 1体用上段をクリア表示にするか
                 const Math::Vector4 upperGoalColor = oneCloneUpperGoalComplete
                     ? kPastSelfTutorialGoalClearColor
-                    : kPastSelfTutorialStageBlockDescs[blockIndex].color; // 1体用上段の攻略状態を示す表示色
+                    : stageBlock.baseColor; // 1体用上段の攻略状態を示す表示色
                 stageBlock.object->SetMaterialColor(upperGoalColor);
             }
             stageBlock.object->Update(viewMatrix, projectionMatrix);
@@ -1189,18 +1632,148 @@ void PlayScene::UpdatePastSelfTutorialStage(const Math::Matrix4x4& viewMatrix, c
 /// </summary>
 bool PlayScene::IsPastSelfTutorialStageBlockEnabled(size_t blockIndex) const
 {
-    constexpr size_t kOneCloneRouteLastBlockIndex = 2; // 1体用ルートで使用する左側区間の末尾番号
-    constexpr size_t kTwoCloneRouteFirstBlockIndex = 2; // 2体用ルートで使用する中央区間の先頭番号
-    constexpr size_t kTwoCloneRouteLastBlockIndex = 8; // 2体用ルートで使用する青扉通過後区間の末尾番号
+    if (blockIndex >= pastSelfTutorialStageBlocks_.size()) {
+        return false;
+    }
+    const uint32_t routeMask = pastSelfTutorialStageBlocks_[blockIndex].routeMask; // ブロックに設定された対象ルート
     switch (pastSelfTutorialRoute_) {
     case PastSelfTutorialRoute::OneCloneBasics:
-        return blockIndex <= kOneCloneRouteLastBlockIndex;
+        return (routeMask & kPastSelfTutorialOneCloneRouteMask) != 0;
     case PastSelfTutorialRoute::TwoCloneCooperation:
-        return blockIndex >= kTwoCloneRouteFirstBlockIndex && blockIndex <= kTwoCloneRouteLastBlockIndex;
+        return (routeMask & kPastSelfTutorialTwoCloneRouteMask) != 0;
     case PastSelfTutorialRoute::FinalChallenge:
-        return true;
+        return (routeMask & kPastSelfTutorialFinalRouteMask) != 0;
     }
     return false;
+}
+
+/// <summary>
+/// 選択中ルートで使用するステージ編集対象一覧を構築する。
+/// </summary>
+void PlayScene::BuildPastSelfTutorialEditorObjects(std::vector<PastSelfTutorialEditorObject>* outObjects)
+{
+    if (!outObjects) {
+        return;
+    }
+
+    outObjects->clear();
+    outObjects->reserve(pastSelfTutorialStageBlocks_.size() + 10);
+    std::vector<PastSelfTutorialEditorObject> stageBlockObjects; // ルート内の固定ブロック編集対象
+    stageBlockObjects.reserve(pastSelfTutorialStageBlocks_.size());
+    for (size_t blockIndex = 0; blockIndex < pastSelfTutorialStageBlocks_.size(); ++blockIndex) {
+        if (!IsPastSelfTutorialStageBlockEnabled(blockIndex) || !pastSelfTutorialStageBlocks_[blockIndex].object) {
+            continue;
+        }
+        const char* blockLabel = pastSelfTutorialStageBlocks_[blockIndex].name.empty()
+            ? "Stage Block"
+            : pastSelfTutorialStageBlocks_[blockIndex].name.c_str(); // 編集一覧へ表示するブロック名
+        stageBlockObjects.push_back({ pastSelfTutorialStageBlocks_[blockIndex].object.get(), blockLabel, PastSelfTutorialEditorObjectType::StageBlock, blockIndex });
+    }
+    if (!stageBlockObjects.empty()) {
+        outObjects->insert(outObjects->end(), stageBlockObjects.begin(), stageBlockObjects.end() - 1);
+    }
+
+    const auto appendGimmick = [outObjects](Object3d* object, const char* label, PastSelfTutorialEditorObjectType type) {
+        if (object) {
+            outObjects->push_back({ object, label, type, 0 });
+        }
+    }; // 実ステージで使用中のギミックを編集一覧へ追加する処理
+    const auto appendLastStageBlock = [outObjects, &stageBlockObjects]() {
+        if (!stageBlockObjects.empty()) {
+            outObjects->push_back(stageBlockObjects.back());
+        }
+    }; // 末尾へ追加された固定ブロックを編集一覧の最後へ配置する処理
+
+    if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::OneCloneBasics) {
+        appendGimmick(pastSelfTutorialToggleSwitch_.GetEditorObject(), "Toggle Switch", PastSelfTutorialEditorObjectType::ToggleSwitch);
+        appendGimmick(pastSelfTutorialToggleGate_.GetEditorObject(), "Toggle Gate", PastSelfTutorialEditorObjectType::ToggleGate);
+        appendGimmick(pastSelfTutorialToggleElevator_.GetEditorObject(), "Toggle Elevator", PastSelfTutorialEditorObjectType::ToggleElevator);
+        appendLastStageBlock();
+        return;
+    }
+    if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::TwoCloneCooperation) {
+        appendGimmick(pastSelfTutorialSwitch_.GetEditorObject(), "Clone Switch", PastSelfTutorialEditorObjectType::BoxSwitch);
+        appendGimmick(pastSelfTutorialDoor_.GetEditorObject(), "Linked Door", PastSelfTutorialEditorObjectType::Door);
+        appendGimmick(pastSelfTutorialTimedSwitch_.GetEditorObject(), "Timed Switch", PastSelfTutorialEditorObjectType::TimedSwitch);
+        appendGimmick(pastSelfTutorialTimedDoor_.GetEditorObject(), "Timed Door", PastSelfTutorialEditorObjectType::TimedDoor);
+        appendLastStageBlock();
+        return;
+    }
+
+    appendGimmick(pastSelfTutorialSwitch_.GetEditorObject(), "Clone Switch", PastSelfTutorialEditorObjectType::BoxSwitch);
+    appendGimmick(pastSelfTutorialDoor_.GetEditorObject(), "Linked Door", PastSelfTutorialEditorObjectType::Door);
+    appendGimmick(pastSelfTutorialTimedSwitch_.GetEditorObject(), "Timed Switch", PastSelfTutorialEditorObjectType::TimedSwitch);
+    appendGimmick(pastSelfTutorialTimedDoor_.GetEditorObject(), "Timed Door", PastSelfTutorialEditorObjectType::TimedDoor);
+    appendGimmick(pastSelfTutorialToggleSwitch_.GetEditorObject(), "Toggle Switch", PastSelfTutorialEditorObjectType::ToggleSwitch);
+    appendGimmick(pastSelfTutorialToggleGate_.GetEditorObject(), "Toggle Gate", PastSelfTutorialEditorObjectType::ToggleGate);
+    appendGimmick(pastSelfTutorialToggleElevator_.GetEditorObject(), "Toggle Elevator", PastSelfTutorialEditorObjectType::ToggleElevator);
+    appendGimmick(pastSelfTutorialWeightSwitch_.GetEditorObject(), "Weight Switch", PastSelfTutorialEditorObjectType::WeightSwitch);
+    appendGimmick(pastSelfTutorialGoalBridge_.GetEditorObject(), "Goal Bridge", PastSelfTutorialEditorObjectType::GoalBridge);
+    appendGimmick(pastSelfTutorialOneWayGate_.GetEditorObject(), "One Way Gate", PastSelfTutorialEditorObjectType::OneWayGate);
+    appendLastStageBlock();
+}
+
+/// <summary>
+/// ステージ編集対象のTransform変更をゲーム判定へ反映する。
+/// </summary>
+void PlayScene::ApplyPastSelfTutorialEditorTransform(const PastSelfTutorialEditorObject& editorObject)
+{
+    if (!editorObject.object) {
+        return;
+    }
+
+    switch (editorObject.type) {
+    case PastSelfTutorialEditorObjectType::StageBlock:
+        if (editorObject.stageBlockIndex < pastSelfTutorialStageBlocks_.size()) {
+            PastSelfTutorialStageBlock& stageBlock = pastSelfTutorialStageBlocks_[editorObject.stageBlockIndex]; // 判定を同期するステージブロック
+            const Math::Vector3 previousCenter = stageBlock.collider.center; // 編集前のステージブロック中心
+            const Math::Vector3 previousHalfSize = stageBlock.collider.halfSize; // 編集前のステージブロック半サイズ
+            const Math::Vector3 editedCenter = editorObject.object->GetTranslate(); // 編集後のステージブロック中心
+            const Math::Vector3 editedHalfSize = CalculateStageBlockHalfSize(editorObject.object->GetScale()); // 編集後のステージブロック半サイズ
+            stageBlock.collider.center = editedCenter;
+            stageBlock.collider.halfSize = editedHalfSize;
+            if (stageBlock.goalMarker) {
+                constexpr float kMinimumHalfSize = 0.0001f; // 拡縮率計算で除算可能とみなす最小値
+                const Math::Vector3 scaleRatio = { // ゴール判定へ反映する各軸の拡縮率
+                    previousHalfSize.x > kMinimumHalfSize ? editedHalfSize.x / previousHalfSize.x : 1.0f,
+                    previousHalfSize.y > kMinimumHalfSize ? editedHalfSize.y / previousHalfSize.y : 1.0f,
+                    previousHalfSize.z > kMinimumHalfSize ? editedHalfSize.z / previousHalfSize.z : 1.0f,
+                };
+                pastSelfTutorialGoal_.ApplyEditorTransform(editedCenter - previousCenter, scaleRatio);
+            }
+        }
+        break;
+    case PastSelfTutorialEditorObjectType::BoxSwitch:
+        pastSelfTutorialSwitch_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::Door:
+        pastSelfTutorialDoor_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::TimedSwitch:
+        pastSelfTutorialTimedSwitch_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::TimedDoor:
+        pastSelfTutorialTimedDoor_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::ToggleSwitch:
+        pastSelfTutorialToggleSwitch_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::ToggleGate:
+        pastSelfTutorialToggleGate_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::ToggleElevator:
+        pastSelfTutorialToggleElevator_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::WeightSwitch:
+        pastSelfTutorialWeightSwitch_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::GoalBridge:
+        pastSelfTutorialGoalBridge_.ApplyEditorTransform();
+        break;
+    case PastSelfTutorialEditorObjectType::OneWayGate:
+        pastSelfTutorialOneWayGate_.ApplyEditorTransform();
+        break;
+    }
 }
 
 /// <summary>
@@ -1331,7 +1904,7 @@ void PlayScene::ApplyPastSelfTutorialGoalVisual()
             continue;
         }
 
-        const Math::Vector4 goalColor = pastSelfTutorialGoalReached_ ? kPastSelfTutorialGoalClearColor : kPastSelfTutorialStageBlockDescs.back().color; // 現在状態に応じたゴール色
+        const Math::Vector4 goalColor = pastSelfTutorialGoalReached_ ? kPastSelfTutorialGoalClearColor : stageBlock.baseColor; // 現在状態に応じたゴール色
         stageBlock.object->SetMaterialColor(goalColor);
     }
 }

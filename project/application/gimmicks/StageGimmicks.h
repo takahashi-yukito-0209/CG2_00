@@ -185,6 +185,16 @@ public:
     /// </summary>
     bool IsCloneOnSwitch() const { return cloneOnSwitch_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
 private:
     /// <summary>
     /// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
@@ -199,6 +209,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
+    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
+    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 activeColor_ { 0.0f, 1.0f, 0.45f, 1.0f }; // 分身入力時の表示色
     Math::Vector4 playerOnlyColor_ { 1.0f, 0.62f, 0.12f, 1.0f }; // プレイヤーだけが乗った時の表示色
@@ -257,6 +269,16 @@ public:
     /// </summary>
     float GetRemainingSeconds() const { return remainingSeconds_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
 private:
     /// <summary>
     /// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
@@ -271,6 +293,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
+    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
+    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 activeColor_ { 0.0f, 0.7f, 1.0f, 1.0f }; // 起動中の表示色
     Math::Vector4 triggerColor_ { 0.2f, 1.0f, 0.85f, 1.0f }; // 分身が踏んでいる時の表示色
@@ -324,6 +348,16 @@ public:
     /// </summary>
     bool IsCloneOnSwitch() const { return cloneOnSwitch_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
 private:
     /// <summary>
     /// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
@@ -338,6 +372,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
+    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
+    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // OFF時の表示色
     Math::Vector4 activeColor_ { 1.0f, 0.45f, 0.1f, 1.0f }; // ON時の表示色
     Math::Vector4 pressedColor_ { 1.0f, 0.85f, 0.2f, 1.0f }; // 分身が踏んでいる時の表示色
@@ -396,6 +432,16 @@ public:
     /// </summary>
     bool IsCloneOnSwitch() const { return cloneOnSwitch_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
 private:
     /// <summary>
     /// 指定したプレイヤー状態がスイッチ判定内にあるか判定する。
@@ -410,6 +456,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
+    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
+    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 partialColor_ { 1.0f, 0.62f, 0.12f, 1.0f }; // 片方だけが乗った時の表示色
     Math::Vector4 activeColor_ { 0.65f, 1.0f, 0.1f, 1.0f }; // 両方が乗った時の表示色
@@ -462,6 +510,16 @@ public:
     /// 扉が開いているか取得する。
     /// </summary>
     bool IsOpen() const { return open_; }
+
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果を扉の衝突判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
 
 private:
     /// <summary>
@@ -526,6 +584,16 @@ public:
     /// 橋が展開されているか取得する。
     /// </summary>
     bool IsDeployed() const { return deployed_; }
+
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果を橋の衝突判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
 
 private:
     /// <summary>
@@ -616,6 +684,31 @@ public:
     /// </summary>
     const Math::Vector3& GetCurrentTranslate() const { return currentTranslate_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果を昇降範囲と衝突判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
+    /// <summary>
+    /// ステージ保存用に昇降範囲の下端座標を取得する。
+    /// </summary>
+    const Math::Vector3& GetEditorLowerTranslate() const { return lowerTranslate_; }
+
+    /// <summary>
+    /// ステージ保存用に昇降範囲の上端座標を取得する。
+    /// </summary>
+    const Math::Vector3& GetEditorUpperTranslate() const { return upperTranslate_; }
+
+    /// <summary>
+    /// 保存された表示Transformと昇降範囲を復元する。
+    /// </summary>
+    void RestoreEditorTransform(const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& lowerTranslate, const Math::Vector3& upperTranslate);
+
 private:
     /// <summary>
     /// 現在状態に応じた表示色と座標を反映する。
@@ -683,6 +776,16 @@ public:
     /// </summary>
     bool IsBlocking() const { return blocking_; }
 
+    /// <summary>
+    /// ステージ編集で操作する表示オブジェクトを取得する。
+    /// </summary>
+    MyEngine::Object3d* GetEditorObject() const { return object_.get(); }
+
+    /// <summary>
+    /// 表示オブジェクトの編集結果をゲートの衝突判定へ反映する。
+    /// </summary>
+    void ApplyEditorTransform();
+
 private:
     /// <summary>
     /// 現在状態に応じた表示色を反映する。
@@ -722,6 +825,11 @@ public:
     /// ゴール到達状態を初期状態へ戻す。
     /// </summary>
     void Reset();
+
+    /// <summary>
+    /// ゴール表示の編集量を判定範囲へ反映する。
+    /// </summary>
+    void ApplyEditorTransform(const Math::Vector3& translateDelta, const Math::Vector3& scaleRatio);
 
     /// <summary>
     /// ゴールに到達済みか取得する。

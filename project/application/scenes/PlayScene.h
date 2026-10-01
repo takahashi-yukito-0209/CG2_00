@@ -139,9 +139,52 @@ private:
     /// 分身チュートリアル用のステージブロック。
     /// </summary>
     struct PastSelfTutorialStageBlock {
+        std::string name; // ステージエディターで識別する名前
         std::unique_ptr<MyEngine::Object3d> object; // 表示用のステージブロック
         SolidCollider collider; // 地形として全面衝突する情報
+        Math::Vector4 baseColor { 1.0f, 1.0f, 1.0f, 1.0f }; // 通常時の表示色
+        uint32_t routeMask = 0; // このブロックを使用するチュートリアルルート
+        bool oneCloneGoalPlatform = false; // 1体ルートの到達床として色を切り替えるか
         bool goalMarker = false; // ゴール表示用のブロックか
+    };
+
+    /// <summary>
+    /// ステージ編集対象の種類。
+    /// </summary>
+    enum class PastSelfTutorialEditorObjectType {
+        StageBlock, // 固定ステージブロック
+        BoxSwitch, // 通常スイッチ
+        Door, // 通常扉
+        TimedSwitch, // 時間差スイッチ
+        TimedDoor, // 時間差扉
+        ToggleSwitch, // トグルスイッチ
+        ToggleGate, // トグル連動ゲート
+        ToggleElevator, // トグル連動昇降足場
+        WeightSwitch, // 重さスイッチ
+        GoalBridge, // ゴール前の橋
+        OneWayGate, // 一方通行ゲート
+    };
+
+    /// <summary>
+    /// 実ステージ上の編集対象を参照する情報。
+    /// </summary>
+    struct PastSelfTutorialEditorObject {
+        MyEngine::Object3d* object = nullptr; // ギズモとImGuiで編集する表示オブジェクト
+        const char* label = "Stage Object"; // ステージ編集一覧へ表示する名前
+        PastSelfTutorialEditorObjectType type = PastSelfTutorialEditorObjectType::StageBlock; // 編集対象の種類
+        size_t stageBlockIndex = 0; // StageBlockの場合に参照するブロック番号
+    };
+
+    /// <summary>
+    /// JSONから読み込んだギミック配置情報。
+    /// </summary>
+    struct PastSelfTutorialGimmickLayout {
+        std::string id; // 保存対象のギミックを識別するID
+        Math::Vector3 scale { 1.0f, 1.0f, 1.0f }; // 保存された表示スケール
+        Math::Vector3 rotate { 0.0f, 0.0f, 0.0f }; // 保存された表示回転
+        Math::Vector3 translate { 0.0f, 0.0f, 0.0f }; // 保存された表示座標
+        Math::Vector3 upperTranslate { 0.0f, 0.0f, 0.0f }; // 昇降足場の上端座標
+        bool hasUpperTranslate = false; // 上端座標を持つ昇降足場情報か
     };
 
     /// <summary>
@@ -225,6 +268,11 @@ private:
     /// ImGuiでシーン内3Dオブジェクトの生成と削除を行う
     /// </summary>
     void DrawSceneObjectEditImGui();
+
+    /// <summary>
+    /// 実ステージで使用中のオブジェクト編集ImGuiを描画する。
+    /// </summary>
+    void DrawPastSelfTutorialStageEditorImGui();
 
     /// <summary>
     /// ImGuiでレベルJSONの読み込み状態を表示する。
@@ -336,6 +384,56 @@ private:
     /// 分身チュートリアル用ステージを初期化する。
     /// </summary>
     void InitializePastSelfTutorialStage();
+
+    /// <summary>
+    /// 選択中ルートで使用するステージ編集対象一覧を構築する。
+    /// </summary>
+    void BuildPastSelfTutorialEditorObjects(std::vector<PastSelfTutorialEditorObject>* outObjects);
+
+    /// <summary>
+    /// ステージ編集対象のTransform変更をゲーム判定へ反映する。
+    /// </summary>
+    void ApplyPastSelfTutorialEditorTransform(const PastSelfTutorialEditorObject& editorObject);
+
+    /// <summary>
+    /// 読み込んだギミック配置を実ステージへ反映する。
+    /// </summary>
+    void ApplyPastSelfTutorialGimmickLayouts();
+
+    /// <summary>
+    /// 現在の攻略状況を収めるゲーム用カメラ位置へ戻す。
+    /// </summary>
+    void ResetPastSelfTutorialCameraFrame();
+
+    /// <summary>
+    /// 実ステージブロックとギミック配置をJSONから再読み込みする。
+    /// </summary>
+    bool ReloadPastSelfTutorialStage();
+
+    /// <summary>
+    /// 現在の実ステージブロックとギミック配置をJSONへ保存する。
+    /// </summary>
+    bool SavePastSelfTutorialStage();
+
+    /// <summary>
+    /// 選択中ルート用の新しいステージブロックを追加する。
+    /// </summary>
+    size_t CreatePastSelfTutorialStageBlock();
+
+    /// <summary>
+    /// 指定したステージブロックを複製する。
+    /// </summary>
+    size_t DuplicatePastSelfTutorialStageBlock(size_t blockIndex);
+
+    /// <summary>
+    /// 指定したステージブロックを削除する。
+    /// </summary>
+    bool DeletePastSelfTutorialStageBlock(size_t blockIndex);
+
+    /// <summary>
+    /// 指定情報から実ステージブロックを構築して末尾へ追加する。
+    /// </summary>
+    size_t AppendPastSelfTutorialStageBlock(const std::string& name, const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& translate, const Math::Vector4& color, bool collidable, bool oneCloneGoalPlatform, bool goalMarker, uint32_t routeMask);
 
     /// <summary>
     /// 分身チュートリアル用状態を更新する。
@@ -944,6 +1042,12 @@ private: // メンバー変数
     PastSelfRecorder pastSelfRecorder_; // 分身用のプレイヤー状態記録
     PastSelfCloneManager pastSelfCloneManager_; // 記録済み状態を再生するチュートリアル用分身の管理クラス
     std::vector<PastSelfTutorialStageBlock> pastSelfTutorialStageBlocks_; // 分身チュートリアル用のステージブロック一覧
+    std::vector<PastSelfTutorialGimmickLayout> pastSelfTutorialGimmickLayouts_; // JSONから読み込んだギミック配置一覧
+    std::string pastSelfTutorialStageFileName_; // エディターで指定する実ステージJSON名
+    std::string pastSelfTutorialStageFilePath_; // 実ステージJSONの保存先
+    std::string pastSelfTutorialStageFileMessage_; // 直近の読み書き結果
+    bool pastSelfTutorialStageFileSucceeded_ = false; // 直近の読み書きに成功したか
+    bool pastSelfTutorialAutoCameraFollow_ = true; // プレイヤーと攻略対象へゲーム用カメラを自動追従させるか
     BoxSwitchGimmick pastSelfTutorialSwitch_; // 分身専用スイッチギミック
     LinkedDoorGimmick pastSelfTutorialDoor_; // スイッチ連動扉ギミック
     TimedSwitchGimmick pastSelfTutorialTimedSwitch_; // 時間差スイッチギミック

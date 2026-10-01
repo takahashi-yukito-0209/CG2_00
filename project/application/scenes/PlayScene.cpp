@@ -30,7 +30,6 @@ constexpr float kKeyboardDissolveThreshold = 0.45f; // キー切り替え時に�
 constexpr float kCubeEnvironmentCoefficient = 0.85f; // cubeに適用する環境マップ反射率
 constexpr Vector3 kCubeInitialTranslate = { 3.0f, 0.0f, 0.0f }; // cubeの初期配置
 constexpr bool kLoadEnvironmentMapOnStartup = false; // 遷移直後に環境マップを読み込むか
-constexpr bool kExposeSceneJsonObjectsToImGui = false; // SceneJSON配置オブジェクトをImGui編集対象として表示するか
 constexpr const char* kFenceModelKeyword = "fence"; // アルファ抜き設定を適用するモデル判定キーワード
 constexpr const char* kCubeModelKeywordLower = "cube"; // cubeモデル判定用の小文字キーワード
 constexpr const char* kCubeModelKeywordUpper = "Cube"; // cubeモデル判定用の大文字キーワード
@@ -1381,13 +1380,12 @@ void PlayScene::FillObject3dPointers(std::vector<Object3d*>* out)
     }
 
     out->clear();
-    if (!kExposeSceneJsonObjectsToImGui) {
-        return;
+    std::vector<PastSelfTutorialEditorObject> editorObjects; // 現在のルートで実際に使用するステージ編集対象
+    BuildPastSelfTutorialEditorObjects(&editorObjects);
+    out->reserve(editorObjects.size());
+    for (const PastSelfTutorialEditorObject& editorObject : editorObjects) {
+        out->push_back(editorObject.object);
     }
-
-    RebuildObjectPointerView();
-    out->reserve(objectPointerView_.size());
-    out->insert(out->end(), objectPointerView_.begin(), objectPointerView_.end());
 }
 
 /// <summary>
@@ -1403,7 +1401,13 @@ int PlayScene::GetSelectedSceneObjectIndex() const
 /// </summary>
 void PlayScene::SelectSceneObjectForEditor(size_t objectIndex)
 {
-    if (!ctx_.imguiManager || objectIndex >= objects3d_.size()) {
+    if (!ctx_.imguiManager) {
+        return;
+    }
+
+    std::vector<PastSelfTutorialEditorObject> editorObjects; // 選択可能な実ステージオブジェクト一覧
+    BuildPastSelfTutorialEditorObjects(&editorObjects);
+    if (objectIndex >= editorObjects.size()) {
         return;
     }
 
@@ -1475,14 +1479,12 @@ void PlayScene::ApplyLevelColliderEditToSceneObject(size_t objectIndex, const Le
 /// </summary>
 void PlayScene::NotifyObjectTransformEdited(size_t objectIndex)
 {
-    if (levelData_.objects.empty() || objectIndex >= objects3d_.size()) {
+    std::vector<PastSelfTutorialEditorObject> editorObjects; // ギズモ番号に対応する実ステージオブジェクト一覧
+    BuildPastSelfTutorialEditorObjects(&editorObjects);
+    if (objectIndex >= editorObjects.size()) {
         return;
     }
-
-    const bool syncSucceeded = SyncSceneObjectsToLevelData(); // Gizmo編集後のTransform書き戻し結果
-    if (syncSucceeded) {
-        MarkLevelDataDirty("Scene View gizmo synced to level data. Save hierarchy snapshot.", true);
-    }
+    ApplyPastSelfTutorialEditorTransform(editorObjects[objectIndex]);
 }
 
 /// <summary>

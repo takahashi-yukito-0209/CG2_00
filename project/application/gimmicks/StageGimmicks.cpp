@@ -91,6 +91,34 @@ void DrawObjectWithAlphaBlend(Object3d* object)
     object->Draw();
     object3dCommon->SetBlendMode(previousBlendMode);
 }
+
+/// <summary>
+/// 編集された表示Transformを箱形入力判定へ同期する。
+/// </summary>
+void ApplyEditedSwitchTransform(Object3d* object, Math::Vector3& previousScale, Math::Vector3& previousTranslate, Math::Vector3& volumeCenter, Math::Vector3& volumeHalfSize)
+{
+    if (!object) {
+        return;
+    }
+
+    const Math::Vector3 editedScale = object->GetScale(); // 編集後の表示スケール
+    const Math::Vector3 editedTranslate = object->GetTranslate(); // 編集後の表示座標
+    const Math::Vector3 translateDelta = editedTranslate - previousTranslate; // 判定中心へ加える移動量
+    constexpr float kMinimumScale = 0.0001f; // 拡縮率計算で除算可能とみなす最小値
+    const Math::Vector3 scaleRatio = { // 判定範囲へ反映する各軸の拡縮率
+        std::fabs(previousScale.x) > kMinimumScale ? std::fabs(editedScale.x / previousScale.x) : 1.0f,
+        std::fabs(previousScale.y) > kMinimumScale ? std::fabs(editedScale.y / previousScale.y) : 1.0f,
+        std::fabs(previousScale.z) > kMinimumScale ? std::fabs(editedScale.z / previousScale.z) : 1.0f,
+    };
+    volumeCenter += translateDelta;
+    volumeHalfSize = {
+        volumeHalfSize.x * scaleRatio.x,
+        volumeHalfSize.y * scaleRatio.y,
+        volumeHalfSize.z * scaleRatio.z,
+    };
+    previousScale = editedScale;
+    previousTranslate = editedTranslate;
+}
 }
 
 /// <summary>
@@ -104,6 +132,8 @@ void BoxSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* 
     activeColor_ = desc.activeColor;
     playerOnlyColor_ = desc.playerOnlyColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
+    editorScale_ = desc.scale;
+    editorTranslate_ = desc.translate;
     Reset();
 }
 
@@ -114,6 +144,14 @@ void BoxSwitchGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+/// </summary>
+void BoxSwitchGimmick::ApplyEditorTransform()
+{
+    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -202,6 +240,8 @@ void TimedSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager
     triggerColor_ = desc.triggerColor;
     holdSeconds_ = (std::max)(desc.holdSeconds, 0.0f);
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
+    editorScale_ = desc.scale;
+    editorTranslate_ = desc.translate;
     Reset();
 }
 
@@ -212,6 +252,14 @@ void TimedSwitchGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+/// </summary>
+void TimedSwitchGimmick::ApplyEditorTransform()
+{
+    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -302,6 +350,8 @@ void ToggleSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManage
     activeColor_ = desc.activeColor;
     pressedColor_ = desc.pressedColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
+    editorScale_ = desc.scale;
+    editorTranslate_ = desc.translate;
     Reset();
 }
 
@@ -312,6 +362,14 @@ void ToggleSwitchGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+/// </summary>
+void ToggleSwitchGimmick::ApplyEditorTransform()
+{
+    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -400,6 +458,8 @@ void WeightSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManage
     partialColor_ = desc.partialColor;
     activeColor_ = desc.activeColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
+    editorScale_ = desc.scale;
+    editorTranslate_ = desc.translate;
     Reset();
 }
 
@@ -410,6 +470,14 @@ void WeightSwitchGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果をスイッチ判定へ反映する。
+/// </summary>
+void WeightSwitchGimmick::ApplyEditorTransform()
+{
+    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -506,6 +574,18 @@ void LinkedDoorGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果を扉の衝突判定へ反映する。
+/// </summary>
+void LinkedDoorGimmick::ApplyEditorTransform()
+{
+    if (!object_) {
+        return;
+    }
+    scale_ = object_->GetScale();
+    translate_ = object_->GetTranslate();
 }
 
 /// <summary>
@@ -608,6 +688,18 @@ void LinkedBridgeGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果を橋の衝突判定へ反映する。
+/// </summary>
+void LinkedBridgeGimmick::ApplyEditorTransform()
+{
+    if (!object_) {
+        return;
+    }
+    scale_ = object_->GetScale();
+    translate_ = object_->GetTranslate();
 }
 
 /// <summary>
@@ -714,6 +806,45 @@ void MovingPlatformGimmick::Finalize()
 {
     object_.reset();
     Reset();
+}
+
+/// <summary>
+/// 表示オブジェクトの編集結果を昇降範囲と衝突判定へ反映する。
+/// </summary>
+void MovingPlatformGimmick::ApplyEditorTransform()
+{
+    if (!object_) {
+        return;
+    }
+
+    const Math::Vector3 editedTranslate = object_->GetTranslate(); // 編集後の昇降足場座標
+    const Math::Vector3 translateDelta = editedTranslate - currentTranslate_; // 移動範囲全体へ加える移動量
+    scale_ = object_->GetScale();
+    lowerTranslate_ += translateDelta;
+    upperTranslate_ += translateDelta;
+    currentTranslate_ += translateDelta;
+    previousTranslate_ += translateDelta;
+}
+
+/// <summary>
+/// 保存された表示Transformと昇降範囲を復元する。
+/// </summary>
+void MovingPlatformGimmick::RestoreEditorTransform(const Math::Vector3& scale, const Math::Vector3& rotate, const Math::Vector3& lowerTranslate, const Math::Vector3& upperTranslate)
+{
+    if (!object_) {
+        return;
+    }
+
+    scale_ = scale;
+    lowerTranslate_ = lowerTranslate;
+    upperTranslate_ = upperTranslate;
+    currentTranslate_ = lowerTranslate_;
+    previousTranslate_ = lowerTranslate_;
+    endpointWaitRemainingSeconds_ = 0.0f;
+    movingToUpper_ = true;
+    object_->SetScale(scale_);
+    object_->SetRotate(rotate);
+    object_->SetTranslate(currentTranslate_);
 }
 
 /// <summary>
@@ -866,6 +997,18 @@ void OneWayGateGimmick::Finalize()
 }
 
 /// <summary>
+/// 表示オブジェクトの編集結果をゲートの衝突判定へ反映する。
+/// </summary>
+void OneWayGateGimmick::ApplyEditorTransform()
+{
+    if (!object_) {
+        return;
+    }
+    scale_ = object_->GetScale();
+    translate_ = object_->GetTranslate();
+}
+
+/// <summary>
 /// プレイヤー位置からゲートの遮断状態を更新する。
 /// </summary>
 void OneWayGateGimmick::Update(const PlayerState& playerState)
@@ -980,6 +1123,19 @@ bool BoxGoalGimmick::Update(const PlayerState& playerState)
 void BoxGoalGimmick::Reset()
 {
     reached_ = false;
+}
+
+/// <summary>
+/// ゴール表示の編集量を判定範囲へ反映する。
+/// </summary>
+void BoxGoalGimmick::ApplyEditorTransform(const Math::Vector3& translateDelta, const Math::Vector3& scaleRatio)
+{
+    center_ += translateDelta;
+    halfSize_ = {
+        halfSize_.x * scaleRatio.x,
+        halfSize_.y * scaleRatio.y,
+        halfSize_.z * scaleRatio.z,
+    };
 }
 
 /// <summary>
