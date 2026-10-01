@@ -7,6 +7,7 @@
 #include "../../engine/3d/PrimitiveFactory.h"
 #include "../../engine/particle/ParticleManager.h"
 #include "../../engine/base/DirectXCommon.h"
+#include "../../engine/base/ImGuiManager.h"
 #include "../../engine/io/InputManager.h"
 #include <iostream>
 #include <array>
@@ -19,6 +20,9 @@ constexpr const char* kTitleGpuParticleGroupName = "TitleGpuParticle"; // タイ
 constexpr const char* kTitleGpuParticleTextureName = "circle.png"; // タイトル確認用GPUパーティクルテクスチャ
 constexpr std::array<float, 4> kTitleSceneClearColor = { 0.10f, 0.12f, 0.16f, 1.0f }; // タイトルScene Viewのクリア色
 constexpr bool kDisableAlphaCutoutSampler = false; // 円形テクスチャの透明度をそのまま使う設定
+constexpr Math::Vector3 kParticlePreviewCameraRotate = { 0.0f, 0.0f, 0.0f }; // GPUパーティクルを正面から見るカメラ回転
+constexpr Math::Vector3 kParticlePreviewCameraTranslate = { 0.0f, 0.0f, -10.0f }; // 原点のGPUパーティクルを収めるカメラ座標
+constexpr const char* kTitleSceneEditorWindowName = "Scene Editor"; // タイトル用エフェクト編集ウィンドウ名
 
 /// <summary>
 /// タイトルシーンをScene Viewへ表示するためのRenderTarget設定を作成する。
@@ -75,6 +79,7 @@ void TitleScene::Initialize(const SceneContext& ctx)
     }
 
     RegisterParticleManagerState();
+    ConfigureParticlePreviewCamera();
 }
 
 /// <summary>
@@ -172,6 +177,30 @@ void TitleScene::Draw()
 }
 
 /// <summary>
+/// タイトルのパーティクル編集UIを描画する。
+/// </summary>
+void TitleScene::DrawImGui()
+{
+#ifdef USE_IMGUI
+    ImGui::Begin(kTitleSceneEditorWindowName);
+    if (ImGui::BeginTabBar("TitleSceneEditorTabs")) {
+        if (ImGui::BeginTabItem("Effects")) {
+            ParticleManager* particleManager = ctx_.particleManager; // GPUパーティクル設定を編集する管理クラス
+            if (!particleManager) {
+                particleManager = ParticleManager::GetInstance();
+            }
+            if (particleManager) {
+                particleManager->DrawImGui(nullptr);
+            }
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    ImGui::End();
+#endif
+}
+
+/// <summary>
 /// タイトル用の3Dオブジェクトを描画する
 /// </summary>
 void TitleScene::DrawWorldObjects()
@@ -201,6 +230,7 @@ void TitleScene::OnEnter()
 {
     std::cout << "TitleScene OnEnter\n";
     RegisterParticleManagerState();
+    ConfigureParticlePreviewCamera();
 }
 
 /// <summary>
@@ -231,6 +261,20 @@ void TitleScene::RegisterParticleManagerState()
         particleManager->CreateParticleGroup(kTitleGpuParticleGroupName, kTitleGpuParticleTextureName);
         particleManager->SetParticleObject(kTitleGpuParticleGroupName, particlePlane_.get());
     }
+}
+
+/// <summary>
+/// GPUパーティクル確認用のカメラ位置を設定する。
+/// </summary>
+void TitleScene::ConfigureParticlePreviewCamera()
+{
+    if (!ctx_.camera) {
+        return;
+    }
+
+    ctx_.camera->SetRotate(kParticlePreviewCameraRotate);
+    ctx_.camera->SetTranslate(kParticlePreviewCameraTranslate);
+    ctx_.camera->Update();
 }
 
 /// <summary>

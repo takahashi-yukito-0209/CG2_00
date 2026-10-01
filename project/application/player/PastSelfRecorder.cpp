@@ -94,6 +94,14 @@ float PastSelfRecorder::GetDuration() const
 }
 
 /// <summary>
+/// 記録可能な最大時間を有効範囲内で設定する。
+/// </summary>
+void PastSelfRecorder::SetMaxRecordTime(float maxRecordTime)
+{
+    maxRecordTime_ = (std::clamp)(maxRecordTime, kMinimumRecordTime, kMaximumRecordTime);
+}
+
+/// <summary>
 /// ImGuiで記録状態を表示する。
 /// </summary>
 void PastSelfRecorder::DrawImGui()

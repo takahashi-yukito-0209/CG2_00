@@ -83,6 +83,11 @@ bool HasHorizontalOverlap(const Vector3& cloneCenter, const Vector3& cloneHalfSi
 }
 
 /// <summary>
+/// コンストラクタ
+/// </summary>
+PastSelfClone::PastSelfClone() = default;
+
+/// <summary>
 /// デストラクタ
 /// </summary>
 PastSelfClone::~PastSelfClone() = default;
@@ -115,9 +120,9 @@ void PastSelfClone::Finalize()
 }
 
 /// <summary>
-/// 記録済みフレームの再生を開始する。
+/// 再生に使用する記録済みフレームを読み込む。
 /// </summary>
-bool PastSelfClone::Start(const std::vector<PastSelfFrame>& sourceFrames)
+bool PastSelfClone::Load(const std::vector<PastSelfFrame>& sourceFrames)
 {
     if (sourceFrames.size() < 2) {
         return false;
@@ -131,10 +136,47 @@ bool PastSelfClone::Start(const std::vector<PastSelfFrame>& sourceFrames)
 
     playbackTime_ = 0.0f;
     currentState_ = frames_.front().state;
+    isPlaying_ = false;
+    isVisible_ = false;
+    ApplyStateMaterialColor();
+    return true;
+}
+
+/// <summary>
+/// 読み込み済みフレームの再生を開始する。
+/// </summary>
+bool PastSelfClone::Start()
+{
+    if (frames_.size() < 2) {
+        return false;
+    }
+
+    playbackTime_ = 0.0f;
+    currentState_ = frames_.front().state;
     isPlaying_ = true;
     isVisible_ = true;
     ApplyStateMaterialColor();
     return true;
+}
+
+/// <summary>
+/// 記録済みフレームの再生を開始する。
+/// </summary>
+bool PastSelfClone::Start(const std::vector<PastSelfFrame>& sourceFrames)
+{
+    return Load(sourceFrames) && Start();
+}
+
+/// <summary>
+/// 再生中と再生終了後の分身表示色を設定する。
+/// </summary>
+void PastSelfClone::SetMaterialColors(const Math::Vector4& playingColor, const Math::Vector4& finishedColor)
+{
+    materialColor_ = playingColor;
+    finishedMaterialColor_ = finishedColor;
+    ClampMaterialColor(&materialColor_, 0.1f);
+    ClampMaterialColor(&finishedMaterialColor_, 0.05f);
+    ApplyStateMaterialColor();
 }
 
 /// <summary>
@@ -145,6 +187,15 @@ void PastSelfClone::Stop()
     isPlaying_ = false;
     isVisible_ = false;
     playbackTime_ = 0.0f;
+    ApplyStateMaterialColor();
+}
+
+/// <summary>
+/// 分身を表示したまま再生だけを止める。
+/// </summary>
+void PastSelfClone::Pause()
+{
+    isPlaying_ = false;
     ApplyStateMaterialColor();
 }
 

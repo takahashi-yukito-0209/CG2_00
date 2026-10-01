@@ -18,6 +18,11 @@ class Object3dCommon;
 class PastSelfClone {
 public:
     /// <summary>
+    /// コンストラクタ
+    /// </summary>
+    PastSelfClone();
+
+    /// <summary>
     /// デストラクタ
     /// </summary>
     ~PastSelfClone();
@@ -33,14 +38,34 @@ public:
     void Finalize();
 
     /// <summary>
+    /// 再生に使用する記録済みフレームを読み込む。
+    /// </summary>
+    bool Load(const std::vector<PastSelfFrame>& sourceFrames);
+
+    /// <summary>
+    /// 読み込み済みフレームの再生を開始する。
+    /// </summary>
+    bool Start();
+
+    /// <summary>
     /// 記録済みフレームの再生を開始する。
     /// </summary>
     bool Start(const std::vector<PastSelfFrame>& sourceFrames);
 
     /// <summary>
+    /// 再生中と再生終了後の分身表示色を設定する。
+    /// </summary>
+    void SetMaterialColors(const Math::Vector4& playingColor, const Math::Vector4& finishedColor);
+
+    /// <summary>
     /// 分身再生を停止する。
     /// </summary>
     void Stop();
+
+    /// <summary>
+    /// 分身を表示したまま再生だけを止める。
+    /// </summary>
+    void Pause();
 
     /// <summary>
     /// 分身の再生状態を更新する。
@@ -77,6 +102,26 @@ public:
     /// </summary>
     bool IsVisible() const { return isVisible_; }
 
+    /// <summary>
+    /// 分身が再生中か取得する。
+    /// </summary>
+    bool IsPlaying() const { return isPlaying_; }
+
+    /// <summary>
+    /// 現在の再生時刻を取得する。
+    /// </summary>
+    float GetPlaybackTime() const { return playbackTime_; }
+
+    /// <summary>
+    /// 分身の再生時間を取得する。
+    /// </summary>
+    float GetDuration() const { return frames_.empty() ? 0.0f : frames_.back().time; }
+
+    /// <summary>
+    /// 分身識別に使用する再生中の表示色を取得する。
+    /// </summary>
+    const Math::Vector4& GetIdentityColor() const { return materialColor_; }
+
 private:
     /// <summary>
     /// 指定時刻のプレイヤー状態を取得する。
@@ -96,8 +141,8 @@ private:
     std::unique_ptr<MyEngine::Object3d> object3d_; // 分身表示用の3Dオブジェクト
     std::vector<PastSelfFrame> frames_; // 再生に使用する記録フレーム
     PlayerState currentState_; // 現在の分身状態
-    Math::Vector4 materialColor_ { 0.35f, 0.8f, 1.0f, 0.45f }; // 再生中の分身表示色
-    Math::Vector4 finishedMaterialColor_ { 0.75f, 0.8f, 0.9f, 0.28f }; // 再生終了後の分身表示色
+    Math::Vector4 materialColor_ { 1.0f, 0.05f, 0.95f, 0.78f }; // 再生中の分身表示色
+    Math::Vector4 finishedMaterialColor_ { 0.9f, 0.45f, 1.0f, 0.5f }; // 再生終了後の分身表示色
     float playbackTime_ = 0.0f; // 現在の再生時刻
     float playbackSpeed_ = 1.0f; // 再生速度
     bool loopPlayback_ = false; // 終端でループするか

@@ -126,6 +126,22 @@ bool EditVector3Value(const char* label, Vector3& value)
 }
 
 /// <summary>
+/// Vector3の各成分が同じ値か判定する。
+/// </summary>
+bool IsSameVector3Value(const Vector3& lhs, const Vector3& rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+/// <summary>
+/// Vector4の各成分が同じ値か判定する。
+/// </summary>
+bool IsSameVector4Value(const Vector4& lhs, const Vector4& rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+
+/// <summary>
 /// ラジアン保持の回転値を度数法としてImGuiで編集する。
 /// </summary>
 bool EditRotationDegrees(const char* label, Vector3& rotationRadians)
@@ -1338,6 +1354,173 @@ void PlayScene::DrawSelectedEffectImGui()
 }
 
 /// <summary>
+/// 実ステージで使用中のオブジェクト編集ImGuiを描画する。
+/// </summary>
+void PlayScene::DrawPastSelfTutorialStageEditorImGui()
+{
+#ifdef USE_IMGUI
+    constexpr uint32_t kOneCloneRouteMask = 1u << 0; // 1体ルートの編集用フラグ
+    constexpr uint32_t kTwoCloneRouteMask = 1u << 1; // 2体ルートの編集用フラグ
+    constexpr uint32_t kFinalRouteMask = 1u << 2; // 最終ルートの編集用フラグ
+    static int lastAutoOpenedObjectIndex = -1; // 自動展開を適用した直近の選択オブジェクト番号
+    std::vector<PastSelfTutorialEditorObject> editorObjects; // 選択中ルートで使用するステージ編集対象
+    BuildPastSelfTutorialEditorObjects(&editorObjects);
+
+    int selectedObjectIndex = GetSelectedSceneObjectIndex(); // このフレーム開始時の選択オブジェクト番号
+    const bool hasSelectedEditorObject = selectedObjectIndex >= 0 && selectedObjectIndex < static_cast<int>(editorObjects.size()); // 有効な編集対象を選択しているか
+    const bool selectedStageBlock = hasSelectedEditorObject && editorObjects[static_cast<size_t>(selectedObjectIndex)].type == PastSelfTutorialEditorObjectType::StageBlock; // 固定ブロックを選択しているか
+    const size_t selectedStageBlockIndex = selectedStageBlock ? editorObjects[static_cast<size_t>(selectedObjectIndex)].stageBlockIndex : pastSelfTutorialStageBlocks_.size(); // 選択中の固定ブロック番号
+
+    const auto selectStageBlock = [this, &editorObjects](size_t stageBlockIndex) {
+        BuildPastSelfTutorialEditorObjects(&editorObjects);
+        for (size_t editorIndex = 0; editorIndex < editorObjects.size(); ++editorIndex) {
+            if (editorObjects[editorIndex].type == PastSelfTutorialEditorObjectType::StageBlock && editorObjects[editorIndex].stageBlockIndex == stageBlockIndex) {
+                SelectSceneObjectForEditor(editorIndex);
+                return;
+            }
+        }
+    }; // ステージブロック番号に対応する編集対象を選択する処理
+
+    if (ImGui::Checkbox("Auto Camera Follow", &pastSelfTutorialAutoCameraFollow_)) {
+        if (pastSelfTutorialAutoCameraFollow_) {
+            ResetPastSelfTutorialCameraFrame();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Camera")) {
+        ResetPastSelfTutorialCameraFrame();
+    }
+
+    EditStringText("Stage File", pastSelfTutorialStageFileName_);
+    if (ImGui::Button("New Block")) {
+        const size_t createdBlockIndex = CreatePastSelfTutorialStageBlock(); // 新規作成した固定ブロック番号
+        selectStageBlock(createdBlockIndex);
+        selectedObjectIndex = GetSelectedSceneObjectIndex();
+    }
+    ImGui::SameLine();
+    if (!selectedStageBlock) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Duplicate")) {
+        const size_t duplicatedBlockIndex = DuplicatePastSelfTutorialStageBlock(selectedStageBlockIndex); // 複製した固定ブロック番号
+        if (duplicatedBlockIndex < pastSelfTutorialStageBlocks_.size()) {
+            selectStageBlock(duplicatedBlockIndex);
+            selectedObjectIndex = GetSelectedSceneObjectIndex();
+        }
+    }
+    ImGui::SameLine();
+    const bool selectedGoalMarker = selectedStageBlock && selectedStageBlockIndex < pastSelfTutorialStageBlocks_.size() && pastSelfTutorialStageBlocks_[selectedStageBlockIndex].goalMarker; // 削除不可のゴール表示か
+    if (selectedGoalMarker) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Delete")) {
+        if (DeletePastSelfTutorialStageBlock(selectedStageBlockIndex)) {
+            BuildPastSelfTutorialEditorObjects(&editorObjects);
+            SelectSceneObjectForEditor(0);
+            selectedObjectIndex = GetSelectedSceneObjectIndex();
+        }
+    }
+    if (selectedGoalMarker) {
+        ImGui::EndDisabled();
+    }
+    if (!selectedStageBlock) {
+        ImGui::EndDisabled();
+    }
+
+    if (ImGui::Button("Save Stage")) {
+        SavePastSelfTutorialStage();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reload Stage")) {
+        ReloadPastSelfTutorialStage();
+        BuildPastSelfTutorialEditorObjects(&editorObjects);
+        SelectSceneObjectForEditor(0);
+        selectedObjectIndex = GetSelectedSceneObjectIndex();
+        lastAutoOpenedObjectIndex = -1;
+    }
+    if (!pastSelfTutorialStageFileMessage_.empty()) {
+        const ImVec4 statusColor = pastSelfTutorialStageFileSucceeded_
+            ? ImVec4(0.35f, 0.9f, 0.45f, 1.0f)
+            : ImVec4(1.0f, 0.45f, 0.3f, 1.0f); // 読み書き結果に応じた表示色
+        ImGui::TextColored(statusColor, "%s", pastSelfTutorialStageFileMessage_.c_str());
+    }
+    ImGui::Separator();
+    ImGui::Text("Route Objects: %zu", editorObjects.size());
+    for (size_t objectIndex = 0; objectIndex < editorObjects.size(); ++objectIndex) {
+        PastSelfTutorialEditorObject& editorObject = editorObjects[objectIndex]; // 一覧へ表示する実ステージオブジェクト
+        if (!editorObject.object) {
+            continue;
+        }
+
+        ImGui::PushID(static_cast<int>(objectIndex));
+        const bool isSelected = selectedObjectIndex == static_cast<int>(objectIndex); // ギズモ操作対象として選択中か
+        ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth; // ステージオブジェクト表示用フラグ
+        if (isSelected) {
+            nodeFlags |= ImGuiTreeNodeFlags_Selected;
+            if (lastAutoOpenedObjectIndex != selectedObjectIndex) {
+                ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            }
+        }
+
+        const bool nodeOpen = ImGui::TreeNodeEx(editorObject.label, nodeFlags); // Transform詳細を表示するか
+        if (ImGui::IsItemClicked()) {
+            SelectSceneObjectForEditor(objectIndex);
+        }
+        if (nodeOpen) {
+            const Vector3 beforeScale = editorObject.object->GetScale(); // 編集前の表示スケール
+            const Vector3 beforeRotate = editorObject.object->GetRotate(); // 編集前の表示回転
+            const Vector3 beforeTranslate = editorObject.object->GetTranslate(); // 編集前の表示座標
+            const Vector4 beforeColor = editorObject.object->GetMaterialColor(); // 編集前の表示色
+            editorObject.object->DrawImGui(static_cast<int>(objectIndex));
+            if (editorObject.type == PastSelfTutorialEditorObjectType::StageBlock && editorObject.stageBlockIndex < pastSelfTutorialStageBlocks_.size()) {
+                PastSelfTutorialStageBlock& stageBlock = pastSelfTutorialStageBlocks_[editorObject.stageBlockIndex]; // 追加設定を編集する固定ブロック
+                if (!IsSameVector4Value(beforeColor, editorObject.object->GetMaterialColor())) {
+                    stageBlock.baseColor = editorObject.object->GetMaterialColor();
+                }
+                ImGui::SeparatorText("Stage Block");
+                EditStringText("Name", stageBlock.name);
+                ImGui::Checkbox("Collidable", &stageBlock.collider.enabled);
+                bool useOneCloneRoute = (stageBlock.routeMask & kOneCloneRouteMask) != 0; // 1体ルートで使用するか
+                bool useTwoCloneRoute = (stageBlock.routeMask & kTwoCloneRouteMask) != 0; // 2体ルートで使用するか
+                bool useFinalRoute = (stageBlock.routeMask & kFinalRouteMask) != 0; // 最終ルートで使用するか
+                if (ImGui::Checkbox("One Clone Route", &useOneCloneRoute)) {
+                    stageBlock.routeMask = useOneCloneRoute ? stageBlock.routeMask | kOneCloneRouteMask : stageBlock.routeMask & ~kOneCloneRouteMask;
+                }
+                if (ImGui::Checkbox("Two Clone Route", &useTwoCloneRoute)) {
+                    stageBlock.routeMask = useTwoCloneRoute ? stageBlock.routeMask | kTwoCloneRouteMask : stageBlock.routeMask & ~kTwoCloneRouteMask;
+                }
+                if (ImGui::Checkbox("Final Route", &useFinalRoute)) {
+                    stageBlock.routeMask = useFinalRoute ? stageBlock.routeMask | kFinalRouteMask : stageBlock.routeMask & ~kFinalRouteMask;
+                }
+                if (stageBlock.routeMask == 0) {
+                    if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::OneCloneBasics) {
+                        stageBlock.routeMask = kOneCloneRouteMask;
+                    } else if (pastSelfTutorialRoute_ == PastSelfTutorialRoute::TwoCloneCooperation) {
+                        stageBlock.routeMask = kTwoCloneRouteMask;
+                    } else {
+                        stageBlock.routeMask = kFinalRouteMask;
+                    }
+                }
+                if (stageBlock.goalMarker) {
+                    stageBlock.routeMask |= kFinalRouteMask;
+                    ImGui::TextDisabled("Goal marker cannot be deleted.");
+                }
+            }
+            const bool transformEdited = !IsSameVector3Value(beforeScale, editorObject.object->GetScale()) ||
+                !IsSameVector3Value(beforeRotate, editorObject.object->GetRotate()) ||
+                !IsSameVector3Value(beforeTranslate, editorObject.object->GetTranslate()); // Transformが変更されたか
+            if (transformEdited) {
+                ApplyPastSelfTutorialEditorTransform(editorObject);
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    lastAutoOpenedObjectIndex = selectedObjectIndex;
+#endif
+}
+
+/// <summary>
 /// シーン編集用のImGuiを描画する。
 /// </summary>
 void PlayScene::DrawImGui()
@@ -1346,17 +1529,23 @@ void PlayScene::DrawImGui()
     ImGui::Begin(kSceneEditorWindowName);
 
     if (ImGui::BeginTabBar("SceneEditorTabs")) {
-        if (ImGui::BeginTabItem("Level")) {
-            DrawLevelDataImGui();
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Objects")) {
-            DrawSceneObjectEditImGui();
+        if (ImGui::BeginTabItem("Stage")) {
+            DrawPastSelfTutorialStageEditorImGui();
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("Player")) {
-            DrawPlayerPrototypeImGui();
+            DrawPastSelfTutorialRouteSelector();
+            DrawPastSelfTutorialFixedStatusHud();
+            ImGui::Checkbox("Verification Details", &pastSelfTutorialShowVerificationDetails_);
+            if (ImGui::BeginChild("PlayerTabDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
+                DrawPastSelfTutorialImGui();
+                if (pastSelfTutorialShowVerificationDetails_) {
+                    ImGui::Separator();
+                    DrawPastSelfTutorialStatusHud();
+                }
+            }
+            ImGui::EndChild();
             ImGui::EndTabItem();
         }
 
