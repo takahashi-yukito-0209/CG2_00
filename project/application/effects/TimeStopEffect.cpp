@@ -1,4 +1,5 @@
 #include "TimeStopEffect.h"
+#include "EffectImGuiUtility.h"
 #include "EffectProgress.h"
 #include "EffectParticleUtility.h"
 
@@ -209,27 +210,35 @@ void TimeStopEffect::Update(float deltaTime, PostProcess& postProcess)
 void TimeStopEffect::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Text("Time Stop Phase: %s", GetPhaseName());
-    ImGui::Text("Phase Time: %.3f", phaseTime_);
-    if (ImGui::Button("Reset Time Stop Settings")) {
+    using namespace EffectImGuiUtility;
+    ImGui::PushID(this);
+    ImGui::TextWrapped("Phase: %s", GetPhaseName());
+    if (DrawResetSettingsButton()) {
         ResetSettings();
     }
-
-    if (ImGui::CollapsingHeader("Time Stop Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Enter Duration", &settings_.enterDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
-        ImGui::DragFloat("Stop Duration", &settings_.stopDuration, kImGuiStopDurationStep, kImGuiMinimumStopDuration, kImGuiMaximumStopDuration, "%.2f sec");
-        ImGui::DragFloat("Release Duration", &settings_.releaseDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
-        ImGui::SeparatorText("Distortion");
-        ImGui::DragFloat("Stop Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
-        ImGui::DragFloat("Stop Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
-        ImGui::DragFloat("Stop Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
-        ImGui::SeparatorText("Particles");
-        ImGui::SliderInt("Start Ring Count", &settings_.startRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
-        ImGui::SliderInt("Release Ring Count", &settings_.releaseRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
-        ImGui::SliderInt("Release Fragment Count", &settings_.releaseFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
-        ImGui::SliderInt("GPU Failure Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
-        ImGui::DragFloat3("Time Stop Position", &settings_.effectPosition.x, kImGuiPositionStep);
+    if (ImGui::CollapsingHeader("Status")) {
+        ImGui::TextWrapped("Phase Time: %.3f s", phaseTime_);
     }
+    if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
+        DrawFloat("Enter Duration", &settings_.enterDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
+        DrawFloat("Stop Duration", &settings_.stopDuration, kImGuiStopDurationStep, kImGuiMinimumStopDuration, kImGuiMaximumStopDuration, "%.2f sec");
+        DrawFloat("Release Duration", &settings_.releaseDuration, kImGuiShortDurationStep, kImGuiMinimumShortDuration, kImGuiMaximumShortDuration, "%.2f sec");
+    }
+    if (ImGui::CollapsingHeader("Distortion")) {
+        DrawFloat("Stop Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
+        DrawFloat("Stop Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        DrawFloat("Stop Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
+    }
+    if (ImGui::CollapsingHeader("Particles")) {
+        DrawVector3("Position", &settings_.effectPosition.x, kImGuiPositionStep);
+        DrawIntSlider("Start Ring Count", &settings_.startRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        DrawIntSlider("Release Ring Count", &settings_.releaseRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        DrawIntSlider("Release Fragment Count", &settings_.releaseFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+    }
+    if (ImGui::CollapsingHeader("GPU Fallback")) {
+        DrawIntSlider("Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+    }
+    ImGui::PopID();
 #endif
 }
 
