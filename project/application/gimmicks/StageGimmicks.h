@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../player/PlayerState.h"
+#include "StageGimmickTransformUtility.h"
 
 #include <cstdint>
 #include <memory>
@@ -209,8 +210,7 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
-    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
-    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
+    SwitchVolumeBasis editorBasis_; // 編集同期に使う変更されない初期表示と判定範囲
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 activeColor_ { 0.0f, 1.0f, 0.45f, 1.0f }; // 分身入力時の表示色
     Math::Vector4 playerOnlyColor_ { 1.0f, 0.62f, 0.12f, 1.0f }; // プレイヤーだけが乗った時の表示色
@@ -293,8 +293,7 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
-    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
-    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
+    SwitchVolumeBasis editorBasis_; // 編集同期に使う変更されない初期表示と判定範囲
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 activeColor_ { 0.0f, 0.7f, 1.0f, 1.0f }; // 起動中の表示色
     Math::Vector4 triggerColor_ { 0.2f, 1.0f, 0.85f, 1.0f }; // 分身が踏んでいる時の表示色
@@ -372,8 +371,7 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
-    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
-    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
+    SwitchVolumeBasis editorBasis_; // 編集同期に使う変更されない初期表示と判定範囲
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // OFF時の表示色
     Math::Vector4 activeColor_ { 1.0f, 0.45f, 0.1f, 1.0f }; // ON時の表示色
     Math::Vector4 pressedColor_ { 1.0f, 0.85f, 0.2f, 1.0f }; // 分身が踏んでいる時の表示色
@@ -456,8 +454,7 @@ private:
     std::unique_ptr<MyEngine::Object3d> object_; // スイッチ表示用オブジェクト
     Math::Vector3 volumeCenter_ { 0.0f, 0.0f, 0.0f }; // スイッチ判定範囲の中心
     Math::Vector3 volumeHalfSize_ { 0.5f, 0.5f, 0.5f }; // スイッチ判定範囲の半サイズ
-    Math::Vector3 editorScale_ { 1.0f, 1.0f, 1.0f }; // 編集同期に使う直前の表示スケール
-    Math::Vector3 editorTranslate_ { 0.0f, 0.0f, 0.0f }; // 編集同期に使う直前の表示座標
+    SwitchVolumeBasis editorBasis_; // 編集同期に使う変更されない初期表示と判定範囲
     Math::Vector4 inactiveColor_ { 0.18f, 0.18f, 0.22f, 1.0f }; // 未入力時の表示色
     Math::Vector4 partialColor_ { 1.0f, 0.62f, 0.12f, 1.0f }; // 片方だけが乗った時の表示色
     Math::Vector4 activeColor_ { 0.65f, 1.0f, 0.1f, 1.0f }; // 両方が乗った時の表示色
@@ -827,14 +824,19 @@ public:
     void Reset();
 
     /// <summary>
-    /// ゴール表示の編集量を判定範囲へ反映する。
+    /// ゴール表示の現在位置と判定半サイズを反映し、到達済み状態は維持する。
     /// </summary>
-    void ApplyEditorTransform(const Math::Vector3& translateDelta, const Math::Vector3& scaleRatio);
+    void ApplyEditorTransform(const Math::Vector3& center, const Math::Vector3& halfSize);
 
     /// <summary>
     /// ゴールに到達済みか取得する。
     /// </summary>
     bool IsReached() const { return reached_; }
+
+    /// <summary>
+    /// 編集後のゴール判定範囲の中心を取得する。
+    /// </summary>
+    const Math::Vector3& GetCenter() const { return center_; }
 
 private:
     /// <summary>
