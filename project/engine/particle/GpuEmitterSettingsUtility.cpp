@@ -1,6 +1,7 @@
 #include "GpuEmitterSettingsUtility.h"
 
 #include "engine/utility/FileUtility.h"
+#include "engine/utility/JsonFileLoader.h"
 #include "engine/utility/JsonUtility.h"
 #include "engine/utility/ResourceResolver.h"
 
@@ -138,13 +139,13 @@ std::string ResolvePresetPath(const std::string& presetName)
     }
 
     for (const std::string& filePath : files) {
-        std::string jsonText; // 読み込んだJSON文字列
-        if (!FileUtility::TryReadText(filePath, jsonText)) {
+        JsonDocument root; // 読み込んだプリセットのJSON
+        if (!JsonFileLoader::Load(filePath, root) || !root.is_object()) {
             continue;
         }
 
-        std::string effectSection = jsonText; // effectカテゴリの読み取り元
-        JsonUtility::ExtractObjectSection(jsonText, "effect", effectSection);
+        JsonDocument effectSection = root; // 旧形式も含めたeffectカテゴリの読み取り元
+        JsonUtility::ExtractObjectSection(root, "effect", effectSection);
 
         std::string effectName; // JSON内の表示名
         if (JsonUtility::ExtractString(effectSection, "effectName", effectName)

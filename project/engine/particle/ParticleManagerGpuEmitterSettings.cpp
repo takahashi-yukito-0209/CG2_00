@@ -2,12 +2,14 @@
 #include "GpuEmitterSettingsUtility.h"
 #include "engine/base/PostProcess.h"
 #include "engine/utility/FileUtility.h"
+#include "engine/utility/JsonFileLoader.h"
 #include "engine/utility/JsonUtility.h"
 #include "engine/utility/Logger.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <iomanip>
+#include <sstream>
+#include <stdexcept>
 
 using namespace Math;
 using namespace MyEngine;
@@ -22,23 +24,28 @@ constexpr float kGpuEmitterDampingMax = 100.0f; // GPU Emitter減衰率の最大
 /// <summary>
 /// GPU Emitter設定をJSONファイルへ保存する。
 /// </summary>
-bool ParticleManager::SaveGpuEmitterSettings(const std::string& filePath) const
+bool ParticleManager::SaveGpuEmitterSettings(const std::string& filePath, std::string* errorMessage) const
 {
-    const std::filesystem::path outputPath(filePath); // 保存先パス
-    const std::string parentDirectory = FileUtility::GetParentDirectory(filePath); // 保存先の親ディレクトリ
-    if (!parentDirectory.empty() && !FileUtility::CreateDirectoryIfNeeded(parentDirectory)) {
-        Logger::Warn("ParticleManager::SaveGpuEmitterSettings: failed to create directory " + parentDirectory + "\n");
-        return false;
+    if (errorMessage) {
+        errorMessage->clear();
     }
 
-    std::ofstream file(outputPath); // JSONを書き出すファイルストリーム
-    if (!file) {
-        Logger::Warn("ParticleManager::SaveGpuEmitterSettings: failed to open " + filePath + "\n");
-        return false;
+    std::string writeError; // JSON変換またはファイル保存の失敗理由
+    try {
+        std::ostringstream jsonStream; // 保存先を開く前に完成させるJSON文字列
+        WriteGpuEmitterSettingsJson(jsonStream);
+        if (FileUtility::WriteText(filePath, jsonStream.str(), &writeError)) {
+            return true;
+        }
+    } catch (const std::exception& exception) {
+        writeError = exception.what();
     }
 
-    WriteGpuEmitterSettingsJson(file);
-    return true;
+    if (errorMessage) {
+        *errorMessage = writeError;
+    }
+    Logger::Warn("ParticleManager::SaveGpuEmitterSettings: " + filePath + " / " + writeError + "\n");
+    return false;
 }
 
 /// <summary>
@@ -49,65 +56,66 @@ void ParticleManager::WriteGpuEmitterSettingsJson(std::ostream& file) const
     const Vector3 postRadialBlurCenter { gpuEmitterRadialBlurCenter_.x, gpuEmitterRadialBlurCenter_.y, 0.0f }; // JSON保存用のRadialBlur中心
     const Vector3 postDistortionCenter { gpuEmitterDistortionCenter_.x, gpuEmitterDistortionCenter_.y, 0.0f }; // JSON保存用のDistortion中心
 
-    file << std::fixed << std::setprecision(4);
-    file << R"({)" << '\n';
-    file << R"(  "version": 2,)" << '\n';
-
-    file << R"(  "effect": {)" << '\n';
-    file << R"(    "effectName": ")" << JsonUtility::EscapeString(gpuEmitterEffectName_) << R"(",)" << '\n';
-    file << R"(    "description": ")" << JsonUtility::EscapeString(gpuEmitterDescription_) << R"(")" << '\n';
-    file << R"(  },)" << '\n';
-
-    file << R"(  "playback": {)" << '\n';
-    file << R"(    "autoEmit": )" << (gpuEmitterAutoEmit_ ? 1 : 0) << R"(,)" << '\n';
-    file << R"(    "updateParticles": )" << (gpuParticleUpdateEnabled_ ? 1 : 0) << R"(,)" << '\n';
-    file << R"(    "drawParticles": )" << (gpuParticleDrawEnabled_ ? 1 : 0) << '\n';
-    file << R"(  },)" << '\n';
-
-    file << R"(  "render": {)" << '\n';
-    file << R"(    "texture": ")" << JsonUtility::EscapeString(gpuEmitterTexturePath_) << R"(",)" << '\n';
-    file << R"(    "usePostProcess": )" << (gpuEmitterUsePostProcess_ ? 1 : 0) << '\n';
-    file << R"(  },)" << '\n';
-
-    file << R"(  "emitter": {)" << '\n';
-    file << R"(    "spawnShape": )" << gpuEmitterState_.spawnShape << R"(,)" << '\n';
-    file << R"(    "translate": [)" << gpuEmitterState_.translate.x << ", " << gpuEmitterState_.translate.y << ", " << gpuEmitterState_.translate.z << R"(],)" << '\n';
-    file << R"(    "radius": )" << gpuEmitterState_.radius << R"(,)" << '\n';
-    file << R"(    "count": )" << gpuEmitterState_.count << R"(,)" << '\n';
-    file << R"(    "frequency": )" << gpuEmitterState_.frequency << R"(,)" << '\n';
-    file << R"(    "baseScale": [)" << gpuEmitterState_.baseScale.x << ", " << gpuEmitterState_.baseScale.y << ", " << gpuEmitterState_.baseScale.z << R"(],)" << '\n';
-    file << R"(    "randomScale": )" << gpuEmitterState_.randomScale << R"(,)" << '\n';
-    file << R"(    "velocityScale": [)" << gpuEmitterState_.velocityScale.x << ", " << gpuEmitterState_.velocityScale.y << ", " << gpuEmitterState_.velocityScale.z << R"(],)" << '\n';
-    file << R"(    "lifeTime": )" << gpuEmitterState_.lifeTime << R"(,)" << '\n';
-    file << R"(    "colorMin": [)" << gpuEmitterState_.colorMin.x << ", " << gpuEmitterState_.colorMin.y << ", " << gpuEmitterState_.colorMin.z << ", " << gpuEmitterState_.colorMin.w << R"(],)" << '\n';
-    file << R"(    "colorMax": [)" << gpuEmitterState_.colorMax.x << ", " << gpuEmitterState_.colorMax.y << ", " << gpuEmitterState_.colorMax.z << ", " << gpuEmitterState_.colorMax.w << R"(],)" << '\n';
-    file << R"(    "scaleOverLife": )" << gpuEmitterState_.scaleOverLife << R"(,)" << '\n';
-    file << R"(    "endScale": [)" << gpuEmitterState_.endScale.x << ", " << gpuEmitterState_.endScale.y << ", " << gpuEmitterState_.endScale.z << R"(],)" << '\n';
-    file << R"(    "gravity": [)" << gpuEmitterState_.gravity.x << ", " << gpuEmitterState_.gravity.y << ", " << gpuEmitterState_.gravity.z << R"(],)" << '\n';
-    file << R"(    "damping": )" << gpuEmitterState_.damping << R"(,)" << '\n';
-    file << R"(    "colorOverLife": )" << gpuEmitterState_.colorOverLife << R"(,)" << '\n';
-    file << R"(    "endColor": [)" << gpuEmitterState_.endColor.x << ", " << gpuEmitterState_.endColor.y << ", " << gpuEmitterState_.endColor.z << ", " << gpuEmitterState_.endColor.w << R"(])" << '\n';
-    file << R"(  },)" << '\n';
-
-    file << R"(  "postProcess": {)" << '\n';
-    file << R"(    "postProcessEnabled": )" << (gpuEmitterPostProcessEnabled_ ? 1 : 0) << R"(,)" << '\n';
-    file << R"(    "postEffectType": )" << gpuEmitterPostEffectType_ << R"(,)" << '\n';
-    file << R"(    "postRadialBlurCenter": [)" << postRadialBlurCenter.x << ", " << postRadialBlurCenter.y << ", " << postRadialBlurCenter.z << R"(],)" << '\n';
-    file << R"(    "postRadialBlurWidth": )" << gpuEmitterRadialBlurWidth_ << R"(,)" << '\n';
-    file << R"(    "postRadialBlurSampleCount": )" << gpuEmitterRadialBlurSampleCount_ << R"(,)" << '\n';
-    file << R"(    "postDistortionCenter": [)" << postDistortionCenter.x << ", " << postDistortionCenter.y << ", " << postDistortionCenter.z << R"(],)" << '\n';
-    file << R"(    "postDistortionStrength": )" << gpuEmitterDistortionStrength_ << R"(,)" << '\n';
-    file << R"(    "postDistortionRadius": )" << gpuEmitterDistortionRadius_ << R"(,)" << '\n';
-    file << R"(    "postDistortionWaveCount": )" << gpuEmitterDistortionWaveCount_ << R"(,)" << '\n';
-    file << R"(    "postDistortionProgress": )" << gpuEmitterDistortionProgress_ << R"(,)" << '\n';
-    file << R"(    "postDissolveThreshold": )" << gpuEmitterDissolveThreshold_ << R"(,)" << '\n';
-    file << R"(    "postDissolveEdgeWidth": )" << gpuEmitterDissolveEdgeWidth_ << R"(,)" << '\n';
-    file << R"(    "postDissolveEdgeColor": [)" << gpuEmitterDissolveEdgeColor_.x << ", " << gpuEmitterDissolveEdgeColor_.y << ", " << gpuEmitterDissolveEdgeColor_.z << R"(],)" << '\n';
-    file << R"(    "postRandomStrength": )" << gpuEmitterRandomStrength_ << R"(,)" << '\n';
-    file << R"(    "postRandomScale": )" << gpuEmitterRandomScale_ << R"(,)" << '\n';
-    file << R"(    "postRandomSpeed": )" << gpuEmitterRandomSpeed_ << '\n';
-    file << R"(  })" << '\n';
-    file << R"(})" << '\n';
+    const JsonDocument document { // 保存形式のカテゴリと設定値
+        { "version", 2 },
+        { "effect", {
+            { "effectName", gpuEmitterEffectName_ },
+            { "description", gpuEmitterDescription_ },
+        } },
+        { "playback", {
+            { "autoEmit", gpuEmitterAutoEmit_ ? 1 : 0 },
+            { "updateParticles", gpuParticleUpdateEnabled_ ? 1 : 0 },
+            { "drawParticles", gpuParticleDrawEnabled_ ? 1 : 0 },
+        } },
+        { "render", {
+            { "texture", gpuEmitterTexturePath_ },
+            { "usePostProcess", gpuEmitterUsePostProcess_ ? 1 : 0 },
+        } },
+        { "emitter", {
+            { "spawnShape", gpuEmitterState_.spawnShape },
+            { "translate", { gpuEmitterState_.translate.x, gpuEmitterState_.translate.y, gpuEmitterState_.translate.z } },
+            { "radius", gpuEmitterState_.radius },
+            { "count", gpuEmitterState_.count },
+            { "frequency", gpuEmitterState_.frequency },
+            { "baseScale", { gpuEmitterState_.baseScale.x, gpuEmitterState_.baseScale.y, gpuEmitterState_.baseScale.z } },
+            { "randomScale", gpuEmitterState_.randomScale },
+            { "velocityScale", { gpuEmitterState_.velocityScale.x, gpuEmitterState_.velocityScale.y, gpuEmitterState_.velocityScale.z } },
+            { "lifeTime", gpuEmitterState_.lifeTime },
+            { "colorMin", { gpuEmitterState_.colorMin.x, gpuEmitterState_.colorMin.y, gpuEmitterState_.colorMin.z, gpuEmitterState_.colorMin.w } },
+            { "colorMax", { gpuEmitterState_.colorMax.x, gpuEmitterState_.colorMax.y, gpuEmitterState_.colorMax.z, gpuEmitterState_.colorMax.w } },
+            { "scaleOverLife", gpuEmitterState_.scaleOverLife },
+            { "endScale", { gpuEmitterState_.endScale.x, gpuEmitterState_.endScale.y, gpuEmitterState_.endScale.z } },
+            { "gravity", { gpuEmitterState_.gravity.x, gpuEmitterState_.gravity.y, gpuEmitterState_.gravity.z } },
+            { "damping", gpuEmitterState_.damping },
+            { "colorOverLife", gpuEmitterState_.colorOverLife },
+            { "endColor", { gpuEmitterState_.endColor.x, gpuEmitterState_.endColor.y, gpuEmitterState_.endColor.z, gpuEmitterState_.endColor.w } },
+        } },
+        { "postProcess", {
+            { "postProcessEnabled", gpuEmitterPostProcessEnabled_ ? 1 : 0 },
+            { "postEffectType", gpuEmitterPostEffectType_ },
+            { "postRadialBlurCenter", { postRadialBlurCenter.x, postRadialBlurCenter.y, postRadialBlurCenter.z } },
+            { "postRadialBlurWidth", gpuEmitterRadialBlurWidth_ },
+            { "postRadialBlurSampleCount", gpuEmitterRadialBlurSampleCount_ },
+            { "postDistortionCenter", { postDistortionCenter.x, postDistortionCenter.y, postDistortionCenter.z } },
+            { "postDistortionStrength", gpuEmitterDistortionStrength_ },
+            { "postDistortionRadius", gpuEmitterDistortionRadius_ },
+            { "postDistortionWaveCount", gpuEmitterDistortionWaveCount_ },
+            { "postDistortionProgress", gpuEmitterDistortionProgress_ },
+            { "postDissolveThreshold", gpuEmitterDissolveThreshold_ },
+            { "postDissolveEdgeWidth", gpuEmitterDissolveEdgeWidth_ },
+            { "postDissolveEdgeColor", { gpuEmitterDissolveEdgeColor_.x, gpuEmitterDissolveEdgeColor_.y, gpuEmitterDissolveEdgeColor_.z } },
+            { "postRandomStrength", gpuEmitterRandomStrength_ },
+            { "postRandomScale", gpuEmitterRandomScale_ },
+            { "postRandomSpeed", gpuEmitterRandomSpeed_ },
+        } },
+    };
+    // 非有限数値をnullへ変換して保存すると、次回読み込みで設定が失われる。
+    for (const auto& value : document.flatten()) { // 保存対象の末端の設定値
+        if (value.is_number_float() && !std::isfinite(value.get<double>())) {
+            throw std::invalid_argument("GPU emitter settings contain a non-finite number");
+        }
+    }
+    file << document.dump(2) << '\n';
 }
 
 /// <summary>
@@ -115,22 +123,30 @@ void ParticleManager::WriteGpuEmitterSettingsJson(std::ostream& file) const
 /// </summary>
 bool ParticleManager::LoadGpuEmitterSettings(const std::string& filePath)
 {
-    std::string jsonText; // 読み込んだJSON文字列
-    if (!FileUtility::TryReadText(filePath, jsonText)) {
+    JsonDocument root; // 構文を検証済みのGPU Emitter設定
+    if (!JsonFileLoader::Load(filePath, root) || !root.is_object()) {
         Logger::Warn("ParticleManager::LoadGpuEmitterSettings: failed to open " + filePath + "\n");
         return false;
     }
 
-    std::string effectSection = jsonText; // effectカテゴリの読み取り元
-    std::string playbackSection = jsonText; // playbackカテゴリの読み取り元
-    std::string renderSection = jsonText; // renderカテゴリの読み取り元
-    std::string emitterSection = jsonText; // emitterカテゴリの読み取り元
-    std::string postProcessSection = jsonText; // postProcessカテゴリの読み取り元
-    JsonUtility::ExtractObjectSection(jsonText, "effect", effectSection);
-    JsonUtility::ExtractObjectSection(jsonText, "playback", playbackSection);
-    JsonUtility::ExtractObjectSection(jsonText, "render", renderSection);
-    JsonUtility::ExtractObjectSection(jsonText, "emitter", emitterSection);
-    JsonUtility::ExtractObjectSection(jsonText, "postProcess", postProcessSection);
+    for (const char* category : { "effect", "playback", "render", "emitter", "postProcess" }) { // 型を検証する設定カテゴリ
+        if (root.contains(category) && !root[category].is_object()) {
+            Logger::Warn("ParticleManager::LoadGpuEmitterSettings: invalid category " + std::string(category) + "\n");
+            return false;
+        }
+    }
+
+    // カテゴリ分割前の旧形式は、ルート直下の値を読み取る
+    JsonDocument effectSection = root; // effectカテゴリの読み取り元
+    JsonDocument playbackSection = root; // playbackカテゴリの読み取り元
+    JsonDocument renderSection = root; // renderカテゴリの読み取り元
+    JsonDocument emitterSection = root; // emitterカテゴリの読み取り元
+    JsonDocument postProcessSection = root; // postProcessカテゴリの読み取り元
+    JsonUtility::ExtractObjectSection(root, "effect", effectSection);
+    JsonUtility::ExtractObjectSection(root, "playback", playbackSection);
+    JsonUtility::ExtractObjectSection(root, "render", renderSection);
+    JsonUtility::ExtractObjectSection(root, "emitter", emitterSection);
+    JsonUtility::ExtractObjectSection(root, "postProcess", postProcessSection);
 
     LoadGpuEmitterEffectSettings(effectSection, renderSection);
     LoadGpuEmitterPlaybackSettings(playbackSection, renderSection);
@@ -143,7 +159,7 @@ bool ParticleManager::LoadGpuEmitterSettings(const std::string& filePath)
 /// <summary>
 /// JSONのeffect/renderカテゴリからGPU Emitterの基本情報を読み込む。
 /// </summary>
-void ParticleManager::LoadGpuEmitterEffectSettings(const std::string& effectSection, const std::string& renderSection)
+void ParticleManager::LoadGpuEmitterEffectSettings(const JsonDocument& effectSection, const JsonDocument& renderSection)
 {
     JsonUtility::ExtractString(effectSection, "effectName", gpuEmitterEffectName_);
     JsonUtility::ExtractString(effectSection, "description", gpuEmitterDescription_);
@@ -155,7 +171,7 @@ void ParticleManager::LoadGpuEmitterEffectSettings(const std::string& effectSect
 /// <summary>
 /// JSONのplayback/renderカテゴリからGPU Emitterの再生設定を読み込む。
 /// </summary>
-void ParticleManager::LoadGpuEmitterPlaybackSettings(const std::string& playbackSection, const std::string& renderSection)
+void ParticleManager::LoadGpuEmitterPlaybackSettings(const JsonDocument& playbackSection, const JsonDocument& renderSection)
 {
     uint32_t autoEmit = gpuEmitterAutoEmit_ ? 1u : 0u; // JSON読み込み用の自動発生フラグ
     if (JsonUtility::ExtractUint(playbackSection, "autoEmit", autoEmit)) {
@@ -181,7 +197,7 @@ void ParticleManager::LoadGpuEmitterPlaybackSettings(const std::string& playback
 /// <summary>
 /// JSONのpostProcessカテゴリからGPU EmitterのPostProcess設定を読み込む。
 /// </summary>
-void ParticleManager::LoadGpuEmitterPostProcessSettings(const std::string& postProcessSection)
+void ParticleManager::LoadGpuEmitterPostProcessSettings(const JsonDocument& postProcessSection)
 {
     uint32_t postProcessEnabled = gpuEmitterPostProcessEnabled_ ? 1u : 0u; // JSON読み込み用のPostProcess有効フラグ
     if (JsonUtility::ExtractUint(postProcessSection, "postProcessEnabled", postProcessEnabled)) {
@@ -215,7 +231,7 @@ void ParticleManager::LoadGpuEmitterPostProcessSettings(const std::string& postP
 /// <summary>
 /// JSONのemitterカテゴリからGPU Emitterの発生設定を読み込む。
 /// </summary>
-void ParticleManager::LoadGpuEmitterStateSettings(const std::string& emitterSection)
+void ParticleManager::LoadGpuEmitterStateSettings(const JsonDocument& emitterSection)
 {
     JsonUtility::ExtractUint(emitterSection, "spawnShape", gpuEmitterState_.spawnShape);
     JsonUtility::ExtractVector3(emitterSection, "translate", gpuEmitterState_.translate);
@@ -276,6 +292,7 @@ bool ParticleManager::LoadGpuEmitterPreset(const std::string& presetName)
 
     gpuEmitterLoadedSettingsName_ = FileUtility::GetStem(loadPath);
     gpuEmitterSettingsName_ = gpuEmitterLoadedSettingsName_;
+    gpuEmitterSelectedSettingsPath_ = loadPath;
     gpuEmitterSettingsMessage_ = "Preset loaded: " + loadPath;
     return true;
 }

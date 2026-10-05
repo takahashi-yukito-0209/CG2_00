@@ -5,6 +5,7 @@
 #include "engine/3d/Object3dCommon.h"
 #include "engine/base/SrvManager.h"
 #include "engine/utility/mathUtility.h"
+#include "externals/nlohmann/json.hpp"
 #include <cstddef>
 #include <iosfwd>
 #include <array>
@@ -309,6 +310,11 @@ private:
     void DrawGpuEmitterImGui(PostProcess* postProcess);
 
     /// <summary>
+    /// ImGuiでCPUパーティクルの共通設定とグループを編集する。
+    /// </summary>
+    void DrawCpuParticleImGui();
+
+    /// <summary>
     /// ImGuiでGPU Emitterの基本情報を表示する。
     /// </summary>
     void DrawGpuEmitterStatusImGui();
@@ -371,7 +377,7 @@ private:
     /// <summary>
     /// ImGuiでGPU Emitter設定ファイルの操作ボタンを表示する。
     /// </summary>
-    void DrawGpuEmitterSettingsFileButtonsImGui(const std::string& saveSettingsPath, const std::string& selectedSettingsPath);
+    void DrawGpuEmitterSettingsFileButtonsImGui(const std::string& selectedSettingsPath);
 
     /// <summary>
     /// GPU Emitter設定を指定パスへ保存して結果メッセージを更新する。
@@ -450,7 +456,7 @@ private:
     /// <summary>
     /// GPU Emitter設定をJSONファイルへ保存する。
     /// </summary>
-    bool SaveGpuEmitterSettings(const std::string& filePath) const;
+    bool SaveGpuEmitterSettings(const std::string& filePath, std::string* errorMessage = nullptr) const;
 
     /// <summary>
     /// GPU Emitter設定をJSONファイルから読み込む。
@@ -464,22 +470,22 @@ private:
     /// <summary>
     /// JSONのeffect/renderカテゴリからGPU Emitterの基本情報を読み込む。
     /// </summary>
-    void LoadGpuEmitterEffectSettings(const std::string& effectSection, const std::string& renderSection);
+    void LoadGpuEmitterEffectSettings(const nlohmann::json& effectSection, const nlohmann::json& renderSection);
 
     /// <summary>
     /// JSONのplayback/renderカテゴリからGPU Emitterの再生設定を読み込む。
     /// </summary>
-    void LoadGpuEmitterPlaybackSettings(const std::string& playbackSection, const std::string& renderSection);
+    void LoadGpuEmitterPlaybackSettings(const nlohmann::json& playbackSection, const nlohmann::json& renderSection);
 
     /// <summary>
     /// JSONのpostProcessカテゴリからGPU EmitterのPostProcess設定を読み込む。
     /// </summary>
-    void LoadGpuEmitterPostProcessSettings(const std::string& postProcessSection);
+    void LoadGpuEmitterPostProcessSettings(const nlohmann::json& postProcessSection);
 
     /// <summary>
     /// JSONのemitterカテゴリからGPU Emitterの発生設定を読み込む。
     /// </summary>
-    void LoadGpuEmitterStateSettings(const std::string& emitterSection);
+    void LoadGpuEmitterStateSettings(const nlohmann::json& emitterSection);
 
     /// <summary>
     /// GPU Emitter設定を実行時に扱える範囲へ整える。
@@ -568,6 +574,8 @@ private:
     uint32_t gpuAliveCountEstimate_ = 0; // GPU FreeListIndexから推定した生存Particle数
     std::string gpuEmitterSettingsName_ = "gpu_particle"; // JSON保存時の設定名
     std::string gpuEmitterLoadedSettingsName_; // 現在ロード済みの設定名
+    std::string gpuEmitterSelectedSettingsPath_; // 保存名とは独立した読み込み対象のパス
+    std::string gpuEmitterPendingSettingsPath_; // 確認ダイアログを開いた時点の操作対象
     std::string gpuEmitterEffectName_ = "GPU Particle"; // エフェクト表示名
     std::string gpuEmitterDescription_; // エフェクト説明文
     std::string gpuEmitterTexturePath_ = "resources/textures/circle.png"; // GPU Particle描画用テクスチャ
