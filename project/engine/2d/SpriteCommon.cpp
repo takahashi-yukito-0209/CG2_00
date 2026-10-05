@@ -228,7 +228,7 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
     // HRESULT型の変数を用意して、以降のDirectX関数の戻り値を受け取るために使う
     HRESULT hr;
 
-    // InputLayout
+    // 頂点入力レイアウトの設定
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
     inputElementDescs[0].SemanticName = "POSITION";
     inputElementDescs[0].SemanticIndex = 0;
@@ -342,11 +342,11 @@ void SpriteCommon::CreateGraphicsPipeline(BlendMode mode)
     // PSOを生成する
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc {};
     graphicsPipelineStateDesc.pRootSignature = rootSignature_.Get(); // メンバ変数のルートシグネチャを使用
-    graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
-    graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // VertexShader
-    graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // PixelShader
-    graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
-    graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
+    graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // 頂点入力レイアウト
+    graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // 頂点シェーダー
+    graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // ピクセルシェーダー
+    graphicsPipelineStateDesc.BlendState = blendDesc; // ブレンド設定
+    graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // ラスタライズ設定
     // 書き込むRTVの情報
     graphicsPipelineStateDesc.NumRenderTargets = kSpriteRenderTargetCount;
     graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();

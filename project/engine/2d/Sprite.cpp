@@ -211,7 +211,7 @@ Sprite::~Sprite()
 {
     ReleaseGpuResources();
     spriteCommon_ = nullptr;
-    // no ImGui unregister needed; registration is centralized
+    // ImGuiへの登録は一元管理しているため、ここでの登録解除は不要
 }
 
 /// <summary>

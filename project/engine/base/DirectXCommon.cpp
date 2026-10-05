@@ -34,8 +34,8 @@ namespace MyEngine {
 struct RenderTargetInternal {
     Microsoft::WRL::ComPtr<ID3D12Resource> colorResource;
     Microsoft::WRL::ComPtr<ID3D12Resource> depthResource;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap; // per-RT RTV heap
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap; // per-RT DSV heap (optional)
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap; // レンダーターゲット専用のRTVヒープ
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap; // 必要な場合に用意するレンダーターゲット専用のDSVヒープ
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle {};
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle {};
     DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -447,7 +447,7 @@ int DirectXCommon::CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORM
 
     // 初期状態はレンダーターゲットとして設定
     rt->currentState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    // store clear color for later ClearRenderTargetView calls
+    // 後続のClearRenderTargetViewで使用するクリア色を保存する
     rt->clearColor = clearColor;
 
     // レンダーターゲット用のテクスチャリソースができたので、RTVヒープとRTVを作成して関連付けるレンダーターゲット
@@ -1194,7 +1194,7 @@ ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, cons
     hr = dxcCompiler_->Compile(
         &buffer, // 1. pSource (DxcBuffer 構造体へのポインタ)
         arguments.data(), // 2. pArguments (コンパイル引数配列)
-        argCount, // 3. argCount
+        argCount, // 3. コンパイル引数の数
         includeHandler_.Get(), // 4. pIncludeHandler (インクルード処理用)
         IID_PPV_ARGS(&result) // 5. riid & 6. ppResult (IID_PPV_ARGSで2つ分の引数を処理)
     );
@@ -1604,7 +1604,7 @@ void DirectXCommon::ResizeDepthStencil(uint32_t width, uint32_t height)
 /// </summary>
 void DirectXCommon::CreateDescriptorHeaps()
 {
-    // RTV
+    // レンダーターゲットビューの設定
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc {};
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -1614,7 +1614,7 @@ void DirectXCommon::CreateDescriptorHeaps()
         assert(SUCCEEDED(hr));
     }
 
-    // SRV (CBV_SRV_UAV)
+    // シェーダーリソースビュー用ヒープの設定（CBV_SRV_UAV）
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc {};
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -1635,7 +1635,7 @@ void DirectXCommon::CreateDescriptorHeaps()
         }
     }
 
-    // DSV
+    // 深度ステンシルビューの設定
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc {};
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;

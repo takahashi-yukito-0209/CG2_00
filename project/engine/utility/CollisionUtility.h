@@ -246,7 +246,7 @@ bool IntersectCapsule_AABB(const Capsule& capsule, const AABB& box);
 bool IntersectCapsule_OBB(const Capsule& capsule, const OBB& obb);
 
 // ----------------------
-// Collider
+// コライダー
 // ----------------------
 
 using LayerMask = uint32_t;
@@ -393,7 +393,7 @@ RayHitResult RayIntersectCapsule_Detailed(const Ray& ray, const Capsule& capsule
 RayHitResult RayIntersectTriangle_Detailed(const Ray& ray, const Triangle& triangle);
 
 // ----------------------
-// BVH
+// BVH（境界ボリューム階層）
 // ----------------------
 
 /// <summary>

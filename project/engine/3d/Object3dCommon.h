@@ -139,14 +139,14 @@ public: // メンバ関数
     /// <summary>
     /// レンダリングにデバッグカメラを使うかどうかを取得/設定
     /// </summary>
-    bool GetUseDebugCameraForRender() const { return useDebugCameraForRender_; } // No-op
-    void SetUseDebugCameraForRender(bool v) { useDebugCameraForRender_ = v; } // No-op
+    bool GetUseDebugCameraForRender() const { return useDebugCameraForRender_; } // デバッグカメラの描画使用フラグを取得する
+    void SetUseDebugCameraForRender(bool v) { useDebugCameraForRender_ = v; } // デバッグカメラの描画使用フラグを設定する
 
     /// <summary>
     /// デバッグカメラの入力を有効にするかどうかを取得/設定
     /// </summary>
-    bool GetEnableDebugCameraInput() const { return enableDebugCameraInput_; } // No-op
-    void SetEnableDebugCameraInput(bool v) { enableDebugCameraInput_ = v; } // No-op
+    bool GetEnableDebugCameraInput() const { return enableDebugCameraInput_; } // デバッグカメラの入力有効フラグを取得する
+    void SetEnableDebugCameraInput(bool v) { enableDebugCameraInput_ = v; } // デバッグカメラの入力有効フラグを設定する
 
     /// <summary>
     /// ブレンドモードの取得

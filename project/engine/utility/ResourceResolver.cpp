@@ -10,7 +10,7 @@ namespace fs = std::filesystem;
 
 // グローバルなリゾルバーデータ構造体
 struct ResolverData {
-    std::vector<std::pair<std::string, std::string>> searchPaths; // name, path
+    std::vector<std::pair<std::string, std::string>> searchPaths; // 検索先の名前とパスの組
     std::unordered_map<ResourceResolver::Type, std::vector<std::string>> extMap;
     std::unordered_map<std::string, std::string> resolveCache; // Resolveで見つかったパスのキャッシュ
     std::unordered_map<std::string, std::string> relativeResolveCache; // ResolveRelativeで見つかったパスのキャッシュ
