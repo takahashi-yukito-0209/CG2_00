@@ -60,10 +60,7 @@ public: // メンバ関数
         std::function<void(size_t)> notifyObjectTransformEdited; // 3DオブジェクトのGizmo編集通知
         std::vector<class Sprite*>* sprites = nullptr; // 表示・編集対象のスプライト一覧
         class SpriteCommon* spriteCommon = nullptr; // スプライト共通設定
-        bool* useBillboard = nullptr; // ビルボード描画の有効フラグ
         class ParticleManager* particleManager = nullptr; // パーティクル管理
-        float dt = 0.0f; // フレームのデルタタイム
-        bool* useDebugCameraForRender = nullptr; // 描画にデバッグカメラを使用するか
         std::function<void(const char*)> requestSceneChange; // ImGuiからのシーン切替要求
         const char* currentSceneName = nullptr; // 現在のシーン名
         PostProcess* postProcess = nullptr; // 現在のシーンが使用しているポストプロセス

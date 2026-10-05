@@ -471,7 +471,9 @@ void Object3d::DrawSkeletonDebug()
     BindDirectionalLightResource(commandList, "Object3d::DrawSkeletonDebug");
     BindPointLightResource(commandList);
     BindCameraResource(commandList);
-    BindTexture(commandList, skeletonDebugTextureIndex_, "Object3d::DrawSkeletonDebug");
+    if (!BindTexture(commandList, skeletonDebugTextureIndex_, "Object3d::DrawSkeletonDebug")) {
+        return;
+    }
 
     const uint32_t boneVertexCount = skeletonDebugBoneVertexCounts_[frameIndex]; // Bone描画頂点数
     const uint32_t jointVertexCount = skeletonDebugJointVertexCounts_[frameIndex]; // Joint描画頂点数

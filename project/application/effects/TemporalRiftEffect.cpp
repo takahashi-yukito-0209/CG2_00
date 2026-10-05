@@ -1,4 +1,5 @@
 #include "TemporalRiftEffect.h"
+#include "EffectImGuiUtility.h"
 #include "EffectProgress.h"
 #include "EffectParticleUtility.h"
 
@@ -515,75 +516,82 @@ void TemporalRiftEffect::StopCameraShake(Camera* camera)
 void TemporalRiftEffect::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Text("Rift Phase: %s", GetPhaseName());
-    ImGui::Text("Phase Time: %.3f", phaseTime_);
-    ImGui::Text("Blur Center UV: %.3f, %.3f", screenUv_.x, screenUv_.y);
-    if (ImGui::Button("Reset Settings")) {
+    using namespace EffectImGuiUtility;
+    ImGui::PushID(this);
+    ImGui::TextWrapped("Phase: %s", GetPhaseName());
+    if (DrawResetSettingsButton()) {
         ResetSettings();
+    }
+    if (ImGui::CollapsingHeader("Status")) {
+        ImGui::TextWrapped("Phase Time: %.3f s", phaseTime_);
+        ImGui::TextWrapped("Blur Center UV: %.3f, %.3f", screenUv_.x, screenUv_.y);
+        ImGui::TextWrapped("Hit Stop Remaining: %.3f s", hitStopRemainingTime_);
+        ImGui::TextWrapped("Shake Remaining: %.3f s", cameraShakeRemainingTime_);
     }
 
     if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Compress Duration", &settings_.compressDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Freeze Duration", &settings_.freezeDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Crack Duration", &settings_.crackDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Burst Duration", &settings_.burstDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Recover Duration", &settings_.recoverDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Compress Duration", &settings_.compressDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Freeze Duration", &settings_.freezeDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Crack Duration", &settings_.crackDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Burst Duration", &settings_.burstDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Recover Duration", &settings_.recoverDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
     }
 
-    if (ImGui::CollapsingHeader("Radial Blur", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Compress Blur Start", &settings_.compressBlurStart, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
-        ImGui::DragFloat("Compress Blur End", &settings_.compressBlurEnd, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
-        ImGui::DragFloat("Burst Blur Strength", &settings_.burstBlurStrength, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
-        ImGui::SliderInt("Blur Sample Count", &settings_.blurSampleCount, kImGuiBlurSampleCountMin, kImGuiBlurSampleCountMax);
+    if (ImGui::CollapsingHeader("Radial Blur")) {
+        DrawFloat("Compress Blur Start", &settings_.compressBlurStart, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        DrawFloat("Compress Blur End", &settings_.compressBlurEnd, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        DrawFloat("Burst Blur Strength", &settings_.burstBlurStrength, kImGuiBlurStep, kImGuiBlurMin, kImGuiBlurMax, "%.3f");
+        DrawIntSlider("Blur Sample Count", &settings_.blurSampleCount, kImGuiBlurSampleCountMin, kImGuiBlurSampleCountMax);
     }
 
-    if (ImGui::CollapsingHeader("Distortion", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
-        ImGui::DragFloat("Compress Distortion", &settings_.compressDistortionStrength, kImGuiDistortionStrengthStep, kImGuiCompressDistortionMin, kImGuiCompressDistortionMax, "%.3f");
-        ImGui::DragFloat("Burst Distortion", &settings_.burstDistortionStrength, kImGuiDistortionStrengthStep, kImGuiBurstDistortionMin, kImGuiBurstDistortionMax, "%.3f");
-        ImGui::DragFloat("Distortion Wave Count", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
+    if (ImGui::CollapsingHeader("Distortion")) {
+        DrawFloat("Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        DrawFloat("Compress Distortion", &settings_.compressDistortionStrength, kImGuiDistortionStrengthStep, kImGuiCompressDistortionMin, kImGuiCompressDistortionMax, "%.3f");
+        DrawFloat("Burst Distortion", &settings_.burstDistortionStrength, kImGuiDistortionStrengthStep, kImGuiBurstDistortionMin, kImGuiBurstDistortionMax, "%.3f");
+        DrawFloat("Distortion Wave Count", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
     }
 
-    if (ImGui::CollapsingHeader("Afterimage", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Afterimage Count", &settings_.afterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
-        ImGui::SliderInt("History Interval", &settings_.afterimageFrameInterval, kImGuiAfterimageIntervalMin, kImGuiAfterimageIntervalMax);
-        ImGui::DragFloat("Afterimage Size", &settings_.afterimageSize, kImGuiAfterimageSizeStep, kImGuiAfterimageSizeMin, kImGuiAfterimageSizeMax, "%.0f");
-        ImGui::SliderFloat("Afterimage Alpha", &settings_.afterimageAlpha, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
-        ImGui::DragFloat("Temporal Displacement", &settings_.temporalDisplacement, kImGuiTemporalDisplacementStep, kImGuiTemporalDisplacementMin, kImGuiTemporalDisplacementMax, "%.2f");
-        ImGui::ColorEdit3("Afterimage Color", &settings_.afterimageColor.x);
+    if (ImGui::CollapsingHeader("Afterimage")) {
+        DrawIntSlider("Afterimage Count", &settings_.afterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
+        DrawIntSlider("History Interval", &settings_.afterimageFrameInterval, kImGuiAfterimageIntervalMin, kImGuiAfterimageIntervalMax);
+        DrawFloat("Afterimage Size", &settings_.afterimageSize, kImGuiAfterimageSizeStep, kImGuiAfterimageSizeMin, kImGuiAfterimageSizeMax, "%.0f");
+        DrawFloatSlider("Afterimage Alpha", &settings_.afterimageAlpha, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
+        DrawFloat("Temporal Displacement", &settings_.temporalDisplacement, kImGuiTemporalDisplacementStep, kImGuiTemporalDisplacementMin, kImGuiTemporalDisplacementMax, "%.2f");
+        DrawColor("Afterimage Color", &settings_.afterimageColor.x, false);
     }
 
-    if (ImGui::CollapsingHeader("Impact", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("Hit Stop Duration", &settings_.hitStopDuration, kImGuiHitStopDurationStep, kImGuiHitStopDurationMin, kImGuiHitStopDurationMax, "%.3f sec");
-        ImGui::DragFloat("Camera Shake Duration", &settings_.cameraShakeDuration, kImGuiCameraShakeDurationStep, kImGuiCameraShakeDurationMin, kImGuiCameraShakeDurationMax, "%.2f sec");
-        ImGui::DragFloat("Camera Shake Strength", &settings_.cameraShakeStrength, kImGuiCameraShakeStrengthStep, kImGuiCameraShakeStrengthMin, kImGuiCameraShakeStrengthMax, "%.2f");
-        ImGui::DragFloat("Camera Shake Frequency", &settings_.cameraShakeFrequency, kImGuiCameraShakeFrequencyStep, kImGuiCameraShakeFrequencyMin, kImGuiCameraShakeFrequencyMax, "%.0f");
-        ImGui::Text("Hit Stop Remaining: %.3f", hitStopRemainingTime_);
-        ImGui::Text("Shake Remaining: %.3f", cameraShakeRemainingTime_);
+    if (ImGui::CollapsingHeader("Impact")) {
+        DrawFloat("Hit Stop Duration", &settings_.hitStopDuration, kImGuiHitStopDurationStep, kImGuiHitStopDurationMin, kImGuiHitStopDurationMax, "%.3f sec");
+        DrawFloat("Camera Shake Duration", &settings_.cameraShakeDuration, kImGuiCameraShakeDurationStep, kImGuiCameraShakeDurationMin, kImGuiCameraShakeDurationMax, "%.2f sec");
+        DrawFloat("Camera Shake Strength", &settings_.cameraShakeStrength, kImGuiCameraShakeStrengthStep, kImGuiCameraShakeStrengthMin, kImGuiCameraShakeStrengthMax, "%.2f");
+        DrawFloat("Camera Shake Frequency", &settings_.cameraShakeFrequency, kImGuiCameraShakeFrequencyStep, kImGuiCameraShakeFrequencyMin, kImGuiCameraShakeFrequencyMax, "%.0f");
     }
 
-    if (ImGui::CollapsingHeader("Crack", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat3("Effect Position", &effectPosition_.x, kImGuiPositionStep);
-        ImGui::SliderInt("Crack Count", &settings_.crackCount, kImGuiCrackCountMin, kImGuiCrackCountMax);
-        ImGui::DragFloat("Crack Length", &settings_.crackLength, kImGuiCrackLengthStep, kImGuiCrackLengthMin, kImGuiCrackLengthMax);
-        ImGui::DragFloat("Length Variation", &settings_.crackLengthVariation, kImGuiCrackLengthVariationStep, kImGuiCrackLengthVariationMin, kImGuiCrackLengthVariationMax);
-        ImGui::DragFloat("Crack Width", &settings_.crackWidth, kImGuiCrackWidthStep, kImGuiCrackWidthMin, kImGuiCrackWidthMax);
-        ImGui::DragFloat("Width Variation", &settings_.crackWidthVariation, kImGuiCrackWidthStep, kImGuiCrackWidthVariationMin, kImGuiCrackWidthVariationMax);
-        ImGui::DragFloat("Crack Life Time", &settings_.crackLifeTime, kImGuiDurationStep, kImGuiDurationMin, kImGuiCrackLifeTimeMax, "%.2f sec");
-        ImGui::ColorEdit4("Crack Color", &settings_.crackColor.x);
+    if (ImGui::CollapsingHeader("Crack")) {
+        DrawVector3("Effect Position", &effectPosition_.x, kImGuiPositionStep);
+        DrawIntSlider("Crack Count", &settings_.crackCount, kImGuiCrackCountMin, kImGuiCrackCountMax);
+        DrawFloat("Crack Length", &settings_.crackLength, kImGuiCrackLengthStep, kImGuiCrackLengthMin, kImGuiCrackLengthMax);
+        DrawFloat("Length Variation", &settings_.crackLengthVariation, kImGuiCrackLengthVariationStep, kImGuiCrackLengthVariationMin, kImGuiCrackLengthVariationMax);
+        DrawFloat("Crack Width", &settings_.crackWidth, kImGuiCrackWidthStep, kImGuiCrackWidthMin, kImGuiCrackWidthMax);
+        DrawFloat("Width Variation", &settings_.crackWidthVariation, kImGuiCrackWidthStep, kImGuiCrackWidthVariationMin, kImGuiCrackWidthVariationMax);
+        DrawFloat("Crack Life Time", &settings_.crackLifeTime, kImGuiDurationStep, kImGuiDurationMin, kImGuiCrackLifeTimeMax, "%.2f sec");
+        DrawColor("Crack Color", &settings_.crackColor.x);
     }
 
-    if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Ring Count", &settings_.ringCount, kImGuiRingCountMin, kImGuiRingCountMax);
-        ImGui::SliderInt("Fragment Count", &settings_.fragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
-        ImGui::SliderInt("GPU Failure Fragment Count", &settings_.gpuFailureFallbackFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
-        ImGui::ColorEdit4("Inner Ring Color", &settings_.innerRingColor.x);
-        ImGui::ColorEdit4("Outer Ring Color", &settings_.outerRingColor.x);
-        ImGui::ColorEdit4("Fragment Color", &settings_.fragmentColor.x);
-        ImGui::DragFloat("Fragment Min Speed", &settings_.fragmentMinSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
-        ImGui::DragFloat("Fragment Max Speed", &settings_.fragmentMaxSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
-        ImGui::DragFloat("Fragment Life Time", &settings_.fragmentLifeTime, kImGuiFragmentLifeTimeStep, kImGuiFragmentLifeTimeMin, kImGuiFragmentLifeTimeMax, "%.2f sec");
+    if (ImGui::CollapsingHeader("Burst")) {
+        DrawIntSlider("Ring Count", &settings_.ringCount, kImGuiRingCountMin, kImGuiRingCountMax);
+        DrawIntSlider("Fragment Count", &settings_.fragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+        DrawColor("Inner Ring Color", &settings_.innerRingColor.x);
+        DrawColor("Outer Ring Color", &settings_.outerRingColor.x);
+        DrawColor("Fragment Color", &settings_.fragmentColor.x);
+        DrawFloat("Fragment Min Speed", &settings_.fragmentMinSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
+        DrawFloat("Fragment Max Speed", &settings_.fragmentMaxSpeed, kImGuiFragmentSpeedStep, kImGuiFragmentSpeedMin, kImGuiFragmentSpeedMax, "%.1f");
+        DrawFloat("Fragment Life Time", &settings_.fragmentLifeTime, kImGuiFragmentLifeTimeStep, kImGuiFragmentLifeTimeMin, kImGuiFragmentLifeTimeMax, "%.2f sec");
     }
+    if (ImGui::CollapsingHeader("GPU Fallback")) {
+        DrawIntSlider("Fragment Count", &settings_.gpuFailureFallbackFragmentCount, kImGuiFragmentCountMin, kImGuiFragmentCountMax);
+    }
+    ImGui::PopID();
 #endif
 }
 

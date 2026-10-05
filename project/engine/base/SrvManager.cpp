@@ -246,7 +246,7 @@ void SrvManager::InitImGui()
     // 成功ログ
     Logger::Log("INFO InitImGui: ImGui DX12 initialized successfully.\n");
 #else
-    // ImGui disabled: no-op
+    // ImGuiが無効な場合は処理を行わない
     (void)dxCommon_;
     Logger::Log("INFO InitImGui: ImGui disabled at compile time, skipping initialization.\n");
 #endif
@@ -265,6 +265,6 @@ void SrvManager::ShutdownImGui()
 #ifdef USE_IMGUI
     ImGui_ImplDX12_InvalidateDeviceObjects();
 #else
-    // ImGui disabled: nothing to invalidate
+    // ImGuiが無効な場合は無効化する対象がない
 #endif
 }

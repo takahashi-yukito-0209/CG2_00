@@ -1,4 +1,5 @@
 #include "TimeReversalEffect.h"
+#include "EffectImGuiUtility.h"
 #include "EffectProgress.h"
 #include "EffectParticleUtility.h"
 
@@ -461,35 +462,51 @@ void TimeReversalEffect::DrawParticles(
 void TimeReversalEffect::DrawImGui()
 {
 #ifdef USE_IMGUI
-    ImGui::Text("Time Reversal Phase: %s", GetPhaseName());
-    ImGui::Text("Phase Time: %.3f", phaseTime_);
-
-    if (ImGui::CollapsingHeader("Time Reversal Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::SliderInt("Particle Count", &settings_.particleCount, kImGuiParticleCountMin, kImGuiParticleCountMax);
-        ImGui::DragFloat("Min Speed", &settings_.minSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
-        ImGui::DragFloat("Max Speed", &settings_.maxSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
-        ImGui::DragFloat("Expansion Duration", &settings_.expansionDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Pause Duration", &settings_.pauseDuration, kImGuiDurationStep, kImGuiPauseDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::DragFloat("Rewind Duration", &settings_.rewindDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
-        ImGui::SliderInt("Rewind Afterimage Count", &settings_.rewindAfterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
-        ImGui::DragFloat("Rewind Afterimage Spacing", &settings_.rewindAfterimageSpacing, kImGuiAfterimageSpacingStep, kImGuiAfterimageSpacingMin, kImGuiAfterimageSpacingMax, "%.2f");
-        ImGui::DragFloat("Rewind Afterimage Alpha", &settings_.rewindAfterimageAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
-        ImGui::SeparatorText("Screen Distortion");
-        ImGui::DragFloat("Rewind Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
-        ImGui::DragFloat("Rewind Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
-        ImGui::DragFloat("Rewind Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
-        ImGui::SeparatorText("Convergence");
-        ImGui::DragFloat("Convergence Duration", &settings_.convergenceDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiConvergenceDurationMax, "%.2f sec");
-        ImGui::DragFloat("Convergence Flash Size", &settings_.convergenceFlashSize, kImGuiFlashSizeStep, kImGuiFlashSizeMin, kImGuiFlashSizeMax, "%.0f");
-        ImGui::DragFloat("Convergence Flash Alpha", &settings_.convergenceFlashAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
-        ImGui::SliderInt("Convergence Ring Count", &settings_.convergenceRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
-        ImGui::SliderInt("GPU Failure Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiRingCountMin, kImGuiParticleCountMax);
-        ImGui::SeparatorText("Transform Rewind");
-        ImGui::DragFloat("Transform History Duration", &settings_.transformHistoryDuration, kImGuiHistoryDurationStep, kImGuiHistoryDurationMin, kImGuiHistoryDurationMax, "%.1f sec");
-        ImGui::DragFloat("Particle Size", &settings_.particleSize, kImGuiParticleSizeStep, kImGuiParticleSizeMin, kImGuiParticleSizeMax, "%.0f");
-        ImGui::ColorEdit4("Particle Color", &settings_.particleColor.x);
-        ImGui::DragFloat3("Effect Position", &settings_.effectPosition.x, kImGuiPositionStep);
+    using namespace EffectImGuiUtility;
+    ImGui::PushID(this);
+    ImGui::TextWrapped("Phase: %s", GetPhaseName());
+    if (DrawResetSettingsButton()) {
+        ResetSettings();
     }
+    if (ImGui::CollapsingHeader("Status")) {
+        ImGui::TextWrapped("Phase Time: %.3f s", phaseTime_);
+    }
+    if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
+        DrawFloat("Expansion Duration", &settings_.expansionDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Pause Duration", &settings_.pauseDuration, kImGuiDurationStep, kImGuiPauseDurationMin, kImGuiDurationMax, "%.2f sec");
+        DrawFloat("Rewind Duration", &settings_.rewindDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiDurationMax, "%.2f sec");
+    }
+    if (ImGui::CollapsingHeader("Particles")) {
+        DrawVector3("Position", &settings_.effectPosition.x, kImGuiPositionStep);
+        DrawIntSlider("Particle Count", &settings_.particleCount, kImGuiParticleCountMin, kImGuiParticleCountMax);
+        DrawFloat("Min Speed", &settings_.minSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
+        DrawFloat("Max Speed", &settings_.maxSpeed, kImGuiSpeedStep, kImGuiSpeedMin, kImGuiSpeedMax, "%.1f");
+        DrawFloat("Particle Size", &settings_.particleSize, kImGuiParticleSizeStep, kImGuiParticleSizeMin, kImGuiParticleSizeMax, "%.0f");
+        DrawColor("Particle Color", &settings_.particleColor.x);
+    }
+    if (ImGui::CollapsingHeader("Afterimage")) {
+        DrawIntSlider("Rewind Afterimage Count", &settings_.rewindAfterimageCount, kImGuiAfterimageCountMin, kImGuiAfterimageCountMax);
+        DrawFloat("Rewind Afterimage Spacing", &settings_.rewindAfterimageSpacing, kImGuiAfterimageSpacingStep, kImGuiAfterimageSpacingMin, kImGuiAfterimageSpacingMax, "%.2f");
+        DrawFloat("Rewind Afterimage Alpha", &settings_.rewindAfterimageAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
+    }
+    if (ImGui::CollapsingHeader("Distortion")) {
+        DrawFloat("Rewind Distortion Strength", &settings_.distortionStrength, kImGuiDistortionStrengthStep, kImGuiDistortionStrengthMin, kImGuiDistortionStrengthMax, "%.3f");
+        DrawFloat("Rewind Distortion Radius", &settings_.distortionRadius, kImGuiDistortionRadiusStep, kImGuiDistortionRadiusMin, kImGuiDistortionRadiusMax, "%.2f");
+        DrawFloat("Rewind Distortion Waves", &settings_.distortionWaveCount, kImGuiDistortionWaveStep, kImGuiDistortionWaveMin, kImGuiDistortionWaveMax, "%.1f");
+    }
+    if (ImGui::CollapsingHeader("Convergence")) {
+        DrawFloat("Convergence Duration", &settings_.convergenceDuration, kImGuiDurationStep, kImGuiDurationMin, kImGuiConvergenceDurationMax, "%.2f sec");
+        DrawFloat("Convergence Flash Size", &settings_.convergenceFlashSize, kImGuiFlashSizeStep, kImGuiFlashSizeMin, kImGuiFlashSizeMax, "%.0f");
+        DrawFloat("Convergence Flash Alpha", &settings_.convergenceFlashAlpha, kImGuiAlphaStep, kImGuiAlphaMin, kImGuiAlphaMax, "%.2f");
+        DrawIntSlider("Convergence Ring Count", &settings_.convergenceRingCount, kImGuiRingCountMin, kImGuiRingCountMax);
+    }
+    if (ImGui::CollapsingHeader("Transform Rewind")) {
+        DrawFloat("Transform History Duration", &settings_.transformHistoryDuration, kImGuiHistoryDurationStep, kImGuiHistoryDurationMin, kImGuiHistoryDurationMax, "%.1f sec");
+    }
+    if (ImGui::CollapsingHeader("GPU Fallback")) {
+        DrawIntSlider("Hit Count", &settings_.gpuFailureFallbackHitCount, kImGuiRingCountMin, kImGuiParticleCountMax);
+    }
+    ImGui::PopID();
 #endif
 }
 

@@ -23,7 +23,7 @@ constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 const std::vector<std::string> kModelTextureExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 constexpr unsigned int kAssimpLoadFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FlipWindingOrder;
 constexpr size_t kObjectLogBufferSize = 256; // Object3dModelLoader用ログバッファサイズ
-std::unordered_map<std::string, Object3d::ModelData> g_modelDataCache; // Assimp読み込み済みモデルのキャッシュ
+std::unordered_map<std::string, Object3dTypes::ModelData> g_modelDataCache; // Assimp読み込み済みモデルのキャッシュ
 /// <summary>
 /// モデルデータキャッシュで使用するファイルパスキーを作成する。
 /// </summary>
@@ -57,7 +57,7 @@ std::string MakeModelDataCacheKey(const std::string& filePath)
 /// <summary>
 /// 読み込み済みのモデルデータをキャッシュから取得する。
 /// </summary>
-const Object3d::ModelData* FindCachedModelData(const std::string& cacheKey)
+const Object3dTypes::ModelData* FindCachedModelData(const std::string& cacheKey)
 {
     auto cacheIterator = g_modelDataCache.find(cacheKey); // キャッシュ上の検索位置
     if (cacheIterator == g_modelDataCache.end()) {
@@ -70,7 +70,7 @@ const Object3d::ModelData* FindCachedModelData(const std::string& cacheKey)
 /// <summary>
 /// 読み込みに成功したモデルデータをキャッシュへ保存する。
 /// </summary>
-Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Object3d::ModelData& modelData)
+Object3dTypes::ModelData StoreCachedModelData(const std::string& cacheKey, const Object3dTypes::ModelData& modelData)
 {
     g_modelDataCache[cacheKey] = modelData;
     return g_modelDataCache[cacheKey];
@@ -79,7 +79,7 @@ Object3d::ModelData StoreCachedModelData(const std::string& cacheKey, const Obje
 /// <summary>
 /// モデル読み込みで最終的に選択されたテクスチャパスをログへ出力する
 /// </summary>
-void LogResolvedModelTexturePath(const Object3d::ModelData& modelData)
+void LogResolvedModelTexturePath(const Object3dTypes::ModelData& modelData)
 {
     char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
     sprintf_s(buffer, "LoadModelFile: 最終的な textureFilePath = %s\n", modelData.material.textureFilePath.c_str());
@@ -110,7 +110,7 @@ std::string ResolveMaterialTextureReferencePath(const std::string& textureFilena
 /// <summary>
 /// 読み込み済みモデルデータを必要に応じてキャッシュへ保存して返す
 /// </summary>
-Object3d::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const Object3d::ModelData& modelData)
+Object3dTypes::ModelData FinalizeLoadedModelData(const std::string& cacheKey, const Object3dTypes::ModelData& modelData)
 {
     if (!modelData.vertices.empty()) {
         return StoreCachedModelData(cacheKey, modelData);
@@ -166,7 +166,7 @@ std::string FindTexturePathByModelBaseName(const std::string& modelDirectory, co
         std::string texturePath = modelDirectory + "/" + modelBaseName + extension; // ベース名から作る候補パス
         if (std::filesystem::exists(texturePath)) {
             char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
-            sprintf_s(buffer, "Object3d::LoadModelFile: ベース名からテクスチャを検出 %s\n", texturePath.c_str());
+            sprintf_s(buffer, "Object3dTypes::LoadModelFile: ベース名からテクスチャを検出 %s\n", texturePath.c_str());
             Logger::Debug(buffer);
             return texturePath;
         }
@@ -193,7 +193,7 @@ std::string FindFirstTexturePathInDirectory(const std::string& modelDirectory)
 
         std::string texturePath = entry.path().string(); // ディレクトリ内で見つかった画像パス
         char buffer[kObjectLogBufferSize]; // ログ出力用バッファ
-        sprintf_s(buffer, "Object3d::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", texturePath.c_str());
+        sprintf_s(buffer, "Object3dTypes::LoadModelFile: ディレクトリ内でテクスチャを検出 %s\n", texturePath.c_str());
         Logger::Debug(buffer);
         return texturePath;
     }
@@ -223,15 +223,15 @@ std::string ResolveModelTextureFilePath(const aiScene* scene, const std::filesys
         return textureFilePath;
     }
 
-    Logger::Debug(std::string("Object3d::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
+    Logger::Debug(std::string("Object3dTypes::LoadModelFile: テクスチャが見つからなかったため、resources/uvChecker.png を既定として使用\n"));
     return kDefaultObjectTexturePath;
 }
 /// <summary>
 /// AssimpマテリアルからObject3d用マテリアル情報を作成する。
 /// </summary>
-Object3d::MaterialData BuildMaterialDataFromAssimpMaterial(const aiMaterial* material, const std::string& modelDirectory)
+Object3dTypes::MaterialData BuildMaterialDataFromAssimpMaterial(const aiMaterial* material, const std::string& modelDirectory)
 {
-    Object3d::MaterialData materialData {}; // 変換後のマテリアル情報
+    Object3dTypes::MaterialData materialData {}; // 変換後のマテリアル情報
     if (!material || material->GetTextureCount(aiTextureType_DIFFUSE) == 0) {
         materialData.textureFilePath = kDefaultObjectTexturePath;
         return materialData;
@@ -247,7 +247,7 @@ Object3d::MaterialData BuildMaterialDataFromAssimpMaterial(const aiMaterial* mat
 /// <summary>
 /// Assimpシーン内の全マテリアルをModelDataへ読み込む。
 /// </summary>
-void ReadMaterialListToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+void ReadMaterialListToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3dTypes::ModelData& modelData)
 {
     const std::string modelDirectory = modelPath.parent_path().string(); // モデルファイルの配置ディレクトリ
     modelData.materials.clear();
@@ -262,12 +262,12 @@ void ReadMaterialListToModelData(const aiScene* scene, const std::filesystem::pa
 
     const std::string fallbackTexturePath = ResolveModelTextureFilePath(scene, modelPath); // 個別マテリアルにテクスチャが無い場合の代替パス
     if (modelData.materials.empty()) {
-        Object3d::MaterialData fallbackMaterial {}; // マテリアルが無いモデル用の既定マテリアル
+        Object3dTypes::MaterialData fallbackMaterial {}; // マテリアルが無いモデル用の既定マテリアル
         fallbackMaterial.textureFilePath = fallbackTexturePath;
         modelData.materials.push_back(fallbackMaterial);
     }
 
-    for (Object3d::MaterialData& materialData : modelData.materials) {
+    for (Object3dTypes::MaterialData& materialData : modelData.materials) {
         if (materialData.textureFilePath.empty()) {
             materialData.textureFilePath = fallbackTexturePath;
         }
@@ -319,7 +319,7 @@ void LogMaterialTemplateTexturePath(const std::string& textureFilePath)
 /// <summary>
 /// MTL ファイルの1行を読み取り、対応するマテリアル情報へ反映する。
 /// </summary>
-void ApplyMaterialTemplateLine(const std::string& line, const std::string& directoryPath, Object3d::MaterialData& materialData)
+void ApplyMaterialTemplateLine(const std::string& line, const std::string& directoryPath, Object3dTypes::MaterialData& materialData)
 {
     std::istringstream lineStream(line); // MTL ファイルから読んだ1行の解析用ストリーム
     std::string identifier; // 行頭の識別子
@@ -362,9 +362,9 @@ bool ValidateAssimpScene(const aiScene* scene, const std::string& fullPath)
 /// <summary>
 /// Skinning用の初期VertexInfluenceを作成する
 /// </summary>
-Object3d::VertexInfluence CreateDefaultVertexInfluence()
+Object3dTypes::VertexInfluence CreateDefaultVertexInfluence()
 {
-    Object3d::VertexInfluence influence {}; // 初期化済みの影響情報
+    Object3dTypes::VertexInfluence influence {}; // 初期化済みの影響情報
     influence.weights[0] = 1.0f;
     influence.jointIndices[0] = 0;
     return influence;
@@ -373,13 +373,13 @@ Object3d::VertexInfluence CreateDefaultVertexInfluence()
 /// <summary>
 /// Node階層をCreateJointと同じ順番で走査し、Node名からJointIndexを引ける辞書を作る
 /// </summary>
-void BuildNodeIndexMap(const Object3d::ModelData::Node& node, std::unordered_map<std::string, int32_t>& nodeIndexMap, int32_t& nextIndex)
+void BuildNodeIndexMap(const Object3dTypes::ModelData::Node& node, std::unordered_map<std::string, int32_t>& nodeIndexMap, int32_t& nextIndex)
 {
     const int32_t currentIndex = nextIndex; // 現在のNodeに割り当てるIndex
     nodeIndexMap[node.name] = currentIndex;
     ++nextIndex;
 
-    for (const Object3d::ModelData::Node& child : node.children) {
+    for (const Object3dTypes::ModelData::Node& child : node.children) {
         BuildNodeIndexMap(child, nodeIndexMap, nextIndex);
     }
 }
@@ -407,12 +407,12 @@ Math::Matrix4x4 ConvertAssimpInverseBindPoseMatrix(const aiMatrix4x4& inverseBin
 /// <summary>
 /// 頂点にJointの影響を追加する
 /// </summary>
-void AddVertexInfluence(Object3d::VertexInfluence& influence, int32_t jointIndex, float weight)
+void AddVertexInfluence(Object3dTypes::VertexInfluence& influence, int32_t jointIndex, float weight)
 {
     uint32_t weakestIndex = 0; // 最も小さい重みのスロット
     float weakestWeight = (std::numeric_limits<float>::max)(); // 最小重みの比較値
 
-    for (uint32_t influenceIndex = 0; influenceIndex < Object3d::kNumMaxInfluence; ++influenceIndex) {
+    for (uint32_t influenceIndex = 0; influenceIndex < Object3dTypes::kNumMaxInfluence; ++influenceIndex) {
         if (influence.weights[influenceIndex] == 0.0f) {
             influence.weights[influenceIndex] = weight;
             influence.jointIndices[influenceIndex] = jointIndex;
@@ -433,7 +433,7 @@ void AddVertexInfluence(Object3d::VertexInfluence& influence, int32_t jointIndex
 /// <summary>
 /// 1頂点分のSkinning重みを正規化する
 /// </summary>
-void NormalizeVertexInfluence(Object3d::VertexInfluence& influence)
+void NormalizeVertexInfluence(Object3dTypes::VertexInfluence& influence)
 {
     float weightSum = 0.0f; // 合計重み
     for (float weight : influence.weights) {
@@ -453,9 +453,9 @@ void NormalizeVertexInfluence(Object3d::VertexInfluence& influence)
 /// <summary>
 /// AssimpのBone情報からメッシュ内頂点のSkinning影響を構築する
 /// </summary>
-std::vector<Object3d::VertexInfluence> BuildMeshVertexInfluences(const aiMesh* mesh, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3d::ModelData& modelData)
+std::vector<Object3dTypes::VertexInfluence> BuildMeshVertexInfluences(const aiMesh* mesh, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3dTypes::ModelData& modelData)
 {
-    std::vector<Object3d::VertexInfluence> meshVertexInfluences(mesh->mNumVertices); // メッシュ元頂点ごとの影響情報
+    std::vector<Object3dTypes::VertexInfluence> meshVertexInfluences(mesh->mNumVertices); // メッシュ元頂点ごとの影響情報
 
     for (uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
         const aiBone* bone = mesh->mBones[boneIndex]; // Assimp側のBone
@@ -465,7 +465,7 @@ std::vector<Object3d::VertexInfluence> BuildMeshVertexInfluences(const aiMesh* m
             continue;
         }
 
-        Object3d::JointWeightData& jointWeightData = modelData.skinClusterData[jointName]; // JointごとのSkinning補助情報
+        Object3dTypes::JointWeightData& jointWeightData = modelData.skinClusterData[jointName]; // JointごとのSkinning補助情報
         jointWeightData.inverseBindPoseMatrix = ConvertAssimpInverseBindPoseMatrix(bone->mOffsetMatrix);
 
         for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
@@ -477,7 +477,7 @@ std::vector<Object3d::VertexInfluence> BuildMeshVertexInfluences(const aiMesh* m
         }
     }
 
-    for (Object3d::VertexInfluence& influence : meshVertexInfluences) {
+    for (Object3dTypes::VertexInfluence& influence : meshVertexInfluences) {
         NormalizeVertexInfluence(influence);
     }
 
@@ -501,7 +501,7 @@ bool HasRequiredMeshNormals(const aiMesh* mesh, uint32_t meshIndex)
 /// <summary>
 /// Assimp の頂点情報を Object3d 用の頂点データへ変換する。
 /// </summary>
-Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint32_t vertexIndex, bool hasTextureCoords)
+Object3dTypes::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint32_t vertexIndex, bool hasTextureCoords)
 {
     const aiVector3D& position = mesh->mVertices[vertexIndex]; // Assimp 側の座標
     const aiVector3D& normal = mesh->mNormals[vertexIndex]; // Assimp 側の法線
@@ -510,7 +510,7 @@ Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint3
         texcoord = mesh->mTextureCoords[0][vertexIndex];
     }
 
-    Object3d::VertexData vertexData; // ModelData に追加する頂点データ
+    Object3dTypes::VertexData vertexData; // ModelData に追加する頂点データ
     vertexData.position = { -position.x, position.y, position.z, 1.0f };
     vertexData.texcoord = { texcoord.x, texcoord.y };
     vertexData.normal = { -normal.x, normal.y, normal.z };
@@ -520,10 +520,10 @@ Object3d::VertexData ConvertAssimpVertexToObjectVertex(const aiMesh* mesh, uint3
 /// <summary>
 /// Assimp のメッシュ頂点を Object3d 用の頂点配列へ追加する。
 /// </summary>
-void AppendMeshSourceVerticesToModelData(const aiMesh* mesh, bool hasTextureCoords, const std::vector<Object3d::VertexInfluence>& meshVertexInfluences, Object3d::ModelData& modelData)
+void AppendMeshSourceVerticesToModelData(const aiMesh* mesh, bool hasTextureCoords, const std::vector<Object3dTypes::VertexInfluence>& meshVertexInfluences, Object3dTypes::ModelData& modelData)
 {
     for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
-        const Object3d::VertexData vertexData = ConvertAssimpVertexToObjectVertex(mesh, vertexIndex, hasTextureCoords); // 追加する頂点データ
+        const Object3dTypes::VertexData vertexData = ConvertAssimpVertexToObjectVertex(mesh, vertexIndex, hasTextureCoords); // 追加する頂点データ
         modelData.vertices.push_back(vertexData);
         modelData.vertexInfluences.push_back(meshVertexInfluences[vertexIndex]);
     }
@@ -532,7 +532,7 @@ void AppendMeshSourceVerticesToModelData(const aiMesh* mesh, bool hasTextureCoor
 /// <summary>
 /// Assimp の三角形面から Object3d 用のIndex配列へ追加する。
 /// </summary>
-void AppendFaceIndicesToModelData(const aiFace& face, uint32_t vertexBaseIndex, Object3d::ModelData& modelData)
+void AppendFaceIndicesToModelData(const aiFace& face, uint32_t vertexBaseIndex, Object3dTypes::ModelData& modelData)
 {
     for (uint32_t element = 0; element < 3; ++element) {
         const uint32_t vertexIndex = face.mIndices[element]; // 面が参照するメッシュ内頂点番号
@@ -543,13 +543,13 @@ void AppendFaceIndicesToModelData(const aiFace& face, uint32_t vertexBaseIndex, 
 /// <summary>
 /// AssimpメッシュのIndex範囲をサブメッシュ情報として追加する。
 /// </summary>
-void AppendMeshPartToModelData(const aiMesh* mesh, const aiScene* scene, uint32_t indexOffset, uint32_t indexCount, Object3d::ModelData& modelData)
+void AppendMeshPartToModelData(const aiMesh* mesh, const aiScene* scene, uint32_t indexOffset, uint32_t indexCount, Object3dTypes::ModelData& modelData)
 {
     if (indexCount == 0) {
         return;
     }
 
-    Object3d::ModelData::MeshPart meshPart {}; // 追加するサブメッシュ情報
+    Object3dTypes::ModelData::MeshPart meshPart {}; // 追加するサブメッシュ情報
     meshPart.indexOffset = indexOffset;
     meshPart.indexCount = indexCount;
     meshPart.materialIndex = mesh && mesh->mMaterialIndex < scene->mNumMaterials ? mesh->mMaterialIndex : 0;
@@ -559,7 +559,7 @@ void AppendMeshPartToModelData(const aiMesh* mesh, const aiScene* scene, uint32_
 /// <summary>
 /// Assimp の全メッシュを Object3d 用の頂点データとIndexデータへ変換する。
 /// </summary>
-void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3d::ModelData& modelData)
+void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_map<std::string, int32_t>& nodeIndexMap, Object3dTypes::ModelData& modelData)
 {
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh* mesh = scene->mMeshes[meshIndex]; // 変換対象のメッシュ
@@ -571,7 +571,7 @@ void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_ma
         const bool hasTextureCoords = mesh->HasTextureCoords(0); // テクスチャ座標を持っているか
         const uint32_t vertexBaseIndex = static_cast<uint32_t>(modelData.vertices.size()); // このメッシュの先頭頂点番号
         const uint32_t indexOffset = static_cast<uint32_t>(modelData.indices.size()); // このメッシュの先頭Index番号
-        const std::vector<Object3d::VertexInfluence> meshVertexInfluences = BuildMeshVertexInfluences(mesh, nodeIndexMap, modelData); // メッシュ元頂点ごとのSkinning影響
+        const std::vector<Object3dTypes::VertexInfluence> meshVertexInfluences = BuildMeshVertexInfluences(mesh, nodeIndexMap, modelData); // メッシュ元頂点ごとのSkinning影響
         AppendMeshSourceVerticesToModelData(mesh, hasTextureCoords, meshVertexInfluences, modelData);
 
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
@@ -590,11 +590,11 @@ void AppendMeshVerticesToModelData(const aiScene* scene, const std::unordered_ma
 /// <summary>
 /// AssimpのVector3キーをObject3d用Keyframeに変換して追加する
 /// </summary>
-void AppendVector3Keyframes(const aiVectorKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3d::KeyframeVector3>& destination, bool invertX)
+void AppendVector3Keyframes(const aiVectorKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3dTypes::KeyframeVector3>& destination, bool invertX)
 {
     for (uint32_t keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
         const aiVectorKey& sourceKey = sourceKeys[keyIndex]; // Assimp側のキーフレーム
-        Object3d::KeyframeVector3 keyframe {}; // 追加するキーフレーム
+        Object3dTypes::KeyframeVector3 keyframe {}; // 追加するキーフレーム
         keyframe.time = static_cast<float>(sourceKey.mTime / ticksPerSecond);
         keyframe.value = {
             invertX ? -sourceKey.mValue.x : sourceKey.mValue.x,
@@ -608,11 +608,11 @@ void AppendVector3Keyframes(const aiVectorKey* sourceKeys, uint32_t keyCount, do
 /// <summary>
 /// AssimpのQuaternionキーをObject3d用Keyframeに変換して追加する
 /// </summary>
-void AppendQuaternionKeyframes(const aiQuatKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3d::KeyframeQuaternion>& destination)
+void AppendQuaternionKeyframes(const aiQuatKey* sourceKeys, uint32_t keyCount, double ticksPerSecond, std::vector<Object3dTypes::KeyframeQuaternion>& destination)
 {
     for (uint32_t keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
         const aiQuatKey& sourceKey = sourceKeys[keyIndex]; // Assimp側のキーフレーム
-        Object3d::KeyframeQuaternion keyframe {}; // 追加するキーフレーム
+        Object3dTypes::KeyframeQuaternion keyframe {}; // 追加するキーフレーム
         keyframe.time = static_cast<float>(sourceKey.mTime / ticksPerSecond);
         keyframe.value = {
             sourceKey.mValue.x,
@@ -627,9 +627,9 @@ void AppendQuaternionKeyframes(const aiQuatKey* sourceKeys, uint32_t keyCount, d
 /// <summary>
 /// AssimpのNodeAnimationをObject3d用NodeAnimationに変換する
 /// </summary>
-Object3d::NodeAnimation ReadNodeAnimation(const aiNodeAnim* channel, double ticksPerSecond)
+Object3dTypes::NodeAnimation ReadNodeAnimation(const aiNodeAnim* channel, double ticksPerSecond)
 {
-    Object3d::NodeAnimation nodeAnimation {}; // 変換後のノードアニメーション
+    Object3dTypes::NodeAnimation nodeAnimation {}; // 変換後のノードアニメーション
     AppendVector3Keyframes(channel->mPositionKeys, channel->mNumPositionKeys, ticksPerSecond, nodeAnimation.translate.keyframes, true);
     AppendQuaternionKeyframes(channel->mRotationKeys, channel->mNumRotationKeys, ticksPerSecond, nodeAnimation.rotate.keyframes);
     AppendVector3Keyframes(channel->mScalingKeys, channel->mNumScalingKeys, ticksPerSecond, nodeAnimation.scale.keyframes, false);
@@ -639,9 +639,9 @@ Object3d::NodeAnimation ReadNodeAnimation(const aiNodeAnim* channel, double tick
 /// <summary>
 /// AssimpのAnimationをObject3d用Animationに変換する
 /// </summary>
-Object3d::Animation BuildAnimationFromAssimpScene(const aiScene* scene)
+Object3dTypes::Animation BuildAnimationFromAssimpScene(const aiScene* scene)
 {
-    Object3d::Animation animation {}; // 読み込んだアニメーション
+    Object3dTypes::Animation animation {}; // 読み込んだアニメーション
     if (!scene || scene->mNumAnimations == 0) {
         return animation;
     }
@@ -660,11 +660,11 @@ Object3d::Animation BuildAnimationFromAssimpScene(const aiScene* scene)
 }
 
 /// <summary>
-/// Assimp のノードを再帰的に読み込んで Object3d::ModelData::Node に変換する関数
+/// Assimp のノードを再帰的に読み込んで Object3dTypes::ModelData::Node に変換する関数
 /// </summary>
-static Object3d::ModelData::Node ReadNode(const aiNode* node)
+static Object3dTypes::ModelData::Node ReadNode(const aiNode* node)
 {
-    Object3d::ModelData::Node result; // 変換後のノード情報
+    Object3dTypes::ModelData::Node result; // 変換後のノード情報
     aiVector3D scale; // Assimp側のスケール
     aiQuaternion rotate; // Assimp側の回転
     aiVector3D translate; // Assimp側の平行移動
@@ -686,7 +686,7 @@ static Object3d::ModelData::Node ReadNode(const aiNode* node)
 /// <summary>
 /// Assimp のルートノードをモデルデータへ読み込む
 /// </summary>
-static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& modelData)
+static void ReadRootNodeToModelData(const aiScene* scene, Object3dTypes::ModelData& modelData)
 {
     if (!scene->mRootNode) {
         return;
@@ -698,7 +698,7 @@ static void ReadRootNodeToModelData(const aiScene* scene, Object3d::ModelData& m
 /// <summary>
 /// Assimpシーンからマテリアル一覧をモデルデータへ設定する。
 /// </summary>
-void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesystem::path& modelPath, Object3dTypes::ModelData& modelData)
 {
     ReadMaterialListToModelData(scene, modelPath, modelData);
 }
@@ -706,9 +706,9 @@ void ReadMaterialTexturePathToModelData(const aiScene* scene, const std::filesys
 /// <summary>
 /// Assimp のシーンから Object3d 用のモデルデータを構築する
 /// </summary>
-static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, const std::filesystem::path& modelPath)
+static Object3dTypes::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, const std::filesystem::path& modelPath)
 {
-    Object3d::ModelData modelData; // 構築するモデルデータ
+    Object3dTypes::ModelData modelData; // 構築するモデルデータ
 
     ReadRootNodeToModelData(scene, modelData);
     std::unordered_map<std::string, int32_t> nodeIndexMap; // Node名からJointIndexを引く辞書
@@ -723,7 +723,7 @@ static Object3d::ModelData BuildModelDataFromAssimpScene(const aiScene* scene, c
 /// <summary>
 /// Assimp でモデルファイルを読み込み、Object3d 用のモデルデータを構築する。
 /// </summary>
-static bool TryLoadModelDataFromAssimpFile(const std::string& fullPath, const std::filesystem::path& modelPath, Object3d::ModelData& modelData)
+static bool TryLoadModelDataFromAssimpFile(const std::string& fullPath, const std::filesystem::path& modelPath, Object3dTypes::ModelData& modelData)
 {
     Assimp::Importer importer; // Assimp の読み込み管理
     const aiScene* scene = ReadAssimpScene(importer, fullPath); // Assimp が読み込んだシーン
@@ -743,9 +743,9 @@ namespace MyEngine::Object3dModelLoader {
 /// <summary>
 /// .mtlファイルを読み取り、マテリアル情報を取得する。
 /// </summary>
-Object3d::MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename)
+Object3dTypes::MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename)
 {
-    Object3d::MaterialData materialData; // 読み込むMaterialData
+    Object3dTypes::MaterialData materialData; // 読み込むMaterialData
     std::string line; // 解析対象の1行
 
     std::ifstream file(directoryPath + "/" + filename); // 読み込むMTLファイル
@@ -764,14 +764,14 @@ Object3d::MaterialData LoadMaterialTemplateFile(const std::string& directoryPath
 /// <summary>
 /// モデルファイルを読み込み、Object3d用のモデルデータを作成する。
 /// </summary>
-Object3d::ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename)
+Object3dTypes::ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename)
 {
-    Object3d::ModelData modelData; // 読み込むModelData
+    Object3dTypes::ModelData modelData; // 読み込むModelData
 
     const std::string fullPath = BuildModelFilePath(directoryPath, filename); // 読み込み対象のフルパス
     const std::filesystem::path modelPath(fullPath); // filesystemで扱うモデルパス
     const std::string cacheKey = MakeModelDataCacheKey(fullPath); // キャッシュ検索用のキー
-    if (const Object3d::ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
+    if (const Object3dTypes::ModelData* cachedModelData = FindCachedModelData(cacheKey)) {
         return *cachedModelData;
     }
 
@@ -786,9 +786,9 @@ Object3d::ModelData LoadModelFile(const std::string& directoryPath, const std::s
 /// <summary>
 /// アニメーションファイルを読み込み、Object3d用のアニメーションデータを作成する。
 /// </summary>
-Object3d::Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename)
+Object3dTypes::Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename)
 {
-    Object3d::Animation animation {}; // 読み込むアニメーション
+    Object3dTypes::Animation animation {}; // 読み込むアニメーション
     const std::string fullPath = BuildModelFilePath(directoryPath, filename); // 読み込み対象のフルパス
 
     Assimp::Importer importer; // Assimpの読み込み管理

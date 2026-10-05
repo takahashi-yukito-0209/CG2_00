@@ -1,14 +1,14 @@
 #include "ParticleEmitter.h"
+#include "ParticleEditorImGuiUtility.h"
 #include "engine/particle/ParticleManager.h"
 #ifdef USE_IMGUI
 #include "ImGuiManager.h"
 #endif
-#include <cstring>
 
 using namespace MyEngine;
+using namespace MyEngine::ParticleEditorImGuiUtility;
 
 namespace {
-constexpr size_t kGroupNameInputBufferSize = 256; // グループ名入力用バッファサイズ
 constexpr float kImGuiTranslateStep = 0.01f; // 発生位置の調整幅
 constexpr float kImGuiRotateStep = 0.01f; // 発生回転の調整幅
 constexpr float kImGuiScaleStep = 0.01f; // 発生スケールの調整幅
@@ -75,34 +75,40 @@ void ParticleEmitter::Update(float deltaTime)
 /// </summary>
 void ParticleEmitter::DrawImGui()
 {
-    // グループ名の編集用バッファを用意
-    char buf[kGroupNameInputBufferSize] = {};
-    // 現在のグループ名をバッファにコピー（安全な関数を使用）
-    strncpy_s(buf, sizeof(buf), groupName.c_str(), _TRUNCATE);
-    // 入力内容が変わったらグループ名を更新する
 #ifdef USE_IMGUI
-    if (ImGui::InputText("GroupName", buf, sizeof(buf))) {
-        groupName = std::string(buf);
+    if (ImGui::CollapsingHeader("Emission", ImGuiTreeNodeFlags_DefaultOpen)) {
+        DrawParticleTextInput("Group Name", "##GroupName", groupName);
+        int tmpCount = static_cast<int>(count); // ImGuiで編集する発生数
+        DrawParticlePropertyLabel("Particles / Emit");
+        if (ImGui::DragInt("##Count", &tmpCount, kImGuiCountStep, kImGuiCountMin, kImGuiCountMax, "%d", ImGuiSliderFlags_AlwaysClamp)) {
+            count = static_cast<uint32_t>(tmpCount);
+        }
+        DrawParticlePropertyLabel("Emit Interval (s)");
+        ImGui::DragFloat("##Frequency", &frequency, kImGuiFrequencyStep, kImGuiFrequencyMin, kImGuiFrequencyMax);
     }
-    // SRTを編集する
-    ImGui::DragFloat3("Scale", &transform.scale.x, kImGuiScaleStep);
-    ImGui::DragFloat3("Rotate", &transform.rotate.x, kImGuiRotateStep);
-    ImGui::DragFloat3("Translate", &transform.translate.x, kImGuiTranslateStep);
-    // 発生数を編集する
-    int tmpCount = static_cast<int>(count);
-    // 変更があったら発生数へ反映する
-    if (ImGui::DragInt("Count", &tmpCount, kImGuiCountStep, kImGuiCountMin, kImGuiCountMax))
-        count = static_cast<uint32_t>(tmpCount);
-    ImGui::DragFloat("Frequency", &frequency, kImGuiFrequencyStep, kImGuiFrequencyMin, kImGuiFrequencyMax);
-    ImGui::Checkbox("Use Hit Effect", &useHitEffect);
-    ImGui::Checkbox("Use Ring Effect", &useRingEffect);
-    ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);
-    ImGui::Separator();
-    ImGui::Checkbox("Show Debug Range", &showDebugRange);
-    ImGui::DragFloat3("Debug Range Half", &debugRangeHalfSize.x, kImGuiRangeStep, 0.0f, 100.0f);
-    ImGui::DragInt("Debug Grid Half Lines", &debugGridHalfLineCount, 1, 1, 64);
-    ImGui::DragFloat("Debug Grid Spacing", &debugGridSpacing, kImGuiRangeStep, 0.01f, 100.0f);
-#else
-    (void)buf;
+    if (ImGui::CollapsingHeader("Transform")) {
+        DrawParticlePropertyLabel("Scale");
+        ImGui::DragFloat3("##Scale", &transform.scale.x, kImGuiScaleStep);
+        DrawParticlePropertyLabel("Rotation");
+        ImGui::DragFloat3("##Rotate", &transform.rotate.x, kImGuiRotateStep);
+        DrawParticlePropertyLabel("Position");
+        ImGui::DragFloat3("##Translate", &transform.translate.x, kImGuiTranslateStep);
+    }
+    if (ImGui::CollapsingHeader("Effect Type")) {
+        ImGui::Checkbox("Use Hit Effect", &useHitEffect);
+        ImGui::Checkbox("Use Ring Effect", &useRingEffect);
+        ImGui::Checkbox("Use Cylinder Effect", &useCylinderEffect);
+    }
+    if (ImGui::CollapsingHeader("Debug Range")) {
+        ImGui::Checkbox("Show Debug Range", &showDebugRange);
+        ImGui::BeginDisabled(!showDebugRange);
+        DrawParticlePropertyLabel("Range Half Size");
+        ImGui::DragFloat3("##DebugRangeHalf", &debugRangeHalfSize.x, kImGuiRangeStep, 0.0f, 100.0f);
+        DrawParticlePropertyLabel("Grid Half Lines");
+        ImGui::DragInt("##DebugGridHalfLines", &debugGridHalfLineCount, 1, 1, 64);
+        DrawParticlePropertyLabel("Grid Spacing");
+        ImGui::DragFloat("##DebugGridSpacing", &debugGridSpacing, kImGuiRangeStep, 0.01f, 100.0f);
+        ImGui::EndDisabled();
+    }
 #endif
 }

@@ -245,6 +245,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\Game.cpp" />
     <ClCompile Include="application\scenes\PlayScene.cpp" />
     <ClCompile Include="application\scenes\PlayScenePlayer.cpp" />
+    <ClCompile Include="application\scenes\TraceShiftStageJson.cpp" />
     <ClCompile Include="application\player\Player.cpp" />
     <ClCompile Include="application\player\PastSelfRecorder.cpp" />
     <ClCompile Include="application\player\PastSelfClone.cpp" />
@@ -396,7 +397,6 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
   <ItemGroup>
     <ClInclude Include="engine\3d\Camera.h" />
     <ClInclude Include="engine\3d\Model.h" />
-    <ClInclude Include="engine\3d\ModelCommon.h" />
     <ClInclude Include="engine\3d\ModelManager.h" />
     <ClInclude Include="engine\3d\PrimitiveFactory.h" />
     <ClInclude Include="engine\3d\SkyBox.h" />
@@ -415,6 +415,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\debug\DebugRenderer.h" />
     <ClInclude Include="engine\particle\ParticleEmitter.h" />
     <ClInclude Include="engine\particle\GpuEmitterSettingsUtility.h" />
+    <ClInclude Include="engine\particle\ParticleEditorImGuiUtility.h" />
     <ClInclude Include="engine\particle\ParticleManager.h" />
     <ClInclude Include="engine\RenderState.h" />
     <ClInclude Include="engine\sound\Sound.h" />
@@ -455,8 +456,13 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\3d\Object3dModelLoader.h" />
     <ClInclude Include="engine\3d\Object3dCommon.h" />
     <ClInclude Include="engine\base\ImGuiManager.h" />
+    <ClInclude Include="engine\base\ImGuiFontUtility.h" />
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
+    <ClInclude Include="application\scenes\TraceShiftStageJson.h" />
+    <ClInclude Include="application\scenes\PlaySceneEditorState.h" />
+    <ClInclude Include="application\scenes\PastSelfTutorialState.h" />
+    <ClInclude Include="application\scenes\PastSelfTutorialLayoutUtility.h" />
     <ClInclude Include="application\scenes\StageRuleSettings.h" />
     <ClInclude Include="application\player\Player.h" />
     <ClInclude Include="application\player\PlayerState.h" />
@@ -464,9 +470,11 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\player\PastSelfClone.h" />
     <ClInclude Include="application\player\PastSelfCloneManager.h" />
     <ClInclude Include="application\gimmicks\StageGimmicks.h" />
+    <ClInclude Include="application\gimmicks\StageGimmickTransformUtility.h" />
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h" />
     <ClInclude Include="application\scenes\PlaySceneLevelEditorHierarchy.h" />
     <ClInclude Include="application\effects\EffectProgress.h" />
+    <ClInclude Include="application\effects\EffectImGuiUtility.h" />
     <ClInclude Include="application\effects\EffectParticleUtility.h" />
     <ClInclude Include="application\effects\TimeStopEffect.h" />
     <ClInclude Include="application\effects\TimeReversalEffect.h" />

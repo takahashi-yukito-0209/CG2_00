@@ -1,4 +1,11 @@
 #include "FileUtility.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -7,6 +14,40 @@
 namespace fs = std::filesystem;
 
 namespace FileUtility {
+namespace {
+/// <summary>
+/// この保存処理で作成した一時ファイルとハンドルだけを終了時に解放する。
+/// </summary>
+struct TemporaryTextFile {
+    fs::path path; // 保存先と同じフォルダーの一時パス
+    HANDLE handle = INVALID_HANDLE_VALUE; // 排他的に作成した書き込みハンドル
+    bool ownsFile = false; // この処理が作成した一時ファイルか
+
+    /// <summary>
+    /// 残ったハンドルを閉じ、置き換え前の一時ファイルを削除する。
+    /// </summary>
+    ~TemporaryTextFile()
+    {
+        if (handle != INVALID_HANDLE_VALUE) {
+            CloseHandle(handle);
+        }
+        if (ownsFile) {
+            DeleteFileW(path.c_str());
+        }
+    }
+};
+
+/// <summary>
+/// 保存失敗の工程とWindowsエラー番号を任意の出力先へ返す。
+/// </summary>
+bool ReportWriteFailure(std::string* outError, const char* operation, DWORD error)
+{
+    if (outError) {
+        *outError = std::string(operation) + " (Windows error " + std::to_string(error) + ").";
+    }
+    return false;
+}
+} // namespace
 
 /// <summary>
 /// 指定したパスが存在するかを確認する。
@@ -66,24 +107,86 @@ std::string ReadText(const std::string& path)
 }
 
 /// <summary>
-/// テキストファイルへ書き込む。必要に応じて親ディレクトリを作成する。
+/// 一時ファイルの書き込み・フラッシュ・クローズ後に保存先を置き換える。
 /// </summary>
-bool WriteText(const std::string& path, const std::string& text)
+bool WriteText(const std::string& path, const std::string& text, std::string* outError)
 {
+    if (outError) {
+        outError->clear();
+    }
+    if (path.empty()) {
+        return ReportWriteFailure(outError, "Empty output path", ERROR_INVALID_NAME);
+    }
     const fs::path outputPath(path); // 書き込み先パス
     const fs::path parentDirectory = outputPath.parent_path(); // 書き込み先の親ディレクトリ
 
-    if (!parentDirectory.empty() && !CreateDirectoryIfNeeded(parentDirectory.generic_string())) {
-        return false;
+    if (!parentDirectory.empty()) {
+        std::error_code directoryError; // 親ディレクトリ作成の実際の失敗理由
+        fs::create_directories(parentDirectory, directoryError);
+        if (directoryError) {
+            if (outError) {
+                *outError = "Failed to create parent directory: " + directoryError.message();
+            }
+            return false;
+        }
     }
 
-    std::ofstream file(path); // 書き込み対象ファイル
-    if (!file.is_open()) {
-        return false;
+    std::string outputText; // 従来のWindowsテキストモードと同じ改行へ変換した内容
+    outputText.reserve(text.size());
+    for (char character : text) { // 書き込む文字
+        if (character == '\n') {
+            outputText.push_back('\r');
+        }
+        outputText.push_back(character);
     }
 
-    file << text;
-    return file.good();
+    static std::atomic<uint64_t> nextTemporaryId { 0 }; // 同一プロセス内の一時ファイル識別番号
+    TemporaryTextFile temporary; // 成功・失敗のどちらでも残骸を解放する一時ファイル
+    for (size_t attempt = 0; attempt < 128; ++attempt) { // 過去の残骸と衝突した場合の再試行回数
+        temporary.path = outputPath;
+        temporary.path += ".tmp." + std::to_string(GetCurrentProcessId()) + "." +
+            std::to_string(nextTemporaryId.fetch_add(1));
+        temporary.handle = CreateFileW(temporary.path.c_str(), GENERIC_WRITE, 0, nullptr,
+            CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (temporary.handle != INVALID_HANDLE_VALUE) {
+            temporary.ownsFile = true;
+            break;
+        }
+        const DWORD createError = GetLastError(); // 一時ファイル作成に失敗した理由
+        if (createError != ERROR_FILE_EXISTS && createError != ERROR_ALREADY_EXISTS) {
+            return ReportWriteFailure(outError, "Failed to create temporary file", createError);
+        }
+    }
+    if (!temporary.ownsFile) {
+        return ReportWriteFailure(outError, "Temporary file names are occupied", ERROR_FILE_EXISTS);
+    }
+
+    size_t offset = 0; // 一時ファイルへ書き込み済みのバイト数
+    while (offset < outputText.size()) {
+        const DWORD chunkSize = static_cast<DWORD>((std::min)(outputText.size() - offset, size_t { 1024 * 1024 })); // 1回の書き込み量
+        DWORD written = 0; // 実際に書き込まれたバイト数
+        if (!WriteFile(temporary.handle, outputText.data() + offset, chunkSize, &written, nullptr)) {
+            return ReportWriteFailure(outError, "Failed to write temporary file", GetLastError());
+        }
+        if (written == 0) {
+            return ReportWriteFailure(outError, "Temporary file write made no progress", ERROR_WRITE_FAULT);
+        }
+        offset += written;
+    }
+    if (!FlushFileBuffers(temporary.handle)) {
+        return ReportWriteFailure(outError, "Failed to flush temporary file", GetLastError());
+    }
+    if (!CloseHandle(temporary.handle)) {
+        return ReportWriteFailure(outError, "Failed to close temporary file", GetLastError());
+    }
+    temporary.handle = INVALID_HANDLE_VALUE;
+
+    // 同じフォルダー内で置き換える。失敗時も保存先を削除しない。
+    if (!MoveFileExW(temporary.path.c_str(), outputPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        return ReportWriteFailure(outError, "Failed to replace output file", GetLastError());
+    }
+    temporary.ownsFile = false;
+    return true;
 }
 
 /// <summary>

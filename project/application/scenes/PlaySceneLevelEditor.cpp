@@ -1,4 +1,5 @@
 #include "PlayScene.h"
+#include "../effects/EffectImGuiUtility.h"
 #include "PlaySceneLevelEditorOverlay.h"
 #include "PlaySceneLevelEditorHierarchy.h"
 #ifdef USE_IMGUI
@@ -837,50 +838,29 @@ void PlayScene::DrawEffectControllerImGui()
 {
 #ifdef USE_IMGUI
     int selectedEffectIndex = static_cast<int>(selectedEffectType_); // ImGuiで編集中のエフェクト番号
-    if (!IsAnyEffectPlaying()
-        && ImGui::Combo(
-            kEffectTypeComboLabel,
+    const bool isPlaying = IsAnyEffectPlaying(); // 再生中の選択変更と重複再生を防ぐ
+    EffectImGuiUtility::DrawPropertyLabel(kEffectTypeComboLabel);
+    ImGui::BeginDisabled(isPlaying);
+    if (ImGui::Combo(
+            "##EffectType",
             &selectedEffectIndex,
             kEffectNames.data(),
             static_cast<int>(kEffectNames.size()))) {
         selectedEffectType_ = static_cast<EffectType>(selectedEffectIndex);
     }
 
-    ImGui::Text(kEffectTriggerKeyText);
-    if (!IsAnyEffectPlaying()) {
-        if (ImGui::Button(kPlayEffectButtonLabel)) {
-            StartSelectedEffect();
-        }
-    } else {
-        ImGui::BeginDisabled();
-        ImGui::Button(kPlayEffectButtonLabel);
-        ImGui::EndDisabled();
+    if (ImGui::Button(kPlayEffectButtonLabel, ImVec2(-FLT_MIN, 0.0f))) {
+        StartSelectedEffect();
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("%s", kEffectTriggerKeyText);
     }
 #endif
 }
 
 #ifdef USE_IMGUI
 
-struct PlayScene::LevelEditorImGuiState {
-    std::array<char, 256> levelPathBuffer {}; // 編集中の読み込みレベルJSONファイル名
-    std::array<char, 256> levelPrefabPathBuffer {}; // 編集中のPrefab JSONファイル名
-    std::string bufferedLevelPath; // 読み込みバッファへ反映済みのファイル名
-    std::string bufferedLevelPrefabPath; // Prefabバッファへ反映済みのファイル名
-    std::string levelPrefabFileName = "levels/prefabs/selected_prefab.json"; // Prefab保存と挿入に使うJSONファイル名
-    bool autoApplyEditedLevel = true; // LevelData編集時に即シーンへ反映するか
-    bool autoSaveEditedLevel = true; // LevelData編集後にJSONへ自動保存するか
-    bool pendingLevelAutoSave = false; // 編集完了後に自動保存を実行するか
-    bool autoReloadLevelWhenChanged = false; // レベルJSONの更新時に自動再読込するか
-    bool autoReloadHasTimestamp = false; // 自動再読込用の更新日時を保持済みか
-    fs::file_time_type autoReloadLastWriteTime {}; // 自動再読込で最後に確認した更新日時
-    std::vector<LevelData> levelUndoHistory; // LevelData編集のUndo履歴
-    std::vector<LevelData> levelRedoHistory; // LevelData編集のRedo履歴
-    bool pendingLevelEditHistory = false; // 編集終了待ちのUndo履歴があるか
-    LevelData pendingLevelEditSnapshot; // 編集開始時点のLevelData
-    int pendingLevelSaveAction = 0; // 未適用保存確認後に実行する処理
-    std::vector<std::string> selectedLevelObjectPaths; // 複数選択中のLevelObjectパス
-    std::vector<LevelObjectData> levelObjectClipboard; // コピーしたLevelObject群
-};
 
 /// <summary>
 /// LevelData編集ImGuiからレベル再読み込みを実行する。
@@ -1317,7 +1297,7 @@ void PlayScene::FlushLevelEditorDeferredActions(LevelEditorImGuiState& state)
 void PlayScene::DrawLevelDataImGui()
 {
 #ifdef USE_IMGUI
-    static LevelEditorImGuiState levelEditorImGuiState; // LevelData編集ImGuiの一時状態
+    LevelEditorImGuiState& levelEditorImGuiState = levelEditorImGuiState_; // このシーンが所有する編集状態
     SyncTextBuffer(levelDataFileName_, levelEditorImGuiState.levelPathBuffer, levelEditorImGuiState.bufferedLevelPath);
     levelSaveFileName_ = levelDataFileName_;
     SyncTextBuffer(levelEditorImGuiState.levelPrefabFileName, levelEditorImGuiState.levelPrefabPathBuffer, levelEditorImGuiState.bufferedLevelPrefabPath);
@@ -1362,7 +1342,7 @@ void PlayScene::DrawPastSelfTutorialStageEditorImGui()
     constexpr uint32_t kOneCloneRouteMask = 1u << 0; // 1体ルートの編集用フラグ
     constexpr uint32_t kTwoCloneRouteMask = 1u << 1; // 2体ルートの編集用フラグ
     constexpr uint32_t kFinalRouteMask = 1u << 2; // 最終ルートの編集用フラグ
-    static int lastAutoOpenedObjectIndex = -1; // 自動展開を適用した直近の選択オブジェクト番号
+    int& lastAutoOpenedObjectIndex = lastAutoOpenedStageObjectIndex_; // このシーンの自動展開状態
     std::vector<PastSelfTutorialEditorObject> editorObjects; // 選択中ルートで使用するステージ編集対象
     BuildPastSelfTutorialEditorObjects(&editorObjects);
 
@@ -1431,8 +1411,7 @@ void PlayScene::DrawPastSelfTutorialStageEditorImGui()
         SavePastSelfTutorialStage();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Reload Stage")) {
-        ReloadPastSelfTutorialStage();
+    if (ImGui::Button("Reload Stage") && ReloadPastSelfTutorialStage()) {
         BuildPastSelfTutorialEditorObjects(&editorObjects);
         SelectSceneObjectForEditor(0);
         selectedObjectIndex = GetSelectedSceneObjectIndex();
@@ -1557,7 +1536,10 @@ void PlayScene::DrawImGui()
         if (ImGui::BeginTabItem("Effects")) {
             DrawEffectControllerImGui();
             ImGui::Separator();
-            DrawSelectedEffectImGui();
+            if (ImGui::BeginChild("EffectSettings", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
+                DrawSelectedEffectImGui();
+            }
+            ImGui::EndChild();
             ImGui::EndTabItem();
         }
 

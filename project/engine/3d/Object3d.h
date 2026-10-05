@@ -16,7 +16,6 @@
 #include <wrl.h>
 
 #include "DirectXCommon.h"
-#include "ModelCommon.h"
 
 namespace MyEngine {
 
@@ -365,7 +364,6 @@ private: // メンバ変数
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 
     Math::Transform transform_; // オブジェクトの座標変換情報（スケール、回転、平行移動）
-    Math::Transform cameraTransform_; // カメラの座標変換情報（スケール、回転、平行移動）
 
     Animation animation_; // 再生対象のアニメーション
     float animationTime_ = 0.0f; // 現在の再生時刻
@@ -381,12 +379,6 @@ private: // メンバ変数
     CollisionUtility::Collider collider_ {}; // 現在のTransformを反映したコライダー
     Math::Vector3 colliderLocalCenter_ { 0.0f, 0.0f, 0.0f }; // コライダーのローカル中心座標
     Math::Vector3 colliderSize_ { 1.0f, 1.0f, 1.0f }; // コライダーのローカルサイズ
-    // モデル用にこのObject3dが所有するModelCommon
-    std::unique_ptr<ModelCommon> modelCommon_;
-
-    // 参照するカメラ（未設定時はObject3dCommonのデフォルトカメラ）
-    class Camera* camera_ = nullptr;
-
     // このオブジェクトのマテリアルがアルファカットアウト用サンプラー（point+clamp）を必要とするか
     bool useAlphaCutoutSampler_ = false;
     bool useAlphaDiscard_ = true;

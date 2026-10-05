@@ -61,8 +61,8 @@ std::string GetDisplayFileName(const std::string& path)
 void PlayScene::DrawSceneSpriteEditImGui()
 {
 #ifdef USE_IMGUI
-    static int selectedCreateTextureIndex = 0; // 生成に使用するテクスチャ番号
-    static int selectedDeleteSpriteIndex = 0; // 削除対象のスプライト番号
+    int& selectedCreateTextureIndex = objectEditorState_.selectedCreateTextureIndex; // このシーンの生成テクスチャ選択
+    int& selectedDeleteSpriteIndex = objectEditorState_.selectedDeleteSpriteIndex; // このシーンの削除スプライト選択
 
     ImGui::SeparatorText("Create");
     const char* textureNames[kSceneSpriteCreateTextureNames.size()] = {}; // Combo表示用のテクスチャ名一覧
@@ -131,8 +131,8 @@ void PlayScene::DrawSceneSpriteEditImGui()
 void PlayScene::DrawSceneObjectEditImGui()
 {
 #ifdef USE_IMGUI
-    static int selectedCreateModelIndex = 0; // 生成に使用するモデル番号
-    static int selectedDeleteObjectIndex = 0; // 削除対象のオブジェクト番号
+    int& selectedCreateModelIndex = objectEditorState_.selectedCreateModelIndex; // このシーンの生成モデル選択
+    int& selectedDeleteObjectIndex = objectEditorState_.selectedDeleteObjectIndex; // このシーンの削除オブジェクト選択
 
     ImGui::SeparatorText("Create");
     const char* modelNames[kSceneObjectCreateModelDisplayNames.size()] = {}; // Combo表示用のモデル名一覧

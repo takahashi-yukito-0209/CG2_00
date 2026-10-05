@@ -325,7 +325,7 @@ void Object3dCommon::DrawImGui()
             if (ImGui::SliderFloat("Intensity", &intensity, kImGuiLightIntensityMin, kImGuiLightIntensityMax)) {
                 directionalLightData_->intensity = intensity;
             }
-            // Point lights UI
+            // ポイントライトの編集UI
             if (ImGui::TreeNode("Point Lights")) {
                 if (pointLightsData_) {
                     for (uint32_t i = 0; i < Object3dCommon::kMaxPointLights; ++i) {
@@ -375,7 +375,7 @@ void Object3dCommon::DrawImGui()
                 ImGui::TreePop();
             }
 
-            // Spot light UI
+            // スポットライトの編集UI
             if (ImGui::TreeNode("Spot Light")) {
                 if (spotLightData_) {
                     bool enabled = spotLightData_->enabled != 0;
@@ -392,7 +392,7 @@ void Object3dCommon::DrawImGui()
 
                     float sdir[3] = { spotLightData_->direction.x, spotLightData_->direction.y, spotLightData_->direction.z };
                     if (ImGui::DragFloat3("Direction", sdir, kImGuiLightDirectionStep)) {
-                        // normalize direction if possible
+                        // 正規化できる場合は方向ベクトルを正規化する
                         float len = sqrtf(sdir[0] * sdir[0] + sdir[1] * sdir[1] + sdir[2] * sdir[2]);
                         if (len > kDirectionNormalizeEpsilon) {
                             spotLightData_->direction.x = sdir[0] / len;
@@ -423,7 +423,7 @@ void Object3dCommon::DrawImGui()
                         spotLightData_->decay = decay;
                     }
 
-                    // Cone angle editing (convert between cos and degrees for usability)
+                    // 円錐角を度数で編集できるよう、余弦値と度数を相互変換する
                     const float rad2deg = kRadiansToDegrees;
                     const float deg2rad = kDegreesToRadians;
                     float angleDeg = acosf(fmaxf(kCosClampMin, fminf(kCosClampMax, spotLightData_->cosAngle))) * rad2deg;
@@ -452,12 +452,12 @@ void Object3dCommon::DrawImGui()
 void Object3dCommon::DrawCameraImGui()
 {
     // デバッグカメラ切替・入力トグルおよびメイン/デバッグカメラのTransform編集UIを提供する
-    // Use Debug Camera for Render
+    // 描画に使用するデバッグカメラの切り替え
     if (ImGui::Checkbox("Use Debug Camera for Render", &useDebugCameraForRender_)) {
-        // nothing else here, Game側のフラグと同期されている場合は呼び出し元で反映される
+        // Game側のフラグと同期している場合は、呼び出し元で変更を反映する
     }
 
-    // Enable Debug Camera Input
+    // デバッグカメラへの入力の切り替え
     ImGui::Checkbox("Enable Debug Camera Input", &enableDebugCameraInput_);
 
     // メインカメラの編集
@@ -479,7 +479,7 @@ void Object3dCommon::DrawCameraImGui()
     // デバッグカメラの編集
     if (ImGui::CollapsingHeader("Debug Camera")) {
         if (debugCamera_) {
-            // DebugCamera uses Math::Vector3 for translation/rotation
+            // DebugCameraの位置と回転はMath::Vector3で扱う
             Math::Vector3 dt = debugCamera_->GetTranslation();
             float dt_arr[3] = { dt.x, dt.y, dt.z };
             if (ImGui::DragFloat3("Debug Translate", dt_arr, kImGuiCameraTranslateStep)) {
@@ -1090,7 +1090,7 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
     HRESULT hr;
 
 
-    // InputLayout
+    // 頂点入力レイアウトの設定
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
     inputElementDescs[0].SemanticName = "POSITION";
     inputElementDescs[0].SemanticIndex = 0;
@@ -1238,11 +1238,11 @@ void Object3dCommon::CreateGraphicsPipeline(BlendMode mode)
     // PSOを生成する
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc {};
     graphicsPipelineStateDesc.pRootSignature = rootSignature_.Get(); // メンバ変数のルートシグネチャを使用
-    graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
-    graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // VertexShader
-    graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // PixelShader
-    graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
-    graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
+    graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // 頂点入力レイアウト
+    graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() }; // 頂点シェーダー
+    graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() }; // ピクセルシェーダー
+    graphicsPipelineStateDesc.BlendState = blendDesc; // ブレンド設定
+    graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // ラスタライズ設定
     // 書き込むRTVの情報
     graphicsPipelineStateDesc.NumRenderTargets = kObjectRenderTargetCount;
     graphicsPipelineStateDesc.RTVFormats[0] = dxCommon_->GetSwapChainFormat();

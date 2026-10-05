@@ -1,6 +1,7 @@
 #include "ImGuiManager.h"
 
 #ifdef USE_IMGUI
+#include "ImGuiFontUtility.h"
 #include "engine/base/SrvManager.h"
 #include "engine/utility/Logger.h"
 #include <algorithm>
@@ -118,6 +119,10 @@ void ImGuiManager::Initialize(void* hwnd, SrvManager* srvManager)
     ImGuiIO& imguiIo = ImGui::GetIO(); // ImGui全体の設定を扱うIO情報
     imguiIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ドッキング機能を有効化する
     imguiIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // ImGuiウィンドウをメイン画面外へ出せるようにする
+
+    if (!ImGuiFontUtility::LoadJapaneseFont(imguiIo)) {
+        Logger::Warn("ImGui: Fira Mono or Japanese font could not be loaded.\n");
+    }
 
     ApplyEditorStyle();
     ApplyViewportStyleIfEnabled(imguiIo);

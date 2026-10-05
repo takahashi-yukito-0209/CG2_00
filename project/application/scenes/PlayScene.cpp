@@ -962,16 +962,21 @@ void PlayScene::InitializeSkyBox()
 void PlayScene::Initialize(const SceneContext& ctx)
 {
     ctx_ = ctx;
+    levelEditorImGuiState_ = {};
+    objectEditorState_ = {};
+    lastAutoOpenedStageObjectIndex_ = -1;
 
     LoadSceneTextures();
     InitializeSkyBox();
     InitializeSceneObjects();
     InitializePastSelfTutorial();
-    if (!kUsePostEffectPreviewScene) {
-        InitializeParticleObjects();
+    InitializeParticleObjects();
+    if (kUsePostEffectPreviewScene) {
+        InitializeParticleManager();
+    } else {
         InitializeParticleEffects();
-        InitializeTemporalEffectSprites();
     }
+    InitializeTemporalEffectSprites();
     InitializePostProcessTargets();
 }
 
@@ -989,6 +994,9 @@ void PlayScene::ReleaseSceneObjects()
     collisionSystem_.Clear();
     lastCollisionPairCount_ = 0;
     levelData_ = {};
+    levelEditorImGuiState_ = {};
+    objectEditorState_ = {};
+    lastAutoOpenedStageObjectIndex_ = -1;
     levelLoadSucceeded_ = false;
     levelLoadMessage_.clear();
     levelSaveSucceeded_ = false;
@@ -1010,6 +1018,8 @@ void PlayScene::ReleaseSceneObjects()
     timeReversalConvergenceSprite_.reset();
     player_.Finalize();
     pastSelfTutorialStageBlocks_.clear();
+    pastSelfTutorialGimmickLayouts_.clear();
+    pastSelfTutorialDefaultGimmickLayouts_.clear();
     pastSelfTutorialSwitch_.Finalize();
     pastSelfTutorialDoor_.Finalize();
     pastSelfTutorialTimedSwitch_.Finalize();
@@ -1021,45 +1031,7 @@ void PlayScene::ReleaseSceneObjects()
     pastSelfTutorialGoalBridge_.Finalize();
     pastSelfTutorialOneWayGate_.Finalize();
     pastSelfTutorialGoal_.Reset();
-    pastSelfTutorialSwitchActive_ = false;
-    pastSelfTutorialDoorOpen_ = false;
-    pastSelfTutorialGoalReached_ = false;
-    pastSelfTutorialDoorUnlockedByClone_ = false;
-    pastSelfTutorialPlayerOnSwitch_ = false;
-    pastSelfTutorialCloneOnSwitch_ = false;
-    pastSelfTutorialDoorBlockedBeforeClone_ = false;
-    pastSelfTutorialClonePlatformUsed_ = false;
-    pastSelfTutorialDoorOpenedByClone_ = false;
-    pastSelfTutorialTimedSwitchActive_ = false;
-    pastSelfTutorialTimedSwitchCloneOn_ = false;
-    pastSelfTutorialTimedDoorOpen_ = false;
-    pastSelfTutorialToggleSwitchActive_ = false;
-    pastSelfTutorialToggleSwitchCloneOn_ = false;
-    pastSelfTutorialToggleGateOpen_ = false;
-    pastSelfTutorialToggleElevatorActive_ = false;
-    pastSelfTutorialOneCloneToggleActivated_ = false;
-    pastSelfTutorialOneCloneElevatorRidden_ = false;
-    pastSelfTutorialOneCloneBasicsComplete_ = false;
-    pastSelfTutorialTwoCloneReplayPrepared_ = false;
-    pastSelfTutorialTwoCloneSwitchesActivated_ = false;
-    pastSelfTutorialTwoCloneCooperationComplete_ = false;
-    pastSelfTutorialRouteClearFinalized_ = false;
-    pastSelfTutorialOneCloneRouteCleared_ = false;
-    pastSelfTutorialTwoCloneRouteCleared_ = false;
-    pastSelfTutorialFinalChallengeCleared_ = false;
-    pastSelfTutorialWeightSwitchActive_ = false;
-    pastSelfTutorialWeightPlayerOn_ = false;
-    pastSelfTutorialWeightCloneOn_ = false;
-    pastSelfTutorialOneWayGateBlocking_ = false;
-    pastSelfTutorialTimedDoorOpened_ = false;
-    pastSelfTutorialDualCloneSwitchesActivated_ = false;
-    pastSelfTutorialWeightSwitchActivated_ = false;
-    pastSelfTutorialOneWayGateUsed_ = false;
-    pastSelfTutorialElapsedTime_ = 0.0f;
-    pastSelfTutorialClearTime_ = 0.0f;
-    pastSelfTutorialLastRecordDuration_ = 0.0f;
-    pastSelfTutorialPrepareFeedbackSeconds_ = 0.0f;
-    pastSelfTutorialRecordTakeCount_ = 0;
+    pastSelfTutorialState_ = {};
     pastSelfRecorder_.Clear();
     pastSelfCloneManager_.Finalize();
 }
@@ -1207,28 +1179,20 @@ void PlayScene::Update(float dt)
         HandleEffectStartInput();
     }
     HandlePostProcessShortcutInput();
-    if (kUsePostEffectPreviewScene) {
-        postProcess_.Update(dt);
-    } else {
-        UpdateTemporalEffects(dt);
-    }
+    UpdateTemporalEffects(dt);
 
     if (ctx_.camera) {
         ctx_.camera->Update();
     }
     UpdatePastSelfTutorial(dt);
-    if (!kUsePostEffectPreviewScene) {
-        UpdatePostEffectCenters();
-        UpdateParticleSystems(dt);
-    }
+    UpdatePostEffectCenters();
+    UpdateParticleSystems(dt);
 
     UpdateSceneObjects(dt);
     UpdateSceneCollisions();
 
-    if (!kUsePostEffectPreviewScene) {
-        UpdateAfterimageSprites();
-        UpdateTimeReversalSprites();
-    }
+    UpdateAfterimageSprites();
+    UpdateTimeReversalSprites();
 }
 
 /// <summary>
@@ -1290,9 +1254,7 @@ void PlayScene::Draw()
 void PlayScene::OnEnter()
 {
     std::cout << "PlayScene OnEnter\n";
-    if (!kUsePostEffectPreviewScene) {
-        InitializeParticleManager();
-    }
+    InitializeParticleManager();
 }
 
 /// <summary>

@@ -186,13 +186,15 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
     }
 
     if (ImGui::CollapsingHeader("Particle")) {
-        if (hasCpuEmitters) {
+        if (hasCpuEmitters && ImGui::CollapsingHeader("CPU Emitters")) {
             const int emitterCount = static_cast<int>(ctx.particleEmitters->size()); // 編集可能なCPUエミッター数
             selectedEmitterIndex_ = (std::clamp)(selectedEmitterIndex_, 0, emitterCount - 1);
             ParticleEmitter* previewEmitter = (*ctx.particleEmitters)[selectedEmitterIndex_]; // コンボの現在選択エミッター
             std::string preview = BuildParticleEmitterDisplayLabel(previewEmitter, selectedEmitterIndex_); // コンボの現在表示名
 
-            if (ImGui::BeginCombo("CPU Emitter Target", preview.c_str())) {
+            ImGui::TextUnformatted("CPU Emitter Target");
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::BeginCombo("##CpuEmitterTarget", preview.c_str())) {
                 for (int emitterIndex = 0; emitterIndex < emitterCount; ++emitterIndex) {
                     ParticleEmitter* emitter = (*ctx.particleEmitters)[emitterIndex]; // 表示名を作るエミッター
                     std::string label = BuildParticleEmitterDisplayLabel(emitter, emitterIndex); // 選択候補の表示名
@@ -213,7 +215,7 @@ void ImGuiManager::DrawParticleSection(Context& ctx)
                 selectedEmitter->DrawImGui();
                 ImGui::PopID();
             }
-        } else if (ctx.particleEmitter) {
+        } else if (!hasCpuEmitters && ctx.particleEmitter && ImGui::CollapsingHeader("CPU Emitters")) {
             ImGui::PushID(ctx.particleEmitter);
             ctx.particleEmitter->DrawImGui();
             ImGui::PopID();

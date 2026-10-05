@@ -106,11 +106,11 @@ private: // メンバ変数
         IXAudio2SourceVoice* voice = nullptr;
         std::shared_ptr<SoundClip> clip; // 再生中の音声データ寿命を保持する
         std::atomic<bool> finished { false };
-        // IUnknown
+        // IUnknownインターフェースの実装
         STDMETHOD(QueryInterface)(REFIID, void**) { return E_NOINTERFACE; }
         STDMETHOD_(ULONG, AddRef)() { return 1; }
         STDMETHOD_(ULONG, Release)() { return 1; }
-        // IXAudio2VoiceCallback
+        // IXAudio2VoiceCallbackインターフェースの実装
         STDMETHOD_(void, OnVoiceProcessingPassStart)(UINT32) { }
         STDMETHOD_(void, OnVoiceProcessingPassEnd)() { }
         STDMETHOD_(void, OnStreamEnd)() { }

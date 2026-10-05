@@ -95,29 +95,12 @@ void DrawObjectWithAlphaBlend(Object3d* object)
 /// <summary>
 /// 編集された表示Transformを箱形入力判定へ同期する。
 /// </summary>
-void ApplyEditedSwitchTransform(Object3d* object, Math::Vector3& previousScale, Math::Vector3& previousTranslate, Math::Vector3& volumeCenter, Math::Vector3& volumeHalfSize)
+void ApplyEditedSwitchTransform(Object3d* object, const SwitchVolumeBasis& basis, Math::Vector3& volumeCenter, Math::Vector3& volumeHalfSize)
 {
     if (!object) {
         return;
     }
-
-    const Math::Vector3 editedScale = object->GetScale(); // 編集後の表示スケール
-    const Math::Vector3 editedTranslate = object->GetTranslate(); // 編集後の表示座標
-    const Math::Vector3 translateDelta = editedTranslate - previousTranslate; // 判定中心へ加える移動量
-    constexpr float kMinimumScale = 0.0001f; // 拡縮率計算で除算可能とみなす最小値
-    const Math::Vector3 scaleRatio = { // 判定範囲へ反映する各軸の拡縮率
-        std::fabs(previousScale.x) > kMinimumScale ? std::fabs(editedScale.x / previousScale.x) : 1.0f,
-        std::fabs(previousScale.y) > kMinimumScale ? std::fabs(editedScale.y / previousScale.y) : 1.0f,
-        std::fabs(previousScale.z) > kMinimumScale ? std::fabs(editedScale.z / previousScale.z) : 1.0f,
-    };
-    volumeCenter += translateDelta;
-    volumeHalfSize = {
-        volumeHalfSize.x * scaleRatio.x,
-        volumeHalfSize.y * scaleRatio.y,
-        volumeHalfSize.z * scaleRatio.z,
-    };
-    previousScale = editedScale;
-    previousTranslate = editedTranslate;
+    StageGimmickTransformUtility::CalculateSwitchVolume(basis, object->GetScale(), object->GetTranslate(), volumeCenter, volumeHalfSize);
 }
 }
 
@@ -132,8 +115,7 @@ void BoxSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager* 
     activeColor_ = desc.activeColor;
     playerOnlyColor_ = desc.playerOnlyColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
-    editorScale_ = desc.scale;
-    editorTranslate_ = desc.translate;
+    editorBasis_ = { desc.scale, desc.translate, desc.volumeCenter, desc.volumeHalfSize };
     Reset();
 }
 
@@ -151,7 +133,7 @@ void BoxSwitchGimmick::Finalize()
 /// </summary>
 void BoxSwitchGimmick::ApplyEditorTransform()
 {
-    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
+    ApplyEditedSwitchTransform(object_.get(), editorBasis_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -240,8 +222,7 @@ void TimedSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManager
     triggerColor_ = desc.triggerColor;
     holdSeconds_ = (std::max)(desc.holdSeconds, 0.0f);
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
-    editorScale_ = desc.scale;
-    editorTranslate_ = desc.translate;
+    editorBasis_ = { desc.scale, desc.translate, desc.volumeCenter, desc.volumeHalfSize };
     Reset();
 }
 
@@ -259,7 +240,7 @@ void TimedSwitchGimmick::Finalize()
 /// </summary>
 void TimedSwitchGimmick::ApplyEditorTransform()
 {
-    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
+    ApplyEditedSwitchTransform(object_.get(), editorBasis_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -350,8 +331,7 @@ void ToggleSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManage
     activeColor_ = desc.activeColor;
     pressedColor_ = desc.pressedColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
-    editorScale_ = desc.scale;
-    editorTranslate_ = desc.translate;
+    editorBasis_ = { desc.scale, desc.translate, desc.volumeCenter, desc.volumeHalfSize };
     Reset();
 }
 
@@ -369,7 +349,7 @@ void ToggleSwitchGimmick::Finalize()
 /// </summary>
 void ToggleSwitchGimmick::ApplyEditorTransform()
 {
-    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
+    ApplyEditedSwitchTransform(object_.get(), editorBasis_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -458,8 +438,7 @@ void WeightSwitchGimmick::Initialize(Object3dCommon* object3dCommon, ImGuiManage
     partialColor_ = desc.partialColor;
     activeColor_ = desc.activeColor;
     object_ = CreateGimmickObject(object3dCommon, imguiManager, desc.objectId, desc.modelFileName, desc.scale, desc.translate, inactiveColor_);
-    editorScale_ = desc.scale;
-    editorTranslate_ = desc.translate;
+    editorBasis_ = { desc.scale, desc.translate, desc.volumeCenter, desc.volumeHalfSize };
     Reset();
 }
 
@@ -477,7 +456,7 @@ void WeightSwitchGimmick::Finalize()
 /// </summary>
 void WeightSwitchGimmick::ApplyEditorTransform()
 {
-    ApplyEditedSwitchTransform(object_.get(), editorScale_, editorTranslate_, volumeCenter_, volumeHalfSize_);
+    ApplyEditedSwitchTransform(object_.get(), editorBasis_, volumeCenter_, volumeHalfSize_);
 }
 
 /// <summary>
@@ -1126,16 +1105,12 @@ void BoxGoalGimmick::Reset()
 }
 
 /// <summary>
-/// ゴール表示の編集量を判定範囲へ反映する。
+/// ゴール表示の現在位置と判定半サイズを反映し、到達済み状態は維持する。
 /// </summary>
-void BoxGoalGimmick::ApplyEditorTransform(const Math::Vector3& translateDelta, const Math::Vector3& scaleRatio)
+void BoxGoalGimmick::ApplyEditorTransform(const Math::Vector3& center, const Math::Vector3& halfSize)
 {
-    center_ += translateDelta;
-    halfSize_ = {
-        halfSize_.x * scaleRatio.x,
-        halfSize_.y * scaleRatio.y,
-        halfSize_.z * scaleRatio.z,
-    };
+    center_ = center;
+    halfSize_ = halfSize;
 }
 
 /// <summary>

@@ -351,8 +351,9 @@ bool LevelWriter::SaveHierarchySnapshot(const std::string& filePath, const Level
 
     const std::string jsonText = root.dump(4); // 整形済みJSON文字列
     const std::string resolvedFilePath = ResolveWritableLevelPath(filePath); // 実際に書き込む保存先
-    if (!FileUtility::WriteText(resolvedFilePath, jsonText)) {
-        const std::string message = "Failed to save: " + resolvedFilePath; // 保存失敗理由
+    std::string writeError; // 共通ファイル保存処理の失敗理由
+    if (!FileUtility::WriteText(resolvedFilePath, jsonText, &writeError)) {
+        const std::string message = "Failed to save: " + resolvedFilePath + " / " + writeError; // 保存失敗理由
         Logger::Warn(std::string("Warning: LevelWriter ") + message + "\n");
         SetSaveError(errorMessage, message);
         return false;

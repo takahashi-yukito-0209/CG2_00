@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Object3d.h"
+#include "Object3dTypes.h"
 #include <d3d12.h>
 #include <vector>
 #include <wrl.h>
@@ -9,7 +9,6 @@ namespace MyEngine {
 
 // 前方宣言
 class DirectXCommon;
-class ModelCommon;
 class Object3d;
 class TextureManager;
 
@@ -27,9 +26,9 @@ public: // メンバ関数
     bool LoadFromFile(const std::string& directoryPath, const std::string& filename);
 
     /// <summary>
-    /// モデルを初期化する
+    /// GPUリソース生成に使用するDirectX共通処理を渡してモデルを初期化する
     /// </summary>
-    void Initialize(ModelCommon* modelCommon);
+    void Initialize(DirectXCommon* dxCommon);
 
     /// <summary>
     /// 描画する
@@ -44,7 +43,7 @@ public: // メンバ関数
     /// <summary>
     /// 読み込んだモデルデータを取得する
     /// </summary>
-    const Object3d::ModelData& GetModelData() const { return modelData_; }
+    const Object3dTypes::ModelData& GetModelData() const { return modelData_; }
 
 private: // メンバ変数
 
@@ -81,7 +80,7 @@ private: // メンバ変数
     /// <summary>
     /// 描画時に使用する頂点データを取得する
     /// </summary>
-    const std::vector<Object3d::VertexData>& ResolveDrawVertices(const Object3d* owner) const;
+    const std::vector<Object3dTypes::VertexData>& ResolveDrawVertices(const Object3d* owner) const;
 
     /// <summary>
     /// 描画時に使用するIndexデータを取得する
@@ -158,12 +157,10 @@ private: // メンバ変数
     DirectXCommon* dxCommon_ = nullptr;
 
     // 読み込んだモデルの構造データ
-    Object3d::ModelData modelData_;
+    Object3dTypes::ModelData modelData_;
 
     // GPU上に配置される頂点バッファ用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
-    // 頂点データ転送時に使用する中間バッファ
-    Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource_;
     // DirectX12用の頂点バッファビュー
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ {};
 

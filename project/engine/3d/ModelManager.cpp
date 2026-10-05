@@ -64,7 +64,7 @@ void ModelManager::Finalize()
 /// <summary>
 /// モデルを読み込み、読み込み済みの場合はキャッシュ済みモデルを返す。
 /// </summary>
-Model* ModelManager::LoadModel(const std::string& directory, const std::string& filename, ModelCommon* modelCommon)
+Model* ModelManager::LoadModel(const std::string& directory, const std::string& filename, DirectXCommon* dxCommon)
 {
     std::string requestedDir = directory; // 呼び出し側が指定したモデルディレクトリ
     std::string requestedFilename = filename; // 呼び出し側が指定したモデルファイル名
@@ -122,7 +122,7 @@ Model* ModelManager::LoadModel(const std::string& directory, const std::string& 
     std::string useDir = modelFilePath.parent_path().string(); // Modelへ渡すディレクトリ
     std::string useFile = modelFilePath.filename().string(); // Modelへ渡すファイル名
     if (model->LoadFromFile(useDir, useFile)) {
-        model->Initialize(modelCommon);
+        model->Initialize(dxCommon);
         Model* loadedModel = model.get(); // 呼び出し側へ返すモデルポインタ
         models_.insert(std::make_pair(cacheKey, std::move(model)));
         return loadedModel;
