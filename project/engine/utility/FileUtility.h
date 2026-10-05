@@ -34,9 +34,10 @@ bool TryReadText(const std::string& path, std::string& outText);
 std::string ReadText(const std::string& path);
 
 /// <summary>
-/// テキストファイルへ書き込む。必要に応じて親ディレクトリを作成する。
+/// 同じフォルダーの一時ファイルへ書き込み、成功後に保存先を置き換える。
+/// 親ディレクトリは必要に応じて作成し、失敗理由を任意で返す。
 /// </summary>
-bool WriteText(const std::string& path, const std::string& text);
+bool WriteText(const std::string& path, const std::string& text, std::string* outError = nullptr);
 
 /// <summary>
 /// 指定したディレクトリが存在しない場合に作成する。
