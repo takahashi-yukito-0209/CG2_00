@@ -110,18 +110,10 @@ int Framework::Run(HINSTANCE hInstance, int nCmdShow)
         frameStart = clock::now();
         accumulator += static_cast<double>(frameTimer.GetDeltaTime());
 
-        // フレーム時間が目標を超えている場合、Update を呼び出してゲームロジックを更新する
-        bool updatedThisFrame = false;
-        // 累積時間が目標フレーム時間を超えている限り Update を呼び出す（複数回呼ぶ可能性もある）
+        // 固定更新1回分の時間がある場合だけ更新し、消費した時間を差し引く
         while (accumulator >= targetSec && !IsEndRequest()) {
             Update();
-            updatedThisFrame = true;
             accumulator -= targetSec;
-        }
-
-        // Update が呼ばれなかった場合でも、終了要求が出ていないなら Update を呼び出して状態を更新する
-        if (!updatedThisFrame && !IsEndRequest()) {
-            Update();
         }
 
         // 描画処理を呼び出す前に終了要求が出ていないか確認する
