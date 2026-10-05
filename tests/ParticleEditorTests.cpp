@@ -2,6 +2,7 @@
 #include "engine/particle/ParticleEmitter.h"
 #include "engine/particle/GpuEmitterSettingsUtility.h"
 #include "engine/base/PostProcess.h"
+#include "engine/base/ImGuiFontUtility.h"
 #include "engine/utility/FileUtility.h"
 #include "externals/imgui/imgui_internal.h"
 #include <Windows.h>
@@ -358,10 +359,15 @@ int main()
         io.IniFilename = nullptr;
         io.DisplaySize = ImVec2(1200.0f, 2800.0f);
         io.DeltaTime = 1.0f / 60.0f;
+        const std::string latinFontPath = (originalDirectory / "project/resources/fonts/FiraMono-Regular.ttf").generic_string(); // 検証用作業フォルダーに依存しないフォント参照
+        Require(MyEngine::ImGuiFontUtility::LoadJapaneseFont(io, latinFontPath), "Editor fonts could not be loaded");
+        Require(io.FontDefault->Sources.Size == 2, "Japanese font was not merged into Fira Mono");
+        Require(std::string(io.FontDefault->GetDebugName()).find("FiraMono-Regular") != std::string::npos, "Fira Mono is not the primary font");
         unsigned char* pixels = nullptr; // フォントの構築に使用する画素参照
         int width = 0; // フォント画像の幅
         int height = 0; // フォント画像の高さ
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+        Require(io.FontDefault->GetFontBaked(16.0f)->FindGlyphNoFallback(0x7C92) != nullptr, "Japanese glyph is missing");
         ImGui::GetCurrentContext()->TestEngineHookItems = true;
         TestPresetSave();
         TestPanelWidths();

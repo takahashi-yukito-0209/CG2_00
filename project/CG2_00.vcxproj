@@ -456,6 +456,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\3d\Object3dModelLoader.h" />
     <ClInclude Include="engine\3d\Object3dCommon.h" />
     <ClInclude Include="engine\base\ImGuiManager.h" />
+    <ClInclude Include="engine\base\ImGuiFontUtility.h" />
     <ClInclude Include="application\Game.h" />
     <ClInclude Include="application\scenes\PlayScene.h" />
     <ClInclude Include="application\scenes\TraceShiftStageJson.h" />

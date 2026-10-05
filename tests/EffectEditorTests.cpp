@@ -3,6 +3,7 @@
 #include "application/effects/TimeReversalEffect.h"
 #include "engine/3d/Object3d.h"
 #include "engine/base/PostProcess.h"
+#include "engine/base/ImGuiFontUtility.h"
 #include "externals/imgui/imgui_internal.h"
 #include <iostream>
 #include <stdexcept>
@@ -118,10 +119,14 @@ int main()
         io.IniFilename = nullptr;
         io.DisplaySize = ImVec2(1200.0f, 3000.0f);
         io.DeltaTime = 1.0f / 60.0f;
+        Require(MyEngine::ImGuiFontUtility::LoadJapaneseFont(io, "project/resources/fonts/FiraMono-Regular.ttf"), "Editor fonts could not be loaded");
+        Require(io.FontDefault->Sources.Size == 2, "Japanese font was not merged into Fira Mono");
+        Require(std::string(io.FontDefault->GetDebugName()).find("FiraMono-Regular") != std::string::npos, "Fira Mono is not the primary font");
         unsigned char* pixels = nullptr; // フォント構築に使う画素参照
         int width = 0; // フォント画像の幅
         int height = 0; // フォント画像の高さ
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+        Require(io.FontDefault->GetFontBaked(16.0f)->FindGlyphNoFallback(0x6642) != nullptr, "Japanese glyph is missing");
         TemporalRiftEffect rift; // 時空破砕の検証対象
         TimeStopEffect stop; // 時間停止の検証対象
         TimeReversalEffect reversal; // 時間逆行の検証対象

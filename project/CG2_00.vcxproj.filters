@@ -620,6 +620,9 @@
     <ClInclude Include="engine\base\ImGuiManager.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
+    <ClInclude Include="engine\base\ImGuiFontUtility.h">
+      <Filter>ヘッダー ファイル\engine\base</Filter>
+    </ClInclude>
     <ClInclude Include="engine\base\Framework.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
