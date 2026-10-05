@@ -9,7 +9,7 @@ namespace MyEngine {
 
 // 前方宣言
 class Model;
-class ModelCommon;
+class DirectXCommon;
 
 /// <summary>
 /// モデルマネージャクラス
@@ -29,7 +29,7 @@ public: // メンバ関数
     /// <summary>
     /// モデルの読み込みと取得
     /// </summary>
-    Model* LoadModel(const std::string& directory, const std::string& filename, ModelCommon* modelCommon);
+    Model* LoadModel(const std::string& directory, const std::string& filename, DirectXCommon* dxCommon);
 
     /// <summary>
     /// ファイルパスに対応するモデルを検索して返す（見つからない場合は nullptr を返す）

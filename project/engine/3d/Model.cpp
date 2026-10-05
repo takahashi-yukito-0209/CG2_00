@@ -2,9 +2,9 @@
 #include "../utility/ResourceResolver.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
-#include "ModelCommon.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
+#include "Object3dModelLoader.h"
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "mathUtility.h"
@@ -79,7 +79,6 @@ void Model::DeferReleaseResource(Microsoft::WRL::ComPtr<ID3D12Resource>& resourc
 void Model::FinalizeGpuResources()
 {
     DeferReleaseResource(vertexResource_);
-    DeferReleaseResource(intermediateResource_);
     DeferReleaseResource(indexResource_);
     DeferReleaseResource(vertexInfluenceResource_);
 
@@ -241,7 +240,9 @@ bool Model::DrawMeshPartsIndexed(ID3D12GraphicsCommandList* commandList, const O
 
         const uint32_t drawIndexCount = (std::min)(meshPart.indexCount, static_cast<uint32_t>(indices.size()) - meshPart.indexOffset); // 範囲外参照を防いだ描画Index数
         const uint32_t textureIndex = ResolveMeshPartTextureIndex(owner, meshPart.materialIndex); // サブメッシュに使用するSRV番号
-        BindTexture(commandList, textureIndex, logContext);
+        if (!BindTexture(commandList, textureIndex, logContext)) {
+            continue;
+        }
         commandList->DrawIndexedInstanced(drawIndexCount, instanceCount, meshPart.indexOffset, 0, 0);
     }
 
@@ -258,7 +259,9 @@ void Model::DrawIndexedOrVertices(ID3D12GraphicsCommandList* commandList, const 
     }
 
     const uint32_t textureIndex = ResolveTextureIndex(owner); // 単一描画で使うSRV番号
-    BindTexture(commandList, textureIndex, logContext);
+    if (!BindTexture(commandList, textureIndex, logContext)) {
+        return;
+    }
 
     const std::vector<uint32_t>& indices = ResolveDrawIndices(owner); // 描画に使うIndexデータ
     const D3D12_INDEX_BUFFER_VIEW indexBufferView = ResolveIndexBufferView(owner); // 描画に使うIndexBufferView
@@ -522,7 +525,7 @@ void Model::DrawInstanced(Object3d* owner, uint32_t instanceCount)
 bool Model::LoadFromFile(const std::string& directoryPath, const std::string& filename)
 {
     // Objファイルを読み込む
-    modelData_ = Object3d::LoadModelFile(directoryPath, filename);
+    modelData_ = Object3dModelLoader::LoadModelFile(directoryPath, filename);
     return !modelData_.vertices.empty();
 }
 
@@ -646,11 +649,11 @@ void Model::InitializeModelResources()
 }
 
 /// <summary>
-/// モデルの初期化
+/// GPUリソース生成に使用するDirectX共通処理を渡してモデルを初期化する。
 /// </summary>
-void Model::Initialize(ModelCommon* modelCommon)
+void Model::Initialize(DirectXCommon* dxCommon)
 {
-    dxCommon_ = modelCommon ? modelCommon->GetDxCommon() : nullptr;
+    dxCommon_ = dxCommon;
     // 前提条件のチェック
     if (modelData_.vertices.empty()) {
         return;

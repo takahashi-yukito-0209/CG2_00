@@ -1,10 +1,8 @@
 #include "Object3d.h"
 #include "../utility/ResourceResolver.h"
-#include "Camera.h"
 #include "DirectXCommon.h"
 #include "Logger.h"
 #include "Model.h"
-#include "ModelCommon.h"
 #include "ModelManager.h"
 #include "Object3dCommon.h"
 #include "Object3dModelLoader.h"
@@ -30,8 +28,6 @@ constexpr const char* kDefaultObjectTexturePath = "resources/uvChecker.png";
 constexpr Vector3 kDefaultTransformScale = { 1.0f, 1.0f, 1.0f }; // 初期スケール
 constexpr Vector3 kDefaultTransformRotation = { 0.0f, 0.0f, 0.0f }; // 初期回転
 constexpr Vector3 kDefaultTransformTranslation = { 0.0f, 0.0f, 0.0f }; // 初期位置
-constexpr Vector3 kDefaultCameraRotation = { 0.3f, 0.0f, 0.0f }; // 内部カメラの初期回転
-constexpr Vector3 kDefaultCameraTranslation = { 0.0f, 4.0f, -10.0f }; // 内部カメラの初期位置
 constexpr Vector4 kDefaultMaterialColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 初期マテリアル色
 constexpr int kDefaultLightingMode = 2; // 初期ライティングモード
 constexpr float kDefaultShininess = 32.0f; // 初期スペキュラ指数
@@ -57,21 +53,14 @@ void Object3d::Initialize(Object3dCommon* object3dCommon, ImGuiManager* imguiMan
     // 座標変換行列用リソース作成
     CreateTransformationMatrixResource();
 
-    // ModelCommon を生成して初期化
-    modelCommon_ = std::make_unique<ModelCommon>();
-    modelCommon_->Initialize(object3dCommon->GetDxCommon());
-
     // Model を読み込んでセット
     ModelManager* mgr = ModelManager::GetInstance();
     // デフォルトでは plane.obj を読み込むが、後で SetModel(file) で差し替え可能
-    model_ = mgr->LoadModel("resources", "plane.obj", modelCommon_.get());
+    model_ = mgr->LoadModel("resources", "plane.obj", object3dCommon_->GetDxCommon());
     debugName_ = "plane.obj";
     RebuildSkeletonFromModel();
     // モデル読み込み後にテクスチャ割り当てを行う（MTLが先に読み込まれるように）
     AssignTexture();
-
-    // 既定のカメラを参照
-    camera_ = object3dCommon->GetDefaultCamera();
 
     (void)imguiManager;
 }
@@ -85,11 +74,6 @@ void Object3d::InitializeTransformState()
         kDefaultTransformScale,
         kDefaultTransformRotation,
         kDefaultTransformTranslation
-    };
-    cameraTransform_ = {
-        kDefaultTransformScale,
-        kDefaultCameraRotation,
-        kDefaultCameraTranslation
     };
 }
 
@@ -218,15 +202,16 @@ void Object3d::SetTexture(const std::string& filePath)
 void Object3d::SetModel(const std::string& filePath)
 {
     ModelManager* mgr = ModelManager::GetInstance();
+    DirectXCommon* dxCommon = object3dCommon_ ? object3dCommon_->GetDxCommon() : nullptr; // モデルのGPUリソース生成元
     std::string resolved = ResourceResolver::Resolve(filePath, ResourceResolver::Type::Model);
     Model* m = nullptr;
     if (!resolved.empty()) {
         // 解決されたパスで読み込む
         std::filesystem::path p(resolved);
-        m = mgr->LoadModel(p.parent_path().string(), p.filename().string(), modelCommon_.get());
+        m = mgr->LoadModel(p.parent_path().string(), p.filename().string(), dxCommon);
     } else {
         // 直接指定されたパスで読み込む
-        m = mgr->LoadModel("resources", filePath, modelCommon_.get());
+        m = mgr->LoadModel("resources", filePath, dxCommon);
     }
     model_ = m; // 成功すればポインタが入る。失敗時は nullptr になる
     debugName_ = filePath; // ImGuiでモデルを識別するための表示名
@@ -278,7 +263,6 @@ Object3d::~Object3d()
     ReleaseSkeletonDebugResources();
     ReleaseSkinningResources();
     ReleaseOwnedGpuResources();
-    // modelCommon_ は std::unique_ptr なので自動解放される
 }
 
 /// <summary>
@@ -751,8 +735,7 @@ bool Object3d::BindNonModelDrawResources(ID3D12GraphicsCommandList* commandList)
     BindCameraResource(commandList);
 
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(commandList, textureIndex, "Object3d::Draw");
-    return true;
+    return BindTexture(commandList, textureIndex, "Object3d::Draw");
 }
 
 /// <summary>
@@ -770,7 +753,9 @@ bool Object3d::BindNonModelInstancedDrawResources(ID3D12GraphicsCommandList* com
     BindPointLightResource(commandList);
 
     const uint32_t textureIndex = modelData_.material.textureIndex; // カスタムメッシュで使用するテクスチャ番号
-    BindTexture(commandList, textureIndex, "Object3d::DrawInstanced");
+    if (!BindTexture(commandList, textureIndex, "Object3d::DrawInstanced")) {
+        return false;
+    }
     BindInstancingResource(commandList);
     return true;
 }

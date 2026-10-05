@@ -727,11 +727,8 @@ void ParticleManager::Draw()
         object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
         object3dCommon_->SetInstancingDrawSetting();
 
-        if (auto* model = renderObject->GetModel()) {
-            model->DrawInstanced(renderObject, count);
-        } else {
-            renderObject->DrawInstanced(count);
-        }
+        // Object3d側で現在フレームのGPU転送を行ってから描画する
+        renderObject->DrawInstanced(count);
         object3dCommon_->ClearInstancingSrvOverride();
     }
 
@@ -750,11 +747,8 @@ void ParticleManager::Draw()
             object3dCommon_->SetBillboardCameraWithVP(cameraRight, cameraUp, viewProjection, gpuEmitterGroup.useBillboard);
             object3dCommon_->SetInstancingSrvOverride(gpuParticleOutputSrvHandlesGPU_[frameIndex]);
             object3dCommon_->SetInstancingDrawSetting();
-            if (auto* model = renderObject->GetModel()) {
-                model->DrawInstanced(renderObject, drawCount);
-            } else {
-                renderObject->DrawInstanced(drawCount);
-            }
+            // Object3d側で現在フレームのGPU転送を行ってから描画する
+            renderObject->DrawInstanced(drawCount);
             object3dCommon_->ClearInstancingSrvOverride();
         }
     }

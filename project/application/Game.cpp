@@ -121,7 +121,6 @@ struct Game::Impl {
 
     DebugCamera debugCamera;
     bool isDebugCameraControl = true;
-    bool useBillboard = true;
     bool useDebugCameraForRender = false;
 
     ImGuiManager imguiManager;
@@ -634,10 +633,7 @@ void Game::Draw()
     }
     ctx.particleEmitters = &emitterPtrs;
     ctx.spriteCommon = impl_->spriteCommon.get();
-    ctx.useBillboard = &impl_->useBillboard;
     ctx.particleManager = ParticleManager::GetInstance();
-    ctx.dt = kFixedDeltaTime;
-    ctx.useDebugCameraForRender = &impl_->useDebugCameraForRender;
     ctx.requestSceneChange = [this](const char* sceneName) {
         if (sceneName) {
             impl_->pendingSceneName = sceneName;
