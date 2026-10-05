@@ -544,7 +544,7 @@ void PlayScene::DrawWorldAndParticles()
     }
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル描画を担当する管理クラス
-    if (!kUsePostEffectPreviewScene && particleManager) {
+    if (particleManager) {
         particleManager->Draw();
     }
 
@@ -578,16 +578,20 @@ void PlayScene::DrawWorldAndParticles()
 /// </summary>
 void PlayScene::DrawSprites()
 {
-    if (kUsePostEffectPreviewScene || !ctx_.spriteCommon) {
+    if (!ctx_.spriteCommon) {
         return;
     }
 
     ctx_.spriteCommon->SetCommonDrawSetting();
-    for (auto& sprite : sprites_) {
-        if (sprite) {
-            sprite->Draw();
+    if (!kUsePostEffectPreviewScene) {
+        for (auto& sprite : sprites_) {
+            if (sprite) {
+                sprite->Draw();
+            }
         }
     }
+    DrawTemporalAfterimages();
+    DrawTimeReversalParticles();
 }
 
 /// <summary>

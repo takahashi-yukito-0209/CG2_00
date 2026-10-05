@@ -148,6 +148,12 @@ void PlayScene::InitializeParticleManager()
     }
 
     particleManager->ClearSceneParticles();
+    if (kUsePostEffectPreviewScene) {
+        // 確認用GPU粒子は発生させず、エフェクト起動時のプリセット読み込みを待つ。
+        if (PM_GpuEmitterSphere* emitterState = particleManager->GetMutableGpuEmitterState()) { // 発生数を初期化するGPU設定
+            emitterState->count = 0;
+        }
+    }
     particleManager->SetParticlePlane(particlePlane_.get());
     particleManager->CreateParticleGroup(kCircleParticleGroupName, kCircleTextureName);
     particleManager->CreateParticleGroup(kCheckerParticleGroupName, kUvCheckerTextureName);
@@ -254,9 +260,11 @@ void PlayScene::UpdateParticleSystems(float deltaTime)
 {
     const bool hasActiveHitStop = HasActiveHitStop(temporalRiftEffect_.GetHitStopRemainingTime()); // ヒットストップ中か
     const float particleDeltaTime = (hasActiveHitStop || IsTimeStopped()) ? kStoppedDeltaTime : deltaTime; // ヒットストップと時間停止を反映したパーティクル時間
-    pmEmitter_.Update(particleDeltaTime);
-    ringEmitter_.Update(particleDeltaTime);
-    cylinderEmitter_.Update(particleDeltaTime);
+    if (!kUsePostEffectPreviewScene) {
+        pmEmitter_.Update(particleDeltaTime);
+        ringEmitter_.Update(particleDeltaTime);
+        cylinderEmitter_.Update(particleDeltaTime);
+    }
 
     ParticleManager* particleManager = ParticleManager::GetInstance(); // パーティクル全体を更新する管理クラス
     if (particleManager) {

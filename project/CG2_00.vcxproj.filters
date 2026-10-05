@@ -306,6 +306,9 @@
     <ClCompile Include="application\scenes\PlayScenePlayer.cpp">
       <Filter>ソース ファイル\application\scenes</Filter>
     </ClCompile>
+    <ClCompile Include="application\scenes\TraceShiftStageJson.cpp">
+      <Filter>ソース ファイル\application\scenes</Filter>
+    </ClCompile>
     <ClCompile Include="application\player\Player.cpp">
       <Filter>ソース ファイル\application\player</Filter>
     </ClCompile>
@@ -551,9 +554,6 @@
     <ClInclude Include="engine\3d\Model.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
-    <ClInclude Include="engine\3d\ModelCommon.h">
-      <Filter>ヘッダー ファイル\engine\3d</Filter>
-    </ClInclude>
     <ClInclude Include="engine\3d\ModelManager.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
     </ClInclude>
@@ -602,6 +602,9 @@
     <ClInclude Include="engine\particle\GpuEmitterSettingsUtility.h">
       <Filter>ヘッダー ファイル\engine\particle</Filter>
     </ClInclude>
+    <ClInclude Include="engine\particle\ParticleEditorImGuiUtility.h">
+      <Filter>ヘッダー ファイル\engine\particle</Filter>
+    </ClInclude>
     <ClInclude Include="engine\particle\ParticleManager.h">
       <Filter>ヘッダー ファイル\engine\particle</Filter>
     </ClInclude>
@@ -626,6 +629,18 @@
     <ClInclude Include="application\scenes\PlayScene.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
+    <ClInclude Include="application\scenes\TraceShiftStageJson.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\PlaySceneEditorState.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\PastSelfTutorialState.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="application\scenes\PastSelfTutorialLayoutUtility.h">
+      <Filter>ヘッダー ファイル\application\scenes</Filter>
+    </ClInclude>
     <ClInclude Include="application\scenes\StageRuleSettings.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
@@ -647,6 +662,9 @@
     <ClInclude Include="application\gimmicks\StageGimmicks.h">
       <Filter>ヘッダー ファイル\application\gimmicks</Filter>
     </ClInclude>
+    <ClInclude Include="application\gimmicks\StageGimmickTransformUtility.h">
+      <Filter>ヘッダー ファイル\application\gimmicks</Filter>
+    </ClInclude>
     <ClInclude Include="application\scenes\PlaySceneLevelEditorOverlay.h">
       <Filter>ヘッダー ファイル\application\scenes</Filter>
     </ClInclude>
@@ -660,6 +678,9 @@
       <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
     <ClInclude Include="application\effects\TimeStopEffect.h">
+      <Filter>ヘッダー ファイル\application\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="application\effects\EffectImGuiUtility.h">
       <Filter>ヘッダー ファイル\application\effects</Filter>
     </ClInclude>
     <ClInclude Include="application\effects\TimeReversalEffect.h">
